@@ -145,14 +145,42 @@ class EpisodicStore:
         if not include_failed:
             where.append("e.outcome IN ('merged', 'completed')")
         args.append(limit)
-        sql = f"""
+        if len(where) == 2:
+            sql = """
             SELECT e.* FROM episodes_fts
             JOIN episodes e ON e.rowid = episodes_fts.rowid
             WHERE episodes_fts MATCH ?
-            {("AND " + " AND ".join(where)) if where else ""}
+            AND e.repo = ?
+            AND e.outcome IN ('merged', 'completed')
             ORDER BY bm25(episodes_fts)
             LIMIT ?
-        """
+            """
+        elif where == ["e.repo = ?"]:
+            sql = """
+            SELECT e.* FROM episodes_fts
+            JOIN episodes e ON e.rowid = episodes_fts.rowid
+            WHERE episodes_fts MATCH ?
+            AND e.repo = ?
+            ORDER BY bm25(episodes_fts)
+            LIMIT ?
+            """
+        elif where == ["e.outcome IN ('merged', 'completed')"]:
+            sql = """
+            SELECT e.* FROM episodes_fts
+            JOIN episodes e ON e.rowid = episodes_fts.rowid
+            WHERE episodes_fts MATCH ?
+            AND e.outcome IN ('merged', 'completed')
+            ORDER BY bm25(episodes_fts)
+            LIMIT ?
+            """
+        else:
+            sql = """
+            SELECT e.* FROM episodes_fts
+            JOIN episodes e ON e.rowid = episodes_fts.rowid
+            WHERE episodes_fts MATCH ?
+            ORDER BY bm25(episodes_fts)
+            LIMIT ?
+            """
         with self._connect() as conn:
             rows = conn.execute(sql, args).fetchall()
         return [_row_to_episode(r) for r in rows]

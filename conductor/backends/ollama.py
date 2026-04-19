@@ -24,6 +24,15 @@ from conductor.backends.base import (
 from conductor.backends.registry import registry
 
 
+def _normalize_endpoint(endpoint: str) -> str:
+    value = endpoint.strip().rstrip("/")
+    if not value:
+        return "http://localhost:11434"
+    if "://" not in value:
+        value = f"http://{value}"
+    return value
+
+
 class OllamaBackend(ILLMBackend):
     name = "ollama"
 
@@ -32,9 +41,9 @@ class OllamaBackend(ILLMBackend):
         endpoint: str | None = None,
         timeout: float = 300.0,
     ) -> None:
-        self._endpoint = (
+        self._endpoint = _normalize_endpoint(
             endpoint or os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
-        ).rstrip("/")
+        )
         self._client = httpx.AsyncClient(timeout=timeout)
 
     async def complete(

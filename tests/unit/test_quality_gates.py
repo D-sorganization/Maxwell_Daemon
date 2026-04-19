@@ -84,6 +84,12 @@ class TestTodoFixmeGate:
         assert r.passed is False
         assert "TODO" in r.output
 
+    def test_ignores_todo_in_string_literals(self, tmp_path: Path) -> None:
+        (tmp_path / "a.py").write_text('PATTERN = "TODO|FIXME"\n')
+        gate = TodoFixmeGate()
+        r = asyncio.run(gate.check(tmp_path))
+        assert r.passed is True
+
     def test_allows_todo_with_issue_ref(self, tmp_path: Path) -> None:
         (tmp_path / "a.py").write_text("# TODO #123: fix this\n")
         gate = TodoFixmeGate()

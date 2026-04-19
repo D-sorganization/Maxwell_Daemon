@@ -148,6 +148,51 @@ class TestHealthCheck:
             assert asyncio.run(backend.health_check()) is False
 
 
+class TestStream:
+    def test_yields_message_content_from_streaming_lines(self, backend: OllamaBackend) -> None:
+        with respx.mock(base_url="http://fake:11434") as mock:
+            mock.post("/api/chat").respond(
+                200,
+                content=(
+                    '{"message": {"content": "hello"}, "done": false}\n'
+                    '{"message": {"content": " world"}, "done": true}\n'
+                ),
+            )
+
+            async def collect() -> list[str]:
+                return [
+                    chunk
+                    async for chunk in backend.stream(
+                        [Message(role=MessageRole.USER, content="hi")],
+                        model="llama3.1",
+                    )
+                ]
+
+            assert asyncio.run(collect()) == ["hello", " world"]
+
+    def test_stream_skips_empty_lines_and_empty_messages(self, backend: OllamaBackend) -> None:
+        with respx.mock(base_url="http://fake:11434") as mock:
+            mock.post("/api/chat").respond(
+                200,
+                content=(
+                    "\n"
+                    '{"message": {}, "done": false}\n'
+                    '{"message": {"content": "kept"}, "done": true}\n'
+                ),
+            )
+
+            async def collect() -> list[str]:
+                return [
+                    chunk
+                    async for chunk in backend.stream(
+                        [Message(role=MessageRole.USER, content="hi")],
+                        model="llama3.1",
+                    )
+                ]
+
+            assert asyncio.run(collect()) == ["kept"]
+
+
 class TestCapabilities:
     def test_llama3_has_tool_use(self, backend: OllamaBackend) -> None:
         caps = backend.capabilities("llama3.1:70b")
@@ -168,13 +213,18 @@ class TestCapabilities:
 
 
 class TestEndpointDefaults:
-    def test_uses_localhost_by_default(self) -> None:
+    def test_uses_localhost_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OLLAMA_HOST", raising=False)
         b = OllamaBackend()
         assert b._endpoint == "http://localhost:11434"
 
     def test_strips_trailing_slash(self) -> None:
         b = OllamaBackend(endpoint="http://x:1/")
         assert b._endpoint == "http://x:1"
+
+    def test_adds_scheme_to_schemeless_endpoint(self) -> None:
+        b = OllamaBackend(endpoint="0.0.0.0:11434")
+        assert b._endpoint == "http://0.0.0.0:11434"
 
     def test_env_var_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OLLAMA_HOST", "http://custom:9999")

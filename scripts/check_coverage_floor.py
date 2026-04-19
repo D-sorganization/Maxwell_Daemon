@@ -37,7 +37,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.xml.exists():
-        print(f"✗ Coverage report not found at {args.xml}", file=sys.stderr)
+        print(f"ERROR: Coverage report not found at {args.xml}", file=sys.stderr)
         return 1
 
     current = _read_xml_coverage(args.xml)
@@ -45,7 +45,7 @@ def main() -> int:
     if not FLOOR_FILE.exists():
         FLOOR_FILE.parent.mkdir(parents=True, exist_ok=True)
         FLOOR_FILE.write_text(json.dumps({"floor_percent": current}, indent=2) + "\n")
-        print(f"✓ Initialized coverage floor at {current:.2f}%")
+        print(f"OK: Initialized coverage floor at {current:.2f}%")
         return 0
 
     floor = json.loads(FLOOR_FILE.read_text())["floor_percent"]
@@ -53,16 +53,16 @@ def main() -> int:
 
     if current + TOLERANCE < floor:
         print(
-            f"✗ Coverage dropped by {floor - current:.2f}%. Add tests — do not lower the floor.",
+            f"ERROR: Coverage dropped by {floor - current:.2f}%. Add tests; do not lower the floor.",
             file=sys.stderr,
         )
         return 1
 
     if args.update and current > floor:
         FLOOR_FILE.write_text(json.dumps({"floor_percent": round(current, 2)}, indent=2) + "\n")
-        print(f"✓ Ratcheted floor upward: {floor:.2f}% → {current:.2f}%")
+        print(f"OK: Ratcheted floor upward: {floor:.2f}% -> {current:.2f}%")
     else:
-        print("✓ Coverage floor met.")
+        print("OK: Coverage floor met.")
     return 0
 
 

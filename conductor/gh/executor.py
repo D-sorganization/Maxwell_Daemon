@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from conductor.backends.base import ILLMBackend, Message, MessageRole
@@ -344,9 +346,12 @@ class IssueExecutor:
             except TypeError:
                 # Legacy stub without task_id
                 return self._ws.path_for(repo)
-        from pathlib import Path
-
-        return Path("/tmp/conductor-workspace") / repo.split("/", 1)[1] / (task_id or "test")
+        return (
+            Path(tempfile.gettempdir())
+            / "conductor-workspace"
+            / repo.split("/", 1)[1]
+            / (task_id or "test")
+        )
 
     async def _refine_from_tests(
         self,

@@ -70,11 +70,11 @@ def _check(paths: list[Path], repo_root: Path, config: dict) -> list[str]:
             exc = exc_map[rel]
             print(
                 f"⚠ {rel} ({n} lines) exempt until {exc['expires_on']} "
-                f"— owner: {exc['owner']}, reason: {exc['reason']}"
+                f"- owner: {exc['owner']}, reason: {exc['reason']}"
             )
             continue
         violations.append(
-            f"✗ {rel} has {n} lines (budget: {max_lines}). "
+            f"ERROR: {rel} has {n} lines (budget: {max_lines}). "
             f"Split the module or add a dated exception to {CONFIG_PATH}."
         )
     return violations
@@ -99,7 +99,7 @@ def main() -> int:
     if violations:
         print("\n".join(violations), file=sys.stderr)
         return 1
-    print(f"✓ All {len(paths)} file(s) within budget.")
+    print(f"OK: All {len(paths)} file(s) within budget.")
     return 0
 
 

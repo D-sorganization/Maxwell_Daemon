@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import tokenize
 from pathlib import Path
 
 _PATTERN = re.compile(r"\b(TODO|FIXME|XXX|HACK)\b(?!.*(#\d+|https?://))", re.IGNORECASE)
@@ -20,13 +21,14 @@ def _check(paths: list[Path]) -> list[str]:
     violations: list[str] = []
     for path in paths:
         try:
-            with path.open(encoding="utf-8") as f:
-                for lineno, line in enumerate(f, 1):
-                    if _PATTERN.search(line):
-                        violations.append(
-                            f"{path}:{lineno}: {line.rstrip()} — add #<issue> or URL reference"
-                        )
-        except (OSError, UnicodeDecodeError):
+            with tokenize.open(path) as f:
+                for token in tokenize.generate_tokens(f.readline):
+                    if token.type != tokenize.COMMENT or not _PATTERN.search(token.string):
+                        continue
+                    violations.append(
+                        f"{path}:{token.start[0]}: {token.string.rstrip()} - add #<issue> or URL reference"
+                    )
+        except (OSError, tokenize.TokenError, UnicodeDecodeError):
             continue
     return violations
 
@@ -46,9 +48,9 @@ def main() -> int:
     violations = _check(files)
     if violations:
         print("\n".join(violations), file=sys.stderr)
-        print(f"\n✗ {len(violations)} untracked TODO/FIXME comment(s)", file=sys.stderr)
+        print(f"\nERROR: {len(violations)} untracked TODO/FIXME comment(s)", file=sys.stderr)
         return 1
-    print(f"✓ No untracked TODO/FIXME comments in {len(files)} file(s).")
+    print(f"OK: No untracked TODO/FIXME comments in {len(files)} file(s).")
     return 0
 
 
