@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 from prometheus_client import CollectorRegistry
 
 from conductor.metrics import (
-    CONDUCTOR_REQUEST_COST,
-    CONDUCTOR_REQUEST_DURATION,
     CONDUCTOR_REQUESTS_TOTAL,
     CONDUCTOR_TOKENS_TOTAL,
     build_registry,
@@ -36,9 +33,7 @@ class TestRecordRequest:
         assert after == before + 1
 
     def test_records_token_total(self) -> None:
-        before = CONDUCTOR_TOKENS_TOTAL.labels(
-            backend="claude", model="m"
-        )._value.get()
+        before = CONDUCTOR_TOKENS_TOTAL.labels(backend="claude", model="m")._value.get()
         record_request(
             backend="claude",
             model="m",
@@ -47,20 +42,14 @@ class TestRecordRequest:
             cost_usd=0.01,
             duration_seconds=0.5,
         )
-        after = CONDUCTOR_TOKENS_TOTAL.labels(
-            backend="claude", model="m"
-        )._value.get()
+        after = CONDUCTOR_TOKENS_TOTAL.labels(backend="claude", model="m")._value.get()
         assert after == before + 500
 
     def test_error_status_skips_token_and_cost(self) -> None:
         # Error path still bumps the request counter but not tokens/cost.
-        tokens_before = CONDUCTOR_TOKENS_TOTAL.labels(
-            backend="claude", model="err"
-        )._value.get()
+        tokens_before = CONDUCTOR_TOKENS_TOTAL.labels(backend="claude", model="err")._value.get()
         record_request(backend="claude", model="err", status="error")
-        tokens_after = CONDUCTOR_TOKENS_TOTAL.labels(
-            backend="claude", model="err"
-        )._value.get()
+        tokens_after = CONDUCTOR_TOKENS_TOTAL.labels(backend="claude", model="err")._value.get()
         assert tokens_after == tokens_before
 
 

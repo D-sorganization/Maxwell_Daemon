@@ -12,8 +12,8 @@ from conductor.config import BudgetConfig
 from conductor.core import CostLedger, CostRecord
 from conductor.core.budget import (
     BudgetCheck,
-    BudgetExceededError,
     BudgetEnforcer,
+    BudgetExceededError,
 )
 
 
@@ -43,17 +43,13 @@ class TestBudgetEnforcer:
 
     def test_under_threshold_is_ok(self, ledger: CostLedger) -> None:
         _spend(ledger, 10.0)
-        enforcer = BudgetEnforcer(
-            BudgetConfig(monthly_limit_usd=100.0), ledger
-        )
+        enforcer = BudgetEnforcer(BudgetConfig(monthly_limit_usd=100.0), ledger)
         assert enforcer.check().status == "ok"
 
     def test_crosses_alert_threshold(self, ledger: CostLedger) -> None:
         _spend(ledger, 75.0)
         enforcer = BudgetEnforcer(
-            BudgetConfig(
-                monthly_limit_usd=100.0, alert_thresholds=[0.75, 0.9, 1.0]
-            ),
+            BudgetConfig(monthly_limit_usd=100.0, alert_thresholds=[0.75, 0.9, 1.0]),
             ledger,
         )
         check = enforcer.check()
@@ -71,23 +67,15 @@ class TestBudgetEnforcer:
         enforcer = BudgetEnforcer(BudgetConfig(monthly_limit_usd=100.0), ledger)
         assert enforcer.check().status == "exceeded"
 
-    def test_require_under_raises_when_hard_stop_enabled(
-        self, ledger: CostLedger
-    ) -> None:
+    def test_require_under_raises_when_hard_stop_enabled(self, ledger: CostLedger) -> None:
         _spend(ledger, 100.0)
-        enforcer = BudgetEnforcer(
-            BudgetConfig(monthly_limit_usd=100.0, hard_stop=True), ledger
-        )
+        enforcer = BudgetEnforcer(BudgetConfig(monthly_limit_usd=100.0, hard_stop=True), ledger)
         with pytest.raises(BudgetExceededError):
             enforcer.require_under_budget()
 
-    def test_require_under_permissive_when_hard_stop_disabled(
-        self, ledger: CostLedger
-    ) -> None:
+    def test_require_under_permissive_when_hard_stop_disabled(self, ledger: CostLedger) -> None:
         _spend(ledger, 200.0)
-        enforcer = BudgetEnforcer(
-            BudgetConfig(monthly_limit_usd=100.0, hard_stop=False), ledger
-        )
+        enforcer = BudgetEnforcer(BudgetConfig(monthly_limit_usd=100.0, hard_stop=False), ledger)
         enforcer.require_under_budget()  # should not raise
 
     def test_check_reports_utilisation(self, ledger: CostLedger) -> None:
@@ -100,9 +88,7 @@ class TestBudgetEnforcer:
     def test_highest_crossed_threshold_wins(self, ledger: CostLedger) -> None:
         _spend(ledger, 92.0)
         enforcer = BudgetEnforcer(
-            BudgetConfig(
-                monthly_limit_usd=100.0, alert_thresholds=[0.75, 0.9, 1.0]
-            ),
+            BudgetConfig(monthly_limit_usd=100.0, alert_thresholds=[0.75, 0.9, 1.0]),
             ledger,
         )
         check = enforcer.check()

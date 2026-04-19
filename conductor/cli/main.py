@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -14,12 +15,9 @@ from rich.table import Table
 
 from conductor import __version__
 from conductor.backends import Message, MessageRole, registry
+from conductor.cli.issues import issue_app
 from conductor.config import (
-    AgentConfig,
-    APIConfig,
-    BackendConfig,
     ConductorConfig,
-    FleetConfig,
     load_config,
     save_config,
 )
@@ -32,6 +30,7 @@ app = typer.Typer(
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
+app.add_typer(issue_app, name="issue")
 console = Console()
 
 
@@ -60,22 +59,23 @@ def init(
         console.print("Pass --force to overwrite.")
         raise typer.Exit(1)
 
-    cfg = ConductorConfig(
-        backends={
-            "claude": BackendConfig(
-                type="claude",
-                model="claude-sonnet-4-6",
-                api_key="${ANTHROPIC_API_KEY}",
-            ),
-            "ollama": BackendConfig(
-                type="ollama",
-                model="llama3.1",
-                base_url="http://localhost:11434",
-            ),
-        },
-        agent=AgentConfig(default_backend="claude"),
-        fleet=FleetConfig(),
-        api=APIConfig(enabled=True, host="127.0.0.1", port=8080),
+    cfg = ConductorConfig.model_validate(
+        {
+            "backends": {
+                "claude": {
+                    "type": "claude",
+                    "model": "claude-sonnet-4-6",
+                    "api_key": "${ANTHROPIC_API_KEY}",
+                },
+                "ollama": {
+                    "type": "ollama",
+                    "model": "llama3.1",
+                    "base_url": "http://localhost:11434",
+                },
+            },
+            "agent": {"default_backend": "claude"},
+            "api": {"enabled": True, "host": "127.0.0.1", "port": 8080},
+        }
     )
     written = save_config(cfg, target)
     console.print(
@@ -151,9 +151,7 @@ def health(
             try:
                 decision = router.route(backend_override=name)
                 ok = await decision.backend.health_check()
-                table.add_row(
-                    name, "[green]healthy[/green]" if ok else "[red]unreachable[/red]"
-                )
+                table.add_row(name, "[green]healthy[/green]" if ok else "[red]unreachable[/red]")
                 if not ok:
                     failures += 1
             except Exception as e:
@@ -195,16 +193,81 @@ def ask(
             resp = await decision.backend.complete(msgs, model=decision.model)
             console.print(resp.content)
             cost = decision.backend.estimate_cost(resp.usage, decision.model)
-            console.print(
-                f"\n[dim]tokens: {resp.usage.total_tokens}  "
-                f"cost: ${cost:.4f}[/dim]"
-            )
+            console.print(f"\n[dim]tokens: {resp.usage.total_tokens}  cost: ${cost:.4f}[/dim]")
 
     try:
         asyncio.run(_run())
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted[/yellow]")
         sys.exit(130)
+
+
+@app.command()
+def cost(
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    ledger: Annotated[Path | None, typer.Option("--ledger", help="Ledger DB path")] = None,
+) -> None:
+    """Show current month-to-date spend and budget status."""
+    from conductor.core import BudgetEnforcer, CostLedger
+
+    cfg = load_config(config)
+    ledger_path = ledger or Path.home() / ".local/share/conductor/ledger.db"
+    ledger_obj = CostLedger(ledger_path)
+    enforcer = BudgetEnforcer(cfg.budget, ledger_obj)
+    check = enforcer.check()
+
+    status_color = {"ok": "green", "alert": "yellow", "exceeded": "red"}[check.status]
+    console.print(
+        Panel.fit(
+            f"[bold]Month-to-date:[/bold] ${check.spent_usd:.2f}\n"
+            f"[bold]Limit:[/bold] "
+            f"{'$' + format(check.limit_usd, '.2f') if check.limit_usd else '(unset)'}\n"
+            f"[bold]Utilisation:[/bold] {check.utilisation:.1%}\n"
+            f"[bold]Status:[/bold] [{status_color}]{check.status}[/{status_color}]",
+            title="Cost summary",
+            border_style=status_color,
+        )
+    )
+
+    by_backend = ledger_obj.by_backend(
+        datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    )
+    if by_backend:
+        t = Table(title="By backend", header_style="bold cyan")
+        t.add_column("Backend")
+        t.add_column("Spend (USD)", justify="right")
+        for name, spend in sorted(by_backend.items(), key=lambda kv: -kv[1]):
+            t.add_row(name, f"${spend:.4f}")
+        console.print(t)
+
+
+@app.command()
+def serve(
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port")] = 8080,
+    workers: Annotated[int, typer.Option("--workers")] = 2,
+) -> None:
+    """Run the daemon + REST API together (foreground)."""
+    import uvicorn
+
+    from conductor.api import create_app
+    from conductor.daemon import Daemon
+
+    cfg = load_config(config)
+    daemon = Daemon(cfg)
+
+    async def _boot() -> None:
+        await daemon.start(worker_count=workers)
+
+    asyncio.run(_boot())
+
+    try:
+        fastapi_app = create_app(daemon, auth_token=cfg.api.auth_token)
+        console.print(f"[green]✓[/green] Conductor serving on http://{host}:{port}")
+        uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
+    finally:
+        asyncio.run(daemon.stop())
 
 
 def main() -> None:

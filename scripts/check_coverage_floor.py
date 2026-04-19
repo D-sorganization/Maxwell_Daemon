@@ -7,6 +7,7 @@ in scripts/config/coverage_floor.json. Fails if coverage drops.
 Philosophy (fleet standard): never lower the floor. If coverage drops, add
 tests — don't relax the gate.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -58,9 +59,7 @@ def main() -> int:
         return 1
 
     if args.update and current > floor:
-        FLOOR_FILE.write_text(
-            json.dumps({"floor_percent": round(current, 2)}, indent=2) + "\n"
-        )
+        FLOOR_FILE.write_text(json.dumps({"floor_percent": round(current, 2)}, indent=2) + "\n")
         print(f"✓ Ratcheted floor upward: {floor:.2f}% → {current:.2f}%")
     else:
         print("✓ Coverage floor met.")

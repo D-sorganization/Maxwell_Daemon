@@ -101,7 +101,7 @@ class ILLMBackend(ABC):
     ) -> BackendResponse: ...
 
     @abstractmethod
-    async def stream(
+    def stream(
         self,
         messages: list[Message],
         *,
@@ -110,7 +110,14 @@ class ILLMBackend(ABC):
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
-    ) -> AsyncIterator[str]: ...
+    ) -> AsyncIterator[str]:
+        """Return an async iterator of content chunks.
+
+        Concrete implementations are ``async def`` with ``yield`` (async generators),
+        whose return type matches ``AsyncIterator[str]`` directly — no extra await
+        needed at the call site.
+        """
+        ...
 
     @abstractmethod
     async def health_check(self) -> bool:
