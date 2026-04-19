@@ -17,9 +17,11 @@ _ENV_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}")
 def _substitute_env(value: Any) -> Any:
     """Expand ${VAR} and ${VAR:-default} in strings. Recurses into dicts and lists."""
     if isinstance(value, str):
+
         def replace(m: re.Match[str]) -> str:
             var, default = m.group(1), m.group(2)
             return os.environ.get(var, default or "")
+
         return _ENV_PATTERN.sub(replace, value)
     if isinstance(value, dict):
         return {k: _substitute_env(v) for k, v in value.items()}
@@ -40,9 +42,7 @@ def default_config_path() -> Path:
 def load_config(path: Path | str | None = None) -> ConductorConfig:
     p = Path(path).expanduser() if path else default_config_path()
     if not p.exists():
-        raise FileNotFoundError(
-            f"Config not found at {p}. Run `conductor init` to create one."
-        )
+        raise FileNotFoundError(f"Config not found at {p}. Run `conductor init` to create one.")
     with p.open() as f:
         raw = yaml.safe_load(f) or {}
     return ConductorConfig.model_validate(_substitute_env(raw))

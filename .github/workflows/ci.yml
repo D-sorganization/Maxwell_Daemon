@@ -40,6 +40,9 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: mypy conductor
+      - name: Mypy on tests
+        run: mypy tests --no-strict-optional
+        continue-on-error: true  # Tighten iteratively
 
   test:
     name: Test (py${{ matrix.python-version }})
@@ -94,6 +97,21 @@ jobs:
         with:
           python-version: "3.12"
       - run: python scripts/check_todo_fixme.py conductor
+
+  security:
+    name: Security scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install bandit pip-audit
+      - name: Bandit (static analysis)
+        run: bandit -r conductor -c pyproject.toml
+      - name: pip-audit (dependency vulnerabilities)
+        run: pip-audit --desc --strict || true  # report but don't fail until we triage
 
   build:
     name: Build distribution

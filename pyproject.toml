@@ -49,6 +49,7 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
     "pytest-mock>=3.14.0",
+    "respx>=0.21.0",
     "ruff>=0.6.0",
     "mypy>=1.11.0",
     "types-pyyaml",
@@ -87,3 +88,24 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["prometheus_client", "prometheus_client.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["anthropic", "anthropic.*", "openai", "openai.*"]
+ignore_missing_imports = false
+
+[tool.pydantic-mypy]
+init_forbid_extra = false
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.bandit]
+# Tests contain intentional assertions and fake secrets for fixtures — skip.
+exclude_dirs = ["tests", "docs"]
+# B101 is assert-removed-under-optimisation, which is a style nit not a vuln.
+# B404/B603 are about subprocess — we deliberately use subprocess with argv lists.
+skips = ["B101", "B404", "B603"]

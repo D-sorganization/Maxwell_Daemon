@@ -31,7 +31,11 @@ class _Fake(ILLMBackend):
 
     async def complete(self, messages: list[Message], *, model: str, **_: Any) -> BackendResponse:
         return BackendResponse(
-            content="", finish_reason="stop", usage=TokenUsage(), model=model, backend=self.name,
+            content="",
+            finish_reason="stop",
+            usage=TokenUsage(),
+            model=model,
+            backend=self.name,
         )
 
     async def stream(self, messages: list[Message], *, model: str, **_: Any) -> AsyncIterator[str]:

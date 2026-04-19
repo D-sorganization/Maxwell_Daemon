@@ -97,9 +97,7 @@ class OllamaBackend(ILLMBackend):
         if max_tokens is not None:
             payload["options"]["num_predict"] = max_tokens
 
-        async with self._client.stream(
-            "POST", f"{self._endpoint}/api/chat", json=payload
-        ) as r:
+        async with self._client.stream("POST", f"{self._endpoint}/api/chat", json=payload) as r:
             r.raise_for_status()
             async for line in r.aiter_lines():
                 if not line:

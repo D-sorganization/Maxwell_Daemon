@@ -31,7 +31,13 @@ class BackendRouter:
 
     def _get_or_create(self, name: str, cfg: BackendConfig) -> ILLMBackend:
         if name not in self._instances:
-            params = cfg.model_dump(exclude={"type", "enabled", "model"}, exclude_none=True)
+            # Exclude `api_key` from model_dump() — SecretStr serialises to the
+            # masked form, and we want to pass the raw value explicitly.
+            params = cfg.model_dump(
+                exclude={"type", "enabled", "model", "api_key"}, exclude_none=True
+            )
+            if (key := cfg.api_key_value()) is not None:
+                params["api_key"] = key
             self._instances[name] = registry.create(cfg.type, params)
         return self._instances[name]
 

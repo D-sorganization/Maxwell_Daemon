@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
 class BackendConfig(BaseModel):
@@ -19,9 +19,17 @@ class BackendConfig(BaseModel):
 
     type: str = Field(..., description="Backend type: claude, openai, ollama, google, azure")
     model: str = Field(..., description="Default model id for this backend")
-    api_key: str | None = Field(None, description="API key (supports ${ENV_VAR} substitution)")
+    api_key: SecretStr | None = Field(
+        None,
+        description="API key (supports ${ENV_VAR} substitution). "
+        "Wrapped in SecretStr so it won't leak via repr() or model_dump().",
+    )
     base_url: str | None = None
     enabled: bool = True
+
+    def api_key_value(self) -> str | None:
+        """Unwrap the SecretStr for passing to adapter constructors."""
+        return self.api_key.get_secret_value() if self.api_key is not None else None
 
 
 class BudgetConfig(BaseModel):
@@ -54,6 +62,7 @@ class RepoConfig(BaseModel):
     def _expand_path(cls, v: Any) -> Path:
         if isinstance(v, str):
             return Path(v).expanduser()
+        assert isinstance(v, Path)
         return v
 
 
@@ -88,11 +97,11 @@ class ConductorConfig(BaseModel):
 
     version: str = "1"
     backends: dict[str, BackendConfig] = Field(default_factory=dict)
-    agent: AgentConfig = Field(default_factory=AgentConfig)
+    agent: AgentConfig = Field(default_factory=lambda: AgentConfig())
     repos: list[RepoConfig] = Field(default_factory=list)
-    fleet: FleetConfig = Field(default_factory=FleetConfig)
-    api: APIConfig = Field(default_factory=APIConfig)
-    budget: BudgetConfig = Field(default_factory=BudgetConfig)
+    fleet: FleetConfig = Field(default_factory=lambda: FleetConfig())
+    api: APIConfig = Field(default_factory=lambda: APIConfig())
+    budget: BudgetConfig = Field(default_factory=lambda: BudgetConfig())
 
     @field_validator("backends")
     @classmethod
