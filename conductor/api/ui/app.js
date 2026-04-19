@@ -212,3 +212,116 @@ document.addEventListener("DOMContentLoaded", () => {
 
   setInterval(fetchCost, 30_000);
 });
+
+// ---- new-task dialog -----------------------------------------------------
+
+function parseIssueRef(raw) {
+  const s = String(raw || "").trim();
+  const urlMatch = s.match(/github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)/);
+  if (urlMatch) return { repo: urlMatch[1], number: Number(urlMatch[2]) };
+  const short = s.match(/^([A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*)#(\d+)$/);
+  if (short) return { repo: short[1], number: Number(short[2]) };
+  return null;
+}
+
+function openNewTaskDialog() {
+  const d = document.getElementById("new-task-dialog");
+  document.getElementById("new-task-error").hidden = true;
+  document.getElementById("issue-input").value = "";
+  document.getElementById("prompt-input").value = "";
+  d.showModal();
+  setTimeout(() => document.getElementById("issue-input").focus(), 0);
+}
+
+function closeNewTaskDialog() {
+  document.getElementById("new-task-dialog").close();
+}
+
+function wireKindSwitch() {
+  const issueFields = document.getElementById("issue-fields");
+  const promptFields = document.getElementById("prompt-fields");
+  document.querySelectorAll('input[name="kind"]').forEach((r) => {
+    r.addEventListener("change", () => {
+      const kind = document.querySelector('input[name="kind"]:checked').value;
+      issueFields.hidden = kind !== "issue";
+      promptFields.hidden = kind !== "prompt";
+      (kind === "issue"
+        ? document.getElementById("issue-input")
+        : document.getElementById("prompt-input")
+      ).focus();
+    });
+  });
+}
+
+async function submitNewTask(ev) {
+  ev.preventDefault();
+  const errEl = document.getElementById("new-task-error");
+  errEl.hidden = true;
+
+  const kind = document.querySelector('input[name="kind"]:checked').value;
+  let url, body;
+
+  if (kind === "issue") {
+    const ref = parseIssueRef(document.getElementById("issue-input").value);
+    if (!ref) {
+      errEl.textContent = "Unrecognised issue reference.";
+      errEl.hidden = false;
+      return;
+    }
+    url = "/api/v1/issues/dispatch";
+    body = {
+      repo: ref.repo,
+      number: ref.number,
+      mode: document.getElementById("mode-input").value,
+    };
+  } else {
+    const prompt = document.getElementById("prompt-input").value.trim();
+    if (!prompt) {
+      errEl.textContent = "Prompt cannot be empty.";
+      errEl.hidden = false;
+      return;
+    }
+    url = "/api/v1/tasks";
+    body = { prompt };
+  }
+
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers() },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const detail = await r.text();
+      errEl.textContent = `Dispatch failed (${r.status}): ${detail.slice(0, 200)}`;
+      errEl.hidden = false;
+      return;
+    }
+  } catch (e) {
+    errEl.textContent = `Network error: ${e.message}`;
+    errEl.hidden = false;
+    return;
+  }
+
+  closeNewTaskDialog();
+  await fetchTasks();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  wireKindSwitch();
+  document.getElementById("new-task-btn").addEventListener("click", openNewTaskDialog);
+  document.getElementById("new-task-cancel").addEventListener("click", closeNewTaskDialog);
+  document.getElementById("new-task-form").addEventListener("submit", submitNewTask);
+
+  // N opens the dialog when it's closed and no input is focused.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "n" && ev.key !== "N") return;
+    const tag = document.activeElement?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    const d = document.getElementById("new-task-dialog");
+    if (!d.open) {
+      ev.preventDefault();
+      openNewTaskDialog();
+    }
+  });
+});

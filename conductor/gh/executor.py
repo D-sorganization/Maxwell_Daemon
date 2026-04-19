@@ -24,6 +24,7 @@ from conductor.core.repo_overrides import RepoOverrides
 from conductor.gh.context import ContextBuilder
 from conductor.gh.test_runner import TestResult, TestRunner
 from conductor.gh.workspace import WorkspaceError
+from conductor.tracing import span as _trace_span
 
 __all__ = ["IssueExecutionError", "IssueExecutor", "IssueResult"]
 
@@ -122,7 +123,11 @@ class IssueExecutor:
         task_id: str | None = None,
         on_test_output: Any = None,
     ) -> IssueResult:
-        issue = await self._gh.get_issue(repo, issue_number)
+        async with _trace_span(
+            "conductor.issue.fetch",
+            {"repo": repo, "issue": issue_number},
+        ):
+            issue = await self._gh.get_issue(repo, issue_number)
         branch = f"conductor/issue-{issue_number}"
         # Fall back to a derived id when the caller didn't supply one so the
         # executor stays usable in non-Daemon contexts (one-off scripts, tests).
@@ -142,12 +147,16 @@ class IssueExecutor:
             ctx = await self._context_builder.build(repo_path, issue.body)
             context_prompt = ctx.to_prompt(max_chars=ctx_max)
 
-        plan, diff = await self._draft_change(
-            issue_title=issue.title,
-            issue_body=issue.body,
-            model=model,
-            context=context_prompt,
-        )
+        async with _trace_span(
+            "conductor.issue.draft",
+            {"repo": repo, "issue": issue_number, "model": model, "mode": mode},
+        ):
+            plan, diff = await self._draft_change(
+                issue_title=issue.title,
+                issue_body=issue.body,
+                model=model,
+                context=context_prompt,
+            )
 
         applied = False
         test_result: TestResult | None = None
@@ -201,14 +210,18 @@ class IssueExecutor:
             applied=applied,
             test_result=test_result,
         )
-        pr = await self._gh.create_pull_request(
-            repo,
-            head=branch,
-            base=base_branch,
-            title=f"Fix #{issue_number}: {issue.title}",
-            body=pr_body,
-            draft=True,
-        )
+        async with _trace_span(
+            "conductor.issue.open_pr",
+            {"repo": repo, "issue": issue_number, "applied_diff": applied},
+        ):
+            pr = await self._gh.create_pull_request(
+                repo,
+                head=branch,
+                base=base_branch,
+                title=f"Fix #{issue_number}: {issue.title}",
+                body=pr_body,
+                draft=True,
+            )
         return IssueResult(
             issue_number=issue_number,
             pr_url=pr.url,

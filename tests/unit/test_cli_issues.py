@@ -25,7 +25,10 @@ def runner() -> CliRunner:
 
 class _FakeGH:
     def __init__(
-        self, *, create_url: str = "https://github.com/o/r/issues/7", issues: list[Issue] | None = None
+        self,
+        *,
+        create_url: str = "https://github.com/o/r/issues/7",
+        issues: list[Issue] | None = None,
     ) -> None:
         self._create_url = create_url
         self._issues = issues or []
@@ -35,16 +38,12 @@ class _FakeGH:
     ) -> str:
         return self._create_url
 
-    async def list_issues(
-        self, repo: str, *, state: str = "open", limit: int = 50
-    ) -> list[Issue]:
+    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 50) -> list[Issue]:
         return self._issues
 
 
 class TestIssueNew:
-    def test_creates_issue(
-        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_creates_issue(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
         from conductor import cli
 
         monkeypatch.setattr(cli.issues, "GitHubClient", lambda: _FakeGH())
@@ -83,9 +82,7 @@ class TestIssueNew:
 
 
 class TestIssueList:
-    def test_empty(
-        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
         from conductor import cli
 
         monkeypatch.setattr(cli.issues, "GitHubClient", lambda: _FakeGH(issues=[]))
@@ -93,9 +90,7 @@ class TestIssueList:
         assert r.exit_code == 0
         assert "No issues" in r.stdout
 
-    def test_renders_table(
-        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_renders_table(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
         from conductor import cli
 
         monkeypatch.setattr(
@@ -158,9 +153,7 @@ class TestIssueDispatchBatchFromRepo:
             )
         assert r.exit_code == 0, r.stdout
         # Only the 'triage' issue should have been dispatched.
-        assert captured == [
-            {"items": [{"repo": "owner/repo", "number": 1, "mode": "plan"}]}
-        ]
+        assert captured == [{"items": [{"repo": "owner/repo", "number": 1, "mode": "plan"}]}]
 
     def test_requires_either_file_or_repo(self, runner: CliRunner) -> None:
         r = runner.invoke(app, ["issue", "dispatch-batch"])
@@ -175,9 +168,7 @@ class TestIssueDispatchBatchFromRepo:
         from conductor import cli
 
         monkeypatch.setattr(cli.issues, "GitHubClient", lambda: _FakeGH(issues=[]))
-        r = runner.invoke(
-            app, ["issue", "dispatch-batch", "--repo", "owner/repo"]
-        )
+        r = runner.invoke(app, ["issue", "dispatch-batch", "--repo", "owner/repo"])
         assert r.exit_code == 0
         assert "No issues" in r.stdout
 

@@ -38,6 +38,11 @@ class BudgetConfig(BaseModel):
     hard_stop: bool = Field(
         False, description="If true, refuse requests that would exceed the budget"
     )
+    alert_webhook_url: str | None = Field(
+        None, description="POST alerts here when forecast > limit * warn_multiplier"
+    )
+    alert_warn_multiplier: float = Field(1.1, gt=1.0)
+    alert_debounce_hours: int = Field(6, ge=0)
 
 
 class AgentConfig(BaseModel):

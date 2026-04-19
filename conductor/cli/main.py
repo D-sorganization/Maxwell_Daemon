@@ -255,6 +255,45 @@ def cost(
 
 
 @app.command()
+def doctor(
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    ledger: Annotated[Path | None, typer.Option("--ledger")] = None,
+) -> None:
+    """Run every preflight check and print a green/yellow/red summary."""
+    from conductor.core.doctor import Severity, run_all_checks
+
+    cfg_path = config or Path.home() / ".config/conductor/conductor.yaml"
+    ledger_path = ledger or Path.home() / ".local/share/conductor/ledger.db"
+
+    results = asyncio.run(run_all_checks(config_path=cfg_path, ledger_path=ledger_path))
+
+    icon = {
+        Severity.OK: "[green]✓[/green]",
+        Severity.WARN: "[yellow]⚠[/yellow]",
+        Severity.ERROR: "[red]✗[/red]",
+    }
+    t = Table(show_header=False, box=None, padding=(0, 1))
+    t.add_column("")
+    t.add_column("Check", style="bold")
+    t.add_column("Detail", style="dim")
+    for r in results:
+        t.add_row(icon[r.severity], r.name, r.message)
+    console.print(t)
+
+    errors = [r for r in results if r.severity is Severity.ERROR]
+    warns = [r for r in results if r.severity is Severity.WARN]
+    if errors:
+        console.print(f"\n[red]{len(errors)} error(s), {len(warns)} warning(s)[/red]")
+        raise typer.Exit(1)
+    if warns:
+        console.print(
+            f"\n[yellow]{len(warns)} warning(s) — daemon will run but may be degraded[/yellow]"
+        )
+    else:
+        console.print("\n[green]All checks healthy.[/green]")
+
+
+@app.command()
 def serve(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     host: Annotated[str, typer.Option("--host")] = "127.0.0.1",

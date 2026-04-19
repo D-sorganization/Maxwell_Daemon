@@ -10,6 +10,7 @@
   <header>
     <h1>CONDUCTOR</h1>
     <div class="toolbar">
+      <button id="new-task-btn" title="Dispatch a task (shortcut: N)">+ New</button>
       <span id="connection" class="pill">connecting…</span>
       <span id="cost-summary" class="pill"></span>
     </div>
@@ -65,8 +66,46 @@
     </section>
   </main>
 
+  <dialog id="new-task-dialog">
+    <form id="new-task-form" method="dialog">
+      <h3>Dispatch a task</h3>
+      <fieldset class="kind-switch">
+        <label><input type="radio" name="kind" value="issue" checked> GitHub issue</label>
+        <label><input type="radio" name="kind" value="prompt"> One-shot prompt</label>
+      </fieldset>
+
+      <div class="field" id="issue-fields">
+        <label>Issue URL or <code>owner/repo#NNN</code>
+          <input id="issue-input" type="text"
+                 placeholder="https://github.com/owner/repo/issues/42"
+                 autocomplete="off" autofocus>
+        </label>
+        <label>Mode
+          <select id="mode-input">
+            <option value="plan">plan (safe — no code writes)</option>
+            <option value="implement">implement (draft PR with diff)</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="field" id="prompt-fields" hidden>
+        <label>Prompt
+          <textarea id="prompt-input" rows="4" placeholder="Ask the default backend…"></textarea>
+        </label>
+      </div>
+
+      <div id="new-task-error" class="error" hidden></div>
+
+      <menu>
+        <button type="button" id="new-task-cancel">Cancel</button>
+        <button type="submit" id="new-task-submit">Dispatch</button>
+      </menu>
+    </form>
+  </dialog>
+
   <footer>
     <span>Docs: <a href="https://github.com/D-sorganization/CONDUCTOR">repository</a></span>
+    <span class="hint">Press <kbd>N</kbd> to dispatch, <kbd>Esc</kbd> to close dialogs.</span>
   </footer>
 
   <script src="/ui/app.js"></script>

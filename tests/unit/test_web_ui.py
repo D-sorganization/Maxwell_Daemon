@@ -69,3 +69,16 @@ class TestHTMLContent:
         js = client.get("/ui/app.js").text
         assert "/api/v1/tasks" in js
         assert "/api/v1/events" in js or "WebSocket" in js
+
+
+class TestNewTaskDialog:
+    def test_dialog_present(self, client: TestClient) -> None:
+        html = client.get("/ui/").text
+        assert "new-task-dialog" in html
+        assert "new-task-btn" in html
+
+    def test_js_parses_issue_references(self, client: TestClient) -> None:
+        """Smoke-test: the JS ships the dispatch helper + POST endpoint."""
+        js = client.get("/ui/app.js").text
+        assert "parseIssueRef" in js
+        assert "/api/v1/issues/dispatch" in js

@@ -96,7 +96,7 @@ disallow_untyped_defs = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["prometheus_client", "prometheus_client.*"]
+module = ["prometheus_client", "prometheus_client.*", "opentelemetry.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
