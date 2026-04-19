@@ -22,22 +22,16 @@ class TestConfigureLogging:
         logger = get_logger("test")
         assert logger is not None
 
-    def test_json_format_emits_parseable_json(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_json_format_emits_parseable_json(self, capsys: pytest.CaptureFixture[str]) -> None:
         configure_logging(level="INFO", json_format=True)
         get_logger("test").info("hello", extra_field=42)
         captured = capsys.readouterr()
         # At least one line should be valid JSON with our fields.
         lines = [line for line in captured.err.splitlines() + captured.out.splitlines() if line]
         parsed = [json.loads(line) for line in lines if line.startswith("{")]
-        assert any(
-            p.get("event") == "hello" and p.get("extra_field") == 42 for p in parsed
-        )
+        assert any(p.get("event") == "hello" and p.get("extra_field") == 42 for p in parsed)
 
-    def test_plain_format_human_readable(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_plain_format_human_readable(self, capsys: pytest.CaptureFixture[str]) -> None:
         configure_logging(level="INFO", json_format=False)
         get_logger("test").info("hello there")
         out = capsys.readouterr()
@@ -51,15 +45,11 @@ class TestBindContext:
         with bind_context(request_id="req-123"):
             get_logger("test").info("inside")
         out = capsys.readouterr()
-        lines = [
-            line for line in (out.err + out.out).splitlines() if line.startswith("{")
-        ]
+        lines = [line for line in (out.err + out.out).splitlines() if line.startswith("{")]
         parsed = [json.loads(line) for line in lines]
         assert any(p.get("request_id") == "req-123" for p in parsed)
 
-    def test_context_is_scoped_to_with_block(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_context_is_scoped_to_with_block(self, capsys: pytest.CaptureFixture[str]) -> None:
         configure_logging(level="INFO", json_format=True)
         with bind_context(scoped="yes"):
             pass
@@ -74,9 +64,8 @@ class TestBindContext:
 
     def test_nested_contexts_merge(self, capsys: pytest.CaptureFixture[str]) -> None:
         configure_logging(level="INFO", json_format=True)
-        with bind_context(outer="a"):
-            with bind_context(inner="b"):
-                get_logger("test").info("both")
+        with bind_context(outer="a"), bind_context(inner="b"):
+            get_logger("test").info("both")
         out = capsys.readouterr()
         lines = [line for line in (out.err + out.out).splitlines() if line.startswith("{")]
         parsed = [json.loads(line) for line in lines]

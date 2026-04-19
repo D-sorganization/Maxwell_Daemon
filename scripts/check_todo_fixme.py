@@ -5,6 +5,7 @@ Fleet standard: every open placeholder either points to GitHub issue #NNN or
 links to an external tracker URL. This keeps tech debt visible rather than
 buried.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -23,8 +24,7 @@ def _check(paths: list[Path]) -> list[str]:
                 for lineno, line in enumerate(f, 1):
                     if _PATTERN.search(line):
                         violations.append(
-                            f"{path}:{lineno}: {line.rstrip()} — "
-                            f"add #<issue> or URL reference"
+                            f"{path}:{lineno}: {line.rstrip()} — add #<issue> or URL reference"
                         )
         except (OSError, UnicodeDecodeError):
             continue

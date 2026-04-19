@@ -17,9 +17,7 @@ def runner() -> CliRunner:
 
 
 @pytest.fixture
-def populated_config(
-    tmp_path: Path, register_recording_backend: None
-) -> Path:
+def populated_config(tmp_path: Path, register_recording_backend: None) -> Path:
     from conductor.config import ConductorConfig, save_config
 
     cfg = ConductorConfig.model_validate(
@@ -64,9 +62,7 @@ class TestInit:
 
 
 class TestStatus:
-    def test_reports_configured_backends(
-        self, runner: CliRunner, populated_config: Path
-    ) -> None:
+    def test_reports_configured_backends(self, runner: CliRunner, populated_config: Path) -> None:
         r = runner.invoke(app, ["status", "--config", str(populated_config)])
         assert r.exit_code == 0
         assert "primary" in r.stdout
@@ -86,16 +82,12 @@ class TestBackendsCommand:
 
 
 class TestHealth:
-    def test_healthy_backend_passes(
-        self, runner: CliRunner, populated_config: Path
-    ) -> None:
+    def test_healthy_backend_passes(self, runner: CliRunner, populated_config: Path) -> None:
         r = runner.invoke(app, ["health", "--config", str(populated_config)])
         assert r.exit_code == 0
         assert "healthy" in r.stdout
 
-    def test_unhealthy_backend_fails(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_unhealthy_backend_fails(self, runner: CliRunner, tmp_path: Path) -> None:
         from conductor.config import ConductorConfig, save_config
         from tests.conftest import RecordingBackend
 
@@ -121,9 +113,7 @@ class TestHealth:
 
 
 class TestAsk:
-    def test_one_shot_prompt(
-        self, runner: CliRunner, populated_config: Path
-    ) -> None:
+    def test_one_shot_prompt(self, runner: CliRunner, populated_config: Path) -> None:
         r = runner.invoke(
             app,
             ["ask", "hello world", "--config", str(populated_config), "--no-stream"],

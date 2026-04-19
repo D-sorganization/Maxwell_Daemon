@@ -1,0 +1,65 @@
+site_name: CONDUCTOR
+site_description: Multi-backend autonomous code agent orchestrator
+site_url: https://d-sorganization.github.io/CONDUCTOR/
+repo_url: https://github.com/D-sorganization/CONDUCTOR
+repo_name: D-sorganization/CONDUCTOR
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Quick start: getting-started/quickstart.md
+      - Configuration: getting-started/configuration.md
+      - Autonomous workflow: getting-started/autonomous-workflow.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Backend interface: architecture/backends.md
+      - Design by Contract: architecture/contracts.md
+  - Operations:
+      - Deployment (Ansible): operations/ansible.md
+      - Observability: operations/observability.md
+      - Budgets: operations/budgets.md
+  - Reference:
+      - CLI: reference/cli.md
+      - REST API: reference/api.md
+  - Contributing: contributing.md

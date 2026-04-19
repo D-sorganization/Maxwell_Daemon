@@ -1,0 +1,101 @@
+---
+# Install CONDUCTOR on a fleet node.
+#
+#   ansible-playbook -i inventory.yml ansible/playbooks/install.yml
+#
+# Idempotent: safe to re-run. Tightens system config only where required.
+
+- name: Install CONDUCTOR
+  hosts: conductor_fleet
+  become: true
+  vars:
+    conductor_bin: "{{ conductor_home }}/venv/bin/conductor"
+    conductor_config_dir: "/etc/conductor"
+    conductor_systemd_unit: /etc/systemd/system/conductor.service
+
+  tasks:
+    - name: Ensure conductor user exists
+      ansible.builtin.user:
+        name: "{{ conductor_user }}"
+        system: true
+        shell: /usr/sbin/nologin
+        home: "{{ conductor_home }}"
+        create_home: true
+
+    - name: Ensure required system packages are present
+      ansible.builtin.package:
+        name:
+          - python3
+          - python3-venv
+          - python3-pip
+        state: present
+
+    - name: Create config dir
+      ansible.builtin.file:
+        path: "{{ conductor_config_dir }}"
+        state: directory
+        owner: "{{ conductor_user }}"
+        group: "{{ conductor_user }}"
+        mode: "0750"
+
+    - name: Create virtualenv + install conductor
+      ansible.builtin.pip:
+        name: "conductor-agents=={{ conductor_version }}"
+        virtualenv: "{{ conductor_home }}/venv"
+        virtualenv_command: python3 -m venv
+      become_user: "{{ conductor_user }}"
+
+    - name: Render conductor.yaml from template
+      ansible.builtin.template:
+        src: ../templates/conductor.yaml.j2
+        dest: "{{ conductor_config_dir }}/conductor.yaml"
+        owner: "{{ conductor_user }}"
+        group: "{{ conductor_user }}"
+        mode: "0640"
+      notify: Restart conductor
+
+    - name: Install systemd unit
+      ansible.builtin.copy:
+        dest: "{{ conductor_systemd_unit }}"
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Conductor Daemon
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User={{ conductor_user }}
+          Group={{ conductor_user }}
+          Environment=CONDUCTOR_CONFIG={{ conductor_config_dir }}/conductor.yaml
+          ExecStart={{ conductor_bin }} serve --host 0.0.0.0 --port 8080
+          Restart=on-failure
+          RestartSec=5s
+          # Security hardening
+          NoNewPrivileges=true
+          ProtectSystem=strict
+          ProtectHome=true
+          ReadWritePaths={{ conductor_home }} {{ conductor_config_dir }}
+          PrivateTmp=true
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Reload systemd
+
+    - name: Enable and start conductor
+      ansible.builtin.systemd:
+        name: conductor
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart conductor
+      ansible.builtin.systemd:
+        name: conductor
+        state: restarted

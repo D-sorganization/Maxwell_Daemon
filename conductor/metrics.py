@@ -13,9 +13,9 @@ from fastapi import FastAPI, Response
 from prometheus_client import CollectorRegistry, Counter, Histogram, generate_latest
 
 __all__ = [
+    "CONDUCTOR_REQUESTS_TOTAL",
     "CONDUCTOR_REQUEST_COST",
     "CONDUCTOR_REQUEST_DURATION",
-    "CONDUCTOR_REQUESTS_TOTAL",
     "CONDUCTOR_TOKENS_TOTAL",
     "build_registry",
     "mount_metrics_endpoint",
@@ -65,18 +65,16 @@ def record_request(
     Token and cost metrics are only incremented when status == "success" so that
     failed/rejected requests don't pollute spend dashboards.
     """
-    CONDUCTOR_REQUESTS_TOTAL.labels(
-        backend=backend, model=model, status=status
-    ).inc()
+    CONDUCTOR_REQUESTS_TOTAL.labels(backend=backend, model=model, status=status).inc()
     if status == "success":
         if tokens > 0:
             CONDUCTOR_TOKENS_TOTAL.labels(backend=backend, model=model).inc(tokens)
         if cost_usd > 0:
             CONDUCTOR_REQUEST_COST.labels(backend=backend, model=model).inc(cost_usd)
         if duration_seconds > 0:
-            CONDUCTOR_REQUEST_DURATION.labels(
-                backend=backend, model=model
-            ).observe(duration_seconds)
+            CONDUCTOR_REQUEST_DURATION.labels(backend=backend, model=model).observe(
+                duration_seconds
+            )
 
 
 def build_registry() -> CollectorRegistry:
