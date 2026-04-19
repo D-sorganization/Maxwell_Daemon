@@ -118,15 +118,9 @@ class TestEventBus:
     def test_unsubscribe_on_generator_close(self) -> None:
         async def run() -> int:
             bus = EventBus()
-
-            async def short() -> None:
-                async for _ in bus.subscribe(queue_size=1):
-                    return  # exit after first event
-
-            t = asyncio.create_task(short())
-            await asyncio.sleep(0.01)
-            await bus.publish(Event(kind=EventKind.TASK_QUEUED, payload={}))
-            await asyncio.wait_for(t, timeout=1.0)
+            gen = bus.subscribe(queue_size=1)
+            assert bus.subscriber_count() == 1  # synchronous registration
+            await gen.aclose()
             return bus.subscriber_count()
 
         remaining = asyncio.run(run())

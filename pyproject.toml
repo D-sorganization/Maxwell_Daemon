@@ -102,3 +102,10 @@ ignore_missing_imports = false
 init_forbid_extra = false
 init_typed = true
 warn_required_dynamic_aliases = true
+
+[tool.bandit]
+# Tests contain intentional assertions and fake secrets for fixtures — skip.
+exclude_dirs = ["tests", "docs"]
+# B101 is assert-removed-under-optimisation, which is a style nit not a vuln.
+# B404/B603 are about subprocess — we deliberately use subprocess with argv lists.
+skips = ["B101", "B404", "B603"]

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -59,28 +58,59 @@ class EventBus:
 
     def __init__(self) -> None:
         self._subscribers: set[asyncio.Queue[Event]] = set()
-        self._lock = asyncio.Lock()
 
     async def publish(self, event: Event) -> None:
-        async with self._lock:
-            subs = list(self._subscribers)
-        for q in subs:
+        # No lock needed for a snapshot read; set iteration is atomic.
+        for q in list(self._subscribers):
             try:
                 q.put_nowait(event)
             except asyncio.QueueFull:
                 # Telemetry is best-effort; never block a publisher.
                 continue
 
-    async def subscribe(self, *, queue_size: int = 32) -> AsyncIterator[Event]:
+    def subscribe(self, *, queue_size: int = 32) -> _Subscription:
+        """Register a subscriber and return an async iterator over its events.
+
+        Registration happens synchronously at call time, so
+        :meth:`subscriber_count` reflects the new subscriber immediately.
+        Unregistration happens when the returned iterator is closed (via
+        ``aclose()`` or when the last reference is dropped).
+        """
         queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=queue_size)
-        async with self._lock:
-            self._subscribers.add(queue)
-        try:
-            while True:
-                yield await queue.get()
-        finally:
-            async with self._lock:
-                self._subscribers.discard(queue)
+        self._subscribers.add(queue)
+        return _Subscription(self, queue)
 
     def subscriber_count(self) -> int:
         return len(self._subscribers)
+
+    def _unsubscribe(self, queue: asyncio.Queue[Event]) -> None:
+        self._subscribers.discard(queue)
+
+
+class _Subscription:
+    """Async iterator backed by a queue, with explicit unsubscribe on close."""
+
+    def __init__(self, bus: EventBus, queue: asyncio.Queue[Event]) -> None:
+        self._bus = bus
+        self._queue = queue
+        self._closed = False
+
+    def __aiter__(self) -> _Subscription:
+        return self
+
+    async def __anext__(self) -> Event:
+        if self._closed:
+            raise StopAsyncIteration
+        return await self._queue.get()
+
+    async def aclose(self) -> None:
+        if not self._closed:
+            self._closed = True
+            self._bus._unsubscribe(self._queue)
+
+    def __del__(self) -> None:
+        # Safety net: if the subscription is GC'd without explicit close,
+        # still deregister from the bus so subscriber_count() stays accurate.
+        if not self._closed:
+            self._bus._unsubscribe(self._queue)
+            self._closed = True

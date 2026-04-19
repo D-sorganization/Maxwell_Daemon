@@ -118,8 +118,25 @@ class Daemon:
             self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
         log.info("daemon started with %d workers", worker_count)
 
-    async def stop(self) -> None:
+    async def stop(self, *, drain: bool = False, timeout: float = 30.0) -> None:
+        """Stop the daemon.
+
+        :param drain: if True, stop accepting new tasks but wait for in-flight
+            work to finish (up to ``timeout`` seconds). If False, cancel
+            workers immediately — in-flight tasks will be interrupted.
+        :param timeout: max seconds to wait for in-flight work when drain=True.
+        """
         self._running = False
+        if drain:
+            # Let workers finish whatever they've pulled off the queue.
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*self._workers, return_exceptions=True),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                log.warning("drain timeout exceeded; cancelling remaining workers")
+        # Cancel anything still running (either because drain=False or timeout).
         for w in self._workers:
             w.cancel()
         await asyncio.gather(*self._workers, return_exceptions=True)
@@ -227,9 +244,9 @@ class Daemon:
 
     async def _worker_loop(self, worker_id: int) -> None:
         log.info("worker %d ready", worker_id)
-        while self._running:
+        while self._running or not self._queue.empty():
             try:
-                task = await asyncio.wait_for(self._queue.get(), timeout=1.0)
+                task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
             except asyncio.TimeoutError:
                 continue
             await self._execute(task)

@@ -14,15 +14,28 @@ terminate TLS at the reverse proxy (nginx, caddy) or enable TLS in uvicorn.
 
 from __future__ import annotations
 
+import hmac
+import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from pydantic import BaseModel, Field
 
 from conductor import __version__
 from conductor.daemon import Daemon
 from conductor.daemon.runner import Task
+from conductor.logging import bind_context
 from conductor.metrics import mount_metrics_endpoint
 
 
@@ -103,7 +116,9 @@ def _auth_dep(token: str | None) -> Any:
             return
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token")
-        if authorization.removeprefix("Bearer ").strip() != token:
+        presented = authorization.removeprefix("Bearer ").strip()
+        # Constant-time comparison — prevents leaking token via response timing.
+        if not hmac.compare_digest(presented.encode(), token.encode()):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token")
 
     return _check
@@ -127,6 +142,19 @@ def create_app(
     )
     mount_metrics_endpoint(app)
     auth = _auth_dep(auth_token)
+
+    @app.middleware("http")
+    async def request_id_middleware(request: Request, call_next: Any) -> Response:
+        """Attach a UUID request-id to every request + response + log line."""
+        incoming = request.headers.get("x-request-id", "")
+        try:
+            request_id = str(uuid.UUID(incoming)) if incoming else str(uuid.uuid4())
+        except ValueError:
+            request_id = str(uuid.uuid4())
+        with bind_context(request_id=request_id):
+            response: Response = await call_next(request)
+        response.headers["x-request-id"] = request_id
+        return response
 
     def _gh() -> Any:
         if github_client is not None:
@@ -251,9 +279,11 @@ def create_app(
         ``?token=...`` as a query param because browser WebSocket APIs can't set
         headers. Terminate at a proxy for TLS.
         """
-        if auth_token is not None and ws.query_params.get("token") != auth_token:
-            await ws.close(code=1008)
-            return
+        if auth_token is not None:
+            presented = ws.query_params.get("token") or ""
+            if not hmac.compare_digest(presented.encode(), auth_token.encode()):
+                await ws.close(code=1008)
+                return
         await ws.accept()
         try:
             async for event in daemon.events.subscribe(queue_size=64):

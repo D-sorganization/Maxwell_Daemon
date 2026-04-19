@@ -78,7 +78,9 @@ class TestConfigLoad:
             )
         )
         cfg = load_config(path)
-        assert cfg.backends["claude"].api_key == "sk-test-123"
+        # api_key is a SecretStr so it doesn't leak in repr / JSON dumps.
+        assert cfg.backends["claude"].api_key_value() == "sk-test-123"
+        assert "sk-test-123" not in repr(cfg.backends["claude"])
 
     def test_default_backend_must_exist(self) -> None:
         cfg = ConductorConfig.model_validate(

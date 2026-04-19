@@ -8,10 +8,14 @@ injectable runner so tests never touch a real filesystem worktree.
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 __all__ = ["Workspace", "WorkspaceError"]
+
+# Must match conductor.gh.client._REPO_RE exactly — kept in sync by the test suite.
+_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 RunnerFn = Callable[..., Awaitable[tuple[int, bytes, bytes]]]
 
@@ -45,9 +49,18 @@ class Workspace:
         self._run = runner or _default_runner
 
     def path_for(self, repo: str) -> Path:
+        """Resolve the on-disk path for a repo. Validates the repo string
+        to defend against path traversal — even though callers are expected
+        to have validated it, defence in depth is cheap here."""
+        if not _REPO_RE.match(repo):
+            raise WorkspaceError(f"Invalid repo {repo!r}")
         # One directory per repo. Name is the repo's path segment, not owner/name,
         # so we don't create nested owner/ directories.
-        return self._root / repo.split("/", 1)[1]
+        target = (self._root / repo.split("/", 1)[1]).resolve()
+        # Belt-and-braces: ensure the resolved path is actually under _root.
+        if self._root.resolve() not in target.parents and target != self._root.resolve():
+            raise WorkspaceError(f"Path escape detected for repo {repo!r}")
+        return target
 
     async def _run_git(
         self, *argv: str, cwd: Path | None = None, stdin: bytes | None = None
