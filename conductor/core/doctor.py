@@ -62,6 +62,9 @@ def check_ledger_writable(path: Path) -> CheckResult:
     from conductor.core.ledger import CostLedger
 
     try:
+        parent = path.expanduser().parent
+        if parent.exists() and parent.stat().st_mode & 0o222 == 0:
+            return CheckResult("ledger", Severity.ERROR, f"ledger parent is not writable: {parent}")
         CostLedger(path)
     except Exception as e:
         return CheckResult("ledger", Severity.ERROR, f"ledger not writable: {e}")
@@ -171,8 +174,14 @@ async def run_all_checks(*, config_path: Path, ledger_path: Path) -> list[CheckR
         for name in router.available_backends():
             try:
                 backends.append(router.route(backend_override=name).backend)
-            except Exception:
-                continue
+            except Exception as exc:
+                results.append(
+                    CheckResult(
+                        "backends",
+                        Severity.WARN,
+                        f"backend {name} could not be initialized: {exc}",
+                    )
+                )
         results.append(await check_backends_healthy(backends=backends))
 
     return results

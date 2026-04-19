@@ -118,7 +118,7 @@
   "time": {"from": "now-6h", "to": "now"},
   "timepicker": {},
   "timezone": "",
-  "title": "CONDUCTOR — Agent Fleet",
+  "title": "CONDUCTOR \u2014 Agent Fleet",
   "uid": "conductor-fleet",
   "version": 1,
   "weekStart": ""

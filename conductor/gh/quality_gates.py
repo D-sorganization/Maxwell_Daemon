@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import tokenize
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,13 +86,14 @@ class TodoFixmeGate:
             if ".git" in path.parts or "tests/" in path.as_posix():
                 continue
             try:
-                with path.open(encoding="utf-8") as f:
-                    for lineno, line in enumerate(f, 1):
-                        if self._PATTERN.search(line):
-                            offenders.append(
-                                f"{path.relative_to(repo_path)}:{lineno}: {line.rstrip()}"
-                            )
-            except (OSError, UnicodeDecodeError):
+                with tokenize.open(path) as f:
+                    for token in tokenize.generate_tokens(f.readline):
+                        if token.type != tokenize.COMMENT or not self._PATTERN.search(token.string):
+                            continue
+                        offenders.append(
+                            f"{path.relative_to(repo_path)}:{token.start[0]}: {token.string.rstrip()}"
+                        )
+            except (OSError, tokenize.TokenError, UnicodeDecodeError):
                 continue
         if offenders:
             return GateResult(
