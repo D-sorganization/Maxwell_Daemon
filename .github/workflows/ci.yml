@@ -40,6 +40,9 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: mypy conductor
+      - name: Mypy on tests
+        run: mypy tests --no-strict-optional
+        continue-on-error: true  # Tighten iteratively
 
   test:
     name: Test (py${{ matrix.python-version }})
