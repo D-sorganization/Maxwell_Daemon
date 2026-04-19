@@ -1,0 +1,251 @@
+{
+  "repository": "CONDUCTOR",
+  "assessment_date": "2026-04-19",
+  "run_at_utc": "2026-04-19T08:02:24.4668879Z",
+  "sync_status": "pull-blocked",
+  "sync_notes": "ff-only pull failed: fatal: couldn't find remote ref dependabot/github_actions/actions/setup-python-6",
+  "overall_grade": "C",
+  "overall_score": 73,
+  "category_grades": [
+    {
+      "id": "A",
+      "name": "Architecture and Boundaries",
+      "grade": "B",
+      "score": 82,
+      "evidence": [
+        "97 tracked first-party files",
+        "5 files under source-like directories"
+      ],
+      "notes": "Assesses source organization and boundary clarity from tracked first-party layout."
+    },
+    {
+      "id": "B",
+      "name": "Build and Dependency Management",
+      "grade": "C",
+      "score": 72,
+      "evidence": [
+        "pyproject.toml"
+      ],
+      "notes": "Assesses committed build, dependency, and tool configuration."
+    },
+    {
+      "id": "C",
+      "name": "Configuration and Environment Hygiene",
+      "grade": "C",
+      "score": 78,
+      "evidence": [
+        "pyproject.toml"
+      ],
+      "notes": "Checks whether runtime and developer configuration is explicit."
+    },
+    {
+      "id": "D",
+      "name": "Contracts, Types, and Domain Modeling",
+      "grade": "B",
+      "score": 82,
+      "evidence": [
+        "conductor/api/server.py",
+        "conductor/backends/azure.py",
+        "conductor/backends/base.py",
+        "conductor/backends/claude.py",
+        "conductor/backends/ollama.py",
+        "conductor/backends/openai.py",
+        "conductor/backends/registry.py",
+        "conductor/config/loader.py",
+        "conductor/config/models.py",
+        "conductor/contracts.py"
+      ],
+      "notes": "Design by Contract evidence includes validation, assertions, typed models, explicit raised errors, and invariants."
+    },
+    {
+      "id": "E",
+      "name": "Reliability and Error Handling",
+      "grade": "C",
+      "score": 76,
+      "evidence": [
+        "tests/__init__.py",
+        "tests/conftest.py",
+        "tests/integration/__init__.py",
+        "tests/integration/test_end_to_end.py",
+        "tests/integration/test_issue_workflow.py",
+        "conductor/api/server.py",
+        "conductor/backends/azure.py",
+        "conductor/backends/base.py",
+        "conductor/backends/claude.py",
+        "conductor/backends/ollama.py"
+      ],
+      "notes": "Reliability is graded from test presence plus explicit validation/error-handling signals."
+    },
+    {
+      "id": "F",
+      "name": "Function, Module Size, and SRP",
+      "grade": "C",
+      "score": 70,
+      "evidence": [
+        "conductor/backends/openai.py (coarse avg 81 lines/definition)",
+        "conductor/gh/executor.py (coarse avg 87 lines/definition)"
+      ],
+      "notes": "Evaluates function size, script/module size, and single responsibility using static size signals."
+    },
+    {
+      "id": "G",
+      "name": "Testing and TDD Posture",
+      "grade": "B",
+      "score": 82,
+      "evidence": [
+        "tests/__init__.py",
+        "tests/conftest.py",
+        "tests/integration/__init__.py",
+        "tests/integration/test_end_to_end.py",
+        "tests/integration/test_issue_workflow.py",
+        "tests/unit/__init__.py",
+        "tests/unit/test_api.py",
+        "tests/unit/test_api_events.py",
+        "tests/unit/test_api_issues.py",
+        "tests/unit/test_backend_azure.py",
+        "tests/unit/test_backend_claude.py",
+        "tests/unit/test_backend_ollama.py"
+      ],
+      "notes": "TDD history cannot be confirmed statically; grade reflects committed automated test posture."
+    },
+    {
+      "id": "H",
+      "name": "CI/CD and Automation",
+      "grade": "C",
+      "score": 78,
+      "evidence": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/codeql.yml",
+        ".github/workflows/docs.yml",
+        ".github/workflows/release.yml"
+      ],
+      "notes": "Checks for tracked CI/CD workflow files."
+    },
+    {
+      "id": "I",
+      "name": "Security and Secret Hygiene",
+      "grade": "F",
+      "score": 35,
+      "evidence": [
+        "tests/unit/test_api.py",
+        "tests/unit/test_backend_claude.py"
+      ],
+      "notes": "Secret scan is regex-based; findings require manual confirmation."
+    },
+    {
+      "id": "J",
+      "name": "Documentation and Onboarding",
+      "grade": "B",
+      "score": 82,
+      "evidence": [
+        ".github/ISSUE_TEMPLATE/bug_report.md",
+        ".github/ISSUE_TEMPLATE/feature_request.md",
+        ".github/workflows/docs.yml",
+        "CONTRIBUTING.md",
+        "LICENSE",
+        "README.md",
+        "docs/architecture/backends.md",
+        "docs/architecture/contracts.md",
+        "docs/architecture/overview.md",
+        "docs/contributing.md",
+        "docs/getting-started/autonomous-workflow.md",
+        "docs/getting-started/configuration.md"
+      ],
+      "notes": "Checks docs, README, onboarding, and release documents."
+    },
+    {
+      "id": "K",
+      "name": "Maintainability, DRY, and Duplication",
+      "grade": "B",
+      "score": 80,
+      "evidence": [
+        "scripts/check_todo_fixme.py"
+      ],
+      "notes": "DRY is assessed through duplicate filename clusters and TODO/FIXME density as static heuristics."
+    },
+    {
+      "id": "L",
+      "name": "API Surface and Law of Demeter",
+      "grade": "F",
+      "score": 58,
+      "evidence": [
+        "conductor/backends/claude.py",
+        "conductor/backends/openai.py",
+        "conductor/cli/issues.py",
+        "conductor/cli/main.py",
+        "conductor/config/models.py",
+        "conductor/core/ledger.py",
+        "conductor/core/router.py",
+        "conductor/gh/workspace.py",
+        "tests/unit/test_api_issues.py",
+        "tests/unit/test_backend_azure.py"
+      ],
+      "notes": "Law of Demeter is approximated with deep member-chain hints; confirmed violations require semantic review."
+    },
+    {
+      "id": "M",
+      "name": "Observability and Operability",
+      "grade": "C",
+      "score": 74,
+      "evidence": [
+        "conductor/logging.py",
+        "conductor/metrics.py",
+        "docs/operations/observability.md",
+        "tests/unit/test_logging.py",
+        "tests/unit/test_metrics.py"
+      ],
+      "notes": "Checks for logging, metrics, monitoring, and operational artifacts."
+    },
+    {
+      "id": "N",
+      "name": "Governance, Licensing, and Release Hygiene",
+      "grade": "C",
+      "score": 74,
+      "evidence": [
+        "CONTRIBUTING.md",
+        "LICENSE",
+        "docs/contributing.md"
+      ],
+      "notes": "Checks ownership, release, contribution, security, and license metadata."
+    }
+  ],
+  "key_risks": [
+    "Potential hard-coded secret patterns require manual security review.",
+    "Deep member-chain usage may indicate Law of Demeter pressure points."
+  ],
+  "recommendations": [
+    "Review deep member chains and introduce boundary methods where object graph traversal leaks across modules."
+  ],
+  "issue_candidates": [
+    {
+      "title": "Investigate potential hard-coded secret patterns",
+      "severity": "high",
+      "problem": "Potential secret-like assignments found in: tests/unit/test_api.py; tests/unit/test_backend_claude.py",
+      "evidence": "Category I regex scan matched secret-like assignments.",
+      "impact": "Hard-coded secrets can expose credentials and create security incidents.",
+      "fix": "Manually verify findings, rotate any exposed credentials, and move secrets to environment or secret management.",
+      "acceptance": "Secret scan is clean or findings are documented false positives; exposed credentials are rotated.",
+      "refs": "security, reliability"
+    },
+    {
+      "title": "Review deep object traversal hotspots",
+      "severity": "medium",
+      "problem": "Deep member-chain hints found in: conductor/backends/claude.py; conductor/backends/openai.py; conductor/cli/issues.py; conductor/cli/main.py; conductor/config/models.py; conductor/core/ledger.py; conductor/core/router.py; conductor/gh/workspace.py",
+      "evidence": "Category L found repeated chains with three or more member hops.",
+      "impact": "Law of Demeter pressure can make APIs brittle and increase coupling.",
+      "fix": "Review hotspots and introduce boundary methods or DTOs where callers traverse object graphs.",
+      "acceptance": "Hotspots are documented, simplified, or justified; tests cover any API boundary changes.",
+      "refs": "Law of Demeter, SRP, maintainability"
+    }
+  ],
+  "coverage": {
+    "tracked_files": 97,
+    "code_files": 65,
+    "test_files": 32,
+    "ci_files": 4,
+    "config_files": 1,
+    "docs_files": 19,
+    "exclusions": "cache/build/vendor/virtualenv/temp/generated output directories excluded",
+    "static_limits": "TDD workflow history and confirmed Law of Demeter semantics require deeper review."
+  }
+}
