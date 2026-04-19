@@ -15,6 +15,7 @@ from rich.table import Table
 
 from conductor import __version__
 from conductor.backends import Message, MessageRole, registry
+from conductor.cli.issues import issue_app
 from conductor.config import (
     ConductorConfig,
     load_config,
@@ -29,6 +30,7 @@ app = typer.Typer(
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
+app.add_typer(issue_app, name="issue")
 console = Console()
 
 

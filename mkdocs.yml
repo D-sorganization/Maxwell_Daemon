@@ -50,6 +50,7 @@ nav:
   - Getting Started:
       - Quick start: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
+      - Autonomous workflow: getting-started/autonomous-workflow.md
   - Architecture:
       - Overview: architecture/overview.md
       - Backend interface: architecture/backends.md

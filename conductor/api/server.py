@@ -33,12 +33,34 @@ class TaskSubmit(BaseModel):
     model: str | None = None
 
 
+class IssueCreate(BaseModel):
+    repo: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
+    title: str = Field(..., min_length=1)
+    body: str = ""
+    labels: list[str] = Field(default_factory=list)
+    dispatch: bool = False
+    mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
+
+
+class IssueDispatch(BaseModel):
+    repo: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
+    number: int = Field(..., ge=1)
+    mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
+    backend: str | None = None
+    model: str | None = None
+
+
 class TaskView(BaseModel):
     id: str
     prompt: str
+    kind: str
     repo: str | None
     backend: str | None
     model: str | None
+    issue_repo: str | None = None
+    issue_number: int | None = None
+    issue_mode: str | None = None
+    pr_url: str | None = None
     status: str
     result: str | None
     error: str | None
@@ -52,9 +74,14 @@ class TaskView(BaseModel):
         return cls(
             id=t.id,
             prompt=t.prompt,
+            kind=t.kind.value,
             repo=t.repo,
             backend=t.backend,
             model=t.model,
+            issue_repo=t.issue_repo,
+            issue_number=t.issue_number,
+            issue_mode=t.issue_mode,
+            pr_url=t.pr_url,
             status=t.status.value,
             result=t.result,
             error=t.error,
@@ -82,7 +109,17 @@ def _auth_dep(token: str | None) -> Any:
     return _check
 
 
-def create_app(daemon: Daemon, *, auth_token: str | None = None) -> FastAPI:
+def create_app(
+    daemon: Daemon,
+    *,
+    auth_token: str | None = None,
+    github_client: Any = None,
+) -> FastAPI:
+    """Build the FastAPI app.
+
+    `github_client` is an optional injection point for tests — if omitted, the
+    handlers construct a fresh ``GitHubClient()`` on demand.
+    """
     app = FastAPI(
         title="Conductor API",
         version=__version__,
@@ -90,6 +127,13 @@ def create_app(daemon: Daemon, *, auth_token: str | None = None) -> FastAPI:
     )
     mount_metrics_endpoint(app)
     auth = _auth_dep(auth_token)
+
+    def _gh() -> Any:
+        if github_client is not None:
+            return github_client
+        from conductor.gh import GitHubClient
+
+        return GitHubClient()
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -128,6 +172,67 @@ def create_app(daemon: Daemon, *, auth_token: str | None = None) -> FastAPI:
         if t is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
         return TaskView.from_task(t)
+
+    @app.post(
+        "/api/v1/issues",
+        dependencies=[Depends(auth)],
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def create_issue(payload: IssueCreate) -> dict[str, Any]:
+        """Create a GitHub issue. Optionally dispatch the daemon immediately."""
+        gh = _gh()
+        url = await gh.create_issue(
+            payload.repo,
+            title=payload.title,
+            body=payload.body,
+            labels=payload.labels or None,
+        )
+        result: dict[str, Any] = {"url": url}
+
+        if payload.dispatch:
+            import re
+
+            match = re.search(r"/issues/(\d+)", url)
+            if match:
+                number = int(match.group(1))
+                task = daemon.submit_issue(
+                    repo=payload.repo, issue_number=number, mode=payload.mode
+                )
+                result["task_id"] = task.id
+        return result
+
+    @app.post(
+        "/api/v1/issues/dispatch",
+        dependencies=[Depends(auth)],
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def dispatch_issue(payload: IssueDispatch) -> TaskView:
+        """Queue an existing issue for the daemon to draft a PR for."""
+        task = daemon.submit_issue(
+            repo=payload.repo,
+            issue_number=payload.number,
+            mode=payload.mode,
+            backend=payload.backend,
+            model=payload.model,
+        )
+        return TaskView.from_task(task)
+
+    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(auth)])
+    async def list_repo_issues(
+        owner: str, name: str, state: str = "open", limit: int = 25
+    ) -> list[dict[str, Any]]:
+        gh = _gh()
+        issues = await gh.list_issues(f"{owner}/{name}", state=state, limit=limit)
+        return [
+            {
+                "number": i.number,
+                "title": i.title,
+                "state": i.state,
+                "labels": i.labels,
+                "url": i.url,
+            }
+            for i in issues
+        ]
 
     @app.get("/api/v1/cost", dependencies=[Depends(auth)])
     async def cost_summary() -> CostSummary:

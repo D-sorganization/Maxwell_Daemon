@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 from conductor.backends import Message, MessageRole
 from conductor.config import ConductorConfig, load_config
@@ -40,17 +41,28 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class TaskKind(str, Enum):
+    PROMPT = "prompt"
+    ISSUE = "issue"
+
+
 @dataclass
 class Task:
     id: str
     prompt: str
+    kind: TaskKind = TaskKind.PROMPT
     repo: str | None = None
     backend: str | None = None
     model: str | None = None
+    # Issue-specific fields (set when kind == ISSUE).
+    issue_repo: str | None = None
+    issue_number: int | None = None
+    issue_mode: str | None = None  # "plan" | "implement"
     status: TaskStatus = TaskStatus.QUEUED
     result: str | None = None
     error: str | None = None
     cost_usd: float = 0.0
+    pr_url: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -66,18 +78,29 @@ class DaemonState:
 
 
 class Daemon:
-    def __init__(self, config: ConductorConfig, *, ledger_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        config: ConductorConfig,
+        *,
+        ledger_path: Path | None = None,
+        workspace_root: Path | None = None,
+    ) -> None:
         self._config = config
         self._router = BackendRouter(config)
         self._ledger = CostLedger(ledger_path or Path.home() / ".local/share/conductor/ledger.db")
         self._budget = BudgetEnforcer(config.budget, self._ledger)
         self._events = EventBus()
+        self._workspace_root = workspace_root or Path.home() / ".local/share/conductor/workspaces"
         self._tasks: dict[str, Task] = {}
         self._queue: asyncio.Queue[Task] = asyncio.Queue()
         self._workers: list[asyncio.Task[None]] = []
         self._bg_tasks: set[asyncio.Task[None]] = set()
         self._started_at = datetime.now(timezone.utc)
         self._running = False
+        # Lazily-built collaborators — injected by tests, built on demand in prod.
+        self._github_client: Any = None
+        self._workspace: Any = None
+        self._issue_executor_factory: Any = None
 
     @property
     def events(self) -> EventBus:
@@ -114,6 +137,7 @@ class Daemon:
         task = Task(
             id=uuid.uuid4().hex[:12],
             prompt=prompt,
+            kind=TaskKind.PROMPT,
             repo=repo,
             backend=backend,
             model=model,
@@ -132,6 +156,62 @@ class Daemon:
             self._bg_tasks.add(bg)
             bg.add_done_callback(self._bg_tasks.discard)
         return task
+
+    def submit_issue(
+        self,
+        *,
+        repo: str,
+        issue_number: int,
+        mode: str = "plan",
+        backend: str | None = None,
+        model: str | None = None,
+    ) -> Task:
+        """Queue a task that reads a GitHub issue and opens a draft PR for it."""
+        if mode not in {"plan", "implement"}:
+            raise ValueError(f"mode must be 'plan' or 'implement', got {mode!r}")
+        task = Task(
+            id=uuid.uuid4().hex[:12],
+            prompt=f"{repo}#{issue_number}",
+            kind=TaskKind.ISSUE,
+            repo=repo,
+            backend=backend,
+            model=model,
+            issue_repo=repo,
+            issue_number=issue_number,
+            issue_mode=mode,
+        )
+        self._tasks[task.id] = task
+        self._queue.put_nowait(task)
+        with contextlib.suppress(RuntimeError):
+            loop = asyncio.get_running_loop()
+            bg = loop.create_task(
+                self._events.publish(
+                    Event(
+                        kind=EventKind.TASK_QUEUED,
+                        payload={
+                            "id": task.id,
+                            "kind": "issue",
+                            "repo": repo,
+                            "issue": issue_number,
+                        },
+                    )
+                )
+            )
+            self._bg_tasks.add(bg)
+            bg.add_done_callback(self._bg_tasks.discard)
+        return task
+
+    def set_issue_collaborators(
+        self,
+        *,
+        github_client: Any,
+        workspace: Any,
+        executor_factory: Any,
+    ) -> None:
+        """Inject issue-dispatch collaborators (used by tests + server setup)."""
+        self._github_client = github_client
+        self._workspace = workspace
+        self._issue_executor_factory = executor_factory
 
     def get_task(self, task_id: str) -> Task | None:
         return self._tasks.get(task_id)
@@ -170,6 +250,11 @@ class Daemon:
             )
             decision_backend = decision.backend_name
             decision_model = decision.model
+
+            if task.kind is TaskKind.ISSUE:
+                await self._execute_issue(task, decision)
+                return
+
             resp = await decision.backend.complete(
                 [Message(role=MessageRole.USER, content=task.prompt)],
                 model=decision.model,
@@ -227,6 +312,54 @@ class Daemon:
             )
         finally:
             task.finished_at = datetime.now(timezone.utc)
+
+    async def _execute_issue(self, task: Task, decision: Any) -> None:
+        """Run the issue → PR flow. Called with status already RUNNING."""
+        from conductor.gh import GitHubClient
+        from conductor.gh.executor import IssueExecutor
+        from conductor.gh.workspace import Workspace
+
+        assert task.issue_repo is not None
+        assert task.issue_number is not None
+
+        github = self._github_client or GitHubClient()
+        workspace = self._workspace or Workspace(root=self._workspace_root)
+        executor = (
+            self._issue_executor_factory(github, workspace, decision.backend)
+            if self._issue_executor_factory
+            else IssueExecutor(github=github, workspace=workspace, backend=decision.backend)
+        )
+
+        mode = task.issue_mode if task.issue_mode in {"plan", "implement"} else "plan"
+        result = await executor.execute_issue(
+            repo=task.issue_repo,
+            issue_number=task.issue_number,
+            model=decision.model,
+            mode=mode,  # type: ignore[arg-type]
+        )
+        task.status = TaskStatus.COMPLETED
+        task.pr_url = result.pr_url
+        task.result = result.plan
+        # Issue-mode cost accounting is coarse — we don't see usage here since
+        # the executor owns the backend call. Future: have the executor return
+        # a usage object.
+        record_request(
+            backend=decision.backend_name,
+            model=decision.model,
+            status="success",
+        )
+        await self._events.publish(
+            Event(
+                kind=EventKind.TASK_COMPLETED,
+                payload={
+                    "id": task.id,
+                    "kind": "issue",
+                    "repo": task.issue_repo,
+                    "issue": task.issue_number,
+                    "pr_url": result.pr_url,
+                },
+            )
+        )
 
 
 def main() -> None:
