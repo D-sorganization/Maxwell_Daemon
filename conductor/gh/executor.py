@@ -24,6 +24,8 @@ from conductor.core.repo_overrides import RepoOverrides
 from conductor.gh.context import ContextBuilder
 from conductor.gh.test_runner import TestResult, TestRunner
 from conductor.gh.workspace import WorkspaceError
+from conductor.memory import MemoryManager
+from conductor.templates import classify_issue, render_system_prompt
 from conductor.tracing import span as _trace_span
 
 __all__ = ["IssueExecutionError", "IssueExecutor", "IssueResult"]
@@ -100,6 +102,8 @@ class IssueExecutor:
         test_runner: TestRunner | Any | None = None,
         max_test_retries: int = 1,
         test_timeout_seconds: float = 300.0,
+        memory: MemoryManager | None = None,
+        memory_max_chars: int = 8000,
     ) -> None:
         self._gh = github
         self._ws = workspace
@@ -110,6 +114,8 @@ class IssueExecutor:
         self._test_runner = test_runner
         self._max_test_retries = max_test_retries
         self._test_timeout = test_timeout_seconds
+        self._memory = memory
+        self._memory_max_chars = memory_max_chars
 
     async def execute_issue(
         self,
@@ -147,6 +153,17 @@ class IssueExecutor:
             ctx = await self._context_builder.build(repo_path, issue.body)
             context_prompt = ctx.to_prompt(max_chars=ctx_max)
 
+        # Memory: assemble repo profile + related episodes + scratchpad, if any.
+        memory_prompt = ""
+        if self._memory is not None:
+            memory_prompt = self._memory.assemble_context(
+                repo=repo,
+                issue_title=issue.title,
+                issue_body=issue.body,
+                task_id=effective_task_id,
+                max_chars=self._memory_max_chars,
+            )
+
         async with _trace_span(
             "conductor.issue.draft",
             {"repo": repo, "issue": issue_number, "model": model, "mode": mode},
@@ -156,7 +173,13 @@ class IssueExecutor:
                 issue_body=issue.body,
                 model=model,
                 context=context_prompt,
+                memory=memory_prompt,
+                labels=list(getattr(issue, "labels", []) or []),
             )
+
+        # Record the initial plan to the scratchpad so retries see it.
+        if self._memory is not None and plan:
+            self._memory.scratchpad.append(effective_task_id, role="plan", content=plan)
 
         applied = False
         test_result: TestResult | None = None
@@ -222,6 +245,23 @@ class IssueExecutor:
                 body=pr_body,
                 draft=True,
             )
+
+        # Memory write-back: one episode per successful PR open so future
+        # related issues can retrieve it. Outcome is "completed" until/unless
+        # the PR is later merged — we don't know that from here.
+        if self._memory is not None:
+            self._memory.record_outcome(
+                task_id=effective_task_id,
+                repo=repo,
+                issue_number=issue_number,
+                issue_title=issue.title,
+                issue_body=issue.body,
+                plan=plan,
+                applied_diff=applied,
+                pr_url=pr.url,
+                outcome="completed",
+            )
+
         return IssueResult(
             issue_number=issue_number,
             pr_url=pr.url,
@@ -412,17 +452,31 @@ class IssueExecutor:
         return self._parse_response(response.content)
 
     async def _draft_change(
-        self, *, issue_title: str, issue_body: str, model: str, context: str = ""
+        self,
+        *,
+        issue_title: str,
+        issue_body: str,
+        model: str,
+        context: str = "",
+        memory: str = "",
+        labels: list[str] | None = None,
     ) -> tuple[str, str]:
+        # Pick a specialised system prompt for this kind of issue. Falls back
+        # to the default prompt when the classifier can't decide.
+        kind = classify_issue(title=issue_title, body=issue_body, labels=labels or [])
+        system_prompt = render_system_prompt(kind)
+
         prompt_parts = [f"Issue title: {issue_title}\n"]
         prompt_parts.append(f"Issue body:\n{issue_body or '(empty)'}\n")
+        if memory:
+            prompt_parts.append(f"\n## Memory\n\n{memory}\n")
         if context:
             prompt_parts.append(f"\n## Repository context\n\n{context}\n")
         prompt_parts.append("\nProduce the JSON plan now.")
         prompt = "\n".join(prompt_parts)
         response = await self._backend.complete(
             [
-                Message(role=MessageRole.SYSTEM, content=_SYSTEM_PROMPT),
+                Message(role=MessageRole.SYSTEM, content=system_prompt),
                 Message(role=MessageRole.USER, content=prompt),
             ],
             model=model,

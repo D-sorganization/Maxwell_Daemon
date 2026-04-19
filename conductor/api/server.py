@@ -32,7 +32,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from conductor import __version__
 from conductor.daemon import Daemon
@@ -90,6 +90,20 @@ class IssueBatchDispatch(BaseModel):
     items: list[IssueDispatch] = Field(..., min_length=1, max_length=100)
 
 
+class IssueAbDispatch(BaseModel):
+    repo: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
+    number: int = Field(..., ge=1)
+    backends: list[str] = Field(..., min_length=2, max_length=4)
+    mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
+
+    @field_validator("backends")
+    @classmethod
+    def _check_distinct(cls, v: list[str]) -> list[str]:
+        if len(set(v)) != len(v):
+            raise ValueError("A/B backends must be distinct")
+        return v
+
+
 class TaskView(BaseModel):
     id: str
     prompt: str
@@ -100,6 +114,7 @@ class TaskView(BaseModel):
     issue_repo: str | None = None
     issue_number: int | None = None
     issue_mode: str | None = None
+    ab_group: str | None = None
     pr_url: str | None = None
     status: str
     result: str | None
@@ -121,6 +136,7 @@ class TaskView(BaseModel):
             issue_repo=t.issue_repo,
             issue_number=t.issue_number,
             issue_mode=t.issue_mode,
+            ab_group=t.ab_group,
             pr_url=t.pr_url,
             status=t.status.value,
             result=t.result,
@@ -310,6 +326,34 @@ def create_app(
             model=payload.model,
         )
         return TaskView.from_task(task)
+
+    @app.post(
+        "/api/v1/issues/ab-dispatch",
+        dependencies=[Depends(auth)],
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def ab_dispatch_issue(payload: IssueAbDispatch) -> dict[str, Any]:
+        """Race multiple backends on the same issue — reviewer picks the winner."""
+        available = set(daemon.state().backends_available)
+        unknown = [b for b in payload.backends if b not in available]
+        if unknown:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"unknown backend(s): {', '.join(unknown)}; available: {sorted(available)}",
+            )
+        try:
+            tasks = daemon.submit_issue_ab(
+                repo=payload.repo,
+                issue_number=payload.number,
+                backends=payload.backends,
+                mode=payload.mode,
+            )
+        except ValueError as e:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
+        return {
+            "ab_group": tasks[0].ab_group,
+            "tasks": [TaskView.from_task(t).model_dump(mode="json") for t in tasks],
+        }
 
     @app.post(
         "/api/v1/issues/batch-dispatch",

@@ -60,6 +60,8 @@ class Task:
     issue_repo: str | None = None
     issue_number: int | None = None
     issue_mode: str | None = None  # "plan" | "implement"
+    # A/B grouping: sibling tasks share an ab_group so the UI pairs them.
+    ab_group: str | None = None
     status: TaskStatus = TaskStatus.QUEUED
     result: str | None = None
     error: str | None = None
@@ -97,6 +99,15 @@ class Daemon:
         # Durable task store lives next to the cost ledger by default.
         default_store = Path.home() / ".local/share/conductor/tasks.db"
         self._task_store = TaskStore(task_store_path or default_store)
+        # Memory store — co-located with the ledger for easy backup.
+        from conductor.memory import EpisodicStore, MemoryManager, RepoProfile, ScratchPad
+
+        default_memory = Path.home() / ".local/share/conductor/memory.db"
+        self._memory = MemoryManager(
+            scratchpad=ScratchPad(),
+            profile=RepoProfile(default_memory),
+            episodes=EpisodicStore(default_memory),
+        )
         self._tasks: dict[str, Task] = {}
         self._queue: asyncio.Queue[Task] = asyncio.Queue()
         self._workers: list[asyncio.Task[None]] = []
@@ -237,6 +248,36 @@ class Daemon:
             self._bg_tasks.add(bg)
             bg.add_done_callback(self._bg_tasks.discard)
         return task
+
+    def submit_issue_ab(
+        self,
+        *,
+        repo: str,
+        issue_number: int,
+        backends: list[str],
+        mode: str = "plan",
+    ) -> list[Task]:
+        """Dispatch the same issue to multiple backends concurrently.
+
+        Tasks share an ``ab_group`` so the UI can pair them and a reviewer can
+        compare PRs side-by-side.
+        """
+        if len(backends) < 2:
+            raise ValueError("A/B dispatch needs at least two backends")
+        if len(set(backends)) != len(backends):
+            raise ValueError("A/B dispatch backends must be distinct")
+        ab_group = uuid.uuid4().hex[:12]
+        tasks: list[Task] = []
+        for backend in backends:
+            # Let submit_issue do the regular queueing, then tag the group.
+            task = self.submit_issue(
+                repo=repo, issue_number=issue_number, mode=mode, backend=backend
+            )
+            task.ab_group = ab_group
+            # Persist the group so recovery sees it too.
+            self._task_store.save(task)
+            tasks.append(task)
+        return tasks
 
     def set_issue_collaborators(
         self,
@@ -399,11 +440,46 @@ class Daemon:
         executor = (
             self._issue_executor_factory(github, workspace, decision.backend)
             if self._issue_executor_factory
-            else IssueExecutor(github=github, workspace=workspace, backend=decision.backend)
+            else IssueExecutor(
+                github=github,
+                workspace=workspace,
+                backend=decision.backend,
+                memory=self._memory,
+            )
         )
 
         mode = task.issue_mode if task.issue_mode in {"plan", "implement"} else "plan"
         overrides = resolve_overrides(self._config, repo=task.issue_repo)
+
+        # Smart model selection: if the task didn't specify a model AND the
+        # backend has a tier_map, pick by issue complexity. Otherwise fall back
+        # to whatever the router resolved.
+        effective_model = decision.model
+        backend_cfg = self._config.backends.get(decision.backend_name)
+        if not task.model and backend_cfg is not None and backend_cfg.tier_map:
+            from conductor.core.model_selector import pick_model_for_issue
+
+            try:
+                issue = await github.get_issue(task.issue_repo, task.issue_number)
+                selection = pick_model_for_issue(
+                    title=issue.title,
+                    body=issue.body,
+                    labels=list(issue.labels),
+                    tier_map=backend_cfg.tier_map,
+                    fallback=decision.model,
+                )
+                effective_model = selection.model
+                log.info(
+                    "model-select task=%s tier=%s model=%s factors=%s",
+                    task.id,
+                    selection.tier.value,
+                    selection.model,
+                    selection.factors,
+                )
+            except Exception:
+                # Selection is opportunistic — a failure here falls through
+                # to the default model so the task still proceeds.
+                log.warning("model-select failed for task=%s; using default", task.id)
 
         async def _emit_test_output(chunk: str, stream: str) -> None:
             await self._events.publish(
@@ -420,7 +496,7 @@ class Daemon:
         result = await executor.execute_issue(
             repo=task.issue_repo,
             issue_number=task.issue_number,
-            model=decision.model,
+            model=effective_model,
             mode=mode,  # type: ignore[arg-type]
             overrides=overrides,
             task_id=task.id,

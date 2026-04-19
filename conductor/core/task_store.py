@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 __all__ = ["TaskStore"]
 
-_SCHEMA = """
+_SCHEMA_BASE = """
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     created_at TEXT NOT NULL,
@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     issue_repo TEXT,
     issue_number INTEGER,
     issue_mode TEXT,
+    ab_group TEXT,
     result TEXT,
     error TEXT,
     pr_url TEXT,
@@ -54,6 +55,19 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
 """
+
+# Indexes that depend on migrated-in columns — created after migrations run.
+_SCHEMA_POST_MIGRATION = """
+CREATE INDEX IF NOT EXISTS idx_tasks_ab_group ON tasks(ab_group);
+"""
+
+
+# Incremental migrations for DBs created before a column existed. SQLite
+# doesn't have `ADD COLUMN IF NOT EXISTS`, so we read the column list and only
+# add what's missing.
+_MIGRATIONS = [
+    ("ab_group", "ALTER TABLE tasks ADD COLUMN ab_group TEXT"),
+]
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -70,7 +84,14 @@ class TaskStore:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         with self._connect() as conn:
-            conn.executescript(_SCHEMA)
+            conn.executescript(_SCHEMA_BASE)
+            existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+            for col, ddl in _MIGRATIONS:
+                if col not in existing_cols:
+                    conn.execute(ddl)
+            # Indexes that reference migrated columns run after the migration
+            # so old DBs don't explode before they get upgraded.
+            conn.executescript(_SCHEMA_POST_MIGRATION)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -98,6 +119,7 @@ class TaskStore:
             task.issue_repo,
             task.issue_number,
             task.issue_mode,
+            task.ab_group,
             task.result,
             task.error,
             task.pr_url,
@@ -111,9 +133,9 @@ class TaskStore:
                 INSERT INTO tasks (
                     id, created_at, updated_at, kind, status, prompt,
                     repo, backend, model,
-                    issue_repo, issue_number, issue_mode,
+                    issue_repo, issue_number, issue_mode, ab_group,
                     result, error, pr_url, cost_usd, started_at, finished_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     updated_at=excluded.updated_at,
                     status=excluded.status,
@@ -122,6 +144,7 @@ class TaskStore:
                     issue_repo=excluded.issue_repo,
                     issue_number=excluded.issue_number,
                     issue_mode=excluded.issue_mode,
+                    ab_group=excluded.ab_group,
                     result=excluded.result, error=excluded.error, pr_url=excluded.pr_url,
                     cost_usd=excluded.cost_usd,
                     started_at=excluded.started_at, finished_at=excluded.finished_at
@@ -214,6 +237,12 @@ def _row_to_task(row: sqlite3.Row) -> Task:
     # TaskStore at module load.
     from conductor.daemon.runner import Task, TaskKind, TaskStatus
 
+    # ab_group was added later — missing on older DBs.
+    try:
+        ab_group = row["ab_group"]
+    except (IndexError, KeyError):
+        ab_group = None
+
     return Task(
         id=row["id"],
         prompt=row["prompt"],
@@ -225,6 +254,7 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         issue_repo=row["issue_repo"],
         issue_number=row["issue_number"],
         issue_mode=row["issue_mode"],
+        ab_group=ab_group,
         result=row["result"],
         error=row["error"],
         pr_url=row["pr_url"],

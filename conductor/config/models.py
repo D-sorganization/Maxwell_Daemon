@@ -26,6 +26,11 @@ class BackendConfig(BaseModel):
     )
     base_url: str | None = None
     enabled: bool = True
+    tier_map: dict[str, str] = Field(
+        default_factory=dict,
+        description="Maps ModelTier names (simple/moderate/complex) → model id. "
+        "When set, the router picks by tier; otherwise `model` is used.",
+    )
 
     def api_key_value(self) -> str | None:
         """Unwrap the SecretStr for passing to adapter constructors."""
