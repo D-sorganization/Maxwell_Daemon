@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 
 from conductor import __version__
@@ -137,5 +137,25 @@ def create_app(daemon: Daemon, *, auth_token: str | None = None) -> FastAPI:
             month_to_date_usd=daemon._ledger.month_to_date(),
             by_backend=daemon._ledger.by_backend(start),
         )
+
+    @app.websocket("/api/v1/events")
+    async def events_ws(ws: WebSocket) -> None:
+        """Stream daemon events as JSON frames to the client.
+
+        WebSocket auth is intentionally simpler than REST auth here: clients pass
+        ``?token=...`` as a query param because browser WebSocket APIs can't set
+        headers. Terminate at a proxy for TLS.
+        """
+        if auth_token is not None and ws.query_params.get("token") != auth_token:
+            await ws.close(code=1008)
+            return
+        await ws.accept()
+        try:
+            async for event in daemon.events.subscribe(queue_size=64):
+                await ws.send_text(event.to_json())
+        except WebSocketDisconnect:
+            return
+        except Exception:
+            await ws.close(code=1011)
 
     return app

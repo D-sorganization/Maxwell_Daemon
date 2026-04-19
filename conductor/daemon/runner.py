@@ -8,6 +8,7 @@ External callers (CLI, REST API, gRPC) interact through `Daemon.submit()` and
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import signal
 import uuid
@@ -25,6 +26,7 @@ from conductor.core import (
     CostLedger,
     CostRecord,
 )
+from conductor.events import Event, EventBus, EventKind
 from conductor.metrics import record_request
 
 log = logging.getLogger("conductor.daemon")
@@ -69,11 +71,17 @@ class Daemon:
         self._router = BackendRouter(config)
         self._ledger = CostLedger(ledger_path or Path.home() / ".local/share/conductor/ledger.db")
         self._budget = BudgetEnforcer(config.budget, self._ledger)
+        self._events = EventBus()
         self._tasks: dict[str, Task] = {}
         self._queue: asyncio.Queue[Task] = asyncio.Queue()
         self._workers: list[asyncio.Task[None]] = []
+        self._bg_tasks: set[asyncio.Task[None]] = set()
         self._started_at = datetime.now(timezone.utc)
         self._running = False
+
+    @property
+    def events(self) -> EventBus:
+        return self._events
 
     @classmethod
     def from_config_path(cls, path: Path | str | None = None) -> Daemon:
@@ -112,6 +120,17 @@ class Daemon:
         )
         self._tasks[task.id] = task
         self._queue.put_nowait(task)
+        # Fire-and-forget: if there's no running loop yet (e.g. sync test
+        # submits before start()), skip the event — the queued state is
+        # observable via get_task().
+        with contextlib.suppress(RuntimeError):
+            loop = asyncio.get_running_loop()
+            # Task kept alive via strong reference in _bg_tasks.
+            bg = loop.create_task(
+                self._events.publish(Event(kind=EventKind.TASK_QUEUED, payload={"id": task.id}))
+            )
+            self._bg_tasks.add(bg)
+            bg.add_done_callback(self._bg_tasks.discard)
         return task
 
     def get_task(self, task_id: str) -> Task | None:
@@ -138,6 +157,9 @@ class Daemon:
     async def _execute(self, task: Task) -> None:
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now(timezone.utc)
+        await self._events.publish(
+            Event(kind=EventKind.TASK_STARTED, payload={"id": task.id, "prompt": task.prompt})
+        )
         decision_backend = decision_model = "unknown"
         try:
             self._budget.require_under_budget()
@@ -174,6 +196,12 @@ class Daemon:
                 cost_usd=task.cost_usd,
                 duration_seconds=(datetime.now(timezone.utc) - task.started_at).total_seconds(),
             )
+            await self._events.publish(
+                Event(
+                    kind=EventKind.TASK_COMPLETED,
+                    payload={"id": task.id, "cost_usd": task.cost_usd},
+                )
+            )
         except BudgetExceededError as e:
             log.warning("task %s refused: %s", task.id, e)
             task.status = TaskStatus.FAILED
@@ -183,11 +211,20 @@ class Daemon:
                 model=decision_model,
                 status="budget_exceeded",
             )
+            await self._events.publish(
+                Event(
+                    kind=EventKind.TASK_FAILED,
+                    payload={"id": task.id, "error": str(e), "reason": "budget_exceeded"},
+                )
+            )
         except Exception as e:
             log.exception("task %s failed", task.id)
             task.status = TaskStatus.FAILED
             task.error = str(e)
             record_request(backend=decision_backend, model=decision_model, status="error")
+            await self._events.publish(
+                Event(kind=EventKind.TASK_FAILED, payload={"id": task.id, "error": str(e)})
+            )
         finally:
             task.finished_at = datetime.now(timezone.utc)
 
