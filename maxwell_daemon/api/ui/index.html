@@ -21,7 +21,7 @@
       <div class="card-head">
         <h2>Tasks</h2>
         <div class="filters">
-          <select id="status-filter">
+          <select id="status-filter" aria-label="Filter tasks by status">
             <option value="">all</option>
             <option value="queued">queued</option>
             <option value="running">running</option>
@@ -51,7 +51,7 @@
     <section class="card" id="detail-card" hidden>
       <div class="card-head">
         <h2 id="detail-title">Task detail</h2>
-        <button id="detail-close">×</button>
+        <button id="detail-close" aria-label="Close task details" title="Close">×</button>
       </div>
       <dl id="detail-fields"></dl>
       <h3>Output</h3>
