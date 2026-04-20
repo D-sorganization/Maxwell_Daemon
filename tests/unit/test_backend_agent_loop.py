@@ -431,3 +431,16 @@ class TestCapabilities:
         caps = AgentLoopBackend(workspace_dir=str(tmp_path)).capabilities("claude-sonnet-4-6")
         assert caps.supports_tool_use is True
         assert caps.supports_system_prompt is True
+
+
+class TestAclose:
+    """``aclose`` must release the underlying httpx client so the backend
+    stops leaking TCP sockets when daemons cycle backends or tests churn."""
+
+    async def test_aclose_awaits_underlying_client(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        mock_client = MagicMock()
+        mock_client.aclose = AsyncMock()
+        backend._client = mock_client  # type: ignore[assignment]
+        await backend.aclose()
+        mock_client.aclose.assert_awaited_once()

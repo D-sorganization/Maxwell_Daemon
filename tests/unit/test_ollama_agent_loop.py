@@ -202,3 +202,17 @@ class TestCapabilities:
         assert caps.cost_per_1k_input_tokens == 0.0
         assert caps.cost_per_1k_output_tokens == 0.0
         assert caps.supports_tool_use is True
+
+
+class TestAclose:
+    """``aclose`` must close the injected HTTP client — otherwise a daemon
+    that recreates backends leaks TCP connections."""
+
+    async def test_aclose_awaits_underlying_client(self, tmp_path: Path) -> None:
+        from unittest.mock import AsyncMock, MagicMock
+
+        client = MagicMock()
+        client.aclose = AsyncMock()
+        backend = OllamaAgentLoopBackend(workspace_dir=str(tmp_path), client=client)
+        await backend.aclose()
+        client.aclose.assert_awaited_once()

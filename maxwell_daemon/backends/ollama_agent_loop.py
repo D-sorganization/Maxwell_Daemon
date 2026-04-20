@@ -241,6 +241,20 @@ class OllamaAgentLoopBackend(ILLMBackend):
             cost_per_1k_output_tokens=0.0,
         )
 
+    async def aclose(self) -> None:
+        """Close the injected HTTP client. Safe to call multiple times.
+
+        Without this the underlying :class:`httpx.AsyncClient` leaks TCP
+        sockets when the daemon cycles backends between tasks.
+        """
+        close = getattr(self._client, "aclose", None) or getattr(self._client, "close", None)
+        if close is None:
+            return
+        with suppress(Exception):
+            result = close()
+            if hasattr(result, "__await__"):
+                await result
+
     # ── System prompt + message assembly ────────────────────────────────────
 
     def _build_messages(self, messages: list[Message], *, workspace: Path) -> list[dict[str, Any]]:

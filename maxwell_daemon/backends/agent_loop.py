@@ -483,5 +483,21 @@ class AgentLoopBackend(ILLMBackend):
             cost_per_1k_output_tokens=price_out / 1000,
         )
 
+    async def aclose(self) -> None:
+        """Release the underlying HTTPX connection pool.
+
+        ``AsyncAnthropic`` opens persistent connections; without an explicit
+        close a daemon that cycles backends (A/B dispatch, config reload)
+        leaks sockets and eventually hits ulimit. ``suppress(Exception)``
+        guards against SDK versions that expose a different close method.
+        """
+        close = getattr(self._client, "aclose", None) or getattr(self._client, "close", None)
+        if close is None:
+            return
+        with suppress(Exception):
+            result = close()
+            if hasattr(result, "__await__"):
+                await result
+
 
 registry.register("agent-loop", AgentLoopBackend)
