@@ -1,5 +1,8 @@
 """LLM backend abstraction layer and adapter implementations."""
 
+from contextlib import suppress
+from importlib import import_module
+
 from conductor.backends.base import (
     BackendCapabilities,
     BackendError,
@@ -26,7 +29,5 @@ __all__ = [
 ]
 
 # Ensure agent-loop backend is registered when this package is imported.
-try:
-    import conductor.backends.agent_loop as _agent_loop_mod  # noqa: F401
-except ImportError:
-    pass
+with suppress(ImportError):
+    import_module("conductor.backends.agent_loop")

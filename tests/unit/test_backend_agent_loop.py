@@ -9,15 +9,21 @@ directly without ``asyncio.run`` in most cases.
 from __future__ import annotations
 
 import asyncio
-import textwrap
+import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from conductor.backends.agent_loop import AgentLoopBackend, TOOL_SCHEMAS
-
+from conductor.backends import (
+    BackendResponse,
+    BackendUnavailableError,
+    Message,
+    MessageRole,
+    TokenUsage,
+)
+from conductor.backends.agent_loop import TOOL_SCHEMAS, AgentLoopBackend
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -174,7 +180,11 @@ class TestRunBash:
         (tmp_path / "marker.txt").write_text("found")
         backend = _make_backend()
         result = backend._execute_tool(
-            "run_bash", {"command": "cat marker.txt"}, str(tmp_path)
+            "run_bash",
+            {
+                "command": f'{sys.executable} -c "from pathlib import Path; print(Path(\'marker.txt\').read_text())"',
+            },
+            str(tmp_path),
         )
         assert "found" in result
 
@@ -295,14 +305,15 @@ class TestTurnLimit:
             ],
         )
 
-        with patch.object(backend._client.messages, "create", return_value=tool_response):
-            with pytest.raises(RuntimeError, match="max_turns=3"):
-                asyncio.run(
-                    backend.complete(
-                        [],
-                        workspace_dir=str(tmp_path),
-                    )
+        with patch.object(backend._client.messages, "create", return_value=tool_response), pytest.raises(
+            RuntimeError, match="max_turns=3"
+        ):
+            asyncio.run(
+                backend.complete(
+                    [],
+                    workspace_dir=str(tmp_path),
                 )
+            )
 
     def test_max_turns_override_per_call(self, tmp_path: Path) -> None:
         backend = _make_backend(max_turns=150)  # default high
@@ -317,15 +328,16 @@ class TestTurnLimit:
                 }
             ],
         )
-        with patch.object(backend._client.messages, "create", return_value=tool_response):
-            with pytest.raises(RuntimeError, match="max_turns=2"):
-                asyncio.run(
-                    backend.complete(
-                        [],
-                        workspace_dir=str(tmp_path),
-                        max_turns=2,
-                    )
+        with patch.object(backend._client.messages, "create", return_value=tool_response), pytest.raises(
+            RuntimeError, match="max_turns=2"
+        ):
+            asyncio.run(
+                backend.complete(
+                    [],
+                    workspace_dir=str(tmp_path),
+                    max_turns=2,
                 )
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -411,6 +423,159 @@ class TestEndTurnExits:
 
         assert resp.usage.prompt_tokens == 300
         assert resp.usage.completion_tokens == 130
+
+
+class TestInitialization:
+    def test_requires_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+        with pytest.raises(BackendUnavailableError, match="ANTHROPIC_API_KEY"):
+            AgentLoopBackend(api_key=None)
+
+
+class TestPromptAndCosts:
+    def test_system_messages_are_folded_into_system_prompt(
+        self, tmp_path: Path
+    ) -> None:
+        backend = _make_backend()
+        response = _make_response(stop_reason="end_turn", text="ok")
+        captured: dict[str, Any] = {}
+
+        def _capture(*args: Any, **kwargs: Any) -> MagicMock:
+            captured["system"] = kwargs["system"]
+            captured["messages"] = kwargs["messages"]
+            return response
+
+        with patch.object(backend._client.messages, "create", side_effect=_capture):
+            result = asyncio.run(
+                backend.complete(
+                    [
+                        Message(role=MessageRole.SYSTEM, content="system rule"),
+                        Message(role=MessageRole.USER, content="hi"),
+                    ],
+                    workspace_dir=str(tmp_path),
+                )
+            )
+
+        assert result.content == "ok"
+        assert "system rule" in captured["system"]
+        assert all(message["role"] != "system" for message in captured["messages"])
+
+    def test_records_cost_when_ledger_is_available(self, tmp_path: Path) -> None:
+        ledger = MagicMock()
+        backend = _make_backend(ledger=ledger)
+        response = _make_response(
+            stop_reason="end_turn", text="done", input_tokens=11, output_tokens=7
+        )
+
+        with patch.object(backend._client.messages, "create", return_value=response):
+            asyncio.run(
+                backend.complete([], workspace_dir=str(tmp_path), repo="repo", agent_id="agent")
+            )
+
+        ledger.record.assert_called_once()
+
+    def test_cost_recording_errors_are_swallowed(self, tmp_path: Path) -> None:
+        ledger = MagicMock()
+        ledger.record.side_effect = RuntimeError("boom")
+        backend = _make_backend(ledger=ledger)
+        response = _make_response(stop_reason="end_turn", text="done")
+
+        with patch.object(backend._client.messages, "create", return_value=response):
+            result = asyncio.run(backend.complete([], workspace_dir=str(tmp_path)))
+
+        assert result.content == "done"
+
+
+class TestToolAndStopReasonBranches:
+    def test_grep_files_skips_unreadable_files_and_falls_back_to_relative_path(
+        self, tmp_path: Path
+    ) -> None:
+        backend = _make_backend()
+        search_dir = tmp_path / "sub"
+        search_dir.mkdir()
+        broken = search_dir / "broken.txt"
+        broken.write_text("ignored")
+        target = search_dir / "match.txt"
+        target.write_text("needle")
+        workspace = tmp_path.resolve()
+        original_read_text = Path.read_text
+        original_relative_to = Path.relative_to
+
+        def _read_text(self: Path, *args: Any, **kwargs: Any) -> str:
+            if self == broken:
+                raise OSError("unreadable")
+            return original_read_text(self, *args, **kwargs)
+
+        def _relative_to(self: Path, *other: Any) -> Path:
+            if self == target and other and Path(other[0]).resolve() == workspace:
+                raise ValueError("force fallback")
+            return original_relative_to(self, *other)
+
+        with patch.object(Path, "read_text", new=_read_text), patch.object(
+            Path, "relative_to", new=_relative_to
+        ):
+            result = backend._execute_tool(
+                "grep_files", {"pattern": "needle", "path": "sub"}, str(tmp_path)
+            )
+
+        assert "match.txt" in result
+        assert "needle" in result
+
+    def test_unknown_tool_raises(self, tmp_path: Path) -> None:
+        backend = _make_backend()
+
+        with pytest.raises(ValueError, match="Unknown tool"):
+            backend._dispatch_tool("does_not_exist", {}, str(tmp_path))
+
+    def test_unexpected_stop_reason_is_returned(self, tmp_path: Path) -> None:
+        backend = _make_backend()
+        response = _make_response(stop_reason="length", text="partial")
+
+        with patch.object(backend._client.messages, "create", return_value=response):
+            result = asyncio.run(backend.complete([], workspace_dir=str(tmp_path)))
+
+        assert result.finish_reason == "length"
+        assert result.content == "partial"
+
+
+class TestStreamAndHealthCheck:
+    async def _collect_stream(
+        self, backend: AgentLoopBackend, tmp_path: Path
+    ) -> list[str]:
+        return [chunk async for chunk in backend.stream([], workspace_dir=str(tmp_path))]
+
+    def test_stream_yields_final_content(self, tmp_path: Path) -> None:
+        backend = _make_backend()
+        response = BackendResponse(
+            content="streamed",
+            finish_reason="end_turn",
+            usage=TokenUsage(
+                prompt_tokens=1,
+                completion_tokens=1,
+                total_tokens=2,
+                cached_tokens=0,
+            ),
+            model="claude-sonnet-4-6",
+            backend="agent-loop",
+        )
+
+        with patch.object(backend, "complete", new=AsyncMock(return_value=response)):
+            chunks = asyncio.run(self._collect_stream(backend, tmp_path))
+
+        assert chunks == ["streamed"]
+
+    def test_health_check_reports_success(self) -> None:
+        backend = _make_backend()
+        with patch.object(backend._client.messages, "create", return_value=_make_response()):
+            assert asyncio.run(backend.health_check()) is True
+
+    def test_health_check_reports_failure(self) -> None:
+        backend = _make_backend()
+        with patch.object(
+            backend._client.messages, "create", side_effect=RuntimeError("boom")
+        ):
+            assert asyncio.run(backend.health_check()) is False
 
 
 # ---------------------------------------------------------------------------

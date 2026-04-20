@@ -240,7 +240,7 @@ class AgentLoopBackend(ILLMBackend):
         """
         try:
             return self._dispatch_tool(name, inputs, workspace_dir)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return f"ERROR: {exc}"
 
     def _dispatch_tool(
@@ -296,17 +296,22 @@ class AgentLoopBackend(ILLMBackend):
         if name == "grep_files":
             pattern = inputs["pattern"]
             search_path = inputs.get("path") or "."
-            try:
-                safe_search = self._safe_path(workspace_dir, search_path)
-            except ValueError:
-                raise
-            result = subprocess.run(
-                ["grep", "-r", "-n", pattern, str(safe_search)],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            return result.stdout or "(no matches)"
+            safe_search = self._safe_path(workspace_dir, search_path)
+            workspace = Path(workspace_dir).resolve()
+            grep_matches: list[str] = []
+            for file_path in sorted(p for p in safe_search.rglob("*") if p.is_file()):
+                try:
+                    text = file_path.read_text(errors="replace")
+                except OSError:
+                    continue
+                try:
+                    rel_path = file_path.relative_to(workspace)
+                except ValueError:
+                    rel_path = file_path.relative_to(safe_search)
+                for line_no, line in enumerate(text.splitlines(), start=1):
+                    if pattern in line:
+                        grep_matches.append(f"{rel_path}:{line_no}:{line}")
+            return "\n".join(grep_matches) if grep_matches else "(no matches)"
 
         raise ValueError(f"Unknown tool: {name!r}")
 
@@ -360,7 +365,7 @@ class AgentLoopBackend(ILLMBackend):
                 agent_id=agent_id,
             )
             self._ledger.record(rec)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass  # Cost recording must never crash the agent loop
 
     # ------------------------------------------------------------------
@@ -413,12 +418,14 @@ class AgentLoopBackend(ILLMBackend):
         final_model = effective_model
 
         for turn in range(effective_max_turns):
+            tool_params: Any = TOOL_SCHEMAS
+            message_params: Any = sdk_messages
             response = self._client.messages.create(
                 model=effective_model,
                 max_tokens=max_tokens or 8096,
                 system=system_prompt,
-                tools=TOOL_SCHEMAS,  # type: ignore[arg-type]
-                messages=sdk_messages,  # type: ignore[arg-type]
+                tools=tool_params,
+                messages=message_params,
             )
 
             # Accumulate usage.
@@ -465,13 +472,14 @@ class AgentLoopBackend(ILLMBackend):
                 tool_results: list[dict[str, Any]] = []
                 for block in response.content:
                     if getattr(block, "type", None) == "tool_use":
+                        tool_use: Any = block
                         result = self._execute_tool(
-                            block.name, block.input, effective_workspace
+                            tool_use.name, tool_use.input, effective_workspace
                         )
                         tool_results.append(
                             {
                                 "type": "tool_result",
-                                "tool_use_id": block.id,
+                                "tool_use_id": tool_use.id,
                                 "content": result,
                             }
                         )
