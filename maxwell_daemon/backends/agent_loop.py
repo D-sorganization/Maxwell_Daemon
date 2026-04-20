@@ -361,11 +361,12 @@ class AgentLoopBackend(ILLMBackend):
             )
 
             # Usage + cost.
+            cached_tokens = getattr(response.usage, "cache_read_input_tokens", 0) or 0
             turn_usage = TokenUsage(
-                prompt_tokens=response.usage.input_tokens,
+                prompt_tokens=response.usage.input_tokens - cached_tokens,
                 completion_tokens=response.usage.output_tokens,
                 total_tokens=response.usage.input_tokens + response.usage.output_tokens,
-                cached_tokens=getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+                cached_tokens=cached_tokens,
             )
             total_usage = total_usage + turn_usage
             turn_cost = self._cost_for(turn_usage, effective_model)

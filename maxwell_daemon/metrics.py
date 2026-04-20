@@ -14,6 +14,7 @@ from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, gene
 
 __all__ = [
     "MAXWELL_COST_FORECAST_USD",
+    "MAXWELL_COST_FORECAST_USD",
     "MAXWELL_FREE_REQUESTS_TOTAL",
     "MAXWELL_REQUESTS_TOTAL",
     "MAXWELL_REQUEST_COST",

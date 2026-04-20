@@ -124,9 +124,6 @@ class DiscoveryScheduler:
             total_scanned += result.scanned
             total_dispatched += result.dispatched
             total_skipped += result.skipped
-            # Everything we saw this tick — dispatched or not — is now in the
-            # seen set so we don't repeatedly try failing dispatches.
-            seen.update(i.number for i in current_issues)
 
         return DiscoveryTick(
             scanned=total_scanned,

@@ -191,6 +191,29 @@ class TestRunBash:
         )
 
 
+def test_sandbox_cmd_linux_bwrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    from maxwell_daemon.tools.builtins import get_sandboxed_bash_cmd
+
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/bwrap" if cmd == "bwrap" else None)
+    res = get_sandboxed_bash_cmd(["bash", "-c", "echo hi"], "/tmp/workspace")
+    assert res[0] == "bwrap"
+    assert "--bind" in res
+    assert "/tmp/workspace" in res
+    assert "--unshare-all" in res
+
+
+def test_sandbox_cmd_mac_sandbox_exec(monkeypatch: pytest.MonkeyPatch) -> None:
+    from maxwell_daemon.tools.builtins import get_sandboxed_bash_cmd
+
+    monkeypatch.setattr("sys.platform", "darwin")
+    monkeypatch.setattr(
+        "shutil.which", lambda cmd: "/usr/bin/sandbox-exec" if cmd == "sandbox-exec" else None
+    )
+    res = get_sandboxed_bash_cmd(["bash", "-c", "echo hi"], "/tmp/workspace")
+    assert res[:3] == ["sandbox-exec", "-f", "/usr/share/sandbox/pure_computation.sb"]
+
+
 # ── glob_files ───────────────────────────────────────────────────────────────
 class TestGlobFiles:
     def test_finds_matches(self, tmp_path: Path) -> None:

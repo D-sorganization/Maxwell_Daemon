@@ -194,6 +194,12 @@ class Daemon:
         self._workers.clear()
         if hasattr(self._router, "aclose_all"):
             await self._router.aclose_all()
+
+        # Flush fire-and-forget background tasks (like event publishing)
+        if self._bg_tasks:
+            await asyncio.gather(*self._bg_tasks, return_exceptions=True)
+            self._bg_tasks.clear()
+
         log.info("daemon stopped")
 
     def submit(
@@ -368,6 +374,8 @@ class Daemon:
         )
 
     async def _worker_loop(self, worker_id: int) -> None:
+        from maxwell_daemon.logging import bind_context
+
         log.info("worker %d ready", worker_id)
         while self._running or not self._queue.empty():
             try:
@@ -377,7 +385,8 @@ class Daemon:
             # Tasks cancelled while queued shouldn't be executed.
             if task.status is TaskStatus.CANCELLED:
                 continue
-            await self._execute(task)
+            with bind_context(task_id=task.id, worker_id=worker_id):
+                await self._execute(task)
 
     async def _execute(self, task: Task) -> None:
         task.status = TaskStatus.RUNNING
