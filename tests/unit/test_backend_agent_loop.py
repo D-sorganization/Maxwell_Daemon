@@ -173,6 +173,33 @@ class TestSystemPrompt:
         blob = _system_as_text(create.call_args.kwargs["system"])
         assert "CI requirements" not in blob
 
+    async def test_repo_map_injected_when_python_files_present(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "pkg").mkdir()
+        (tmp_path / "pkg" / "__init__.py").write_text("")
+        (tmp_path / "pkg" / "core.py").write_text(
+            "class Widget: ...\ndef build() -> None: ...\n"
+        )
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        blob = _system_as_text(create.call_args.kwargs["system"])
+        assert "Repository map" in blob
+        assert "pkg/core.py" in blob
+        assert "Widget" in blob
+        assert "build" in blob
+
+    async def test_repo_map_absent_on_workspace_with_no_python(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "readme.md").write_text("hi")
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        blob = _system_as_text(create.call_args.kwargs["system"])
+        assert "Repository map" not in blob
+
     async def test_claude_md_injected_when_present(self, tmp_path: Path) -> None:
         (tmp_path / "CLAUDE.md").write_text("Project rules: use ruff.")
         backend = AgentLoopBackend(workspace_dir=str(tmp_path))

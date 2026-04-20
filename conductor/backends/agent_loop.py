@@ -43,6 +43,7 @@ from conductor.backends.base import (
 )
 from conductor.backends.registry import registry
 from conductor.gh.ci_patterns import detect_ci_profile
+from conductor.gh.repo_map import build_repo_map
 from conductor.tools import ToolRegistry, build_default_registry
 
 __all__ = [
@@ -204,6 +205,13 @@ class AgentLoopBackend(ILLMBackend):
             ci_block = detect_ci_profile(workspace).to_prompt()
             if ci_block:
                 parts.append(ci_block)
+
+        # Inject a compact repo map (file -> top-level symbols) so the agent
+        # knows where things live without paying for full-file context per turn.
+        with suppress(Exception):
+            map_block = build_repo_map(workspace).to_prompt(max_chars=2000)
+            if map_block:
+                parts.append(map_block)
 
         doc = self._load_first_doc(workspace)
         if doc:
