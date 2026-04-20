@@ -15,6 +15,7 @@ Modes:
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 from dataclasses import dataclass
@@ -353,9 +354,12 @@ class IssueExecutor:
             except TypeError:
                 # Legacy stub without task_id
                 return self._ws.path_for(repo)
+        # Namespace fallback paths by PID so parallel pytest workers
+        # (pytest-xdist) that hit the stub-workspace branch don't clobber
+        # each other's checkouts under a shared /tmp/maxwell-daemon-workspace.
         return (
             Path(tempfile.gettempdir())
-            / "maxwell-daemon-workspace"
+            / f"maxwell-daemon-workspace-{os.getpid()}"
             / repo.split("/", 1)[1]
             / (task_id or "test")
         )

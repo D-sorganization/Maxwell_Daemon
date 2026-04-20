@@ -302,7 +302,11 @@ def create_app(
         if payload.dispatch:
             import re
 
-            match = re.search(r"/issues/(\d+)", url)
+            # Anchor to end-of-string so we only match the trailing issue
+            # number that ``gh issue create`` actually returns (one URL per
+            # line), not an ``/issues/NN`` fragment that happens to appear in
+            # the issue body or in a repo slug like ``org/x-issues``.
+            match = re.search(r"/issues/(\d+)/?\s*$", url.strip())
             if match:
                 number = int(match.group(1))
                 task = daemon.submit_issue(

@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from prometheus_client import CollectorRegistry
 
 from maxwell_daemon.metrics import (
+    MAXWELL_FREE_REQUESTS_TOTAL,
+    MAXWELL_REQUEST_COST,
     MAXWELL_REQUESTS_TOTAL,
     MAXWELL_TOKENS_TOTAL,
     build_registry,
@@ -44,6 +46,41 @@ class TestRecordRequest:
         )
         after = MAXWELL_TOKENS_TOTAL.labels(backend="claude", model="m")._value.get()
         assert after == before + 500
+
+    def test_free_request_increments_free_counter_not_cost(self) -> None:
+        # A zero-cost success (local Ollama, cached hit) should bump the
+        # free-requests counter while leaving the USD cost counter flat.
+        free_before = MAXWELL_FREE_REQUESTS_TOTAL.labels(
+            backend="ollama", model="llama3"
+        )._value.get()
+        cost_before = MAXWELL_REQUEST_COST.labels(backend="ollama", model="llama3")._value.get()
+        record_request(
+            backend="ollama",
+            model="llama3",
+            status="success",
+            tokens=10,
+            cost_usd=0.0,
+            duration_seconds=0.1,
+        )
+        free_after = MAXWELL_FREE_REQUESTS_TOTAL.labels(
+            backend="ollama", model="llama3"
+        )._value.get()
+        cost_after = MAXWELL_REQUEST_COST.labels(backend="ollama", model="llama3")._value.get()
+        assert free_after == free_before + 1
+        assert cost_after == cost_before
+
+    def test_priced_request_does_not_increment_free_counter(self) -> None:
+        free_before = MAXWELL_FREE_REQUESTS_TOTAL.labels(backend="claude", model="m")._value.get()
+        record_request(
+            backend="claude",
+            model="m",
+            status="success",
+            tokens=10,
+            cost_usd=0.02,
+            duration_seconds=0.1,
+        )
+        free_after = MAXWELL_FREE_REQUESTS_TOTAL.labels(backend="claude", model="m")._value.get()
+        assert free_after == free_before
 
     def test_error_status_skips_token_and_cost(self) -> None:
         # Error path still bumps the request counter but not tokens/cost.
