@@ -6,6 +6,11 @@ backend — Anthropic, OpenAI, Ollama, or any model we add later — which keeps
 tool layer DRY and makes swapping backends a config change, not a code change.
 """
 
+from conductor.tools.builtins import (
+    BashRunner,
+    SandboxViolationError,
+    build_default_registry,
+)
 from conductor.tools.mcp import (
     ToolParam,
     ToolRegistry,
@@ -16,10 +21,13 @@ from conductor.tools.mcp import (
 )
 
 __all__ = [
+    "BashRunner",
+    "SandboxViolationError",
     "ToolParam",
     "ToolRegistry",
     "ToolRegistryError",
     "ToolResult",
     "ToolSpec",
+    "build_default_registry",
     "mcp_tool",
 ]

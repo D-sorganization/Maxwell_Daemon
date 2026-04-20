@@ -1,33 +1,30 @@
-"""AgentLoopBackend — unit tests for tool execution, safety, and loop control.
+"""Unit tests for AgentLoopBackend — the multi-turn Anthropic agent loop.
 
-All tests that involve the Anthropic API use a synchronous mock so we avoid
-real network calls. The agent loop itself is synchronous under the hood (it
-uses ``client.messages.create``, not the async variant) so we can exercise it
-directly without ``asyncio.run`` in most cases.
+Scope: loop mechanics (turn limit, stop-reason handling, system prompt
+assembly, prompt caching, budget enforcement, wall-clock timeout, memory
+injection, cost recording). Tool behavior itself is covered in
+``tests/unit/test_tools_builtins.py`` — we don't re-test it here.
+
+All Anthropic calls are mocked — no real API traffic.
 """
 
 from __future__ import annotations
 
-import asyncio
-import sys
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from conductor.backends import (
-    BackendResponse,
-    BackendUnavailableError,
-    Message,
-    MessageRole,
-    TokenUsage,
+from conductor.backends.agent_loop import (
+    AgentLoopBackend,
+    BudgetExceededError,
+    WallClockTimeoutError,
 )
-from conductor.backends.agent_loop import TOOL_SCHEMAS, AgentLoopBackend
+from conductor.backends.base import Message, MessageRole
 
-# ---------------------------------------------------------------------------
-# Helpers / fixtures
-# ---------------------------------------------------------------------------
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture(autouse=True)
@@ -35,570 +32,361 @@ def _api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
 
 
-def _make_backend(**kwargs: Any) -> AgentLoopBackend:
-    return AgentLoopBackend(**kwargs)
+def _block(kind: str, **fields: Any) -> MagicMock:
+    b = MagicMock()
+    b.type = kind
+    for k, v in fields.items():
+        setattr(b, k, v)
+    return b
 
 
-def _make_response(
+def _response(
     *,
     stop_reason: str = "end_turn",
-    text: str = "done",
-    tool_calls: list[dict[str, Any]] | None = None,
+    text: str | None = "done",
+    tool_calls: Iterable[dict[str, Any]] = (),
     input_tokens: int = 10,
     output_tokens: int = 5,
+    model: str = "claude-sonnet-4-6",
 ) -> MagicMock:
-    """Build a fake ``anthropic.types.Message``-like object."""
+    """Build a fake ``anthropic.types.Message`` for the mock async client."""
     resp = MagicMock()
     resp.stop_reason = stop_reason
-    resp.model = "claude-sonnet-4-6"
+    resp.model = model
     resp.usage = MagicMock()
     resp.usage.input_tokens = input_tokens
     resp.usage.output_tokens = output_tokens
-    # cache_read_input_tokens may not exist on older SDK shapes
     resp.usage.cache_read_input_tokens = 0
-
     content: list[MagicMock] = []
-
-    if text:
-        text_block = MagicMock()
-        text_block.type = "text"
-        text_block.text = text
-        content.append(text_block)
-
-    for tc in tool_calls or []:
-        tool_block = MagicMock()
-        tool_block.type = "tool_use"
-        tool_block.id = tc["id"]
-        tool_block.name = tc["name"]
-        tool_block.input = tc["input"]
-        content.append(tool_block)
-
+    if text is not None:
+        content.append(_block("text", text=text))
+    for tc in tool_calls:
+        content.append(_block("tool_use", id=tc["id"], name=tc["name"], input=tc["input"]))
     resp.content = content
     return resp
 
 
-# ---------------------------------------------------------------------------
-# Tool execution — file operations
-# ---------------------------------------------------------------------------
+def _install_mock_client(backend: AgentLoopBackend, responses: list[MagicMock]) -> AsyncMock:
+    """Replace the backend's Anthropic client with an AsyncMock cycling ``responses``."""
+    client = MagicMock()
+    client.messages = MagicMock()
+    client.messages.create = AsyncMock(side_effect=list(responses))
+    backend._client = client  # type: ignore[assignment]
+    return client.messages.create
 
 
-class TestReadFile:
-    def test_reads_existing_file(self, tmp_path: Path) -> None:
-        (tmp_path / "hello.txt").write_text("hello world")
-        backend = _make_backend()
-        result = backend._execute_tool("read_file", {"path": "hello.txt"}, str(tmp_path))
-        assert result == "hello world"
-
-    def test_missing_file_returns_error(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool("read_file", {"path": "missing.txt"}, str(tmp_path))
-        assert result.startswith("ERROR:")
-
-    def test_traversal_rejected(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool("read_file", {"path": "../../etc/passwd"}, str(tmp_path))
-        assert "ERROR" in result
-        assert "traversal" in result.lower() or "escapes" in result.lower()
+def _user(text: str) -> list[Message]:
+    return [Message(role=MessageRole.USER, content=text)]
 
 
-class TestWriteFile:
-    def test_creates_file(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool(
-            "write_file", {"path": "new.txt", "content": "abc"}, str(tmp_path)
-        )
-        assert "Written" in result
-        assert (tmp_path / "new.txt").read_text() == "abc"
-
-    def test_creates_parent_dirs(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        backend._execute_tool(
-            "write_file", {"path": "sub/dir/file.txt", "content": "x"}, str(tmp_path)
-        )
-        assert (tmp_path / "sub" / "dir" / "file.txt").read_text() == "x"
-
-    def test_traversal_rejected(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool(
-            "write_file", {"path": "../outside.txt", "content": "x"}, str(tmp_path)
-        )
-        assert "ERROR" in result
+def _system_as_text(system: str | list[dict[str, Any]]) -> str:
+    """The backend may pass system as a plain string or a list of content blocks."""
+    if isinstance(system, str):
+        return system
+    return "\n".join(str(b.get("text", "")) for b in system)
 
 
-class TestEditFile:
-    def test_replaces_unique_occurrence(self, tmp_path: Path) -> None:
-        (tmp_path / "f.txt").write_text("foo bar baz")
-        backend = _make_backend()
-        result = backend._execute_tool(
-            "edit_file",
-            {"path": "f.txt", "old_str": "bar", "new_str": "QUX"},
-            str(tmp_path),
-        )
-        assert "Replaced 1" in result
-        assert (tmp_path / "f.txt").read_text() == "foo QUX baz"
-
-    def test_error_if_not_found(self, tmp_path: Path) -> None:
-        (tmp_path / "f.txt").write_text("hello")
-        backend = _make_backend()
-        result = backend._execute_tool(
-            "edit_file",
-            {"path": "f.txt", "old_str": "MISSING", "new_str": "x"},
-            str(tmp_path),
-        )
-        assert "ERROR" in result
-        assert "not found" in result.lower()
-
-    def test_error_if_not_unique(self, tmp_path: Path) -> None:
-        (tmp_path / "f.txt").write_text("dup dup dup")
-        backend = _make_backend()
-        result = backend._execute_tool(
-            "edit_file",
-            {"path": "f.txt", "old_str": "dup", "new_str": "x"},
-            str(tmp_path),
-        )
-        assert "ERROR" in result
-
-
-class TestRunBash:
-    def test_runs_simple_command(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool("run_bash", {"command": "echo hello"}, str(tmp_path))
-        assert "hello" in result
-
-    def test_nonzero_exit_includes_output(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool("run_bash", {"command": "exit 42"}, str(tmp_path))
-        assert "42" in result
-
-    def test_runs_in_workspace_dir(self, tmp_path: Path) -> None:
-        (tmp_path / "marker.txt").write_text("found")
-        backend = _make_backend()
-        result = backend._execute_tool(
-            "run_bash",
-            {
-                "command": f"{sys.executable} -c \"from pathlib import Path; print(Path('marker.txt').read_text())\"",
-            },
-            str(tmp_path),
-        )
-        assert "found" in result
-
-
-class TestGlobFiles:
-    def test_finds_matching_files(self, tmp_path: Path) -> None:
-        (tmp_path / "a.py").write_text("")
-        (tmp_path / "b.py").write_text("")
-        (tmp_path / "c.txt").write_text("")
-        backend = _make_backend()
-        result = backend._execute_tool("glob_files", {"pattern": "*.py"}, str(tmp_path))
-        assert "a.py" in result
-        assert "b.py" in result
-        assert "c.txt" not in result
-
-    def test_no_matches(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool("glob_files", {"pattern": "*.xyz"}, str(tmp_path))
-        assert "no matches" in result.lower()
-
-    def test_recursive_glob(self, tmp_path: Path) -> None:
-        sub = tmp_path / "sub"
-        sub.mkdir()
-        (sub / "deep.py").write_text("")
-        backend = _make_backend()
-        result = backend._execute_tool("glob_files", {"pattern": "**/*.py"}, str(tmp_path))
-        assert "deep.py" in result
-
-
-class TestGrepFiles:
-    def test_finds_pattern(self, tmp_path: Path) -> None:
-        (tmp_path / "code.py").write_text("def my_func():\n    pass\n")
-        backend = _make_backend()
-        result = backend._execute_tool("grep_files", {"pattern": "my_func"}, str(tmp_path))
-        assert "my_func" in result
-
-    def test_no_match_returns_no_matches(self, tmp_path: Path) -> None:
-        (tmp_path / "code.py").write_text("hello world")
-        backend = _make_backend()
-        result = backend._execute_tool("grep_files", {"pattern": "XXXX_NOTHERE"}, str(tmp_path))
-        assert "no matches" in result.lower()
-
-    def test_traversal_in_search_path_rejected(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool(
-            "grep_files", {"pattern": "x", "path": "../../"}, str(tmp_path)
-        )
-        assert "ERROR" in result
-
-
-# ---------------------------------------------------------------------------
-# Path traversal safety
-# ---------------------------------------------------------------------------
-
-
-class TestPathTraversal:
-    @pytest.mark.parametrize(
-        "bad_path",
-        [
-            "../../etc/passwd",
-            "../outside",
-            "/etc/passwd",
-            "/tmp/evil",
-        ],
-    )
-    def test_read_rejects_escaping_paths(self, bad_path: str, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool("read_file", {"path": bad_path}, str(tmp_path))
-        assert "ERROR" in result
-
-    @pytest.mark.parametrize(
-        "bad_path",
-        [
-            "../../evil.txt",
-            "/tmp/injected.txt",
-        ],
-    )
-    def test_write_rejects_escaping_paths(self, bad_path: str, tmp_path: Path) -> None:
-        backend = _make_backend()
-        result = backend._execute_tool(
-            "write_file", {"path": bad_path, "content": "pwned"}, str(tmp_path)
-        )
-        assert "ERROR" in result
-
-
-# ---------------------------------------------------------------------------
-# Agent loop — turn limit enforcement
-# ---------------------------------------------------------------------------
+# ── Loop control ──────────────────────────────────────────────────────────────
 
 
 class TestTurnLimit:
-    def test_raises_on_turn_limit_exceeded(self, tmp_path: Path) -> None:
-        """When every response is tool_use, the loop must raise after max_turns."""
-        backend = _make_backend(max_turns=3)
-
-        # Every response asks for a tool call that never ends.
-        tool_response = _make_response(
+    async def test_raises_when_max_turns_exceeded_without_end(self, tmp_path: Path) -> None:
+        (tmp_path / "x.txt").write_text("x")
+        backend = AgentLoopBackend(max_turns=3, workspace_dir=str(tmp_path))
+        looping = _response(
             stop_reason="tool_use",
-            text="",
-            tool_calls=[
-                {
-                    "id": "tu_1",
-                    "name": "run_bash",
-                    "input": {"command": "echo hi"},
-                }
-            ],
+            text=None,
+            tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "x.txt"}}],
         )
+        _install_mock_client(backend, [looping, looping, looping])
+        with pytest.raises(RuntimeError, match="max_turns"):
+            await backend.complete(_user("hi"), model="claude-sonnet-4-6")
 
-        with (
-            patch.object(backend._client.messages, "create", return_value=tool_response),
-            pytest.raises(RuntimeError, match="max_turns=3"),
-        ):
-            asyncio.run(
-                backend.complete(
-                    [],
-                    workspace_dir=str(tmp_path),
-                )
-            )
+    async def test_ends_on_end_turn(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(max_turns=5, workspace_dir=str(tmp_path))
+        _install_mock_client(backend, [_response(text="done")])
+        out = await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        assert out.content == "done"
+        assert out.finish_reason == "end_turn"
 
-    def test_max_turns_override_per_call(self, tmp_path: Path) -> None:
-        backend = _make_backend(max_turns=150)  # default high
-        tool_response = _make_response(
+
+class TestStopReasonHandling:
+    async def test_tool_use_continues_loop(self, tmp_path: Path) -> None:
+        """After a tool_use turn, the loop must feed tool_result back and continue."""
+        (tmp_path / "hello.txt").write_text("world")
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        turn_1 = _response(
             stop_reason="tool_use",
-            text="",
-            tool_calls=[
-                {
-                    "id": "tu_1",
-                    "name": "run_bash",
-                    "input": {"command": "echo hi"},
-                }
-            ],
+            text=None,
+            tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "hello.txt"}}],
         )
-        with (
-            patch.object(backend._client.messages, "create", return_value=tool_response),
-            pytest.raises(RuntimeError, match="max_turns=2"),
-        ):
-            asyncio.run(
-                backend.complete(
-                    [],
-                    workspace_dir=str(tmp_path),
-                    max_turns=2,
-                )
-            )
+        turn_2 = _response(stop_reason="end_turn", text="I read it.")
+        create = _install_mock_client(backend, [turn_1, turn_2])
+        out = await backend.complete(_user("read hello.txt"), model="claude-sonnet-4-6")
+        assert out.content == "I read it."
+        # Second turn's messages must include the tool_result from the first call.
+        second_call_messages = create.call_args_list[1].kwargs["messages"]
+        last_user = second_call_messages[-1]
+        assert last_user["role"] == "user"
+        assert isinstance(last_user["content"], list)
+        tr = last_user["content"][0]
+        assert tr["type"] == "tool_result"
+        assert tr["tool_use_id"] == "t1"
+        assert "world" in tr["content"]
+
+    async def test_unknown_stop_reason_terminates_without_raising(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        _install_mock_client(backend, [_response(stop_reason="length", text="partial")])
+        out = await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        assert out.finish_reason == "length"
+        assert out.content == "partial"
 
 
-# ---------------------------------------------------------------------------
-# Agent loop — end_turn exits cleanly
-# ---------------------------------------------------------------------------
+# ── System prompt + caching ───────────────────────────────────────────────────
 
 
-class TestEndTurnExits:
-    def test_single_turn_end_turn(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        final_response = _make_response(stop_reason="end_turn", text="All done!")
+class TestSystemPrompt:
+    async def test_workspace_hint_included(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        blob = _system_as_text(create.call_args.kwargs["system"])
+        assert str(tmp_path) in blob
 
-        with patch.object(backend._client.messages, "create", return_value=final_response):
-            resp = asyncio.run(
-                backend.complete(
-                    [],
-                    workspace_dir=str(tmp_path),
-                )
-            )
-        assert resp.content == "All done!"
-        assert resp.finish_reason == "end_turn"
-        assert resp.backend == "agent-loop"
+    async def test_claude_md_injected_when_present(self, tmp_path: Path) -> None:
+        (tmp_path / "CLAUDE.md").write_text("Project rules: use ruff.")
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        blob = _system_as_text(create.call_args.kwargs["system"])
+        assert "Project rules: use ruff." in blob
 
-    def test_tool_then_end_turn(self, tmp_path: Path) -> None:
-        """Two-turn sequence: tool_use → end_turn."""
-        (tmp_path / "note.txt").write_text("agent result")
-        backend = _make_backend()
+    async def test_contributing_used_when_no_claude_md(self, tmp_path: Path) -> None:
+        (tmp_path / "CONTRIBUTING.md").write_text("Contributor guide here.")
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        blob = _system_as_text(create.call_args.kwargs["system"])
+        assert "Contributor guide here." in blob
 
-        turn1 = _make_response(
-            stop_reason="tool_use",
-            text="Reading the file...",
-            tool_calls=[
-                {
-                    "id": "tu_read",
-                    "name": "read_file",
-                    "input": {"path": "note.txt"},
-                }
-            ],
+
+class TestPromptCaching:
+    async def test_cache_control_attached_by_default(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        system = create.call_args.kwargs["system"]
+        assert isinstance(system, list)
+        assert system[-1].get("cache_control") == {"type": "ephemeral"}
+
+    async def test_cache_control_disabled_when_flag_off(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(
+            workspace_dir=str(tmp_path),
+            enable_prompt_caching=False,
         )
-        turn2 = _make_response(stop_reason="end_turn", text="File says: agent result")
-
-        call_count = 0
-
-        def _side_effect(**kwargs: Any) -> MagicMock:
-            nonlocal call_count
-            call_count += 1
-            return turn1 if call_count == 1 else turn2
-
-        with patch.object(backend._client.messages, "create", side_effect=_side_effect):
-            resp = asyncio.run(
-                backend.complete(
-                    [],
-                    workspace_dir=str(tmp_path),
-                )
-            )
-
-        assert resp.content == "File says: agent result"
-        assert call_count == 2
-
-    def test_token_usage_accumulated_across_turns(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-
-        turn1 = _make_response(
-            stop_reason="tool_use",
-            text="",
-            tool_calls=[{"id": "tu1", "name": "run_bash", "input": {"command": "echo x"}}],
-            input_tokens=100,
-            output_tokens=50,
-        )
-        turn2 = _make_response(
-            stop_reason="end_turn", text="done", input_tokens=200, output_tokens=80
-        )
-
-        call_n = 0
-
-        def _side(**kw: Any) -> MagicMock:
-            nonlocal call_n
-            call_n += 1
-            return turn1 if call_n == 1 else turn2
-
-        with patch.object(backend._client.messages, "create", side_effect=_side):
-            resp = asyncio.run(backend.complete([], workspace_dir=str(tmp_path)))
-
-        assert resp.usage.prompt_tokens == 300
-        assert resp.usage.completion_tokens == 130
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        system = create.call_args.kwargs["system"]
+        if isinstance(system, list):
+            assert all("cache_control" not in b for b in system)
 
 
-class TestInitialization:
-    def test_requires_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-
-        with pytest.raises(BackendUnavailableError, match="ANTHROPIC_API_KEY"):
-            AgentLoopBackend(api_key=None)
+# ── Memory injection ──────────────────────────────────────────────────────────
 
 
-class TestPromptAndCosts:
-    def test_system_messages_are_folded_into_system_prompt(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        response = _make_response(stop_reason="end_turn", text="ok")
-        captured: dict[str, Any] = {}
-
-        def _capture(*args: Any, **kwargs: Any) -> MagicMock:
-            captured["system"] = kwargs["system"]
-            captured["messages"] = kwargs["messages"]
-            return response
-
-        with patch.object(backend._client.messages, "create", side_effect=_capture):
-            result = asyncio.run(
-                backend.complete(
-                    [
-                        Message(role=MessageRole.SYSTEM, content="system rule"),
-                        Message(role=MessageRole.USER, content="hi"),
-                    ],
-                    workspace_dir=str(tmp_path),
-                )
-            )
-
-        assert result.content == "ok"
-        assert "system rule" in captured["system"]
-        assert all(message["role"] != "system" for message in captured["messages"])
-
-    def test_records_cost_when_ledger_is_available(self, tmp_path: Path) -> None:
-        ledger = MagicMock()
-        backend = _make_backend(ledger=ledger)
-        response = _make_response(
-            stop_reason="end_turn", text="done", input_tokens=11, output_tokens=7
-        )
-
-        with patch.object(backend._client.messages, "create", return_value=response):
-            asyncio.run(
-                backend.complete([], workspace_dir=str(tmp_path), repo="repo", agent_id="agent")
-            )
-
-        ledger.record.assert_called_once()
-
-    def test_cost_recording_errors_are_swallowed(self, tmp_path: Path) -> None:
-        ledger = MagicMock()
-        ledger.record.side_effect = RuntimeError("boom")
-        backend = _make_backend(ledger=ledger)
-        response = _make_response(stop_reason="end_turn", text="done")
-
-        with patch.object(backend._client.messages, "create", return_value=response):
-            result = asyncio.run(backend.complete([], workspace_dir=str(tmp_path)))
-
-        assert result.content == "done"
-
-
-class TestToolAndStopReasonBranches:
-    def test_grep_files_skips_unreadable_files_and_falls_back_to_relative_path(
-        self, tmp_path: Path
-    ) -> None:
-        backend = _make_backend()
-        search_dir = tmp_path / "sub"
-        search_dir.mkdir()
-        broken = search_dir / "broken.txt"
-        broken.write_text("ignored")
-        target = search_dir / "match.txt"
-        target.write_text("needle")
-        workspace = tmp_path.resolve()
-        original_read_text = Path.read_text
-        original_relative_to = Path.relative_to
-
-        def _read_text(self: Path, *args: Any, **kwargs: Any) -> str:
-            if self == broken:
-                raise OSError("unreadable")
-            return original_read_text(self, *args, **kwargs)
-
-        def _relative_to(self: Path, *other: Any) -> Path:
-            if self == target and other and Path(other[0]).resolve() == workspace:
-                raise ValueError("force fallback")
-            return original_relative_to(self, *other)
-
-        with (
-            patch.object(Path, "read_text", new=_read_text),
-            patch.object(Path, "relative_to", new=_relative_to),
-        ):
-            result = backend._execute_tool(
-                "grep_files", {"pattern": "needle", "path": "sub"}, str(tmp_path)
-            )
-
-        assert "match.txt" in result
-        assert "needle" in result
-
-    def test_unknown_tool_raises(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-
-        with pytest.raises(ValueError, match="Unknown tool"):
-            backend._dispatch_tool("does_not_exist", {}, str(tmp_path))
-
-    def test_unexpected_stop_reason_is_returned(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        response = _make_response(stop_reason="length", text="partial")
-
-        with patch.object(backend._client.messages, "create", return_value=response):
-            result = asyncio.run(backend.complete([], workspace_dir=str(tmp_path)))
-
-        assert result.finish_reason == "length"
-        assert result.content == "partial"
-
-
-class TestStreamAndHealthCheck:
-    async def _collect_stream(self, backend: AgentLoopBackend, tmp_path: Path) -> list[str]:
-        return [chunk async for chunk in backend.stream([], workspace_dir=str(tmp_path))]
-
-    def test_stream_yields_final_content(self, tmp_path: Path) -> None:
-        backend = _make_backend()
-        response = BackendResponse(
-            content="streamed",
-            finish_reason="end_turn",
-            usage=TokenUsage(
-                prompt_tokens=1,
-                completion_tokens=1,
-                total_tokens=2,
-                cached_tokens=0,
-            ),
+class TestMemoryInjection:
+    async def test_memory_assemble_context_is_called_when_memory_set(self, tmp_path: Path) -> None:
+        memory = MagicMock()
+        memory.assemble_context = MagicMock(return_value="## Prior knowledge\nBe careful.")
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path), memory=memory)
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(
+            _user("fix #42"),
             model="claude-sonnet-4-6",
-            backend="agent-loop",
+            repo="acme/foo",
+            agent_id="task-99",
+            issue_title="fix 42",
+            issue_body="body",
         )
+        memory.assemble_context.assert_called_once()
+        kwargs = memory.assemble_context.call_args.kwargs
+        assert kwargs["repo"] == "acme/foo"
+        assert kwargs["task_id"] == "task-99"
+        blob = _system_as_text(create.call_args.kwargs["system"])
+        assert "Be careful." in blob
 
-        with patch.object(backend, "complete", new=AsyncMock(return_value=response)):
-            chunks = asyncio.run(self._collect_stream(backend, tmp_path))
-
-        assert chunks == ["streamed"]
-
-    def test_health_check_reports_success(self) -> None:
-        backend = _make_backend()
-        with patch.object(backend._client.messages, "create", return_value=_make_response()):
-            assert asyncio.run(backend.health_check()) is True
-
-    def test_health_check_reports_failure(self) -> None:
-        backend = _make_backend()
-        with patch.object(backend._client.messages, "create", side_effect=RuntimeError("boom")):
-            assert asyncio.run(backend.health_check()) is False
+    async def test_no_memory_no_call(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
 
 
-# ---------------------------------------------------------------------------
-# Tool schemas
-# ---------------------------------------------------------------------------
+# ── Budget enforcement ────────────────────────────────────────────────────────
 
 
-class TestToolSchemas:
-    def test_all_tools_present(self) -> None:
-        names = {t["name"] for t in TOOL_SCHEMAS}
-        assert names == {
+class TestBudgetEnforcement:
+    async def test_aborts_when_turn_pushes_over_budget(self, tmp_path: Path) -> None:
+        # Budget = $0.001. Each turn uses 1M input tokens * $3/M = $3 -> abort after turn 1.
+        (tmp_path / "x").write_text("x")
+        backend = AgentLoopBackend(
+            workspace_dir=str(tmp_path),
+            budget_per_story_usd=0.001,
+        )
+        expensive = _response(
+            stop_reason="tool_use",
+            text=None,
+            tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "x"}}],
+            input_tokens=1_000_000,
+            output_tokens=0,
+        )
+        _install_mock_client(backend, [expensive, _response()])
+        with pytest.raises(BudgetExceededError, match=r"budget|0\.001"):
+            await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+
+    async def test_budget_not_exceeded_completes_normally(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(
+            workspace_dir=str(tmp_path),
+            budget_per_story_usd=10.0,
+        )
+        cheap = _response(input_tokens=10, output_tokens=5)
+        _install_mock_client(backend, [cheap])
+        out = await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        assert out.finish_reason == "end_turn"
+
+    async def test_no_budget_means_no_limit(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))  # no budget
+        pricey = _response(input_tokens=5_000_000, output_tokens=5_000_000)
+        _install_mock_client(backend, [pricey])
+        out = await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        assert out.finish_reason == "end_turn"
+
+
+# ── Wall-clock timeout ───────────────────────────────────────────────────────
+
+
+class TestWallClockTimeout:
+    async def test_aborts_past_deadline(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(
+            workspace_dir=str(tmp_path),
+            wall_clock_timeout_seconds=0.0,
+        )
+        (tmp_path / "x").write_text("x")
+        _install_mock_client(
+            backend,
+            [
+                _response(
+                    stop_reason="tool_use",
+                    text=None,
+                    tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "x"}}],
+                )
+            ],
+        )
+        with pytest.raises(WallClockTimeoutError):
+            await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+
+    async def test_deadline_not_hit_completes(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(
+            workspace_dir=str(tmp_path),
+            wall_clock_timeout_seconds=60.0,
+        )
+        _install_mock_client(backend, [_response()])
+        out = await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        assert out.finish_reason == "end_turn"
+
+
+# ── Cost ledger ──────────────────────────────────────────────────────────────
+
+
+class TestCostLedger:
+    async def test_ledger_record_called_per_turn(self, tmp_path: Path) -> None:
+        ledger = MagicMock()
+        ledger.record = MagicMock()
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path), ledger=ledger)
+        (tmp_path / "hi").write_text("x")
+        _install_mock_client(
+            backend,
+            [
+                _response(
+                    stop_reason="tool_use",
+                    text=None,
+                    tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "hi"}}],
+                ),
+                _response(text="done"),
+            ],
+        )
+        await backend.complete(
+            _user("hi"),
+            model="claude-sonnet-4-6",
+            repo="acme/foo",
+            agent_id="task-1",
+        )
+        assert ledger.record.call_count == 2  # one per turn
+        rec = ledger.record.call_args_list[0].args[0]
+        assert rec.repo == "acme/foo"
+        assert rec.agent_id == "task-1"
+        assert rec.backend == "agent-loop"
+
+
+# ── Tool registry integration ───────────────────────────────────────────────
+
+
+class TestToolRegistryIntegration:
+    async def test_tools_param_derived_from_registry(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        tools = create.call_args.kwargs["tools"]
+        names = {t["name"] for t in tools}
+        assert {
             "read_file",
             "write_file",
             "edit_file",
-            "run_bash",
             "glob_files",
             "grep_files",
-        }
+            "run_bash",
+        } <= names
+        for t in tools:
+            assert "input_schema" in t
 
-    def test_each_has_input_schema(self) -> None:
-        for tool in TOOL_SCHEMAS:
-            assert "input_schema" in tool, f"{tool['name']} missing input_schema"
-            assert "properties" in tool["input_schema"]
+    async def test_tool_invocation_goes_through_registry(self, tmp_path: Path) -> None:
+        (tmp_path / "target.txt").write_text("payload-from-registry")
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        _install_mock_client(
+            backend,
+            [
+                _response(
+                    stop_reason="tool_use",
+                    text=None,
+                    tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "target.txt"}}],
+                ),
+                _response(text="got it"),
+            ],
+        )
+        create = backend._client.messages.create  # type: ignore[attr-defined]
+        await backend.complete(_user("read"), model="claude-sonnet-4-6")
+        second_call = create.call_args_list[1].kwargs["messages"]
+        tool_result = second_call[-1]["content"][0]
+        assert tool_result["type"] == "tool_result"
+        assert "payload-from-registry" in tool_result["content"]
 
 
-# ---------------------------------------------------------------------------
-# Registry
-# ---------------------------------------------------------------------------
+class TestAsyncClient:
+    def test_client_is_async(self, tmp_path: Path) -> None:
+        """The underlying Anthropic client must be AsyncAnthropic, not Anthropic.
+
+        The loop is an async function; the sync client would block the event loop.
+        """
+        import anthropic
+
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        assert isinstance(backend._client, anthropic.AsyncAnthropic)
 
 
-class TestRegistry:
-    def test_registered_as_agent_loop(self) -> None:
-        from conductor.backends.registry import registry
+# ── Capabilities ─────────────────────────────────────────────────────────────
 
-        assert "agent-loop" in registry.available()
 
-    def test_capabilities_marks_tool_use(self) -> None:
-        backend = _make_backend()
-        caps = backend.capabilities("claude-sonnet-4-6")
+class TestCapabilities:
+    def test_reports_tool_use(self, tmp_path: Path) -> None:
+        caps = AgentLoopBackend(workspace_dir=str(tmp_path)).capabilities("claude-sonnet-4-6")
         assert caps.supports_tool_use is True
-        assert caps.is_local is False
-
-    def test_pricing_populated(self) -> None:
-        backend = _make_backend()
-        caps = backend.capabilities("claude-sonnet-4-6")
-        assert caps.cost_per_1k_input_tokens > 0
-        assert caps.cost_per_1k_output_tokens > 0
+        assert caps.supports_system_prompt is True

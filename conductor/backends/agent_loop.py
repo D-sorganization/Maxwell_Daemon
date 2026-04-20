@@ -1,21 +1,30 @@
 """Multi-turn Anthropic SDK agent loop backend.
 
 Unlike the one-shot ``claude -p`` approach in :mod:`conductor.backends.claude_code`,
-this backend drives a full tool-use loop using the Anthropic Python SDK directly.
-The agent can read/write/edit files, run bash commands, and search the workspace
-across up to ``max_turns`` turns before returning the final text response.
+this backend drives a full tool-use loop using the Anthropic async SDK. The
+agent reads/writes/edits files, runs bash, and iterates across ``max_turns``
+turns before returning the final text response.
 
-All file operations are confined to ``workspace_dir`` — any attempt to access a
-path outside that directory (via ``..`` traversal or absolute path escape) is
-rejected and the tool call returns an error string instead of raising.
+**Key design choices (per CONDUCTOR principles):**
+
+* **Agent Agnostic / DRY:** tools come from :mod:`conductor.tools` — the same
+  registry emits Anthropic *and* OpenAI schemas. We never hand-roll tool
+  dispatch or JSON-schema dicts in here.
+* **Reversibility:** every knob that changes behaviour (memory, ledger, budget,
+  wall-clock, cache) is an optional constructor parameter with safe defaults.
+  Turning a feature off is deleting an argument.
+* **DbC on boundaries:** abort conditions raise dedicated exceptions
+  (``BudgetExceededError``, ``WallClockTimeoutError``) so callers pattern-match
+  on a failure *kind*, not a string.
+* **Prompt caching** is on by default — a multi-turn loop that replays a
+  system prompt every turn is the prototypical caching case.
 """
 
 from __future__ import annotations
 
-import glob as _glob
 import os
-import subprocess
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,126 +42,21 @@ from conductor.backends.base import (
     TokenUsage,
 )
 from conductor.backends.registry import registry
+from conductor.tools import ToolRegistry, build_default_registry
 
-__all__ = ["AgentLoopBackend"]
-
-# ---------------------------------------------------------------------------
-# Tool schemas (Anthropic tool-use format)
-# ---------------------------------------------------------------------------
-
-TOOL_SCHEMAS: list[dict[str, Any]] = [
-    {
-        "name": "read_file",
-        "description": "Read the contents of a file inside the workspace.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative path to the file within the workspace.",
-                }
-            },
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "write_file",
-        "description": "Write (create or overwrite) a file inside the workspace.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative path to the file within the workspace.",
-                },
-                "content": {
-                    "type": "string",
-                    "description": "Full content to write to the file.",
-                },
-            },
-            "required": ["path", "content"],
-        },
-    },
-    {
-        "name": "edit_file",
-        "description": (
-            "Replace an exact substring in a file (str_replace style). "
-            "Fails if ``old_str`` is not found or appears more than once."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative path to the file within the workspace.",
-                },
-                "old_str": {
-                    "type": "string",
-                    "description": "The exact string to replace (must appear exactly once).",
-                },
-                "new_str": {
-                    "type": "string",
-                    "description": "The replacement string.",
-                },
-            },
-            "required": ["path", "old_str", "new_str"],
-        },
-    },
-    {
-        "name": "run_bash",
-        "description": "Run a shell command inside the workspace directory.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The shell command to execute.",
-                },
-                "timeout": {
-                    "type": "integer",
-                    "description": "Timeout in seconds (default 30).",
-                    "default": 30,
-                },
-            },
-            "required": ["command"],
-        },
-    },
-    {
-        "name": "glob_files",
-        "description": "Return a list of file paths matching a glob pattern in the workspace.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "Glob pattern relative to workspace (e.g. '**/*.py').",
-                }
-            },
-            "required": ["pattern"],
-        },
-    },
-    {
-        "name": "grep_files",
-        "description": "Recursively search files for a pattern using grep.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "Regular expression to search for.",
-                },
-                "path": {
-                    "type": "string",
-                    "description": "Sub-path within workspace to search (default '.').",
-                    "default": ".",
-                },
-            },
-            "required": ["pattern"],
-        },
-    },
+__all__ = [
+    "AgentLoopBackend",
+    "BudgetExceededError",
+    "WallClockTimeoutError",
 ]
 
-# Anthropic public pricing (USD per 1M tokens) as of 2026-04.
+
+# ── Module-level config ───────────────────────────────────────────────────────
+
+
+# Anthropic public pricing (USD per 1M tokens) as of 2026-04. Single source of
+# truth shared with ``conductor.backends.claude`` — kept here rather than
+# imported so the agent loop can work offline from that adapter.
 _MODEL_PRICING: dict[str, tuple[float, float]] = {
     "claude-opus-4-7": (15.0, 75.0),
     "claude-sonnet-4-6": (3.0, 15.0),
@@ -169,25 +73,56 @@ _MODEL_CONTEXT: dict[str, int] = {
     "claude-3-5-haiku-latest": 200_000,
 }
 
+_CLAUDE_DOCS_PRIORITY: tuple[str, ...] = (
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    ".github/CONTRIBUTING.md",
+)
+
+
+# ── Exceptions ────────────────────────────────────────────────────────────────
+
+
+class BudgetExceededError(RuntimeError):
+    """Raised when a single agent-loop invocation exceeds its per-story budget."""
+
+
+class WallClockTimeoutError(RuntimeError):
+    """Raised when an agent-loop invocation exceeds its wall-clock deadline."""
+
+
+# ── Backend ───────────────────────────────────────────────────────────────────
+
 
 class AgentLoopBackend(ILLMBackend):
-    """Multi-turn Anthropic SDK backend with a built-in tool-execution loop.
+    """Multi-turn Anthropic backend with MCP-based tool execution.
 
     Parameters
     ----------
     api_key:
-        Anthropic API key. Falls back to ``ANTHROPIC_API_KEY`` env var.
+        Anthropic API key. Falls back to ``ANTHROPIC_API_KEY``.
     model:
-        Default model to use when none is supplied to ``complete()``.
+        Default model when none is supplied to ``complete()``.
     max_turns:
-        Maximum number of agentic turns before raising ``RuntimeError``.
+        Hard cap on agent turns before ``RuntimeError``.
     timeout:
-        HTTP timeout for each SDK call (seconds).
+        Per-request HTTP timeout in seconds.
     ledger:
-        Optional :class:`~conductor.core.ledger.CostLedger` for cost tracking.
+        Optional :class:`~conductor.core.ledger.CostLedger` for audit trail.
+    memory:
+        Optional :class:`~conductor.memory.MemoryManager` — when set, the
+        system prompt gets prior-knowledge, repo facts, and scratchpad injected.
     workspace_dir:
-        Default workspace directory for tool execution. Can be overridden per
-        call via ``kwargs["workspace_dir"]``.
+        Default workspace for tool execution; per-call overrides via kwarg.
+    budget_per_story_usd:
+        Cumulative USD cap for a single ``complete()`` call. ``None`` disables.
+    wall_clock_timeout_seconds:
+        Deadline in seconds from the first turn. ``None`` disables.
+    enable_prompt_caching:
+        Attach ``cache_control: {"type": "ephemeral"}`` to the system block.
+    registry_factory:
+        Injection seam — callable ``(Path) -> ToolRegistry`` for test doubles.
+        Defaults to :func:`conductor.tools.build_default_registry`.
     """
 
     name = "agent-loop"
@@ -200,172 +135,128 @@ class AgentLoopBackend(ILLMBackend):
         max_turns: int = 150,
         timeout: float = 120.0,
         ledger: Any | None = None,
+        memory: Any | None = None,
         workspace_dir: str | None = None,
+        budget_per_story_usd: float | None = None,
+        wall_clock_timeout_seconds: float | None = None,
+        enable_prompt_caching: bool = True,
+        registry_factory: Callable[[Path], ToolRegistry] | None = None,
     ) -> None:
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
             raise BackendUnavailableError("ANTHROPIC_API_KEY not set and no api_key passed")
-        self._client = anthropic.Anthropic(api_key=key, timeout=timeout)
+        self._client: anthropic.AsyncAnthropic = anthropic.AsyncAnthropic(
+            api_key=key, timeout=timeout
+        )
         self._default_model = model
         self._max_turns = max_turns
         self._ledger = ledger
+        self._memory = memory
         self._default_workspace = workspace_dir
+        self._budget_per_story_usd = budget_per_story_usd
+        self._wall_clock_timeout = wall_clock_timeout_seconds
+        self._enable_cache = enable_prompt_caching
+        self._registry_factory = registry_factory or build_default_registry
 
-    # ------------------------------------------------------------------
-    # Path safety
-    # ------------------------------------------------------------------
+    # ── System prompt assembly ───────────────────────────────────────────────
 
-    def _safe_path(self, workspace_dir: str, relative_path: str) -> Path:
-        """Resolve ``relative_path`` inside ``workspace_dir``.
-
-        Raises ``ValueError`` if the resolved path escapes the workspace.
-        """
-        workspace = Path(workspace_dir).resolve()
-        candidate = (workspace / relative_path).resolve()
-        if not str(candidate).startswith(str(workspace)):
-            msg = f"Path traversal rejected: {relative_path!r} escapes workspace"
-            raise ValueError(msg)
-        return candidate
-
-    # ------------------------------------------------------------------
-    # Tool execution
-    # ------------------------------------------------------------------
-
-    def _execute_tool(self, name: str, inputs: dict[str, Any], workspace_dir: str) -> str:
-        """Dispatch a single tool call and return the string result.
-
-        All exceptions are caught and returned as error strings so the loop
-        can continue (the model will see the error and adapt).
-        """
-        try:
-            return self._dispatch_tool(name, inputs, workspace_dir)
-        except Exception as exc:
-            return f"ERROR: {exc}"
-
-    def _dispatch_tool(self, name: str, inputs: dict[str, Any], workspace_dir: str) -> str:
-        if name == "read_file":
-            path = self._safe_path(workspace_dir, inputs["path"])
-            return path.read_text(errors="replace")
-
-        if name == "write_file":
-            path = self._safe_path(workspace_dir, inputs["path"])
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(inputs["content"])
-            return f"Written {len(inputs['content'])} chars to {inputs['path']}"
-
-        if name == "edit_file":
-            path = self._safe_path(workspace_dir, inputs["path"])
-            text = path.read_text(errors="replace")
-            old_str: str = inputs["old_str"]
-            new_str: str = inputs["new_str"]
-            count = text.count(old_str)
-            if count == 0:
-                raise ValueError(f"old_str not found in {inputs['path']!r}")
-            if count > 1:
-                raise ValueError(
-                    f"old_str appears {count} times in {inputs['path']!r}; must be unique"
-                )
-            path.write_text(text.replace(old_str, new_str, 1))
-            return f"Replaced 1 occurrence in {inputs['path']}"
-
-        if name == "run_bash":
-            command: str = inputs["command"]
-            timeout: int = int(inputs.get("timeout") or 30)
-            result = subprocess.run(
-                command,
-                shell=True,  # nosec B602
-                cwd=workspace_dir,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-            output = result.stdout + result.stderr
-            if result.returncode != 0:
-                return f"Exit {result.returncode}:\n{output}"
-            return output or "(no output)"
-
-        if name == "glob_files":
-            pattern: str = inputs["pattern"]
-            workspace = Path(workspace_dir).resolve()
-            matches = _glob.glob(pattern, root_dir=str(workspace), recursive=True)
-            return "\n".join(sorted(matches)) if matches else "(no matches)"
-
-        if name == "grep_files":
-            pattern = inputs["pattern"]
-            search_path = inputs.get("path") or "."
-            safe_search = self._safe_path(workspace_dir, search_path)
-            workspace = Path(workspace_dir).resolve()
-            grep_matches: list[str] = []
-            for file_path in sorted(p for p in safe_search.rglob("*") if p.is_file()):
+    def _load_first_doc(self, workspace: Path) -> str:
+        """Return the first repo-specific doc found, or an empty string."""
+        for name in _CLAUDE_DOCS_PRIORITY:
+            candidate = workspace / name
+            if candidate.is_file():
                 try:
-                    text = file_path.read_text(errors="replace")
+                    return f"## {name}\n\n" + candidate.read_text(
+                        encoding="utf-8", errors="replace"
+                    )
                 except OSError:
                     continue
-                try:
-                    rel_path = file_path.relative_to(workspace)
-                except ValueError:
-                    rel_path = file_path.relative_to(safe_search)
-                for line_no, line in enumerate(text.splitlines(), start=1):
-                    if pattern in line:
-                        grep_matches.append(f"{rel_path}:{line_no}:{line}")
-            return "\n".join(grep_matches) if grep_matches else "(no matches)"
+        return ""
 
-        raise ValueError(f"Unknown tool: {name!r}")
+    def _build_system_blocks(
+        self,
+        *,
+        system_texts: list[str],
+        workspace: Path,
+        repo: str | None,
+        issue_title: str,
+        issue_body: str,
+        agent_id: str | None,
+    ) -> list[dict[str, Any]] | str:
+        """Assemble the system prompt.
 
-    # ------------------------------------------------------------------
-    # System prompt
-    # ------------------------------------------------------------------
-
-    def _build_system_prompt(self, system_messages: list[str], workspace_dir: str) -> str:
-        parts = list(system_messages)
+        Produces a list of content blocks when caching is on, so ``cache_control``
+        can attach to the stable suffix. Falls back to a plain string when
+        caching is off — matches the Anthropic SDK's ``system: str | list`` shape.
+        """
+        parts: list[str] = [t for t in system_texts if t]
         parts.append(
-            f"You have access to tools to read/write/edit files and run bash commands.\n"
-            f"Your working workspace is: {workspace_dir}\n"
-            f"All file paths must be relative to the workspace root."
+            "You have access to tools to read, write, edit, search, and run bash "
+            "inside the workspace. All paths are relative to the workspace root."
         )
-        return "\n\n".join(p for p in parts if p)
+        parts.append(f"Workspace: {workspace}")
 
-    # ------------------------------------------------------------------
-    # Cost recording
-    # ------------------------------------------------------------------
+        doc = self._load_first_doc(workspace)
+        if doc:
+            parts.append(doc)
+
+        if self._memory is not None and repo:
+            with suppress(Exception):
+                memory_text = self._memory.assemble_context(
+                    repo=repo,
+                    issue_title=issue_title,
+                    issue_body=issue_body,
+                    task_id=agent_id or "adhoc",
+                    max_chars=8000,
+                )
+                if memory_text:
+                    parts.append(memory_text)
+
+        text = "\n\n".join(parts)
+        if not self._enable_cache:
+            return text
+        return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
+
+    # ── Cost math ────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _cost_for(usage: TokenUsage, model: str) -> float:
+        """Compute USD cost for a turn's usage. Uses shared pricing table."""
+        price_in, price_out = _MODEL_PRICING.get(model, (3.0, 15.0))
+        return (
+            usage.prompt_tokens * price_in / 1_000_000
+            + usage.completion_tokens * price_out / 1_000_000
+        )
 
     def _record_cost(
         self,
-        response: anthropic.types.Message,
+        *,
+        usage: TokenUsage,
+        cost_usd: float,
         model: str,
-        repo: str | None = None,
-        agent_id: str | None = None,
+        repo: str | None,
+        agent_id: str | None,
     ) -> None:
         if self._ledger is None:
             return
+        # Import lazily so the ledger dependency is optional — tests that inject
+        # a MagicMock ledger don't have to stub CostRecord.
         with suppress(Exception):
             from conductor.core.ledger import CostRecord
 
-            price_in, price_out = _MODEL_PRICING.get(model, (3.0, 15.0))
-            usage = TokenUsage(
-                prompt_tokens=response.usage.input_tokens,
-                completion_tokens=response.usage.output_tokens,
-                total_tokens=response.usage.input_tokens + response.usage.output_tokens,
-                cached_tokens=getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+            self._ledger.record(
+                CostRecord(
+                    ts=datetime.now(timezone.utc),
+                    backend=self.name,
+                    model=model,
+                    usage=usage,
+                    cost_usd=cost_usd,
+                    repo=repo,
+                    agent_id=agent_id,
+                )
             )
-            cost_usd = (
-                usage.prompt_tokens * price_in / 1_000_000
-                + usage.completion_tokens * price_out / 1_000_000
-            )
-            rec = CostRecord(
-                ts=datetime.now(timezone.utc),
-                backend=self.name,
-                model=model,
-                usage=usage,
-                cost_usd=cost_usd,
-                repo=repo,
-                agent_id=agent_id,
-            )
-            self._ledger.record(rec)
 
-    # ------------------------------------------------------------------
-    # ILLMBackend interface
-    # ------------------------------------------------------------------
+    # ── ILLMBackend interface ────────────────────────────────────────────────
 
     async def complete(
         self,
@@ -379,51 +270,64 @@ class AgentLoopBackend(ILLMBackend):
         max_turns: int | None = None,
         repo: str | None = None,
         agent_id: str | None = None,
+        issue_title: str = "",
+        issue_body: str = "",
         **kwargs: Any,
     ) -> BackendResponse:
-        """Run the multi-turn agent loop and return the final response.
+        """Drive the multi-turn agent loop.
 
-        Parameters
-        ----------
-        workspace_dir:
-            Directory in which file/bash tools operate. Defaults to
-            ``self._default_workspace`` or the process cwd.
-        max_turns:
-            Override the instance-level ``max_turns`` for this call.
-        repo, agent_id:
-            Forwarded to the cost ledger for attribution.
+        The ``tools`` parameter is ignored (we source tools from the registry).
+        The caller controls loop budget via ``max_turns`` / constructor
+        ``budget_per_story_usd`` / ``wall_clock_timeout_seconds``.
         """
         effective_model = model or self._default_model
-        effective_workspace = workspace_dir or self._default_workspace or os.getcwd()
+        effective_workspace = Path(
+            workspace_dir or self._default_workspace or os.getcwd()
+        ).resolve()
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
-        # Split system messages from conversation messages.
-        system_parts: list[str] = []
-        sdk_messages: list[dict[str, Any]] = []
-        for m in messages:
-            if m.role is MessageRole.SYSTEM:
-                system_parts.append(m.content)
-            else:
-                sdk_messages.append({"role": m.role.value, "content": m.content})
+        tool_registry = self._registry_factory(effective_workspace)
+        tool_defs = tool_registry.to_anthropic()
 
-        system_prompt = self._build_system_prompt(system_parts, effective_workspace)
+        system_prompt = self._build_system_blocks(
+            system_texts=[m.content for m in messages if m.role is MessageRole.SYSTEM],
+            workspace=effective_workspace,
+            repo=repo,
+            issue_title=issue_title,
+            issue_body=issue_body,
+            agent_id=agent_id,
+        )
+        sdk_messages: list[dict[str, Any]] = [
+            {"role": m.role.value, "content": m.content}
+            for m in messages
+            if m.role is not MessageRole.SYSTEM
+        ]
 
         total_usage = TokenUsage()
+        cumulative_cost = 0.0
         last_text = ""
         final_model = effective_model
 
+        deadline: float | None = None
+        if self._wall_clock_timeout is not None:
+            deadline = time.monotonic() + self._wall_clock_timeout
+
         for turn in range(effective_max_turns):
-            tool_params: Any = TOOL_SCHEMAS
-            message_params: Any = sdk_messages
-            response = self._client.messages.create(
+            if deadline is not None and time.monotonic() >= deadline:
+                raise WallClockTimeoutError(
+                    f"agent loop exceeded wall-clock timeout of "
+                    f"{self._wall_clock_timeout}s at turn {turn + 1}"
+                )
+
+            response = await self._client.messages.create(
                 model=effective_model,
                 max_tokens=max_tokens or 8096,
-                system=system_prompt,
-                tools=tool_params,
-                messages=message_params,
+                system=system_prompt,  # type: ignore[arg-type]
+                tools=tool_defs,  # type: ignore[arg-type]
+                messages=sdk_messages,  # type: ignore[arg-type]
             )
 
-            # Accumulate usage.
+            # Usage + cost.
             turn_usage = TokenUsage(
                 prompt_tokens=response.usage.input_tokens,
                 completion_tokens=response.usage.output_tokens,
@@ -431,12 +335,28 @@ class AgentLoopBackend(ILLMBackend):
                 cached_tokens=getattr(response.usage, "cache_read_input_tokens", 0) or 0,
             )
             total_usage = total_usage + turn_usage
+            turn_cost = self._cost_for(turn_usage, effective_model)
+            cumulative_cost += turn_cost
             final_model = response.model
 
-            # Record cost per turn.
-            self._record_cost(response, effective_model, repo=repo, agent_id=agent_id)
+            self._record_cost(
+                usage=turn_usage,
+                cost_usd=turn_cost,
+                model=effective_model,
+                repo=repo,
+                agent_id=agent_id,
+            )
 
-            # Extract text from this turn.
+            if (
+                self._budget_per_story_usd is not None
+                and cumulative_cost > self._budget_per_story_usd
+            ):
+                raise BudgetExceededError(
+                    f"agent loop exceeded per-story budget "
+                    f"${self._budget_per_story_usd:.4f} at turn {turn + 1} "
+                    f"(cumulative ${cumulative_cost:.4f})"
+                )
+
             text_parts = [
                 getattr(b, "text", "")
                 for b in response.content
@@ -445,7 +365,6 @@ class AgentLoopBackend(ILLMBackend):
             if text_parts:
                 last_text = "".join(text_parts)
 
-            # If end_turn, we're done.
             if response.stop_reason == "end_turn":
                 return BackendResponse(
                     content=last_text,
@@ -453,44 +372,40 @@ class AgentLoopBackend(ILLMBackend):
                     usage=total_usage,
                     model=final_model,
                     backend=self.name,
-                    raw={"turns": turn + 1},
+                    raw={"turns": turn + 1, "cost_usd": cumulative_cost},
                 )
 
-            # If tool_use, execute tools and continue loop.
             if response.stop_reason == "tool_use":
-                # Append the assistant turn with all content blocks.
                 sdk_messages.append({"role": "assistant", "content": response.content})
-
-                # Build tool results.
                 tool_results: list[dict[str, Any]] = []
                 for block in response.content:
-                    if getattr(block, "type", None) == "tool_use":
-                        tool_use: Any = block
-                        result = self._execute_tool(
-                            tool_use.name, tool_use.input, effective_workspace
-                        )
-                        tool_results.append(
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tool_use.id,
-                                "content": result,
-                            }
-                        )
-
+                    if getattr(block, "type", None) != "tool_use":
+                        continue
+                    tool_use: Any = block
+                    result = await tool_registry.invoke(tool_use.name, tool_use.input)
+                    content = f"ERROR: {result.content}" if result.is_error else result.content
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use.id,
+                            "content": content,
+                            **({"is_error": True} if result.is_error else {}),
+                        }
+                    )
                 sdk_messages.append({"role": "user", "content": tool_results})
                 continue
 
-            # Unexpected stop reason — treat as end_turn.
+            # Any other stop reason — treat as terminal.
             return BackendResponse(
                 content=last_text,
                 finish_reason=response.stop_reason or "stop",
                 usage=total_usage,
                 model=final_model,
                 backend=self.name,
-                raw={"turns": turn + 1},
+                raw={"turns": turn + 1, "cost_usd": cumulative_cost},
             )
 
-        raise RuntimeError(f"Agent loop exceeded max_turns={effective_max_turns} without end_turn")
+        raise RuntimeError(f"agent loop exceeded max_turns={effective_max_turns} without end_turn")
 
     async def stream(
         self,
@@ -502,7 +417,12 @@ class AgentLoopBackend(ILLMBackend):
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
-        """Run the agent loop and yield the final text as a single chunk."""
+        """Run the loop and yield the final text as a single chunk.
+
+        True token-stream passthrough for a multi-turn agent is tricky (we'd
+        have to surface tool-call deltas) and isn't needed yet. This simple
+        adapter keeps the ILLMBackend contract honest.
+        """
         resp = await self.complete(
             messages,
             model=model,
@@ -514,7 +434,7 @@ class AgentLoopBackend(ILLMBackend):
 
     async def health_check(self) -> bool:
         try:
-            self._client.messages.create(
+            await self._client.messages.create(
                 model=self._default_model,
                 max_tokens=1,
                 messages=[{"role": "user", "content": "."}],
