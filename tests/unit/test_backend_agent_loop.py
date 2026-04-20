@@ -153,6 +153,26 @@ class TestSystemPrompt:
         blob = _system_as_text(create.call_args.kwargs["system"])
         assert str(tmp_path) in blob
 
+    async def test_ci_profile_injected_when_workspace_has_configs(self, tmp_path: Path) -> None:
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.ruff]\nline-length = 100\n\n[tool.mypy]\nstrict = true\n"
+        )
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        blob = _system_as_text(create.call_args.kwargs["system"])
+        assert "CI requirements" in blob
+        assert "ruff" in blob
+        assert "mypy" in blob
+        assert "strict" in blob.lower()
+
+    async def test_ci_section_absent_on_empty_workspace(self, tmp_path: Path) -> None:
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path))
+        create = _install_mock_client(backend, [_response()])
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        blob = _system_as_text(create.call_args.kwargs["system"])
+        assert "CI requirements" not in blob
+
     async def test_claude_md_injected_when_present(self, tmp_path: Path) -> None:
         (tmp_path / "CLAUDE.md").write_text("Project rules: use ruff.")
         backend = AgentLoopBackend(workspace_dir=str(tmp_path))

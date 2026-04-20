@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from conductor.contracts import require
+from conductor.gh.ci_patterns import CIProfile, detect_ci_profile
 
 __all__ = ["ContextBuilder", "RepoContext", "detect_language"]
 
@@ -89,6 +90,9 @@ class RepoContext:
     readme: str = ""
     relevant_files: dict[str, str] = field(default_factory=dict)
     recent_commits: list[str] = field(default_factory=list)
+    #: CI contract inferred from workspace files — see ``conductor.gh.ci_patterns``.
+    #: ``None`` for backwards-compatible callers that build a RepoContext by hand.
+    ci_profile: CIProfile | None = None
 
     def to_prompt(self, *, max_chars: int = 32_000) -> str:
         """Render the context as a markdown block, bounded to ``max_chars``.
@@ -97,14 +101,20 @@ class RepoContext:
         truncated with a ``... truncated ...`` marker so the LLM knows the
         section was cut rather than short.
         """
-        # Split the budget: 15% file tree, 25% README, 50% snippets, 10% meta.
+        # Split the budget: 15% file tree, 25% README, 45% snippets, 10% commits, 5% CI.
         budget_tree = max(200, int(max_chars * 0.15))
         budget_readme = max(300, int(max_chars * 0.25))
-        budget_snippets = max(500, int(max_chars * 0.50))
+        budget_snippets = max(500, int(max_chars * 0.45))
         budget_commits = max(200, int(max_chars * 0.10))
+        budget_ci = max(400, int(max_chars * 0.05))
 
         parts: list[str] = []
         parts.append(f"Language: {self.language or 'unknown'}")
+
+        if self.ci_profile is not None:
+            ci_text = self.ci_profile.to_prompt()
+            if ci_text:
+                parts.append("\n" + _truncate(ci_text, budget_ci))
 
         if self.file_tree:
             parts.append("\n## File tree\n")
@@ -173,12 +183,15 @@ class ContextBuilder:
         readme = self._read_readme(repo_path)
         relevant = await self._find_relevant_files(repo_path, issue_body, top_n=5)
         commits = await self._recent_commits(repo_path, limit=self._commit_count)
+        # Detect CI contract synchronously — file-system only, fast.
+        ci_profile = detect_ci_profile(repo_path)
         return RepoContext(
             language=language,
             file_tree=file_tree,
             readme=readme,
             relevant_files=relevant,
             recent_commits=commits,
+            ci_profile=ci_profile,
         )
 
     async def _file_tree(self, repo_path: Path, *, limit: int) -> str:

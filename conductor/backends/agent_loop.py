@@ -42,6 +42,7 @@ from conductor.backends.base import (
     TokenUsage,
 )
 from conductor.backends.registry import registry
+from conductor.gh.ci_patterns import detect_ci_profile
 from conductor.tools import ToolRegistry, build_default_registry
 
 __all__ = [
@@ -195,6 +196,14 @@ class AgentLoopBackend(ILLMBackend):
             "inside the workspace. All paths are relative to the workspace root."
         )
         parts.append(f"Workspace: {workspace}")
+
+        # Inject the repo's CI contract — ruff/mypy/pytest/precommit — so the
+        # agent knows what must pass before a PR can merge. Detection is a
+        # pure filesystem walk; empty workspaces yield an empty string.
+        with suppress(Exception):
+            ci_block = detect_ci_profile(workspace).to_prompt()
+            if ci_block:
+                parts.append(ci_block)
 
         doc = self._load_first_doc(workspace)
         if doc:
