@@ -16,7 +16,7 @@ permissions:
 jobs:
   lint:
     name: Lint (ruff)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, d-sorg-fleet-4core]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -31,7 +31,7 @@ jobs:
 
   typecheck:
     name: Typecheck (mypy --strict)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, d-sorg-fleet-4core]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -46,7 +46,7 @@ jobs:
 
   test:
     name: Test (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, d-sorg-fleet-4core]
     strategy:
       fail-fast: false
       matrix:
@@ -71,7 +71,7 @@ jobs:
     name: Coverage floor (ratchet)
     needs: test
     if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'dependabot/github_actions/') }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, d-sorg-fleet-4core]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v8
@@ -81,7 +81,7 @@ jobs:
 
   file-size-budget:
     name: File size budget
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, d-sorg-fleet-4core]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -91,7 +91,7 @@ jobs:
 
   todo-fixme:
     name: No untracked TODO/FIXME
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, d-sorg-fleet-4core]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -101,7 +101,7 @@ jobs:
 
   security:
     name: Security scans
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, d-sorg-fleet-4core]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -117,7 +117,7 @@ jobs:
   build:
     name: Build distribution
     needs: [lint, typecheck, test]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, d-sorg-fleet-4core]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
