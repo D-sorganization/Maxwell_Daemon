@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.core.model_selector import (
+from maxwell_daemon.core.model_selector import (
     ModelTier,
     score_issue,
     select_model,
@@ -75,7 +75,7 @@ class TestSelectModel:
 
 class TestIntegration:
     def test_end_to_end_pick(self) -> None:
-        from conductor.core.model_selector import pick_model_for_issue
+        from maxwell_daemon.core.model_selector import pick_model_for_issue
 
         tier_map = {
             "simple": "haiku",

@@ -9,14 +9,14 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from conductor.api import create_app
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
+from maxwell_daemon.api import create_app
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
 def client(
-    minimal_config: ConductorConfig, isolated_ledger_path: Path
+    minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
 ) -> Iterator[tuple[TestClient, Daemon]]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -47,7 +47,7 @@ class TestCancel:
         assert r.status_code == 404
 
     def test_cancel_already_completed_returns_409(self, client: tuple[TestClient, Daemon]) -> None:
-        from conductor.daemon.runner import TaskStatus
+        from maxwell_daemon.daemon.runner import TaskStatus
 
         c, daemon = client
         task = daemon.submit("hi")

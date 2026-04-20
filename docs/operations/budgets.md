@@ -1,6 +1,6 @@
 # Budgets
 
-CONDUCTOR records every request's USD cost in a SQLite ledger and can enforce a monthly cap.
+Maxwell-Daemon records every request's USD cost in a SQLite ledger and can enforce a monthly cap.
 
 ## Config
 
@@ -18,7 +18,7 @@ budget:
 ## Checking status
 
 ```bash
-conductor cost
+maxwell-daemon cost
 ```
 
 Or over the API:

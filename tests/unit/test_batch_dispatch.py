@@ -10,14 +10,14 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from conductor.api import create_app
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
+from maxwell_daemon.api import create_app
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
 def system(
-    minimal_config: ConductorConfig, isolated_ledger_path: Path, tmp_path: Path
+    minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path, tmp_path: Path
 ) -> Iterator[tuple[TestClient, Daemon]]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -88,7 +88,7 @@ class TestBatchCLI:
     def test_from_file(self, tmp_path: Path) -> None:
         from typer.testing import CliRunner
 
-        from conductor.cli.main import app
+        from maxwell_daemon.cli.main import app
 
         spec = tmp_path / "issues.txt"
         spec.write_text("owner/a#1\nowner/a#2:implement\n# comment\nowner/b#7:plan\n")

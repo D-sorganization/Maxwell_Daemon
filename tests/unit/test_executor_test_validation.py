@@ -10,16 +10,16 @@ from typing import Any
 
 import pytest
 
-from conductor.backends.base import (
+from maxwell_daemon.backends.base import (
     BackendCapabilities,
     BackendResponse,
     ILLMBackend,
     Message,
     TokenUsage,
 )
-from conductor.gh import Issue, PullRequest
-from conductor.gh.executor import IssueExecutionError, IssueExecutor
-from conductor.gh.test_runner import TestResult
+from maxwell_daemon.gh import Issue, PullRequest
+from maxwell_daemon.gh.executor import IssueExecutionError, IssueExecutor
+from maxwell_daemon.gh.test_runner import TestResult
 
 
 @dataclass

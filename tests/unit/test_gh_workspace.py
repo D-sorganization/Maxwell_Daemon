@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor.gh.workspace import Workspace, WorkspaceError
+from maxwell_daemon.gh.workspace import Workspace, WorkspaceError
 
 
 class FakeGit:
@@ -81,11 +81,11 @@ class TestBranchLifecycle:
         git = FakeGit()
         ws = Workspace(root=tmp_path, runner=git)
         asyncio.run(
-            ws.create_branch("owner/repo", "conductor/issue-42", base="main", task_id="t-1")
+            ws.create_branch("owner/repo", "maxwell-daemon/issue-42", base="main", task_id="t-1")
         )
         cmds = [c[0] for c in git.calls]
         assert ("git", "checkout", "main") in cmds
-        assert ("git", "checkout", "-B", "conductor/issue-42") in cmds
+        assert ("git", "checkout", "-B", "maxwell-daemon/issue-42") in cmds
 
     def test_commit_and_push(self, tmp_path: Path) -> None:
         (tmp_path / "repo" / "t-1" / ".git").mkdir(parents=True)
@@ -94,7 +94,7 @@ class TestBranchLifecycle:
         asyncio.run(
             ws.commit_and_push(
                 "owner/repo",
-                branch="conductor/issue-42",
+                branch="maxwell-daemon/issue-42",
                 message="Fix #42",
                 task_id="t-1",
             )
@@ -102,7 +102,7 @@ class TestBranchLifecycle:
         cmds = [c[0] for c in git.calls]
         assert ("git", "add", "-A") in cmds
         assert ("git", "commit", "-m", "Fix #42") in cmds
-        assert ("git", "push", "--set-upstream", "origin", "conductor/issue-42") in cmds
+        assert ("git", "push", "--set-upstream", "origin", "maxwell-daemon/issue-42") in cmds
 
 
 class TestApplyDiff:

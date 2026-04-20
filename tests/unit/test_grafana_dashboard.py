@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-DASHBOARD = Path(__file__).resolve().parents[2] / "grafana" / "conductor-dashboard.json"
+DASHBOARD = Path(__file__).resolve().parents[2] / "grafana" / "maxwell-daemon-dashboard.json"
 
 
 @pytest.fixture(scope="module")
@@ -18,7 +18,7 @@ def dashboard() -> dict:
 
 class TestDashboardShape:
     def test_has_title_and_uid(self, dashboard: dict) -> None:
-        assert dashboard["title"] == "CONDUCTOR — Agent Fleet"
+        assert dashboard["title"] == "Maxwell-Daemon — Agent Fleet"
         assert dashboard["uid"]
         assert dashboard["schemaVersion"] >= 36
 
@@ -33,9 +33,9 @@ class TestMetricsAreReal:
     """Every metric referenced in PromQL must actually be emitted by the code."""
 
     def _referenced_metrics(self, dashboard: dict) -> set[str]:
-        # Match conductor_* metric names, stripping trailing suffixes added by
+        # Match maxwell_daemon_* metric names, stripping trailing suffixes added by
         # prometheus_client (_total for counters; _bucket/_sum/_count for histograms).
-        name_re = re.compile(r"\bconductor_[a-z_]+\b")
+        name_re = re.compile(r"\bmaxwell_daemon_[a-z_]+\b")
         found: set[str] = set()
         for panel in dashboard["panels"]:
             for target in panel.get("targets", []):
@@ -46,22 +46,22 @@ class TestMetricsAreReal:
         return found
 
     def _exported_metrics(self) -> set[str]:
-        from conductor.metrics import (
-            CONDUCTOR_COST_FORECAST_USD,
-            CONDUCTOR_REQUEST_COST,
-            CONDUCTOR_REQUEST_DURATION,
-            CONDUCTOR_REQUESTS_TOTAL,
-            CONDUCTOR_TOKENS_TOTAL,
+        from maxwell_daemon.metrics import (
+            MAXWELL_COST_FORECAST_USD,
+            MAXWELL_REQUEST_COST,
+            MAXWELL_REQUEST_DURATION,
+            MAXWELL_REQUESTS_TOTAL,
+            MAXWELL_TOKENS_TOTAL,
         )
 
         # `._name` is the internal base-name attribute on prometheus_client
         # collectors — stable enough for our own metrics.
         return {
-            CONDUCTOR_REQUESTS_TOTAL._name,
-            CONDUCTOR_TOKENS_TOTAL._name,
-            CONDUCTOR_REQUEST_COST._name,
-            CONDUCTOR_REQUEST_DURATION._name,
-            CONDUCTOR_COST_FORECAST_USD._name,
+            MAXWELL_REQUESTS_TOTAL._name,
+            MAXWELL_TOKENS_TOTAL._name,
+            MAXWELL_REQUEST_COST._name,
+            MAXWELL_REQUEST_DURATION._name,
+            MAXWELL_COST_FORECAST_USD._name,
         }
 
     def test_every_referenced_metric_exists(self, dashboard: dict) -> None:
@@ -69,5 +69,5 @@ class TestMetricsAreReal:
         exported = self._exported_metrics()
         missing = referenced - exported
         assert not missing, (
-            f"Dashboard references metrics not exported by conductor.metrics: {missing}"
+            f"Dashboard references metrics not exported by maxwell_daemon.metrics: {missing}"
         )

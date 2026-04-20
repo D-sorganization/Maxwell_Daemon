@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from conductor.gh.client import GhCliError, GitHubClient
+from maxwell_daemon.gh.client import GhCliError, GitHubClient
 
 
 class _StubRunner:

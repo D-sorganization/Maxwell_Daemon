@@ -11,7 +11,7 @@ from textwrap import dedent
 
 import pytest
 
-from conductor.gh.context import ContextBuilder, RepoContext
+from maxwell_daemon.gh.context import ContextBuilder, RepoContext
 
 
 async def _null_runner(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:

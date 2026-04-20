@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from conductor.events import Event, EventBus, EventKind
+from maxwell_daemon.events import Event, EventBus, EventKind
 
 
 @dataclass

@@ -15,15 +15,15 @@ from typing import Any
 
 import pytest
 
-from conductor.backends.base import (
+from maxwell_daemon.backends.base import (
     BackendCapabilities,
     BackendResponse,
     ILLMBackend,
     Message,
     TokenUsage,
 )
-from conductor.gh import Issue, PullRequest
-from conductor.gh.executor import IssueExecutionError, IssueExecutor
+from maxwell_daemon.gh import Issue, PullRequest
+from maxwell_daemon.gh.executor import IssueExecutionError, IssueExecutor
 
 
 @dataclass
@@ -246,4 +246,4 @@ class TestBranchNaming:
         asyncio.run(
             executor.execute_issue(repo="owner/repo", issue_number=42, model="m", mode="plan")
         )
-        assert gh.pr_calls[0]["head"] == "conductor/issue-42"
+        assert gh.pr_calls[0]["head"] == "maxwell-daemon/issue-42"

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor.gh.test_runner import (
+from maxwell_daemon.gh.test_runner import (
     TestResult,
     TestRunner,
     TestRunnerError,

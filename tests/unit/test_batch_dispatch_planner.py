@@ -13,13 +13,13 @@ from collections.abc import Sequence
 
 import pytest
 
-from conductor.cli.batch_dispatch import (
+from maxwell_daemon.cli.batch_dispatch import (
     BatchDispatchPlan,
     BatchDispatchPlanner,
     BatchItem,
     RepoBatchSummary,
 )
-from conductor.gh.client import Issue
+from maxwell_daemon.gh.client import Issue
 
 
 def _issue(number: int, *, labels: Sequence[str] = (), title: str = "t", body: str = "") -> Issue:
@@ -183,7 +183,7 @@ class TestPreconditions:
             await planner.plan(repos=["a/b"], mode="destroy")
 
     def test_invalid_max_stories_rejected(self) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         lister = _FakeLister({})
         with pytest.raises(PreconditionError, match="max_stories"):
@@ -195,8 +195,8 @@ class TestPreconditions:
 
 class TestResolveReposFromManifest:
     def test_all_active_repos_included(self) -> None:
-        from conductor.cli.batch_dispatch import resolve_repos_from_manifest
-        from conductor.config.fleet import FleetManifest
+        from maxwell_daemon.cli.batch_dispatch import resolve_repos_from_manifest
+        from maxwell_daemon.config.fleet import FleetManifest
 
         manifest = FleetManifest.model_validate(
             {

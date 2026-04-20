@@ -9,15 +9,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from conductor.api import create_app
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
-from conductor.daemon.runner import TaskKind
+from maxwell_daemon.api import create_app
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.daemon.runner import TaskKind
 
 
 @pytest.fixture
-def dual_config(register_recording_backend: None) -> ConductorConfig:
-    return ConductorConfig.model_validate(
+def dual_config(register_recording_backend: None) -> MaxwellDaemonConfig:
+    return MaxwellDaemonConfig.model_validate(
         {
             "backends": {
                 "primary": {"type": "recording", "model": "m-primary"},
@@ -30,7 +30,7 @@ def dual_config(register_recording_backend: None) -> ConductorConfig:
 
 @pytest.fixture
 def client(
-    dual_config: ConductorConfig, isolated_ledger_path: Path, tmp_path: Path
+    dual_config: MaxwellDaemonConfig, isolated_ledger_path: Path, tmp_path: Path
 ) -> Iterator[tuple[TestClient, Daemon]]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -111,7 +111,7 @@ class TestAbEndpoint:
 
 class TestDaemonAbSubmit:
     def test_submit_ab_sets_group(
-        self, dual_config: ConductorConfig, isolated_ledger_path: Path, tmp_path: Path
+        self, dual_config: MaxwellDaemonConfig, isolated_ledger_path: Path, tmp_path: Path
     ) -> None:
         d = Daemon(
             dual_config,

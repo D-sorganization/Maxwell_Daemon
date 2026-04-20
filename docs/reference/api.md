@@ -1,6 +1,6 @@
 # REST API reference
 
-Base URL: whatever host/port you gave `conductor serve`. Default `http://127.0.0.1:8080`.
+Base URL: whatever host/port you gave `maxwell-daemon serve`. Default `http://127.0.0.1:8080`.
 
 When `api.auth_token` is set in the config, all `/api/v1/*` routes require `Authorization: Bearer <token>`. `/health` and `/metrics` stay unauthenticated so infrastructure can probe them.
 

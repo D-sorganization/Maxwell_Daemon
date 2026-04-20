@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from conductor.api.rate_limit import TokenBucket, TokenBucketLimiter
+from maxwell_daemon.api.rate_limit import TokenBucket, TokenBucketLimiter
 
 
 class TestTokenBucket:
@@ -74,7 +74,7 @@ class TestMiddleware:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
-        from conductor.api.rate_limit import install_rate_limiter
+        from maxwell_daemon.api.rate_limit import install_rate_limiter
 
         app = FastAPI()
         install_rate_limiter(app, default_rate=100.0, default_burst=10, groups={})
@@ -91,7 +91,7 @@ class TestMiddleware:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
-        from conductor.api.rate_limit import install_rate_limiter
+        from maxwell_daemon.api.rate_limit import install_rate_limiter
 
         app = FastAPI()
         install_rate_limiter(app, default_rate=1.0, default_burst=2, groups={})
@@ -113,7 +113,7 @@ class TestMiddleware:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
-        from conductor.api.rate_limit import install_rate_limiter
+        from maxwell_daemon.api.rate_limit import install_rate_limiter
 
         app = FastAPI()
         install_rate_limiter(

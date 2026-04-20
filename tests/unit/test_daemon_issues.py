@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
-from conductor.daemon.runner import TaskKind, TaskStatus
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.daemon.runner import TaskKind, TaskStatus
 
 
 class FakeExecutor:
@@ -26,7 +26,7 @@ class FakeExecutor:
         mode: str = "plan",
         **_: Any,
     ) -> Any:
-        from conductor.gh.executor import IssueResult
+        from maxwell_daemon.gh.executor import IssueResult
 
         return IssueResult(
             issue_number=issue_number,
@@ -39,7 +39,7 @@ class FakeExecutor:
 
 @pytest.fixture
 def daemon_with_fake_executor(
-    minimal_config: ConductorConfig, isolated_ledger_path: Path, tmp_path: Path
+    minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path, tmp_path: Path
 ) -> Daemon:
     d = Daemon(
         minimal_config,

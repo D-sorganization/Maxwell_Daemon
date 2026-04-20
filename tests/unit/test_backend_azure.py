@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.backends.azure import AzureOpenAIBackend
-from conductor.backends.base import BackendUnavailableError
-from conductor.backends.registry import registry
+from maxwell_daemon.backends.azure import AzureOpenAIBackend
+from maxwell_daemon.backends.base import BackendUnavailableError
+from maxwell_daemon.backends.registry import registry
 
 
 class TestConfiguration:

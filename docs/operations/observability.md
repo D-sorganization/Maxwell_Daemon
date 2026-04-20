@@ -2,14 +2,14 @@
 
 ## Metrics
 
-CONDUCTOR exposes Prometheus metrics at `/metrics`:
+Maxwell-Daemon exposes Prometheus metrics at `/metrics`:
 
 | Metric                                    | Type      | Labels                  |
 |-------------------------------------------|-----------|-------------------------|
-| `conductor_requests_total`                | counter   | backend, model, status  |
-| `conductor_tokens_total`                  | counter   | backend, model          |
-| `conductor_request_cost_usd_total`        | counter   | backend, model          |
-| `conductor_request_duration_seconds`      | histogram | backend, model          |
+| `maxwell_daemon_requests_total`                | counter   | backend, model, status  |
+| `maxwell_daemon_tokens_total`                  | counter   | backend, model          |
+| `maxwell_daemon_request_cost_usd_total`        | counter   | backend, model          |
+| `maxwell_daemon_request_duration_seconds`      | histogram | backend, model          |
 
 `status` is one of `success`, `error`, or `budget_exceeded`. Token and cost counters only increment for successful requests so failed requests don't pollute spend dashboards.
 
@@ -17,10 +17,10 @@ CONDUCTOR exposes Prometheus metrics at `/metrics`:
 
 Structured via `structlog`. JSON output when stderr isn't a TTY (ship it straight to Loki / ELK / Datadog), pretty console otherwise.
 
-Bind request-scoped context with `conductor.logging.bind_context`:
+Bind request-scoped context with `maxwell_daemon.logging.bind_context`:
 
 ```python
-from conductor.logging import bind_context, get_logger
+from maxwell_daemon.logging import bind_context, get_logger
 
 log = get_logger(__name__)
 with bind_context(request_id=req.id, repo="my-repo"):
@@ -42,4 +42,4 @@ Subscribers get their own bounded queue; slow subscribers are dropped rather tha
 
 ## Grafana dashboard
 
-A starter dashboard JSON is planned (Phase 7, [issue #15](https://github.com/D-sorganization/CONDUCTOR/issues/15)).
+A starter dashboard JSON is planned (Phase 7, [issue #15](https://github.com/D-sorganization/Maxwell-Daemon/issues/15)).

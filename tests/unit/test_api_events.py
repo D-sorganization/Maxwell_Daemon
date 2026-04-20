@@ -15,14 +15,14 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from conductor.api import create_app
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
+from maxwell_daemon.api import create_app
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
 def system(
-    minimal_config: ConductorConfig, isolated_ledger_path: Path
+    minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
 ) -> Iterator[tuple[Daemon, TestClient]]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -39,7 +39,7 @@ def system(
 
 @pytest.fixture
 def auth_system(
-    minimal_config: ConductorConfig, isolated_ledger_path: Path
+    minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
 ) -> Iterator[tuple[Daemon, TestClient]]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

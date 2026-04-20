@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from conductor.backends import (
+from maxwell_daemon.backends import (
     BackendCapabilities,
     BackendError,
     BackendRegistry,

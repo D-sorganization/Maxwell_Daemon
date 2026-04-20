@@ -1,4 +1,4 @@
-"""Filter preset storage — ~/.config/conductor/presets.json."""
+"""Filter preset storage — ~/.config/maxwell-daemon/presets.json."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor.core.presets import FilterPreset, PresetStore
+from maxwell_daemon.core.presets import FilterPreset, PresetStore
 
 
 @pytest.fixture
@@ -74,8 +74,8 @@ class TestPresetCLI:
         return CliRunner()
 
     def test_save_and_list(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        from conductor.cli import tasks as tasks_cli
-        from conductor.cli.main import app
+        from maxwell_daemon.cli import tasks as tasks_cli
+        from maxwell_daemon.cli.main import app
 
         runner = self._runner()
         presets_path = tmp_path / "presets.json"
@@ -93,15 +93,15 @@ class TestPresetCLI:
     def test_list_preset_applies_filter(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from conductor.cli import tasks as tasks_cli
-        from conductor.cli.main import app
+        from maxwell_daemon.cli import tasks as tasks_cli
+        from maxwell_daemon.cli.main import app
 
         runner = self._runner()
         presets_path = tmp_path / "presets.json"
         monkeypatch.setattr(tasks_cli, "_presets_path", lambda: presets_path)
 
         # Seed a preset directly.
-        from conductor.core.presets import FilterPreset, PresetStore
+        from maxwell_daemon.core.presets import FilterPreset, PresetStore
 
         PresetStore(presets_path).save(FilterPreset(name="qf", status="failed", kind="issue"))
 

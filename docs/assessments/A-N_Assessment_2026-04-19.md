@@ -1,4 +1,4 @@
-# A-N Assessment - CONDUCTOR - 2026-04-19
+# A-N Assessment - Maxwell-Daemon - 2026-04-19
 
 Run time: 2026-04-19T08:02:24.4668879Z UTC
 Sync status: pull-blocked
@@ -27,16 +27,16 @@ Checks whether runtime and developer configuration is explicit.
 
 ### D. Contracts, Types, and Domain Modeling: B (82/100)
 Design by Contract evidence includes validation, assertions, typed models, explicit raised errors, and invariants.
-- Evidence: `conductor/api/server.py`
-- Evidence: `conductor/backends/azure.py`
-- Evidence: `conductor/backends/base.py`
-- Evidence: `conductor/backends/claude.py`
-- Evidence: `conductor/backends/ollama.py`
-- Evidence: `conductor/backends/openai.py`
-- Evidence: `conductor/backends/registry.py`
-- Evidence: `conductor/config/loader.py`
-- Evidence: `conductor/config/models.py`
-- Evidence: `conductor/contracts.py`
+- Evidence: `maxwell_daemon/api/server.py`
+- Evidence: `maxwell_daemon/backends/azure.py`
+- Evidence: `maxwell_daemon/backends/base.py`
+- Evidence: `maxwell_daemon/backends/claude.py`
+- Evidence: `maxwell_daemon/backends/ollama.py`
+- Evidence: `maxwell_daemon/backends/openai.py`
+- Evidence: `maxwell_daemon/backends/registry.py`
+- Evidence: `maxwell_daemon/config/loader.py`
+- Evidence: `maxwell_daemon/config/models.py`
+- Evidence: `maxwell_daemon/contracts.py`
 
 ### E. Reliability and Error Handling: C (76/100)
 Reliability is graded from test presence plus explicit validation/error-handling signals.
@@ -45,16 +45,16 @@ Reliability is graded from test presence plus explicit validation/error-handling
 - Evidence: `tests/integration/__init__.py`
 - Evidence: `tests/integration/test_end_to_end.py`
 - Evidence: `tests/integration/test_issue_workflow.py`
-- Evidence: `conductor/api/server.py`
-- Evidence: `conductor/backends/azure.py`
-- Evidence: `conductor/backends/base.py`
-- Evidence: `conductor/backends/claude.py`
-- Evidence: `conductor/backends/ollama.py`
+- Evidence: `maxwell_daemon/api/server.py`
+- Evidence: `maxwell_daemon/backends/azure.py`
+- Evidence: `maxwell_daemon/backends/base.py`
+- Evidence: `maxwell_daemon/backends/claude.py`
+- Evidence: `maxwell_daemon/backends/ollama.py`
 
 ### F. Function, Module Size, and SRP: C (70/100)
 Evaluates function size, script/module size, and single responsibility using static size signals.
-- Evidence: `conductor/backends/openai.py (coarse avg 81 lines/definition)`
-- Evidence: `conductor/gh/executor.py (coarse avg 87 lines/definition)`
+- Evidence: `maxwell_daemon/backends/openai.py (coarse avg 81 lines/definition)`
+- Evidence: `maxwell_daemon/gh/executor.py (coarse avg 87 lines/definition)`
 
 ### G. Testing and TDD Posture: B (82/100)
 TDD history cannot be confirmed statically; grade reflects committed automated test posture.
@@ -104,21 +104,21 @@ DRY is assessed through duplicate filename clusters and TODO/FIXME density as st
 
 ### L. API Surface and Law of Demeter: F (58/100)
 Law of Demeter is approximated with deep member-chain hints; confirmed violations require semantic review.
-- Evidence: `conductor/backends/claude.py`
-- Evidence: `conductor/backends/openai.py`
-- Evidence: `conductor/cli/issues.py`
-- Evidence: `conductor/cli/main.py`
-- Evidence: `conductor/config/models.py`
-- Evidence: `conductor/core/ledger.py`
-- Evidence: `conductor/core/router.py`
-- Evidence: `conductor/gh/workspace.py`
+- Evidence: `maxwell_daemon/backends/claude.py`
+- Evidence: `maxwell_daemon/backends/openai.py`
+- Evidence: `maxwell_daemon/cli/issues.py`
+- Evidence: `maxwell_daemon/cli/main.py`
+- Evidence: `maxwell_daemon/config/models.py`
+- Evidence: `maxwell_daemon/core/ledger.py`
+- Evidence: `maxwell_daemon/core/router.py`
+- Evidence: `maxwell_daemon/gh/workspace.py`
 - Evidence: `tests/unit/test_api_issues.py`
 - Evidence: `tests/unit/test_backend_azure.py`
 
 ### M. Observability and Operability: C (74/100)
 Checks for logging, metrics, monitoring, and operational artifacts.
-- Evidence: `conductor/logging.py`
-- Evidence: `conductor/metrics.py`
+- Evidence: `maxwell_daemon/logging.py`
+- Evidence: `maxwell_daemon/metrics.py`
 - Evidence: `docs/operations/observability.md`
 - Evidence: `tests/unit/test_logging.py`
 - Evidence: `tests/unit/test_metrics.py`
@@ -155,7 +155,7 @@ Checks ownership, release, contribution, security, and license metadata.
 
 ### Review deep object traversal hotspots
 - Severity: medium
-- Problem: Deep member-chain hints found in: conductor/backends/claude.py; conductor/backends/openai.py; conductor/cli/issues.py; conductor/cli/main.py; conductor/config/models.py; conductor/core/ledger.py; conductor/core/router.py; conductor/gh/workspace.py
+- Problem: Deep member-chain hints found in: maxwell_daemon/backends/claude.py; maxwell_daemon/backends/openai.py; maxwell_daemon/cli/issues.py; maxwell_daemon/cli/main.py; maxwell_daemon/config/models.py; maxwell_daemon/core/ledger.py; maxwell_daemon/core/router.py; maxwell_daemon/gh/workspace.py
 - Evidence: Category L found repeated chains with three or more member hops.
 - Impact: Law of Demeter pressure can make APIs brittle and increase coupling.
 - Proposed fix: Review hotspots and introduce boundary methods or DTOs where callers traverse object graphs.

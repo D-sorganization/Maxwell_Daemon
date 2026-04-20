@@ -1,5 +1,5 @@
 {
-  "repository": "CONDUCTOR",
+  "repository": "Maxwell-Daemon",
   "assessment_date": "2026-04-19",
   "run_at_utc": "2026-04-19T08:02:24.4668879Z",
   "sync_status": "pull-blocked",
@@ -44,16 +44,16 @@
       "grade": "B",
       "score": 82,
       "evidence": [
-        "conductor/api/server.py",
-        "conductor/backends/azure.py",
-        "conductor/backends/base.py",
-        "conductor/backends/claude.py",
-        "conductor/backends/ollama.py",
-        "conductor/backends/openai.py",
-        "conductor/backends/registry.py",
-        "conductor/config/loader.py",
-        "conductor/config/models.py",
-        "conductor/contracts.py"
+        "maxwell_daemon/api/server.py",
+        "maxwell_daemon/backends/azure.py",
+        "maxwell_daemon/backends/base.py",
+        "maxwell_daemon/backends/claude.py",
+        "maxwell_daemon/backends/ollama.py",
+        "maxwell_daemon/backends/openai.py",
+        "maxwell_daemon/backends/registry.py",
+        "maxwell_daemon/config/loader.py",
+        "maxwell_daemon/config/models.py",
+        "maxwell_daemon/contracts.py"
       ],
       "notes": "Design by Contract evidence includes validation, assertions, typed models, explicit raised errors, and invariants."
     },
@@ -68,11 +68,11 @@
         "tests/integration/__init__.py",
         "tests/integration/test_end_to_end.py",
         "tests/integration/test_issue_workflow.py",
-        "conductor/api/server.py",
-        "conductor/backends/azure.py",
-        "conductor/backends/base.py",
-        "conductor/backends/claude.py",
-        "conductor/backends/ollama.py"
+        "maxwell_daemon/api/server.py",
+        "maxwell_daemon/backends/azure.py",
+        "maxwell_daemon/backends/base.py",
+        "maxwell_daemon/backends/claude.py",
+        "maxwell_daemon/backends/ollama.py"
       ],
       "notes": "Reliability is graded from test presence plus explicit validation/error-handling signals."
     },
@@ -82,8 +82,8 @@
       "grade": "C",
       "score": 70,
       "evidence": [
-        "conductor/backends/openai.py (coarse avg 81 lines/definition)",
-        "conductor/gh/executor.py (coarse avg 87 lines/definition)"
+        "maxwell_daemon/backends/openai.py (coarse avg 81 lines/definition)",
+        "maxwell_daemon/gh/executor.py (coarse avg 87 lines/definition)"
       ],
       "notes": "Evaluates function size, script/module size, and single responsibility using static size signals."
     },
@@ -169,14 +169,14 @@
       "grade": "F",
       "score": 58,
       "evidence": [
-        "conductor/backends/claude.py",
-        "conductor/backends/openai.py",
-        "conductor/cli/issues.py",
-        "conductor/cli/main.py",
-        "conductor/config/models.py",
-        "conductor/core/ledger.py",
-        "conductor/core/router.py",
-        "conductor/gh/workspace.py",
+        "maxwell_daemon/backends/claude.py",
+        "maxwell_daemon/backends/openai.py",
+        "maxwell_daemon/cli/issues.py",
+        "maxwell_daemon/cli/main.py",
+        "maxwell_daemon/config/models.py",
+        "maxwell_daemon/core/ledger.py",
+        "maxwell_daemon/core/router.py",
+        "maxwell_daemon/gh/workspace.py",
         "tests/unit/test_api_issues.py",
         "tests/unit/test_backend_azure.py"
       ],
@@ -188,8 +188,8 @@
       "grade": "C",
       "score": 74,
       "evidence": [
-        "conductor/logging.py",
-        "conductor/metrics.py",
+        "maxwell_daemon/logging.py",
+        "maxwell_daemon/metrics.py",
         "docs/operations/observability.md",
         "tests/unit/test_logging.py",
         "tests/unit/test_metrics.py"
@@ -230,7 +230,7 @@
     {
       "title": "Review deep object traversal hotspots",
       "severity": "medium",
-      "problem": "Deep member-chain hints found in: conductor/backends/claude.py; conductor/backends/openai.py; conductor/cli/issues.py; conductor/cli/main.py; conductor/config/models.py; conductor/core/ledger.py; conductor/core/router.py; conductor/gh/workspace.py",
+      "problem": "Deep member-chain hints found in: maxwell_daemon/backends/claude.py; maxwell_daemon/backends/openai.py; maxwell_daemon/cli/issues.py; maxwell_daemon/cli/main.py; maxwell_daemon/config/models.py; maxwell_daemon/core/ledger.py; maxwell_daemon/core/router.py; maxwell_daemon/gh/workspace.py",
       "evidence": "Category L found repeated chains with three or more member hops.",
       "impact": "Law of Demeter pressure can make APIs brittle and increase coupling.",
       "fix": "Review hotspots and introduce boundary methods or DTOs where callers traverse object graphs.",

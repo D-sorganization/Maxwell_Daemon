@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor.memory import RepoProfile
+from maxwell_daemon.memory import RepoProfile
 
 
 @pytest.fixture
@@ -69,13 +69,13 @@ class TestRender:
 
 class TestContractEnforcement:
     def test_rejects_empty_repo(self, profile: RepoProfile) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError):
             profile.learn("", "k", "v")
 
     def test_rejects_empty_key(self, profile: RepoProfile) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError):
             profile.learn("o/r", "", "v")

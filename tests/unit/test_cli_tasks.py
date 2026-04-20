@@ -1,4 +1,4 @@
-"""`conductor tasks ...` subcommand group."""
+"""`maxwell-daemon tasks ...` subcommand group."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from conductor.cli.main import app
+from maxwell_daemon.cli.main import app
 
 
 class _FakeResponse:

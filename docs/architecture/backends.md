@@ -1,6 +1,6 @@
 # Backend interface
 
-Every LLM adapter implements `conductor.backends.ILLMBackend`:
+Every LLM adapter implements `maxwell_daemon.backends.ILLMBackend`:
 
 ```python
 class ILLMBackend(ABC):
@@ -23,11 +23,11 @@ class ILLMBackend(ABC):
 
 ## Adding a new backend
 
-1. Create `conductor/backends/<name>.py`:
+1. Create `maxwell_daemon/backends/<name>.py`:
 
     ```python
-    from conductor.backends.base import ILLMBackend, ...
-    from conductor.backends.registry import registry
+    from maxwell_daemon.backends.base import ILLMBackend, ...
+    from maxwell_daemon.backends.registry import registry
 
     class MyBackend(ILLMBackend):
         name = "mybackend"
@@ -36,7 +36,7 @@ class ILLMBackend(ABC):
     registry.register("mybackend", MyBackend)
     ```
 
-2. Add `"<name>"` to `_BUILTIN_BACKENDS` in `conductor/backends/registry.py` so autoload picks it up.
+2. Add `"<name>"` to `_BUILTIN_BACKENDS` in `maxwell_daemon/backends/registry.py` so autoload picks it up.
 
 3. Declare capabilities honestly — `BackendCapabilities` drives routing decisions and cost estimation, so a wrong number here breaks budget alerts silently.
 
@@ -44,7 +44,7 @@ class ILLMBackend(ABC):
 
 ## Reference implementations
 
-- `conductor/backends/claude.py` — uses the Anthropic SDK, splits system messages out of the thread, records cache-read tokens when the provider returns them.
-- `conductor/backends/openai.py` — also covers any OpenAI-compatible server (point `base_url` at a local vLLM/LM Studio/LocalAI endpoint and drop the API key).
-- `conductor/backends/azure.py` — 52-line subclass of `OpenAIBackend` that swaps in `AsyncAzureOpenAI`. Demonstrates the payoff of interface-driven design.
-- `conductor/backends/ollama.py` — raw `httpx` against the Ollama HTTP API. Zero-cost local inference, streaming support.
+- `maxwell_daemon/backends/claude.py` — uses the Anthropic SDK, splits system messages out of the thread, records cache-read tokens when the provider returns them.
+- `maxwell_daemon/backends/openai.py` — also covers any OpenAI-compatible server (point `base_url` at a local vLLM/LM Studio/LocalAI endpoint and drop the API key).
+- `maxwell_daemon/backends/azure.py` — 52-line subclass of `OpenAIBackend` that swaps in `AsyncAzureOpenAI`. Demonstrates the payoff of interface-driven design.
+- `maxwell_daemon/backends/ollama.py` — raw `httpx` against the Ollama HTTP API. Zero-cost local inference, streaming support.

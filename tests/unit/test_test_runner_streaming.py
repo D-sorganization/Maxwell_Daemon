@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from conductor.gh.test_runner import TestRunner
+from maxwell_daemon.gh.test_runner import TestRunner
 
 
 class _LineStreamingRunner:

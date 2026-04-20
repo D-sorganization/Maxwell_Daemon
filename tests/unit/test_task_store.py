@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from conductor.core.task_store import TaskStore
-from conductor.daemon.runner import Task, TaskKind, TaskStatus
+from maxwell_daemon.core.task_store import TaskStore
+from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
 
 
 def _fresh_task(**overrides: object) -> Task:
@@ -45,7 +45,7 @@ class TestSaveAndGet:
         assert store.get("nope") is None
 
     def test_save_rejects_empty_id(self, store: TaskStore) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         task = _fresh_task(id="")
         with pytest.raises(PreconditionError):

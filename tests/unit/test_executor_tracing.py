@@ -8,16 +8,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from conductor.backends.base import (
+from maxwell_daemon.backends.base import (
     BackendCapabilities,
     BackendResponse,
     ILLMBackend,
     Message,
     TokenUsage,
 )
-from conductor.gh import Issue, PullRequest
-from conductor.gh.executor import IssueExecutor
-from conductor.tracing import _test_exporter, configure_tracing
+from maxwell_daemon.gh import Issue, PullRequest
+from maxwell_daemon.gh.executor import IssueExecutor
+from maxwell_daemon.tracing import _test_exporter, configure_tracing
 
 
 @dataclass
@@ -82,9 +82,9 @@ class TestSpans:
             asyncio.run(executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="plan"))
             names = {s.name for s in _test_exporter().get_finished_spans()}
             assert {
-                "conductor.issue.fetch",
-                "conductor.issue.draft",
-                "conductor.issue.open_pr",
+                "maxwell_daemon.issue.fetch",
+                "maxwell_daemon.issue.draft",
+                "maxwell_daemon.issue.open_pr",
             } <= names
         finally:
             configure_tracing(endpoint=None)
@@ -98,7 +98,7 @@ class TestSpans:
             fetch = next(
                 s
                 for s in _test_exporter().get_finished_spans()
-                if s.name == "conductor.issue.fetch"
+                if s.name == "maxwell_daemon.issue.fetch"
             )
             assert fetch.attributes["issue"] == 7
             assert fetch.attributes["repo"] == "o/r"

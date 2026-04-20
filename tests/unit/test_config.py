@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from conductor.config import ConductorConfig, load_config, save_config
-from conductor.config.loader import _substitute_env
+from maxwell_daemon.config import MaxwellDaemonConfig, load_config, save_config
+from maxwell_daemon.config.loader import _substitute_env
 
 
 class TestEnvSubstitution:
@@ -40,17 +40,17 @@ class TestEnvSubstitution:
 class TestConfigLoad:
     def test_rejects_empty_backends(self) -> None:
         with pytest.raises(ValueError, match="At least one backend"):
-            ConductorConfig(backends={})
+            MaxwellDaemonConfig(backends={})
 
     def test_load_roundtrip(self, tmp_path: Path) -> None:
-        original = ConductorConfig.model_validate(
+        original = MaxwellDaemonConfig.model_validate(
             {
                 "backends": {
                     "claude": {"type": "claude", "model": "claude-sonnet-4-6"},
                 },
             }
         )
-        path = tmp_path / "conductor.yaml"
+        path = tmp_path / "maxwell-daemon.yaml"
         save_config(original, path)
         loaded = load_config(path)
         assert loaded.backends["claude"].model == "claude-sonnet-4-6"
@@ -83,7 +83,7 @@ class TestConfigLoad:
         assert "sk-test-123" not in repr(cfg.backends["claude"])
 
     def test_default_backend_must_exist(self) -> None:
-        cfg = ConductorConfig.model_validate(
+        cfg = MaxwellDaemonConfig.model_validate(
             {
                 "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
                 "agent": {"default_backend": "nonexistent"},
@@ -96,7 +96,7 @@ class TestConfigLoad:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            ConductorConfig.model_validate(
+            MaxwellDaemonConfig.model_validate(
                 {
                     "backends": {"c": {"type": "claude", "model": "x"}},
                     "bogus_key": True,

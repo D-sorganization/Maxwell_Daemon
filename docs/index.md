@@ -1,4 +1,4 @@
-# CONDUCTOR
+# Maxwell-Daemon
 
 **Multi-backend autonomous code agent orchestrator** — use any LLM, from any provider, across any fleet of machines.
 
@@ -6,7 +6,7 @@ Built for developers who want to use everything they've already paid for — Cla
 
 ## Why
 
-Existing autonomous-agent tools lock you to one vendor and one machine. CONDUCTOR solves both:
+Existing autonomous-agent tools lock you to one vendor and one machine. Maxwell-Daemon solves both:
 
 - **Resource-agnostic** — Claude, GPT-4o, Gemini, Llama via Ollama, any OpenAI-compatible endpoint. One interface, pluggable adapters.
 - **Cost-aware by default** — every request is metered, every repo can have a budget, every backend knows its price.
@@ -16,7 +16,7 @@ Existing autonomous-agent tools lock you to one vendor and one machine. CONDUCTO
 ## Quick links
 
 - [Quick start](getting-started/quickstart.md) — install, init, ask
-- [Configuration](getting-started/configuration.md) — `conductor.yaml` reference
+- [Configuration](getting-started/configuration.md) — `maxwell-daemon.yaml` reference
 - [Architecture overview](architecture/overview.md) — how the pieces fit together
 - [Backend interface](architecture/backends.md) — add a new LLM in under an hour
-- [Design by Contract](architecture/contracts.md) — how CONDUCTOR stays correct at the boundaries
+- [Design by Contract](architecture/contracts.md) — how Maxwell-Daemon stays correct at the boundaries

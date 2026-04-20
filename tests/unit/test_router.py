@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from conductor.backends import (
+from maxwell_daemon.backends import (
     BackendCapabilities,
     BackendResponse,
     ILLMBackend,
@@ -19,8 +19,8 @@ from conductor.backends import (
     TokenUsage,
     registry,
 )
-from conductor.config import ConductorConfig
-from conductor.core import BackendRouter
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.core import BackendRouter
 
 
 class _Fake(ILLMBackend):
@@ -60,8 +60,8 @@ def _register_fakes() -> None:
 
 
 @pytest.fixture
-def config() -> ConductorConfig:
-    return ConductorConfig.model_validate(
+def config() -> MaxwellDaemonConfig:
+    return MaxwellDaemonConfig.model_validate(
         {
             "backends": {
                 "primary": {"type": "fake_a", "model": "model-a"},
@@ -82,39 +82,39 @@ def config() -> ConductorConfig:
 
 
 class TestRouter:
-    def test_default_backend(self, config: ConductorConfig) -> None:
+    def test_default_backend(self, config: MaxwellDaemonConfig) -> None:
         decision = BackendRouter(config).route()
         assert decision.backend_name == "primary"
         assert decision.model == "model-a"
         assert "default" in decision.reason
 
-    def test_repo_override(self, config: ConductorConfig) -> None:
+    def test_repo_override(self, config: MaxwellDaemonConfig) -> None:
         decision = BackendRouter(config).route(repo="private-repo")
         assert decision.backend_name == "local"
         assert decision.model == "model-b"
         assert "private-repo" in decision.reason
 
-    def test_repo_without_backend_uses_default(self, config: ConductorConfig) -> None:
+    def test_repo_without_backend_uses_default(self, config: MaxwellDaemonConfig) -> None:
         decision = BackendRouter(config).route(repo="normal-repo")
         assert decision.backend_name == "primary"
 
-    def test_explicit_override_wins(self, config: ConductorConfig) -> None:
+    def test_explicit_override_wins(self, config: MaxwellDaemonConfig) -> None:
         decision = BackendRouter(config).route(repo="private-repo", backend_override="primary")
         assert decision.backend_name == "primary"
         assert "override" in decision.reason
 
-    def test_unknown_override_rejected(self, config: ConductorConfig) -> None:
+    def test_unknown_override_rejected(self, config: MaxwellDaemonConfig) -> None:
         with pytest.raises(ValueError, match="Unknown backend"):
             BackendRouter(config).route(backend_override="martian")
 
-    def test_model_override(self, config: ConductorConfig) -> None:
+    def test_model_override(self, config: MaxwellDaemonConfig) -> None:
         decision = BackendRouter(config).route(model_override="custom-model")
         assert decision.model == "custom-model"
 
-    def test_available_backends(self, config: ConductorConfig) -> None:
+    def test_available_backends(self, config: MaxwellDaemonConfig) -> None:
         assert sorted(BackendRouter(config).available_backends()) == ["local", "primary"]
 
-    def test_instance_cached(self, config: ConductorConfig) -> None:
+    def test_instance_cached(self, config: MaxwellDaemonConfig) -> None:
         router = BackendRouter(config)
         a = router.route().backend
         b = router.route().backend

@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from conductor.backends.base import Message, MessageRole
-from conductor.backends.ollama_agent_loop import OllamaAgentLoopBackend
+from maxwell_daemon.backends.base import Message, MessageRole
+from maxwell_daemon.backends.ollama_agent_loop import OllamaAgentLoopBackend
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 

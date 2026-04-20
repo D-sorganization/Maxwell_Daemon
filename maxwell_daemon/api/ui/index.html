@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Maxwell-Daemon — Agent Fleet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/ui/style.css">
+</head>
+<body>
+  <header>
+    <h1>Maxwell-Daemon</h1>
+    <div class="toolbar">
+      <button id="new-task-btn" title="Dispatch a task (shortcut: N)">+ New</button>
+      <span id="connection" class="pill">connecting…</span>
+      <span id="cost-summary" class="pill"></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" id="tasks-card">
+      <div class="card-head">
+        <h2>Tasks</h2>
+        <div class="filters">
+          <select id="status-filter">
+            <option value="">all</option>
+            <option value="queued">queued</option>
+            <option value="running">running</option>
+            <option value="completed">completed</option>
+            <option value="failed">failed</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+          <button id="refresh-btn">refresh</button>
+        </div>
+      </div>
+      <table id="tasks-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Kind</th>
+            <th>Status</th>
+            <th>Target</th>
+            <th>Cost</th>
+            <th>PR</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tasks-body"></tbody>
+      </table>
+    </section>
+
+    <section class="card" id="detail-card" hidden>
+      <div class="card-head">
+        <h2 id="detail-title">Task detail</h2>
+        <button id="detail-close">×</button>
+      </div>
+      <dl id="detail-fields"></dl>
+      <h3>Output</h3>
+      <pre id="detail-output"></pre>
+    </section>
+
+    <section class="card" id="backends-card">
+      <div class="card-head">
+        <h2>Backends</h2>
+      </div>
+      <ul id="backends-list"></ul>
+    </section>
+  </main>
+
+  <dialog id="new-task-dialog">
+    <form id="new-task-form" method="dialog">
+      <h3>Dispatch a task</h3>
+      <fieldset class="kind-switch">
+        <label><input type="radio" name="kind" value="issue" checked> GitHub issue</label>
+        <label><input type="radio" name="kind" value="prompt"> One-shot prompt</label>
+      </fieldset>
+
+      <div class="field" id="issue-fields">
+        <label>Issue URL or <code>owner/repo#NNN</code>
+          <input id="issue-input" type="text"
+                 placeholder="https://github.com/owner/repo/issues/42"
+                 autocomplete="off" autofocus>
+        </label>
+        <label>Mode
+          <select id="mode-input">
+            <option value="plan">plan (safe — no code writes)</option>
+            <option value="implement">implement (draft PR with diff)</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="field" id="prompt-fields" hidden>
+        <label>Prompt
+          <textarea id="prompt-input" rows="4" placeholder="Ask the default backend…"></textarea>
+        </label>
+      </div>
+
+      <div id="new-task-error" class="error" hidden></div>
+
+      <menu>
+        <button type="button" id="new-task-cancel">Cancel</button>
+        <button type="submit" id="new-task-submit">Dispatch</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <footer>
+    <span>Docs: <a href="https://github.com/D-sorganization/Maxwell-Daemon">repository</a></span>
+    <span class="hint">Press <kbd>N</kbd> to dispatch, <kbd>Esc</kbd> to close dialogs.</span>
+  </footer>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>

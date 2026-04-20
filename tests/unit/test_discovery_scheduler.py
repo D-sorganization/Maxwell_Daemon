@@ -14,12 +14,12 @@ from typing import Any
 
 import pytest
 
-from conductor.daemon.scheduler import (
+from maxwell_daemon.daemon.scheduler import (
     DiscoveryRepoSpec,
     DiscoveryScheduler,
     DiscoveryTick,
 )
-from conductor.gh.client import Issue
+from maxwell_daemon.gh.client import Issue
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ class TestLifecycle:
 
 class TestPreconditions:
     def test_rejects_zero_interval(self) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="interval"):
             DiscoveryScheduler(
@@ -232,7 +232,7 @@ class TestPreconditions:
             )
 
     def test_rejects_negative_interval(self) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="interval"):
             DiscoveryScheduler(

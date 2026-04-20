@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from conductor.backends import registry
-from conductor.cli.main import app
+from maxwell_daemon.backends import registry
+from maxwell_daemon.cli.main import app
 
 
 @pytest.fixture
@@ -18,9 +18,9 @@ def runner() -> CliRunner:
 
 @pytest.fixture
 def populated_config(tmp_path: Path, register_recording_backend: None) -> Path:
-    from conductor.config import ConductorConfig, save_config
+    from maxwell_daemon.config import MaxwellDaemonConfig, save_config
 
-    cfg = ConductorConfig.model_validate(
+    cfg = MaxwellDaemonConfig.model_validate(
         {
             "backends": {
                 "primary": {"type": "recording", "model": "test-model"},
@@ -37,7 +37,7 @@ class TestVersion:
     def test_version_flag(self, runner: CliRunner) -> None:
         r = runner.invoke(app, ["--version"])
         assert r.exit_code == 0
-        assert "conductor" in r.stdout.lower()
+        assert "maxwell-daemon" in r.stdout.lower()
 
 
 class TestInit:
@@ -88,7 +88,7 @@ class TestHealth:
         assert "healthy" in r.stdout
 
     def test_unhealthy_backend_fails(self, runner: CliRunner, tmp_path: Path) -> None:
-        from conductor.config import ConductorConfig, save_config
+        from maxwell_daemon.config import MaxwellDaemonConfig, save_config
         from tests.conftest import RecordingBackend
 
         class UnhealthyBackend(RecordingBackend):
@@ -97,7 +97,7 @@ class TestHealth:
 
         registry._factories["unhealthy"] = UnhealthyBackend
         try:
-            cfg = ConductorConfig.model_validate(
+            cfg = MaxwellDaemonConfig.model_validate(
                 {
                     "backends": {"sick": {"type": "unhealthy", "model": "x"}},
                     "agent": {"default_backend": "sick"},

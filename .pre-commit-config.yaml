@@ -27,11 +27,11 @@ repos:
         entry: python scripts/check_todo_fixme.py
         language: python
         pass_filenames: true
-        files: ^conductor/.*\.py$
+        files: ^maxwell_daemon/.*\.py$
 
       - id: file-size-budget
         name: File size budget
         entry: python scripts/check_file_size_budget.py
         language: python
         pass_filenames: false
-        files: ^conductor/.*\.py$
+        files: ^maxwell_daemon/.*\.py$

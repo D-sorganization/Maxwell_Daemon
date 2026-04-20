@@ -8,11 +8,11 @@ from typing import Any
 
 import pytest
 
-from conductor.backends import registry
-from conductor.backends.base import ILLMBackend
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
-from conductor.daemon.runner import TaskStatus
+from maxwell_daemon.backends import registry
+from maxwell_daemon.backends.base import ILLMBackend
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.daemon.runner import TaskStatus
 
 
 class SlowBackend(ILLMBackend):
@@ -24,7 +24,7 @@ class SlowBackend(ILLMBackend):
         self._delay = delay
 
     async def complete(self, messages: Any, *, model: str, **_: Any) -> Any:
-        from conductor.backends.base import BackendResponse, TokenUsage
+        from maxwell_daemon.backends.base import BackendResponse, TokenUsage
 
         await asyncio.sleep(self._delay)
         return BackendResponse(
@@ -43,7 +43,7 @@ class SlowBackend(ILLMBackend):
         return True
 
     def capabilities(self, model: str) -> Any:
-        from conductor.backends.base import BackendCapabilities
+        from maxwell_daemon.backends.base import BackendCapabilities
 
         return BackendCapabilities(cost_per_1k_input_tokens=0.001, cost_per_1k_output_tokens=0.002)
 
@@ -53,7 +53,7 @@ def slow_daemon(
     tmp_path: Path,
 ) -> Any:
     registry._factories["slow"] = SlowBackend
-    cfg = ConductorConfig.model_validate(
+    cfg = MaxwellDaemonConfig.model_validate(
         {
             "backends": {"primary": {"type": "slow", "model": "x"}},
             "agent": {"default_backend": "primary"},
@@ -93,7 +93,7 @@ class TestGracefulShutdown:
         """If the drain deadline passes, workers get cancelled anyway."""
         registry._factories["reallyslow"] = lambda **kw: SlowBackend(delay=5.0)
         try:
-            cfg = ConductorConfig.model_validate(
+            cfg = MaxwellDaemonConfig.model_validate(
                 {
                     "backends": {"primary": {"type": "reallyslow", "model": "x"}},
                     "agent": {"default_backend": "primary"},

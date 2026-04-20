@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from conductor.backends.agent_loop import AgentLoopBackend
-from conductor.backends.base import Message, MessageRole
-from conductor.backends.condensation import Condenser
+from maxwell_daemon.backends.agent_loop import AgentLoopBackend
+from maxwell_daemon.backends.base import Message, MessageRole
+from maxwell_daemon.backends.condensation import Condenser
 
 
 @pytest.fixture(autouse=True)

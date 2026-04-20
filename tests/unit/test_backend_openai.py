@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.backends.base import BackendUnavailableError
-from conductor.backends.openai import OpenAIBackend
-from conductor.backends.registry import registry
+from maxwell_daemon.backends.base import BackendUnavailableError
+from maxwell_daemon.backends.openai import OpenAIBackend
+from maxwell_daemon.backends.registry import registry
 
 
 class TestConfiguration:
@@ -63,7 +63,7 @@ class TestCapabilities:
 
 class TestCostEstimation:
     def test_cost_scales_with_tokens(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from conductor.backends.base import TokenUsage
+        from maxwell_daemon.backends.base import TokenUsage
 
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         backend = OpenAIBackend()

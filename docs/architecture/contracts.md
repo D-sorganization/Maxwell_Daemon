@@ -1,10 +1,10 @@
 # Design by Contract
 
-CONDUCTOR uses lightweight DbC primitives to enforce correctness at module boundaries without reaching for full static verification.
+Maxwell-Daemon uses lightweight DbC primitives to enforce correctness at module boundaries without reaching for full static verification.
 
 ## Primitives
 
-From `conductor.contracts`:
+From `maxwell_daemon.contracts`:
 
 ```python
 require(cond, msg)            # precondition — check at top of function
@@ -27,7 +27,7 @@ AssertionError
 ## Example
 
 ```python
-from conductor.contracts import postcondition, precondition
+from maxwell_daemon.contracts import postcondition, precondition
 
 @precondition(lambda x: x >= 0, "x must be non-negative")
 @postcondition(lambda result: result >= 0, "result must be non-negative")
@@ -40,7 +40,7 @@ def sqrt(x: float) -> float:
 Invariants only run after **public** methods (names not starting with `_`). This lets private helpers temporarily break the invariant mid-computation as long as it's restored by the time a public method returns.
 
 ```python
-from conductor.contracts import invariant
+from maxwell_daemon.contracts import invariant
 
 @invariant(lambda self: self.balance >= 0, "overdraft not allowed")
 class Account:
@@ -54,7 +54,7 @@ class Account:
 Contracts are enabled by default because the cost is tiny and the diagnostic value is high. When you're running a bulk workload and every microsecond counts:
 
 ```bash
-CONDUCTOR_CONTRACTS=off conductor serve
+MAXWELL_CONTRACTS=off maxwell-daemon serve
 ```
 
 Each call reads the env var fresh, so you can toggle contracts at runtime without restarting Python.

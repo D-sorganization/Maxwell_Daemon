@@ -14,14 +14,14 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from conductor.api import create_app
-from conductor.config import ConductorConfig, save_config
-from conductor.daemon import Daemon
+from maxwell_daemon.api import create_app
+from maxwell_daemon.config import MaxwellDaemonConfig, save_config
+from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
 def e2e_config_path(tmp_path: Path, register_recording_backend: None) -> Path:
-    cfg = ConductorConfig.model_validate(
+    cfg = MaxwellDaemonConfig.model_validate(
         {
             "backends": {
                 "primary": {"type": "recording", "model": "m-primary"},
@@ -34,7 +34,7 @@ def e2e_config_path(tmp_path: Path, register_recording_backend: None) -> Path:
             "budget": {"monthly_limit_usd": 100.0, "hard_stop": False},
         }
     )
-    path = tmp_path / "conductor.yaml"
+    path = tmp_path / "maxwell-daemon.yaml"
     save_config(cfg, path)
     return path
 
@@ -43,7 +43,7 @@ def e2e_config_path(tmp_path: Path, register_recording_backend: None) -> Path:
 def live_system(
     e2e_config_path: Path, tmp_path: Path
 ) -> Iterator[tuple[Daemon, TestClient, asyncio.AbstractEventLoop]]:
-    from conductor.config import load_config
+    from maxwell_daemon.config import load_config
 
     cfg = load_config(e2e_config_path)
     loop = asyncio.new_event_loop()
@@ -114,5 +114,5 @@ class TestEndToEnd:
         _wait_for_completion(client, loop, r.json()["id"])
 
         metrics = client.get("/metrics").text
-        assert "conductor_requests_total" in metrics
+        assert "maxwell_daemon_requests_total" in metrics
         assert 'status="success"' in metrics

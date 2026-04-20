@@ -14,7 +14,7 @@ from textwrap import dedent
 
 import pytest
 
-from conductor.gh.ci_patterns import (
+from maxwell_daemon.gh.ci_patterns import (
     CIPatternDetector,
     CIProfile,
     detect_ci_profile,

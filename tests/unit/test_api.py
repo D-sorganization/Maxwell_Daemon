@@ -8,13 +8,13 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from conductor.api import create_app
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
+from maxwell_daemon.api import create_app
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
-def daemon(minimal_config: ConductorConfig, isolated_ledger_path) -> Iterator[Daemon]:
+def daemon(minimal_config: MaxwellDaemonConfig, isolated_ledger_path) -> Iterator[Daemon]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     d = Daemon(minimal_config, ledger_path=isolated_ledger_path)

@@ -39,7 +39,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: mypy conductor
+      - run: mypy maxwell_daemon
       - name: Mypy on tests
         run: mypy tests --no-strict-optional
         continue-on-error: true  # Tighten iteratively
@@ -59,7 +59,7 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - name: Run tests
-        run: pytest --cov=conductor --cov-report=xml --cov-report=term-missing
+        run: pytest --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
       - name: Upload coverage artifact
         if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@v7
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python scripts/check_todo_fixme.py conductor
+      - run: python scripts/check_todo_fixme.py maxwell_daemon
 
   security:
     name: Security scans
@@ -110,7 +110,7 @@ jobs:
           cache: pip
       - run: pip install bandit pip-audit
       - name: Bandit (static analysis)
-        run: bandit -r conductor -c pyproject.toml
+        run: bandit -r maxwell_daemon -c pyproject.toml
       - name: pip-audit (dependency vulnerabilities)
         run: pip-audit --desc --strict || true  # report but don't fail until we triage
 

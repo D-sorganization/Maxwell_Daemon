@@ -16,7 +16,7 @@ labels: bug
 
 ## Environment
 
-- CONDUCTOR version:
+- Maxwell-Daemon version:
 - Python version:
 - OS:
 - Backend(s) in use:

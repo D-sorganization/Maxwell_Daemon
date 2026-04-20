@@ -1,8 +1,8 @@
-"""Unit tests for conductor.config.fleet — declarative multi-repo fleet config.
+"""Unit tests for maxwell_daemon.config.fleet — declarative multi-repo fleet config.
 
-``fleet.yaml`` is a separate file from ``conductor.yaml``: it lists the repos
+``fleet.yaml`` is a separate file from ``maxwell-daemon.yaml``: it lists the repos
 managed by the fleet plus shared defaults, and is loaded via a priority order
-(explicit path → CWD → ``~/.conductor/fleet.yaml`` → env var).
+(explicit path → CWD → ``~/.maxwell-daemon/fleet.yaml`` → env var).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from textwrap import dedent
 
 import pytest
 
-from conductor.config.fleet import (
+from maxwell_daemon.config.fleet import (
     FleetDefaults,
     FleetManifest,
     FleetManifestError,
@@ -137,7 +137,7 @@ class TestFleetManifestValidation:
                     "default_slots": 4,
                     "default_pr_target_branch": "trunk",
                     "default_budget_per_story": "0.25",
-                    "default_watch_labels": ["conductor:ready"],
+                    "default_watch_labels": ["maxwell:ready"],
                 },
                 "repos": [
                     {"name": "R1", "org": "a"},  # inherits
@@ -149,7 +149,7 @@ class TestFleetManifestValidation:
         assert r1.slots == 4
         assert r1.pr_target_branch == "trunk"
         assert r1.budget_per_story == 0.25
-        assert r1.watch_labels == ["conductor:ready"]
+        assert r1.watch_labels == ["maxwell:ready"]
 
         r2 = manifest.resolve("R2")
         assert r2.slots == 9
@@ -176,8 +176,8 @@ class TestLoadFleetManifest:
     def test_priority_cwd_over_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         cwd = tmp_path / "cwd"
         cwd.mkdir()
-        home_conductor = tmp_path / "home" / ".conductor"
-        home_conductor.mkdir(parents=True)
+        home_maxwell = tmp_path / "home" / ".maxwell-daemon"
+        home_maxwell.mkdir(parents=True)
 
         _write(
             cwd / "fleet.yaml",
@@ -188,7 +188,7 @@ class TestLoadFleetManifest:
             """,
         )
         _write(
-            home_conductor / "fleet.yaml",
+            home_maxwell / "fleet.yaml",
             """
             version: 1
             fleet: {name: HOME}
@@ -203,10 +203,10 @@ class TestLoadFleetManifest:
     def test_falls_back_to_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         empty_cwd = tmp_path / "empty"
         empty_cwd.mkdir()
-        home_conductor = tmp_path / "home" / ".conductor"
-        home_conductor.mkdir(parents=True)
+        home_maxwell = tmp_path / "home" / ".maxwell-daemon"
+        home_maxwell.mkdir(parents=True)
         _write(
-            home_conductor / "fleet.yaml",
+            home_maxwell / "fleet.yaml",
             """
             version: 1
             fleet: {name: HOME}
@@ -215,7 +215,7 @@ class TestLoadFleetManifest:
         )
         monkeypatch.chdir(empty_cwd)
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
-        monkeypatch.delenv("CONDUCTOR_FLEET_CONFIG", raising=False)
+        monkeypatch.delenv("MAXWELL_FLEET_CONFIG", raising=False)
         manifest = load_fleet_manifest()
         assert manifest.fleet.name == "HOME"
 
@@ -243,7 +243,7 @@ class TestLoadFleetManifest:
             """,
         )
         monkeypatch.chdir(cwd)
-        monkeypatch.setenv("CONDUCTOR_FLEET_CONFIG", str(env_file))
+        monkeypatch.setenv("MAXWELL_FLEET_CONFIG", str(env_file))
         manifest = load_fleet_manifest()
         assert manifest.fleet.name == "ENV"
 
@@ -254,7 +254,7 @@ class TestLoadFleetManifest:
         empty.mkdir()
         monkeypatch.chdir(empty)
         monkeypatch.setenv("HOME", str(empty))
-        monkeypatch.delenv("CONDUCTOR_FLEET_CONFIG", raising=False)
+        monkeypatch.delenv("MAXWELL_FLEET_CONFIG", raising=False)
         with pytest.raises(FleetManifestError, match=r"no fleet\.yaml found"):
             load_fleet_manifest()
 

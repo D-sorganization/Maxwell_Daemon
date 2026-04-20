@@ -17,12 +17,12 @@ coverage.xml
 .mypy_cache/
 .ruff_cache/
 
-# Conductor runtime state
-conductor.db
+# Maxwell-Daemon runtime state
+maxwell-daemon.db
 ledger.db
 *.sqlite3
-conductor.yaml
-!tests/**/conductor.yaml
+maxwell-daemon.yaml
+!tests/**/maxwell-daemon.yaml
 
 # IDE
 .vscode/

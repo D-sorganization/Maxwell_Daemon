@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.memory import ScratchPad
+from maxwell_daemon.memory import ScratchPad
 
 
 class TestScratchPad:
@@ -52,7 +52,7 @@ class TestScratchPad:
         assert len(rendered) <= 600  # slack for role headers + truncation marker
 
     def test_rejects_empty_task_id(self) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         pad = ScratchPad()
         with pytest.raises(PreconditionError):

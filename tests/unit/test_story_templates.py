@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.templates import IssueKind, classify_issue, render_system_prompt
+from maxwell_daemon.templates import IssueKind, classify_issue, render_system_prompt
 
 
 class TestClassify:

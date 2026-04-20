@@ -1,8 +1,8 @@
-site_name: CONDUCTOR
+site_name: Maxwell-Daemon
 site_description: Multi-backend autonomous code agent orchestrator
-site_url: https://d-sorganization.github.io/CONDUCTOR/
-repo_url: https://github.com/D-sorganization/CONDUCTOR
-repo_name: D-sorganization/CONDUCTOR
+site_url: https://d-sorganization.github.io/Maxwell-Daemon/
+repo_url: https://github.com/D-sorganization/Maxwell-Daemon
+repo_name: D-sorganization/Maxwell-Daemon
 
 theme:
   name: material

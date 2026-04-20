@@ -10,10 +10,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from conductor.api import create_app
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
-from conductor.gh import Issue
+from maxwell_daemon.api import create_app
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.gh import Issue
 
 
 class FakeIssueExecutor:
@@ -23,7 +23,7 @@ class FakeIssueExecutor:
     async def execute_issue(
         self, *, repo: str, issue_number: int, model: str, mode: str = "plan", **_: Any
     ) -> Any:
-        from conductor.gh.executor import IssueResult
+        from maxwell_daemon.gh.executor import IssueResult
 
         return IssueResult(
             issue_number=issue_number,
@@ -58,13 +58,13 @@ class FakeGitHubClient:
 
 @pytest.fixture
 def daemon(
-    minimal_config: ConductorConfig,
+    minimal_config: MaxwellDaemonConfig,
     isolated_ledger_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[Daemon]:
-    monkeypatch.setattr("conductor.api.server.GitHubClient", FakeGitHubClient, raising=False)
-    monkeypatch.setattr("conductor.gh.GitHubClient", FakeGitHubClient)
+    monkeypatch.setattr("maxwell_daemon.api.server.GitHubClient", FakeGitHubClient, raising=False)
+    monkeypatch.setattr("maxwell_daemon.gh.GitHubClient", FakeGitHubClient)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     d = Daemon(

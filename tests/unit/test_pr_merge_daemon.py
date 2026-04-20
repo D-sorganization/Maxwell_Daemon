@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from conductor.executor.pr_merge_daemon import (
+from maxwell_daemon.executor.pr_merge_daemon import (
     PrMergeConfig,
     PrMergeDaemon,
     PrMergeDecision,
@@ -72,7 +72,7 @@ class _StubGh:
 def _default_config(**overrides: Any) -> PrMergeConfig:
     base = {
         "enabled": True,
-        "required_label": "conductor:auto-merge-ok",
+        "required_label": "maxwell:auto-merge-ok",
         "allowed_base_branches": ("staging",),
         "merge_method": "squash",
     }
@@ -89,7 +89,7 @@ class TestDisabledByDefault:
         assert cfg.enabled is False
 
     async def test_shepherd_is_no_op_when_disabled(self) -> None:
-        pr = _StubPr(repo="a/b", number=1, labels=["conductor:auto-merge-ok"])
+        pr = _StubPr(repo="a/b", number=1, labels=["maxwell:auto-merge-ok"])
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=PrMergeConfig(enabled=False))
         result = await daemon.shepherd(pr, gh=gh)
@@ -123,7 +123,7 @@ class TestRequiredLabel:
 
 class TestDraftsSkipped:
     async def test_draft_pr_skipped_even_with_label(self) -> None:
-        pr = _StubPr(repo="a/b", number=1, draft=True, labels=["conductor:auto-merge-ok"])
+        pr = _StubPr(repo="a/b", number=1, draft=True, labels=["maxwell:auto-merge-ok"])
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config())
         result = await daemon.shepherd(pr, gh=gh)
@@ -140,7 +140,7 @@ class TestBaseBranchAllowList:
             repo="a/b",
             number=1,
             base_branch="main",  # not on allow-list (only staging is)
-            labels=["conductor:auto-merge-ok"],
+            labels=["maxwell:auto-merge-ok"],
         )
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config())
@@ -153,7 +153,7 @@ class TestBaseBranchAllowList:
             repo="a/b",
             number=1,
             base_branch="main",
-            labels=["conductor:auto-merge-ok"],
+            labels=["maxwell:auto-merge-ok"],
         )
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config(allowed_base_branches=("staging", "main")))
@@ -174,7 +174,7 @@ class TestAlreadyMerged:
             repo="a/b",
             number=1,
             merged=True,
-            labels=["conductor:auto-merge-ok"],
+            labels=["maxwell:auto-merge-ok"],
         )
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config())
@@ -192,7 +192,7 @@ class TestHappyPath:
             repo="a/b",
             number=1,
             mergeable_state="clean",
-            labels=["conductor:auto-merge-ok"],
+            labels=["maxwell:auto-merge-ok"],
         )
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config())
@@ -206,7 +206,7 @@ class TestHappyPath:
             number=1,
             mergeable_state="clean",
             auto_merge_enabled=True,
-            labels=["conductor:auto-merge-ok"],
+            labels=["maxwell:auto-merge-ok"],
         )
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config())
@@ -225,7 +225,7 @@ class TestBehindBranchHandling:
             number=1,
             mergeable_state="behind",
             auto_merge_enabled=True,
-            labels=["conductor:auto-merge-ok"],
+            labels=["maxwell:auto-merge-ok"],
         )
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config())
@@ -243,7 +243,7 @@ class TestBlockedState:
             repo="a/b",
             number=1,
             mergeable_state="blocked",
-            labels=["conductor:auto-merge-ok"],
+            labels=["maxwell:auto-merge-ok"],
             check_runs=[{"name": "ci", "conclusion": "failure"}],
         )
         gh = _StubGh(pr)
@@ -256,7 +256,7 @@ class TestBlockedState:
             repo="a/b",
             number=1,
             mergeable_state="blocked",
-            labels=["conductor:auto-merge-ok"],
+            labels=["maxwell:auto-merge-ok"],
             check_runs=[{"name": "ci", "conclusion": ""}],  # still running
         )
         gh = _StubGh(pr)
@@ -274,7 +274,7 @@ class TestDryRun:
             repo="a/b",
             number=1,
             mergeable_state="behind",
-            labels=["conductor:auto-merge-ok"],
+            labels=["maxwell:auto-merge-ok"],
         )
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config(dry_run=True))

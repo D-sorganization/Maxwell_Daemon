@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from conductor.gh.webhook import (
+from maxwell_daemon.gh.webhook import (
     WebhookConfig,
     WebhookDispatch,
     WebhookRoute,
@@ -75,17 +75,17 @@ def config() -> WebhookConfig:
         secret="secret",
         allowed_repos=["owner/allowed"],
         routes=[
-            WebhookRoute(event="issues", action="opened", label="conductor-plan", mode="plan"),
+            WebhookRoute(event="issues", action="opened", label="maxwell-daemon-plan", mode="plan"),
             WebhookRoute(
                 event="issues",
                 action="opened",
-                label="conductor-implement",
+                label="maxwell-daemon-implement",
                 mode="implement",
             ),
             WebhookRoute(
                 event="issue_comment",
                 action="created",
-                trigger="/conductor plan",
+                trigger="/maxwell-daemon plan",
                 mode="plan",
             ),
         ],
@@ -122,7 +122,7 @@ class TestWebhookRouter:
         router = WebhookRouter(config, daemon=daemon)
         dispatches = router.handle(
             event_type="issues",
-            payload=_issue_payload("owner/allowed", 7, ["bug", "conductor-plan"]),
+            payload=_issue_payload("owner/allowed", 7, ["bug", "maxwell-daemon-plan"]),
         )
         assert len(dispatches) == 1
         assert dispatches[0].mode == "plan"
@@ -143,7 +143,7 @@ class TestWebhookRouter:
         router = WebhookRouter(config, daemon=daemon)
         dispatches = router.handle(
             event_type="issues",
-            payload=_issue_payload("someone/else", 7, ["conductor-plan"]),
+            payload=_issue_payload("someone/else", 7, ["maxwell-daemon-plan"]),
         )
         assert dispatches == []
         assert daemon.issue_calls == []
@@ -153,7 +153,7 @@ class TestWebhookRouter:
         router = WebhookRouter(config, daemon=daemon)
         router.handle(
             event_type="issues",
-            payload=_issue_payload("owner/allowed", 9, ["conductor-implement"]),
+            payload=_issue_payload("owner/allowed", 9, ["maxwell-daemon-implement"]),
         )
         assert daemon.issue_calls == [
             {"repo": "owner/allowed", "issue_number": 9, "mode": "implement"}
@@ -164,7 +164,9 @@ class TestWebhookRouter:
         router = WebhookRouter(config, daemon=daemon)
         router.handle(
             event_type="issue_comment",
-            payload=_comment_payload("owner/allowed", 42, "Please look at this. /conductor plan"),
+            payload=_comment_payload(
+                "owner/allowed", 42, "Please look at this. /maxwell-daemon plan"
+            ),
         )
         assert daemon.issue_calls == [{"repo": "owner/allowed", "issue_number": 42, "mode": "plan"}]
 
@@ -174,7 +176,7 @@ class TestWebhookRouter:
         router = WebhookRouter(config, daemon=daemon)
         dispatches = router.handle(
             event_type="issues",
-            payload=_issue_payload("owner/allowed", 1, ["conductor-plan"], action="closed"),
+            payload=_issue_payload("owner/allowed", 1, ["maxwell-daemon-plan"], action="closed"),
         )
         assert dispatches == []
 
@@ -191,11 +193,11 @@ class TestWebhookEndpoint:
     def _setup(self, secret: str = "topsecret") -> tuple[Any, _FakeDaemon]:
         from fastapi.testclient import TestClient
 
-        from conductor.api import create_app
-        from conductor.config import ConductorConfig
-        from conductor.daemon import Daemon
+        from maxwell_daemon.api import create_app
+        from maxwell_daemon.config import MaxwellDaemonConfig
+        from maxwell_daemon.daemon import Daemon
 
-        cfg = ConductorConfig.model_validate(
+        cfg = MaxwellDaemonConfig.model_validate(
             {
                 "backends": {"x": {"type": "ollama", "model": "y"}},
                 "agent": {"default_backend": "x"},
@@ -206,7 +208,7 @@ class TestWebhookEndpoint:
                         {
                             "event": "issues",
                             "action": "opened",
-                            "label": "conductor-plan",
+                            "label": "maxwell-daemon-plan",
                             "mode": "plan",
                         }
                     ],
@@ -219,7 +221,7 @@ class TestWebhookEndpoint:
 
     def test_valid_signature_accepted(self) -> None:
         client, daemon = self._setup()
-        body = json.dumps(_issue_payload("owner/allowed", 1, ["conductor-plan"])).encode()
+        body = json.dumps(_issue_payload("owner/allowed", 1, ["maxwell-daemon-plan"])).encode()
         sig = _sign("topsecret", body)
         r = client.post(
             "/api/v1/webhooks/github",

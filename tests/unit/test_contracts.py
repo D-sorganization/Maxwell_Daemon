@@ -1,7 +1,7 @@
 """Design by Contract — precondition, postcondition, invariant enforcement.
 
-Contracts are the foundation of CONDUCTOR's correctness guarantees. They're
-enabled in dev/test and can be disabled in production via CONDUCTOR_CONTRACTS=off
+Contracts are the foundation of Maxwell-Daemon's correctness guarantees. They're
+enabled in dev/test and can be disabled in production via MAXWELL_CONTRACTS=off
 when the performance overhead matters.
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.contracts import (
+from maxwell_daemon.contracts import (
     ContractViolation,
     PostconditionError,
     PreconditionError,
@@ -39,7 +39,7 @@ class TestRequire:
             require(False, "x must be < 10")
 
     def test_disabled_contracts_skip_check(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CONDUCTOR_CONTRACTS", "off")
+        monkeypatch.setenv("MAXWELL_CONTRACTS", "off")
         # With the flag read on each call, no reload is needed.
         require(False, "should be skipped")
         assert not contracts_enabled()

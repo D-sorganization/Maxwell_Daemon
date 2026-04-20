@@ -14,17 +14,17 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from conductor.api import create_app
-from conductor.backends.base import (
+from maxwell_daemon.api import create_app
+from maxwell_daemon.backends.base import (
     BackendCapabilities,
     BackendResponse,
     ILLMBackend,
     Message,
     TokenUsage,
 )
-from conductor.config import ConductorConfig, save_config
-from conductor.daemon import Daemon
-from conductor.gh import Issue, PullRequest
+from maxwell_daemon.config import MaxwellDaemonConfig, save_config
+from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.gh import Issue, PullRequest
 
 
 class StubGitHub:
@@ -107,7 +107,7 @@ class StubBackend(ILLMBackend):
 
 @pytest.fixture
 def register_stub() -> Iterator[None]:
-    from conductor.backends import registry
+    from maxwell_daemon.backends import registry
 
     registry._factories["stub"] = StubBackend
     yield
@@ -119,7 +119,7 @@ def full_system(
     tmp_path: Path,
     register_stub: None,
 ) -> Iterator[tuple[Daemon, TestClient, StubGitHub, asyncio.AbstractEventLoop]]:
-    cfg = ConductorConfig.model_validate(
+    cfg = MaxwellDaemonConfig.model_validate(
         {
             "backends": {"primary": {"type": "stub", "model": "stub-v1"}},
             "agent": {"default_backend": "primary"},
@@ -134,7 +134,7 @@ def full_system(
     stub_gh = StubGitHub()
 
     # The daemon's issue path needs collaborators wired in.
-    from conductor.gh.executor import IssueExecutor
+    from maxwell_daemon.gh.executor import IssueExecutor
 
     daemon.set_issue_collaborators(
         github_client=stub_gh,

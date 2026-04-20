@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor.gh.workspace import Workspace, WorkspaceError
+from maxwell_daemon.gh.workspace import Workspace, WorkspaceError
 
 
 class _RecordingGit:

@@ -3,7 +3,7 @@ requires = ["hatchling>=1.18"]
 build-backend = "hatchling.build"
 
 [project]
-name = "conductor-agents"
+name = "maxwell-daemon"
 version = "0.1.0"
 description = "Multi-backend autonomous code agent orchestrator with fleet management"
 readme = "README.md"
@@ -55,25 +55,25 @@ dev = [
     "opentelemetry-sdk>=1.30.0",
     "types-pyyaml",
 ]
-all = ["conductor-agents[ollama,google,azure,grpc,dev]"]
+all = ["maxwell-daemon[ollama,google,azure,grpc,dev]"]
 
 [project.scripts]
-conductor = "conductor.cli.main:app"
-conductor-daemon = "conductor.daemon.runner:main"
+maxwell-daemon = "maxwell_daemon.cli.main:app"
+maxwell-daemon-runner = "maxwell_daemon.daemon.runner:main"
 
 [project.urls]
-Homepage = "https://github.com/D-sorganization/CONDUCTOR"
-Documentation = "https://github.com/D-sorganization/CONDUCTOR#readme"
-Repository = "https://github.com/D-sorganization/CONDUCTOR"
-Issues = "https://github.com/D-sorganization/CONDUCTOR/issues"
+Homepage = "https://github.com/D-sorganization/Maxwell-Daemon"
+Documentation = "https://github.com/D-sorganization/Maxwell-Daemon#readme"
+Repository = "https://github.com/D-sorganization/Maxwell-Daemon"
+Issues = "https://github.com/D-sorganization/Maxwell-Daemon/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["conductor"]
+packages = ["maxwell_daemon"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"conductor/api/ui/index.html" = "conductor/api/ui/index.html"
-"conductor/api/ui/app.js" = "conductor/api/ui/app.js"
-"conductor/api/ui/style.css" = "conductor/api/ui/style.css"
+"maxwell_daemon/api/ui/index.html" = "maxwell_daemon/api/ui/index.html"
+"maxwell_daemon/api/ui/app.js" = "maxwell_daemon/api/ui/app.js"
+"maxwell_daemon/api/ui/style.css" = "maxwell_daemon/api/ui/style.css"
 
 [tool.ruff]
 line-length = 100
@@ -86,7 +86,7 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --cov=conductor --cov-report=term-missing"
+addopts = "-ra --strict-markers --cov=maxwell_daemon --cov-report=term-missing"
 
 [tool.mypy]
 python_version = "3.10"

@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from conductor.backends import (
+from maxwell_daemon.backends import (
     BackendCapabilities,
     BackendResponse,
     ILLMBackend,
@@ -20,7 +20,7 @@ from conductor.backends import (
     TokenUsage,
     registry,
 )
-from conductor.config import ConductorConfig
+from maxwell_daemon.config import MaxwellDaemonConfig
 
 
 class RecordingBackend(ILLMBackend):
@@ -95,8 +95,8 @@ def register_recording_backend() -> Iterator[None]:
 
 
 @pytest.fixture
-def minimal_config(register_recording_backend: None) -> ConductorConfig:
-    return ConductorConfig.model_validate(
+def minimal_config(register_recording_backend: None) -> MaxwellDaemonConfig:
+    return MaxwellDaemonConfig.model_validate(
         {
             "backends": {
                 "primary": {"type": "recording", "model": "test-model"},
@@ -107,8 +107,8 @@ def minimal_config(register_recording_backend: None) -> ConductorConfig:
 
 
 @pytest.fixture
-def dual_backend_config(register_recording_backend: None) -> ConductorConfig:
-    return ConductorConfig.model_validate(
+def dual_backend_config(register_recording_backend: None) -> MaxwellDaemonConfig:
+    return MaxwellDaemonConfig.model_validate(
         {
             "backends": {
                 "primary": {"type": "recording", "model": "model-primary"},

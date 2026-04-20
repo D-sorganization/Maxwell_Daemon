@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.backends.base import (
+from maxwell_daemon.backends.base import (
     BackendUnavailableError,
     Message,
     MessageRole,
     TokenUsage,
 )
-from conductor.backends.claude import ClaudeBackend
-from conductor.backends.registry import registry
+from maxwell_daemon.backends.claude import ClaudeBackend
+from maxwell_daemon.backends.registry import registry
 
 
 @pytest.fixture(autouse=True)

@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from conductor.tracing import (
+from maxwell_daemon.tracing import (
     configure_tracing,
     get_tracer,
     span,
@@ -22,7 +22,7 @@ class TestTracingDisabledByDefault:
 
     def test_span_noop_when_disabled(self) -> None:
         async def use_span() -> str:
-            async with span("conductor.noop", {"k": "v"}):
+            async with span("maxwell_daemon.noop", {"k": "v"}):
                 return "ran"
 
         assert asyncio.run(use_span()) == "ran"
@@ -36,46 +36,46 @@ class TestTracingDisabledByDefault:
 class TestTracingEnabled:
     def test_configure_enables(self, monkeypatch: pytest.MonkeyPatch) -> None:
         try:
-            configure_tracing(service_name="conductor-test", use_memory_exporter=True)
+            configure_tracing(service_name="maxwell-daemon-test", use_memory_exporter=True)
             assert tracing_enabled() is True
             assert get_tracer("test") is not None
         finally:
             configure_tracing(endpoint=None)
 
     def test_span_attributes_reach_exporter(self) -> None:
-        from conductor.tracing import _test_exporter  # internal: memory exporter for tests
+        from maxwell_daemon.tracing import _test_exporter  # internal: memory exporter for tests
 
         try:
-            configure_tracing(service_name="conductor-test", use_memory_exporter=True)
+            configure_tracing(service_name="maxwell-daemon-test", use_memory_exporter=True)
 
             async def trace_something() -> None:
-                async with span("conductor.unit", {"answer": 42, "tag": "x"}):
+                async with span("maxwell_daemon.unit", {"answer": 42, "tag": "x"}):
                     pass
 
             asyncio.run(trace_something())
             spans = _test_exporter().get_finished_spans()
-            assert any(s.name == "conductor.unit" for s in spans)
-            target = next(s for s in spans if s.name == "conductor.unit")
+            assert any(s.name == "maxwell_daemon.unit" for s in spans)
+            target = next(s for s in spans if s.name == "maxwell_daemon.unit")
             assert target.attributes["answer"] == 42
             assert target.attributes["tag"] == "x"
         finally:
             configure_tracing(endpoint=None)
 
     def test_span_records_exception(self) -> None:
-        from conductor.tracing import _test_exporter
+        from maxwell_daemon.tracing import _test_exporter
 
         try:
-            configure_tracing(service_name="conductor-test", use_memory_exporter=True)
+            configure_tracing(service_name="maxwell-daemon-test", use_memory_exporter=True)
 
             async def boom() -> None:
-                async with span("conductor.boom"):
+                async with span("maxwell_daemon.boom"):
                     raise RuntimeError("nope")
 
             with pytest.raises(RuntimeError):
                 asyncio.run(boom())
 
             spans = _test_exporter().get_finished_spans()
-            boomed = next(s for s in spans if s.name == "conductor.boom")
+            boomed = next(s for s in spans if s.name == "maxwell_daemon.boom")
             assert boomed.status.status_code.name == "ERROR"
         finally:
             configure_tracing(endpoint=None)

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from conductor.cli.main import app
+from maxwell_daemon.cli.main import app
 
 
 @pytest.fixture
@@ -17,9 +17,9 @@ def runner() -> CliRunner:
 
 @pytest.fixture
 def populated_config(tmp_path: Path, register_recording_backend: None) -> Path:
-    from conductor.config import ConductorConfig, save_config
+    from maxwell_daemon.config import MaxwellDaemonConfig, save_config
 
-    cfg = ConductorConfig.model_validate(
+    cfg = MaxwellDaemonConfig.model_validate(
         {
             "backends": {"primary": {"type": "recording", "model": "m"}},
             "agent": {"default_backend": "primary"},
@@ -50,9 +50,9 @@ class TestCostCommand:
     def test_shows_budget_limit_when_configured(
         self, runner: CliRunner, tmp_path: Path, register_recording_backend: None
     ) -> None:
-        from conductor.config import ConductorConfig, save_config
+        from maxwell_daemon.config import MaxwellDaemonConfig, save_config
 
-        cfg = ConductorConfig.model_validate(
+        cfg = MaxwellDaemonConfig.model_validate(
             {
                 "backends": {"primary": {"type": "recording", "model": "m"}},
                 "agent": {"default_backend": "primary"},

@@ -1,4 +1,4 @@
-"""Unit tests for conductor.tools.mcp — the Model Context Protocol abstraction.
+"""Unit tests for maxwell_daemon.tools.mcp — the Model Context Protocol abstraction.
 
 The abstraction exists so tool *definitions* live in one place (a ``ToolSpec``)
 and *emit* provider-specific schemas (Anthropic, OpenAI) on demand. Handlers
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.tools.mcp import (
+from maxwell_daemon.tools.mcp import (
     ToolParam,
     ToolRegistry,
     ToolRegistryError,

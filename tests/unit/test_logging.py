@@ -7,7 +7,7 @@ import logging
 
 import pytest
 
-from conductor.logging import bind_context, configure_logging, get_logger
+from maxwell_daemon.logging import bind_context, configure_logging, get_logger
 
 
 @pytest.fixture(autouse=True)

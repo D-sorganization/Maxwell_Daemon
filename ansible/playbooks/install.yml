@@ -1,25 +1,25 @@
 ---
-# Install CONDUCTOR on a fleet node.
+# Install Maxwell-Daemon on a fleet node.
 #
 #   ansible-playbook -i inventory.yml ansible/playbooks/install.yml
 #
 # Idempotent: safe to re-run. Tightens system config only where required.
 
-- name: Install CONDUCTOR
-  hosts: conductor_fleet
+- name: Install Maxwell-Daemon
+  hosts: maxwell_daemon_fleet
   become: true
   vars:
-    conductor_bin: "{{ conductor_home }}/venv/bin/conductor"
-    conductor_config_dir: "/etc/conductor"
-    conductor_systemd_unit: /etc/systemd/system/conductor.service
+    maxwell_daemon_bin: "{{ maxwell_daemon_home }}/venv/bin/maxwell-daemon"
+    maxwell_daemon_config_dir: "/etc/maxwell-daemon"
+    maxwell_daemon_systemd_unit: /etc/systemd/system/maxwell-daemon.service
 
   tasks:
-    - name: Ensure conductor user exists
+    - name: Ensure maxwell-daemon user exists
       ansible.builtin.user:
-        name: "{{ conductor_user }}"
+        name: "{{ maxwell_daemon_user }}"
         system: true
         shell: /usr/sbin/nologin
-        home: "{{ conductor_home }}"
+        home: "{{ maxwell_daemon_home }}"
         create_home: true
 
     - name: Ensure required system packages are present
@@ -32,60 +32,60 @@
 
     - name: Create config dir
       ansible.builtin.file:
-        path: "{{ conductor_config_dir }}"
+        path: "{{ maxwell_daemon_config_dir }}"
         state: directory
-        owner: "{{ conductor_user }}"
-        group: "{{ conductor_user }}"
+        owner: "{{ maxwell_daemon_user }}"
+        group: "{{ maxwell_daemon_user }}"
         mode: "0750"
 
-    - name: Create virtualenv + install conductor
+    - name: Create virtualenv + install maxwell-daemon
       ansible.builtin.pip:
-        name: "conductor-agents=={{ conductor_version }}"
-        virtualenv: "{{ conductor_home }}/venv"
+        name: "maxwell-daemon=={{ maxwell_daemon_version }}"
+        virtualenv: "{{ maxwell_daemon_home }}/venv"
         virtualenv_command: python3 -m venv
-      become_user: "{{ conductor_user }}"
+      become_user: "{{ maxwell_daemon_user }}"
 
-    - name: Render conductor.yaml from template
+    - name: Render maxwell-daemon.yaml from template
       ansible.builtin.template:
-        src: ../templates/conductor.yaml.j2
-        dest: "{{ conductor_config_dir }}/conductor.yaml"
-        owner: "{{ conductor_user }}"
-        group: "{{ conductor_user }}"
+        src: ../templates/maxwell-daemon.yaml.j2
+        dest: "{{ maxwell_daemon_config_dir }}/maxwell-daemon.yaml"
+        owner: "{{ maxwell_daemon_user }}"
+        group: "{{ maxwell_daemon_user }}"
         mode: "0640"
-      notify: Restart conductor
+      notify: Restart maxwell-daemon
 
     - name: Install systemd unit
       ansible.builtin.copy:
-        dest: "{{ conductor_systemd_unit }}"
+        dest: "{{ maxwell_daemon_systemd_unit }}"
         mode: "0644"
         content: |
           [Unit]
-          Description=Conductor Daemon
+          Description=Maxwell-Daemon
           After=network-online.target
           Wants=network-online.target
 
           [Service]
           Type=simple
-          User={{ conductor_user }}
-          Group={{ conductor_user }}
-          Environment=CONDUCTOR_CONFIG={{ conductor_config_dir }}/conductor.yaml
-          ExecStart={{ conductor_bin }} serve --host 0.0.0.0 --port 8080
+          User={{ maxwell_daemon_user }}
+          Group={{ maxwell_daemon_user }}
+          Environment=MAXWELL_CONFIG={{ maxwell_daemon_config_dir }}/maxwell-daemon.yaml
+          ExecStart={{ maxwell_daemon_bin }} serve --host 0.0.0.0 --port 8080
           Restart=on-failure
           RestartSec=5s
           # Security hardening
           NoNewPrivileges=true
           ProtectSystem=strict
           ProtectHome=true
-          ReadWritePaths={{ conductor_home }} {{ conductor_config_dir }}
+          ReadWritePaths={{ maxwell_daemon_home }} {{ maxwell_daemon_config_dir }}
           PrivateTmp=true
 
           [Install]
           WantedBy=multi-user.target
       notify: Reload systemd
 
-    - name: Enable and start conductor
+    - name: Enable and start maxwell-daemon
       ansible.builtin.systemd:
-        name: conductor
+        name: maxwell-daemon
         enabled: true
         state: started
         daemon_reload: true
@@ -95,7 +95,7 @@
       ansible.builtin.systemd:
         daemon_reload: true
 
-    - name: Restart conductor
+    - name: Restart maxwell-daemon
       ansible.builtin.systemd:
-        name: conductor
+        name: maxwell-daemon
         state: restarted

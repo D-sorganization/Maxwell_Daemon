@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from conductor.backends import TokenUsage
-from conductor.core import CostLedger, CostRecord
+from maxwell_daemon.backends import TokenUsage
+from maxwell_daemon.core import CostLedger, CostRecord
 
 
 @pytest.fixture

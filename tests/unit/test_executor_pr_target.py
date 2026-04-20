@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from conductor.gh.client import Issue, PullRequest
-from conductor.gh.executor import IssueExecutionError, IssueExecutor
+from maxwell_daemon.gh.client import Issue, PullRequest
+from maxwell_daemon.gh.executor import IssueExecutionError, IssueExecutor
 
 
 class _GhStub:

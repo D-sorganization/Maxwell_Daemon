@@ -1,4 +1,4 @@
-"""`conductor issue ...` subcommand coverage.
+"""`maxwell-daemon issue ...` subcommand coverage.
 
 Complements test_batch_dispatch (which hits the REST layer) and fills in the
 CLI-invocation paths that the daemon tests don't touch.
@@ -14,8 +14,8 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-from conductor.cli.main import app
-from conductor.gh import Issue
+from maxwell_daemon.cli.main import app
+from maxwell_daemon.gh import Issue
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ class _FakeGH:
 
 class TestIssueNew:
     def test_creates_issue(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
-        from conductor import cli
+        from maxwell_daemon import cli
 
         monkeypatch.setattr(cli.issues, "GitHubClient", lambda: _FakeGH())
         r = runner.invoke(app, ["issue", "new", "owner/repo", "Fix it", "--body", "bug"])
@@ -54,7 +54,7 @@ class TestIssueNew:
     def test_dispatch_flag_calls_http(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from conductor import cli
+        from maxwell_daemon import cli
 
         monkeypatch.setattr(cli.issues, "GitHubClient", lambda: _FakeGH())
         # Also avoid a real config load — monkey-patch load_config.
@@ -83,7 +83,7 @@ class TestIssueNew:
 
 class TestIssueList:
     def test_empty(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
-        from conductor import cli
+        from maxwell_daemon import cli
 
         monkeypatch.setattr(cli.issues, "GitHubClient", lambda: _FakeGH(issues=[]))
         r = runner.invoke(app, ["issue", "list", "owner/repo"])
@@ -91,7 +91,7 @@ class TestIssueList:
         assert "No issues" in r.stdout
 
     def test_renders_table(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
-        from conductor import cli
+        from maxwell_daemon import cli
 
         monkeypatch.setattr(
             cli.issues,
@@ -114,7 +114,7 @@ class TestIssueDispatchBatchFromRepo:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        from conductor import cli
+        from maxwell_daemon import cli
 
         monkeypatch.setattr(
             cli.issues,
@@ -165,7 +165,7 @@ class TestIssueDispatchBatchFromRepo:
         runner: CliRunner,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from conductor import cli
+        from maxwell_daemon import cli
 
         monkeypatch.setattr(cli.issues, "GitHubClient", lambda: _FakeGH(issues=[]))
         r = runner.invoke(app, ["issue", "dispatch-batch", "--repo", "owner/repo"])
@@ -177,7 +177,7 @@ class TestBatchFileParser:
     def test_rejects_malformed_line(self, tmp_path: Path) -> None:
         import typer
 
-        from conductor.cli.issues import _parse_batch_file
+        from maxwell_daemon.cli.issues import _parse_batch_file
 
         bad = tmp_path / "bad.txt"
         bad.write_text("definitely not parseable\n")
@@ -185,7 +185,7 @@ class TestBatchFileParser:
             _parse_batch_file(bad, default_mode="plan")
 
     def test_skips_blank_and_commented_lines(self, tmp_path: Path) -> None:
-        from conductor.cli.issues import _parse_batch_file
+        from maxwell_daemon.cli.issues import _parse_batch_file
 
         good = tmp_path / "g.txt"
         good.write_text("\n# a comment\nowner/repo#5\n")

@@ -31,27 +31,27 @@
 
 ## Components
 
-**`conductor.backends`** — one `ILLMBackend` interface, one `BackendRegistry`, and one adapter per provider. Adapters are imported lazily so users only need the SDKs they actually use.
+**`maxwell_daemon.backends`** — one `ILLMBackend` interface, one `BackendRegistry`, and one adapter per provider. Adapters are imported lazily so users only need the SDKs they actually use.
 
-**`conductor.config`** — Pydantic-validated YAML with `${ENV_VAR}` substitution. Fail-fast on misconfiguration.
+**`maxwell_daemon.config`** — Pydantic-validated YAML with `${ENV_VAR}` substitution. Fail-fast on misconfiguration.
 
-**`conductor.core`** — the decoupled primitives:
+**`maxwell_daemon.core`** — the decoupled primitives:
 
 - `BackendRouter` picks a backend for each task based on repo/override/default precedence.
 - `CostLedger` is an append-only SQLite record of every request's token usage and USD cost.
 - `BudgetEnforcer` reads the ledger and enforces monthly caps — soft alert thresholds or hard-stop.
 
-**`conductor.daemon`** — owns a task queue, a worker pool, and an `EventBus`. External callers go through `submit()` / `state()` / `events`. Never reaches into other modules for internal state.
+**`maxwell_daemon.daemon`** — owns a task queue, a worker pool, and an `EventBus`. External callers go through `submit()` / `state()` / `events`. Never reaches into other modules for internal state.
 
-**`conductor.api`** — FastAPI app: `/health`, `/api/v1/{backends,tasks,cost}`, `/api/v1/events` (WebSocket), `/metrics` (Prometheus).
+**`maxwell_daemon.api`** — FastAPI app: `/health`, `/api/v1/{backends,tasks,cost}`, `/api/v1/events` (WebSocket), `/metrics` (Prometheus).
 
-**`conductor.events`** — bounded-queue fan-out pub/sub. Slow subscribers get dropped rather than blocking publishers (telemetry is best-effort; the ledger is the durable record).
+**`maxwell_daemon.events`** — bounded-queue fan-out pub/sub. Slow subscribers get dropped rather than blocking publishers (telemetry is best-effort; the ledger is the durable record).
 
-**`conductor.contracts`** — Design-by-Contract primitives: `require`, `ensure`, `@precondition`, `@postcondition`, `@invariant`. Enabled by default, toggle off in prod via `CONDUCTOR_CONTRACTS=off`.
+**`maxwell_daemon.contracts`** — Design-by-Contract primitives: `require`, `ensure`, `@precondition`, `@postcondition`, `@invariant`. Enabled by default, toggle off in prod via `MAXWELL_CONTRACTS=off`.
 
-**`conductor.metrics`** — single `record_request()` entrypoint for Prometheus counters and histograms. Label taxonomy lives in one place so dashboards stay consistent.
+**`maxwell_daemon.metrics`** — single `record_request()` entrypoint for Prometheus counters and histograms. Label taxonomy lives in one place so dashboards stay consistent.
 
-**`conductor.logging`** — structlog bridge. JSON in production (ship to Loki/ELK), pretty console on TTY.
+**`maxwell_daemon.logging`** — structlog bridge. JSON in production (ship to Loki/ELK), pretty console on TTY.
 
 ## Design principles
 

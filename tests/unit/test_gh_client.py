@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from conductor.gh import GhCliError, GitHubClient, Issue, PullRequest
+from maxwell_daemon.gh import GhCliError, GitHubClient, Issue, PullRequest
 
 
 @pytest.fixture

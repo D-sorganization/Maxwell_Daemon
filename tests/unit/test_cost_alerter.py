@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 
-from conductor.backends import TokenUsage
-from conductor.config import BudgetConfig
-from conductor.core import BudgetEnforcer, CostLedger, CostRecord
-from conductor.core.cost_alerter import (
+from maxwell_daemon.backends import TokenUsage
+from maxwell_daemon.config import BudgetConfig
+from maxwell_daemon.core import BudgetEnforcer, CostLedger, CostRecord
+from maxwell_daemon.core.cost_alerter import (
     AlertDispatch,
     AlertLevel,
     CostAlerter,
@@ -169,7 +169,7 @@ class TestSendAlert:
         assert captured[0]["url"] == "http://example/hook"
         body = captured[0]["json"]
         assert "text" in body
-        assert "CONDUCTOR" in body["text"]
+        assert "Maxwell-Daemon" in body["text"]
 
 
 class TestSlackPayload:

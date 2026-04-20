@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor.memory import Episode, EpisodicStore
+from maxwell_daemon.memory import Episode, EpisodicStore
 
 
 @pytest.fixture
@@ -103,7 +103,7 @@ class TestRender:
 
 class TestContractViolation:
     def test_rejects_empty_id(self, store: EpisodicStore) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError):
             store.record(_ep(id=""))

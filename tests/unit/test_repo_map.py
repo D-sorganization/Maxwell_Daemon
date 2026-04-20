@@ -14,7 +14,7 @@ from textwrap import dedent
 
 import pytest
 
-from conductor.gh.repo_map import RepoMap, RepoMapEntry, build_repo_map
+from maxwell_daemon.gh.repo_map import RepoMap, RepoMapEntry, build_repo_map
 
 
 def _w(root: Path, relpath: str, body: str) -> Path:
@@ -181,7 +181,7 @@ class TestPrompt:
 
 class TestPreconditions:
     def test_rejects_missing_workspace(self, tmp_path: Path) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="workspace"):
             build_repo_map(tmp_path / "nope")

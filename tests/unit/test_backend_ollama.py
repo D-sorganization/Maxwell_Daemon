@@ -9,8 +9,8 @@ import httpx
 import pytest
 import respx
 
-from conductor.backends import Message, MessageRole
-from conductor.backends.ollama import OllamaBackend
+from maxwell_daemon.backends import Message, MessageRole
+from maxwell_daemon.backends.ollama import OllamaBackend
 
 
 @pytest.fixture
@@ -68,7 +68,7 @@ class TestComplete:
         assert resp.finish_reason == "length"
 
     def test_network_error_raises_backend_unavailable(self, backend: OllamaBackend) -> None:
-        from conductor.backends.base import BackendUnavailableError
+        from maxwell_daemon.backends.base import BackendUnavailableError
 
         with respx.mock(base_url="http://fake:11434") as mock:
             mock.post("/api/chat").mock(side_effect=httpx.ConnectError("refused"))

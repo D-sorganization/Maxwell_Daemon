@@ -11,10 +11,10 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, TypeVar
 
-from conductor.backends import registry
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
-from conductor.daemon.runner import Task, TaskStatus
+from maxwell_daemon.backends import registry
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.daemon.runner import Task, TaskStatus
 
 T = TypeVar("T")
 
@@ -39,7 +39,7 @@ async def _wait_for_status(
 
 
 async def _with_daemon(
-    config: ConductorConfig,
+    config: MaxwellDaemonConfig,
     ledger_path: Path,
     *,
     worker_count: int,
@@ -55,7 +55,7 @@ async def _with_daemon(
 
 class TestLifecycle:
     def test_start_spawns_workers(
-        self, minimal_config: ConductorConfig, isolated_ledger_path: Path
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
         async def body(d: Daemon) -> None:
             assert len(d._workers) == 3
@@ -63,7 +63,7 @@ class TestLifecycle:
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=3, body=body))
 
     def test_stop_cancels_workers(
-        self, minimal_config: ConductorConfig, isolated_ledger_path: Path
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
         async def body() -> None:
             d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
@@ -74,7 +74,7 @@ class TestLifecycle:
         _run(body())
 
     def test_double_start_is_idempotent(
-        self, minimal_config: ConductorConfig, isolated_ledger_path: Path
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
         async def body(d: Daemon) -> None:
             await d.start(worker_count=5)
@@ -85,7 +85,7 @@ class TestLifecycle:
 
 class TestTaskExecution:
     def test_queued_task_transitions_to_completed(
-        self, minimal_config: ConductorConfig, isolated_ledger_path: Path
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
         async def body(d: Daemon) -> None:
             task = d.submit("hello")
@@ -109,7 +109,7 @@ class TestTaskExecution:
 
         registry._factories["exploding"] = ExplodingBackend
         try:
-            cfg = ConductorConfig.model_validate(
+            cfg = MaxwellDaemonConfig.model_validate(
                 {
                     "backends": {"bad": {"type": "exploding", "model": "x"}},
                     "agent": {"default_backend": "bad"},
@@ -127,7 +127,7 @@ class TestTaskExecution:
             registry._factories.pop("exploding", None)
 
     def test_multiple_workers_process_concurrently(
-        self, minimal_config: ConductorConfig, isolated_ledger_path: Path
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
         async def body(d: Daemon) -> None:
             tasks = [d.submit(f"t{i}") for i in range(8)]
@@ -138,7 +138,7 @@ class TestTaskExecution:
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=4, body=body))
 
     def test_cost_is_recorded_in_ledger(
-        self, minimal_config: ConductorConfig, isolated_ledger_path: Path
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
         async def body(d: Daemon) -> None:
             task = d.submit("hi")
@@ -150,7 +150,7 @@ class TestTaskExecution:
 
 class TestState:
     def test_state_exposes_backends(
-        self, minimal_config: ConductorConfig, isolated_ledger_path: Path
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
         async def body(d: Daemon) -> None:
             state = d.state()
@@ -161,9 +161,9 @@ class TestState:
     def test_from_config_path_roundtrip(
         self,
         tmp_path: Path,
-        minimal_config: ConductorConfig,
+        minimal_config: MaxwellDaemonConfig,
     ) -> None:
-        from conductor.config import save_config
+        from maxwell_daemon.config import save_config
 
         cfg_path = tmp_path / "c.yaml"
         save_config(minimal_config, cfg_path)

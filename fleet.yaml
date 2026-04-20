@@ -1,10 +1,10 @@
-# CONDUCTOR fleet manifest — single source of truth for which repos the fleet
+# Maxwell-Daemon fleet manifest — single source of truth for which repos the fleet
 # manages, their slot limits, budget caps, PR targets, and the labels we watch.
 #
 # Resolution order when no explicit path is given:
-#   1. $CONDUCTOR_FLEET_CONFIG
+#   1. $MAXWELL_FLEET_CONFIG
 #   2. ./fleet.yaml           ← this file, when checked out at the project root
-#   3. ~/.conductor/fleet.yaml
+#   3. ~/.maxwell-daemon/fleet.yaml
 #
 # Inheritance: any field left unset on a repo entry inherits the matching
 # `default_*` from the `fleet:` block.
@@ -20,7 +20,7 @@ fleet:
   default_pr_fallback_to_default: true
   default_watch_labels:
     - "gaai:deliver"
-    - "conductor:ready"
+    - "maxwell:ready"
 
 repos:
   - name: AffineDrift
@@ -46,11 +46,11 @@ repos:
     slots: 1
     budget_per_story: 0.30
     pr_target_branch: main              # no staging branch here
-    watch_labels: ["conductor:ready"]
+    watch_labels: ["maxwell:ready"]
 
-  - name: CONDUCTOR
+  - name: Maxwell-Daemon
     org: D-sorganization
     slots: 1
     budget_per_story: 0.75
-    pr_target_branch: main              # CONDUCTOR itself merges directly to main
-    watch_labels: ["conductor:ready"]
+    pr_target_branch: main              # Maxwell-Daemon itself merges directly to main
+    watch_labels: ["maxwell:ready"]

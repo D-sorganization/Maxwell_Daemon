@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from conductor.config import ConductorConfig
-from conductor.core.task_store import TaskStore
-from conductor.daemon import Daemon
-from conductor.daemon.runner import Task, TaskKind, TaskStatus
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.core.task_store import TaskStore
+from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
 
 
 @pytest.fixture
-def cfg() -> ConductorConfig:
-    return ConductorConfig.model_validate(
+def cfg() -> MaxwellDaemonConfig:
+    return MaxwellDaemonConfig.model_validate(
         {
             "backends": {"x": {"type": "ollama", "model": "y"}},
             "agent": {"default_backend": "x"},
@@ -24,7 +24,7 @@ def cfg() -> ConductorConfig:
 
 
 class TestRecovery:
-    def test_queued_task_requeued_on_start(self, cfg: ConductorConfig, tmp_path: Path) -> None:
+    def test_queued_task_requeued_on_start(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"
         # Simulate a previous daemon run by writing directly to the store.
         from datetime import datetime, timezone
@@ -47,7 +47,7 @@ class TestRecovery:
         assert d.get_task("previous-run") is not None
 
     def test_running_task_marked_failed_on_recovery(
-        self, cfg: ConductorConfig, tmp_path: Path
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
     ) -> None:
         from datetime import datetime, timezone
 
@@ -74,7 +74,7 @@ class TestRecovery:
         assert loaded.error is not None
         assert "crashed" in loaded.error.lower()
 
-    def test_submit_persists_immediately(self, cfg: ConductorConfig, tmp_path: Path) -> None:
+    def test_submit_persists_immediately(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"
         d = Daemon(cfg, ledger_path=tmp_path / "l.db", task_store_path=task_store_path)
         task = d.submit("hello")
@@ -82,7 +82,7 @@ class TestRecovery:
         store = TaskStore(task_store_path)
         assert store.get(task.id) is not None
 
-    def test_cancel_persists_status(self, cfg: ConductorConfig, tmp_path: Path) -> None:
+    def test_cancel_persists_status(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"
         d = Daemon(cfg, ledger_path=tmp_path / "l.db", task_store_path=task_store_path)
         task = d.submit("hi")
@@ -93,13 +93,13 @@ class TestRecovery:
 
 
 class TestExecutionPersistence:
-    def test_completed_task_persists(self, cfg: ConductorConfig, tmp_path: Path) -> None:
-        from conductor.backends import registry
+    def test_completed_task_persists(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
+        from maxwell_daemon.backends import registry
         from tests.conftest import RecordingBackend
 
         registry._factories["rec"] = RecordingBackend
         try:
-            cfg2 = ConductorConfig.model_validate(
+            cfg2 = MaxwellDaemonConfig.model_validate(
                 {
                     "backends": {"x": {"type": "rec", "model": "y"}},
                     "agent": {"default_backend": "x"},

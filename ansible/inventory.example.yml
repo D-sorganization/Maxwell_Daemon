@@ -1,26 +1,26 @@
-# Example Ansible inventory for a Conductor fleet.
+# Example Ansible inventory for a Maxwell-Daemon fleet.
 # Copy to inventory.yml and edit before running playbooks.
 
 all:
   vars:
-    conductor_version: "0.1.0"
-    conductor_user: conductor
-    conductor_home: /opt/conductor
-    conductor_default_backend: claude
+    maxwell_daemon_version: "0.1.0"
+    maxwell_daemon_user: maxwell-daemon
+    maxwell_daemon_home: /opt/maxwell-daemon
+    maxwell_daemon_default_backend: claude
 
   children:
-    conductor_fleet:
+    maxwell_daemon_fleet:
       hosts:
         worker-1:
           ansible_host: 192.168.1.10
-          conductor_capacity: 4
-          conductor_tags: [production]
+          maxwell_daemon_capacity: 4
+          maxwell_daemon_tags: [production]
         worker-2:
           ansible_host: 192.168.1.11
-          conductor_capacity: 2
-          conductor_tags: [production]
+          maxwell_daemon_capacity: 2
+          maxwell_daemon_tags: [production]
         dev-laptop:
           ansible_host: 127.0.0.1
           ansible_connection: local
-          conductor_capacity: 2
-          conductor_tags: [development]
+          maxwell_daemon_capacity: 2
+          maxwell_daemon_tags: [development]

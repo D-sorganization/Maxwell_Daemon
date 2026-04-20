@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.backends.condensation import Condenser
+from maxwell_daemon.backends.condensation import Condenser
 
 
 async def _stub_summarizer(messages: list[dict[str, object]]) -> str:
@@ -146,13 +146,13 @@ class TestCondense:
 
 class TestPreconditions:
     def test_threshold_must_be_positive(self) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="threshold"):
             Condenser(threshold_tokens=0, keep_recent=2, summarizer=_stub_summarizer)
 
     def test_keep_recent_must_be_positive(self) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="keep_recent"):
             Condenser(threshold_tokens=1000, keep_recent=0, summarizer=_stub_summarizer)

@@ -53,7 +53,7 @@ def _changed_python_files(repo_root: Path, base_ref: str) -> list[Path]:
 
 
 def _all_python_files(repo_root: Path) -> list[Path]:
-    return [p for p in (repo_root / "conductor").rglob("*.py") if p.is_file()]
+    return [p for p in (repo_root / "maxwell-daemon").rglob("*.py") if p.is_file()]
 
 
 def _check(paths: list[Path], repo_root: Path, config: dict) -> list[str]:

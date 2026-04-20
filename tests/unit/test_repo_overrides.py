@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from conductor.config import ConductorConfig, RepoConfig
-from conductor.core.repo_overrides import RepoOverrides, resolve_overrides
+from maxwell_daemon.config import MaxwellDaemonConfig, RepoConfig
+from maxwell_daemon.core.repo_overrides import RepoOverrides, resolve_overrides
 
 
-def _config(*repo_kwargs: dict) -> ConductorConfig:
-    return ConductorConfig.model_validate(
+def _config(*repo_kwargs: dict) -> MaxwellDaemonConfig:
+    return MaxwellDaemonConfig.model_validate(
         {
             "backends": {"c": {"type": "ollama", "model": "m"}},
             "agent": {"default_backend": "c"},

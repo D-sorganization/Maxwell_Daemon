@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from conductor.backends import TokenUsage
-from conductor.config import BudgetConfig
-from conductor.core import BudgetEnforcer, CostLedger, CostRecord
+from maxwell_daemon.backends import TokenUsage
+from maxwell_daemon.config import BudgetConfig
+from maxwell_daemon.core import BudgetEnforcer, CostLedger, CostRecord
 
 
 @pytest.fixture

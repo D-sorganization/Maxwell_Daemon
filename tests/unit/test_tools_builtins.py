@@ -1,4 +1,4 @@
-"""Unit tests for conductor.tools.builtins — the sandboxed filesystem tools.
+"""Unit tests for maxwell_daemon.tools.builtins — the sandboxed filesystem tools.
 
 Every tool must:
  - refuse paths that escape the workspace (``..`` traversal, absolute paths outside root)
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor.tools.builtins import (
+from maxwell_daemon.tools.builtins import (
     SandboxViolationError,
     build_default_registry,
     make_edit_file,

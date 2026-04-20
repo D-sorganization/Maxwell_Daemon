@@ -1,28 +1,28 @@
-# CONDUCTOR
+# Maxwell-Daemon
 
 > **Multi-backend autonomous code agent orchestrator** — use any LLM, from any provider, across any fleet of machines.
 
-CONDUCTOR is an open-source orchestration platform for autonomous coding agents. It lets one person (or a small team) run a fleet of agents that discover, implement, and deliver work across many repositories — and it's **backend-agnostic** so you can mix expensive frontier models with cheap local ones on the same task queue.
+Maxwell-Daemon is an open-source orchestration platform for autonomous coding agents. It lets one person (or a small team) run a fleet of agents that discover, implement, and deliver work across many repositories — and it's **backend-agnostic** so you can mix expensive frontier models with cheap local ones on the same task queue.
 
-**Status:** 🚧 Alpha — under active development. See the [roadmap](https://github.com/D-sorganization/CONDUCTOR/issues).
+**Status:** 🚧 Alpha — under active development. See the [roadmap](https://github.com/D-sorganization/Maxwell-Daemon/issues).
 
-## Why CONDUCTOR?
+## Why Maxwell-Daemon??
 
-The existing autonomous-agent tools are locked to one vendor and one machine. CONDUCTOR solves both:
+The existing autonomous-agent tools are locked to one vendor and one machine. Maxwell-Daemon solves both:
 
 - **Resource-agnostic.** Claude, GPT-4o, Gemini, Llama via Ollama, any OpenAI-compatible endpoint — all through one interface. Your Claude subscription, your OpenAI key, and your local RTX 4090 can all serve the same job queue.
 - **Built for the little guy.** Route the cheap tasks to local models, the hard ones to Claude Opus, and stop burning tokens on work a 7B model could handle.
 - **Fleet-native.** Run on one laptop, five boxes in your basement, or a cloud cluster. Same config, same CLI, same dashboard.
-- **Cost-aware by default.** Every request is metered, every repo has a budget, every backend has a price. When you hit 90% of your monthly cap, CONDUCTOR knows.
+- **Cost-aware by default.** Every request is metered, every repo has a budget, every backend has a price. When you hit 90% of your monthly cap, Maxwell-Daemon knows.
 
 ## Quick Start
 
 ```bash
 pip install -e ".[dev]"
-conductor init
+maxwell-daemon init
 export ANTHROPIC_API_KEY=sk-ant-...
-conductor health
-conductor ask "Explain what this repo does"
+maxwell-daemon health
+maxwell-daemon ask "Explain what this repo does"
 ```
 
 ## Architecture
@@ -36,7 +36,7 @@ conductor ask "Explain what this repo does"
          └─────────────────────┴─────────────────────┘
                                │
                     ┌──────────▼──────────┐
-                    │   Conductor Daemon  │
+                    │   Maxwell-Daemon daemon  │
                     │  - Task queue       │
                     │  - Backend router   │
                     │  - Cost ledger      │
@@ -52,7 +52,7 @@ conductor ask "Explain what this repo does"
 
 ## Configuration
 
-`~/.config/conductor/conductor.yaml`:
+`~/.config/maxwell-daemon/maxwell-daemon.yaml`:
 
 ```yaml
 version: "1"
@@ -95,23 +95,23 @@ api:
   enabled: true
   host: 127.0.0.1
   port: 8080
-  auth_token: ${CONDUCTOR_API_TOKEN}
+  auth_token: ${MAXWELL_API_TOKEN}
 ```
 
 ## CLI
 
 ```bash
-conductor init            # create starter config
-conductor status          # show configured backends and repos
-conductor backends        # list registered adapters
-conductor health          # probe every backend
-conductor ask "hello"     # one-shot prompt (useful for smoke tests)
-conductor-daemon          # run the daemon (systemd entrypoint)
+maxwell-daemon init            # create starter config
+maxwell-daemon status          # show configured backends and repos
+maxwell-daemon backends        # list registered adapters
+maxwell-daemon health          # probe every backend
+maxwell-daemon ask "hello"     # one-shot prompt (useful for smoke tests)
+maxwell-daemon-runner          # run the daemon (systemd entrypoint)
 ```
 
 ## Roadmap
 
-See the [full issue roadmap](https://github.com/D-sorganization/CONDUCTOR/issues). At a glance:
+See the [full issue roadmap](https://github.com/D-sorganization/Maxwell-Daemon/issues). At a glance:
 
 | Phase  | Focus                           | Status |
 |--------|---------------------------------|--------|
@@ -128,7 +128,7 @@ See the [full issue roadmap](https://github.com/D-sorganization/CONDUCTOR/issues
 
 ## Contributing
 
-CONDUCTOR is MIT-licensed and contributor-friendly. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Maxwell-Daemon is MIT-licensed and contributor-friendly. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

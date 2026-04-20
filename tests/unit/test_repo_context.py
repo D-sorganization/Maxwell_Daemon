@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor.gh.context import ContextBuilder, RepoContext, detect_language
+from maxwell_daemon.gh.context import ContextBuilder, RepoContext, detect_language
 
 
 class TestLanguageDetection:
@@ -156,7 +156,7 @@ class TestPromptRendering:
 
 class TestContractViolation:
     def test_build_rejects_nonexistent_path(self, tmp_path: Path) -> None:
-        from conductor.contracts import PreconditionError
+        from maxwell_daemon.contracts import PreconditionError
 
         builder = ContextBuilder()
         with pytest.raises(PreconditionError):

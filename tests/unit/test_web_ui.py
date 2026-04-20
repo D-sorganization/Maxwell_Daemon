@@ -9,13 +9,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from conductor.api import create_app
-from conductor.config import ConductorConfig
-from conductor.daemon import Daemon
+from maxwell_daemon.api import create_app
+from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
-def client(minimal_config: ConductorConfig, isolated_ledger_path: Path) -> Iterator[TestClient]:
+def client(minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path) -> Iterator[TestClient]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
@@ -32,7 +32,7 @@ class TestUIRoutes:
         r = client.get("/ui/")
         assert r.status_code == 200
         assert r.headers["content-type"].startswith("text/html")
-        assert "CONDUCTOR" in r.text
+        assert "Maxwell-Daemon" in r.text
         assert "<title>" in r.text
 
     def test_js_served(self, client: TestClient) -> None:

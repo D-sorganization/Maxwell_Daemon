@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from conductor.memory import (
+from maxwell_daemon.memory import (
     Episode,
     EpisodicStore,
     MemoryManager,

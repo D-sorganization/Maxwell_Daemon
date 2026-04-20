@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from conductor.backends import Message, MessageRole
-from conductor.backends.base import BackendUnavailableError
-from conductor.backends.claude_code import ClaudeCodeCLIBackend
+from maxwell_daemon.backends import Message, MessageRole
+from maxwell_daemon.backends.base import BackendUnavailableError
+from maxwell_daemon.backends.claude_code import ClaudeCodeCLIBackend
 
 
 class _Runner:
@@ -118,6 +118,6 @@ class TestCapabilities:
 
 class TestRegistry:
     def test_registered(self) -> None:
-        from conductor.backends.registry import registry
+        from maxwell_daemon.backends.registry import registry
 
         assert "claude-code-cli" in registry.available()

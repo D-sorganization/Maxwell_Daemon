@@ -35,7 +35,7 @@ def _check(paths: list[Path]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("paths", nargs="*", type=Path, default=[Path("conductor")])
+    parser.add_argument("paths", nargs="*", type=Path, default=[Path("maxwell-daemon")])
     args = parser.parse_args()
 
     files: list[Path] = []

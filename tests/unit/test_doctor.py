@@ -1,4 +1,4 @@
-"""`conductor doctor` — preflight health diagnostic.
+"""`maxwell-daemon doctor` — preflight health diagnostic.
 
 Checks the kind of things that fail silently at 3am. Each check returns a
 CheckResult; the overall exit code is non-zero if any are red.
@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from conductor.cli.main import app
-from conductor.core.doctor import (
+from maxwell_daemon.cli.main import app
+from maxwell_daemon.core.doctor import (
     CheckResult,
     Severity,
     check_backends_healthy,
@@ -164,7 +164,7 @@ class TestDoctorCommand:
         )
 
         # Force gh-auth and backends-health to pass so the CLI exits 0.
-        from conductor.core import doctor
+        from maxwell_daemon.core import doctor
 
         async def _ok_gh(runner: object = None) -> CheckResult:
             return CheckResult("github cli", Severity.OK, "ok")

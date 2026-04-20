@@ -1,6 +1,6 @@
 # Configuration reference
 
-`~/.config/conductor/conductor.yaml` (override with `CONDUCTOR_CONFIG=...`).
+`~/.config/maxwell-daemon/maxwell-daemon.yaml` (override with `MAXWELL_CONFIG=...`).
 
 All `${VAR}` and `${VAR:-default}` references are expanded at load time against the environment.
 
@@ -79,7 +79,7 @@ api:
   enabled: true
   host: 127.0.0.1
   port: 8080
-  auth_token: ${CONDUCTOR_API_TOKEN}
+  auth_token: ${MAXWELL_API_TOKEN}
 
 budget:
   monthly_limit_usd: 200.0

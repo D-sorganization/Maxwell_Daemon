@@ -1,24 +1,24 @@
 # Autonomous workflow
 
-CONDUCTOR can create GitHub issues, queue them for the daemon, and have the daemon draft pull requests against them — so you can keep typing new issues while the agent grinds through the backlog in the background.
+Maxwell-Daemon can create GitHub issues, queue them for the daemon, and have the daemon draft pull requests against them — so you can keep typing new issues while the agent grinds through the backlog in the background.
 
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (`gh auth login`).
-- A running daemon (`conductor serve`).
+- A running daemon (`maxwell-daemon serve`).
 - At least one configured LLM backend with a working API key.
 
 ## Create an issue
 
 ```bash
-conductor issue new owner/repo "Fix the parser" \
+maxwell-daemon issue new owner/repo "Fix the parser" \
     --body "Reproduce: run X, get Y, expected Z."
 ```
 
 Add labels:
 
 ```bash
-conductor issue new owner/repo "Title" -b "body" -l bug -l p1
+maxwell-daemon issue new owner/repo "Title" -b "body" -l bug -l p1
 ```
 
 ## Dispatch the daemon against an issue
@@ -26,19 +26,19 @@ conductor issue new owner/repo "Title" -b "body" -l bug -l p1
 Plan mode — safe, no code changes, opens a draft PR seeded with the agent's plan:
 
 ```bash
-conductor issue dispatch owner/repo 42 --mode plan
+maxwell-daemon issue dispatch owner/repo 42 --mode plan
 ```
 
 Implement mode — agent produces a unified diff, workspace applies it, pushes a branch, and opens a draft PR for human review:
 
 ```bash
-conductor issue dispatch owner/repo 42 --mode implement
+maxwell-daemon issue dispatch owner/repo 42 --mode implement
 ```
 
 ## One-shot: create and dispatch
 
 ```bash
-conductor issue new owner/repo "Fix it" --body "..." --dispatch --mode plan
+maxwell-daemon issue new owner/repo "Fix it" --body "..." --dispatch --mode plan
 ```
 
 ## Keep adding while the daemon works
@@ -67,7 +67,7 @@ curl -s localhost:8080/api/v1/tasks | jq '.[-5:]'
 | `plan`      | No           | Scoping new work, triaging a pile of issues, or testing the agent on a new backend |
 | `implement` | Yes (draft)  | Well-scoped bugs with clear acceptance criteria              |
 
-PRs are always opened as **drafts**. A human un-drafts them after review — CONDUCTOR never auto-merges.
+PRs are always opened as **drafts**. A human un-drafts them after review — Maxwell-Daemon never auto-merges.
 
 ## REST equivalents
 
