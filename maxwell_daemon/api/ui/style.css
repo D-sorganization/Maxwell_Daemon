@@ -64,11 +64,51 @@ header h1 {
 .pill.warn  { color: var(--warn); }
 .pill.err   { color: var(--err); }
 
+/* ---- tab navigation ------------------------------------------------- */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  overflow-x: auto;
+}
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 10px 16px;
+  transition: color 0.1s, border-color 0.1s;
+}
+.tab:hover { background: none; color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ---- views ---------------------------------------------------------- */
 main {
-  display: grid;
+  display: none;
+  padding: 16px 24px;
+}
+main.active { display: grid; }
+
+#view-tasks {
   grid-template-columns: 2fr 1fr;
   gap: 16px;
-  padding: 16px 24px;
+}
+
+#view-tasks #detail-card:not([hidden]) ~ #backends-card {
+  grid-row: 2 / 3;
+}
+
+.full-width { grid-column: 1 / -1; }
+
+main:not(#view-tasks).active {
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
 
 .card {
@@ -228,3 +268,111 @@ kbd {
   font-size: 11px;
 }
 .hint { color: var(--muted); font-size: 11px; }
+
+/* ---- fleet view ----------------------------------------------------- */
+.fleet-meta {
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---- cost view ------------------------------------------------------ */
+.cost-summary-detail {
+  display: flex;
+  gap: 24px;
+  padding: 16px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.cost-stat { text-align: center; }
+.cost-stat .value {
+  display: block;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: ui-monospace, Menlo, monospace;
+}
+.cost-stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.section-label {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  background: var(--panel-alt);
+}
+
+/* ---- history timeline ----------------------------------------------- */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.timeline li {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.timeline li:hover { background: var(--panel-alt); cursor: pointer; }
+.timeline .ts { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+.timeline .title { word-break: break-all; }
+.timeline .cost { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 12px; text-align: right; }
+
+/* ---- monitor / debug log -------------------------------------------- */
+.monitor-log {
+  margin: 0;
+  padding: 14px;
+  max-height: 60vh;
+  overflow: auto;
+  background: #000;
+  color: #eee;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.debug-hint { margin: 0; padding: 10px 14px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+#monitor-filter {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font: inherit;
+  min-width: 160px;
+}
+
+/* ---- repos grid ----------------------------------------------------- */
+.repos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+.repo-card {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px;
+}
+.repo-card h3 { margin: 0 0 6px; font-size: 14px; }
+.repo-card h3 a { color: var(--accent); text-decoration: none; }
+.repo-card h3 a:hover { text-decoration: underline; }
+.repo-meta { font-size: 11px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.repo-meta span { white-space: nowrap; }
+.repo-active { color: var(--ok); font-weight: 600; }
+
+/* ---- responsive ------------------------------------------------------- */
+@media (max-width: 768px) {
+  #view-tasks { grid-template-columns: 1fr; }
+  .cost-summary-detail { flex-wrap: wrap; }
+  .timeline li { grid-template-columns: 1fr auto; }
+  .timeline .ts { grid-column: 1 / -1; }
+}

@@ -416,6 +416,73 @@ def create_app(
             for i in issues
         ]
 
+    @app.get("/api/v1/fleet", dependencies=[Depends(auth)])
+    async def fleet_overview() -> dict[str, Any]:
+        """Return fleet manifest data merged with live task counts per repo."""
+        import os
+
+        import yaml
+
+        candidates = [
+            os.environ.get("MAXWELL_FLEET_CONFIG") or "",
+            "./fleet.yaml",
+            str(_Path.home() / ".maxwell-daemon" / "fleet.yaml"),
+        ]
+        raw: dict[str, Any] = {}
+        for path in candidates:
+            if path:
+                p = _Path(path)
+                if p.is_file():
+                    with p.open() as fh:
+                        raw = yaml.safe_load(fh) or {}
+                    break
+
+        fleet_section: dict[str, Any] = raw.get("fleet", {})
+        repos_raw: list[dict[str, Any]] = raw.get("repos", [])
+
+        default_slots: int = fleet_section.get("default_slots", 2)
+        default_budget: float = fleet_section.get("default_budget_per_story", 0.50)
+        default_branch: str = fleet_section.get("default_pr_target_branch", "staging")
+        default_labels: list[str] = fleet_section.get("default_watch_labels", [])
+
+        tasks = list(daemon.state().tasks.values())
+        active_by_repo: dict[str, int] = {}
+        cost_by_repo: dict[str, float] = {}
+        for t in tasks:
+            repo_name = (t.issue_repo or "").split("/")[-1] or t.repo or ""
+            if not repo_name:
+                continue
+            if t.status.value in ("queued", "running"):
+                active_by_repo[repo_name] = active_by_repo.get(repo_name, 0) + 1
+            cost_by_repo[repo_name] = cost_by_repo.get(repo_name, 0.0) + t.cost_usd
+
+        repos: list[dict[str, Any]] = []
+        for r in repos_raw:
+            name: str = r.get("name", "")
+            org: str = r.get("org", "")
+            repos.append(
+                {
+                    "name": name,
+                    "org": org,
+                    "github_url": f"https://github.com/{org}/{name}" if org and name else None,
+                    "slots": r.get("slots", default_slots),
+                    "budget_per_story": r.get("budget_per_story", default_budget),
+                    "pr_target_branch": r.get("pr_target_branch", default_branch),
+                    "watch_labels": r.get("watch_labels", default_labels),
+                    "active_tasks": active_by_repo.get(name, 0),
+                    "total_cost_usd": round(cost_by_repo.get(name, 0.0), 6),
+                }
+            )
+
+        return {
+            "fleet": {
+                "name": fleet_section.get("name", ""),
+                "auto_promote_staging": fleet_section.get("auto_promote_staging", False),
+                "discovery_interval_seconds": fleet_section.get("discovery_interval_seconds", 300),
+            },
+            "repos": repos,
+        }
+
     @app.get("/api/v1/cost", dependencies=[Depends(auth)])
     async def cost_summary() -> CostSummary:
         now = datetime.now(timezone.utc)

@@ -16,7 +16,18 @@
     </div>
   </header>
 
-  <main>
+  <nav class="tab-bar" role="tablist">
+    <button class="tab active" data-view="tasks" role="tab" aria-selected="true">Tasks</button>
+    <button class="tab" data-view="fleet" role="tab" aria-selected="false">Fleet</button>
+    <button class="tab" data-view="cost" role="tab" aria-selected="false">Cost</button>
+    <button class="tab" data-view="history" role="tab" aria-selected="false">History</button>
+    <button class="tab" data-view="monitor" role="tab" aria-selected="false">Monitor</button>
+    <button class="tab" data-view="repos" role="tab" aria-selected="false">Repos</button>
+    <button class="tab" data-view="debug" role="tab" aria-selected="false">Debug</button>
+  </nav>
+
+  <!-- ── Tasks view ─────────────────────────────────────────────────── -->
+  <main id="view-tasks" class="view active">
     <section class="card" id="tasks-card">
       <div class="card-head">
         <h2>Tasks</h2>
@@ -63,6 +74,119 @@
         <h2>Backends</h2>
       </div>
       <ul id="backends-list"></ul>
+    </section>
+  </main>
+
+  <!-- ── Fleet view ─────────────────────────────────────────────────── -->
+  <main id="view-fleet" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Fleet Overview</h2>
+        <button id="fleet-refresh-btn">refresh</button>
+      </div>
+      <div id="fleet-meta" class="fleet-meta"></div>
+      <table id="fleet-table">
+        <thead>
+          <tr>
+            <th>Repository</th>
+            <th>Org</th>
+            <th>Slots</th>
+            <th>Active</th>
+            <th>Budget/Story</th>
+            <th>PR Target</th>
+            <th>Total Cost</th>
+            <th>Labels</th>
+          </tr>
+        </thead>
+        <tbody id="fleet-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- ── Cost analytics view ────────────────────────────────────────── -->
+  <main id="view-cost" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Cost Analytics</h2>
+        <button id="cost-refresh-btn">refresh</button>
+      </div>
+      <div id="cost-summary-detail" class="cost-summary-detail"></div>
+      <h3 class="section-label">Cost by Backend</h3>
+      <table id="cost-backend-table">
+        <thead>
+          <tr><th>Backend</th><th>Month-to-Date</th></tr>
+        </thead>
+        <tbody id="cost-backend-body"></tbody>
+      </table>
+      <h3 class="section-label">Top Tasks by Cost</h3>
+      <table id="cost-task-table">
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>Target</th>
+            <th>Backend</th>
+            <th>Status</th>
+            <th>Cost</th>
+          </tr>
+        </thead>
+        <tbody id="cost-task-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- ── History timeline view ──────────────────────────────────────── -->
+  <main id="view-history" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>History Timeline</h2>
+        <div class="filters">
+          <select id="history-filter" aria-label="Filter history">
+            <option value="">all finished</option>
+            <option value="completed">completed</option>
+            <option value="failed">failed</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+          <button id="history-refresh-btn">refresh</button>
+        </div>
+      </div>
+      <ol id="history-list" class="timeline"></ol>
+    </section>
+  </main>
+
+  <!-- ── Agent monitor view ─────────────────────────────────────────── -->
+  <main id="view-monitor" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Agent Monitor</h2>
+        <div class="filters">
+          <input id="monitor-filter" type="text" placeholder="filter events…" aria-label="Filter events">
+          <button id="monitor-clear-btn">clear</button>
+        </div>
+      </div>
+      <pre id="monitor-log" class="monitor-log">(waiting for events…)</pre>
+    </section>
+  </main>
+
+  <!-- ── Repository dashboard view ──────────────────────────────────── -->
+  <main id="view-repos" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Repository Dashboard</h2>
+        <button id="repos-refresh-btn">refresh</button>
+      </div>
+      <div id="repos-grid" class="repos-grid"></div>
+    </section>
+  </main>
+
+  <!-- ── Debug inspector view ───────────────────────────────────────── -->
+  <main id="view-debug" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Debug Inspector</h2>
+        <button id="debug-clear-btn">clear</button>
+      </div>
+      <p class="debug-hint">Last 200 WebSocket events received in this session.</p>
+      <pre id="debug-log" class="monitor-log">(no events yet)</pre>
     </section>
   </main>
 
