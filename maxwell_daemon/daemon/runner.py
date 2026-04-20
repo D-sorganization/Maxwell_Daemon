@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import logging
 import signal
+import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -113,6 +114,13 @@ class Daemon:
             episodes=EpisodicStore(default_memory),
         )
         self._tasks: dict[str, Task] = {}
+        # ``_tasks`` is touched from async workers *and* from synchronous
+        # callers like :meth:`submit` (typically a FastAPI request thread).
+        # A plain :class:`threading.Lock` is the right primitive: writers are
+        # sync, readers (``state()``) are sync, and the lock acquisition is
+        # uncontended in the common case. We deliberately do *not* use
+        # :class:`asyncio.Lock` here — ``submit`` is not async.
+        self._tasks_lock = threading.Lock()
         self._queue: asyncio.Queue[Task] = asyncio.Queue()
         self._workers: list[asyncio.Task[None]] = []
         self._bg_tasks: set[asyncio.Task[None]] = set()
@@ -144,9 +152,10 @@ class Daemon:
     def recover(self) -> list[Task]:
         """Re-queue tasks from a prior daemon run. Called automatically from start()."""
         recovered = self._task_store.recover_pending()
-        for task in recovered:
-            self._tasks[task.id] = task
-            self._queue.put_nowait(task)
+        with self._tasks_lock:
+            for task in recovered:
+                self._tasks[task.id] = task
+                self._queue.put_nowait(task)
         if recovered:
             log.info("recovered %d pending task(s) from previous run", len(recovered))
         return recovered
@@ -192,7 +201,8 @@ class Daemon:
             backend=backend,
             model=model,
         )
-        self._tasks[task.id] = task
+        with self._tasks_lock:
+            self._tasks[task.id] = task
         self._task_store.save(task)
         self._queue.put_nowait(task)
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
@@ -231,7 +241,8 @@ class Daemon:
             issue_number=issue_number,
             issue_mode=mode,
         )
-        self._tasks[task.id] = task
+        with self._tasks_lock:
+            self._tasks[task.id] = task
         self._task_store.save(task)
         self._queue.put_nowait(task)
         with contextlib.suppress(RuntimeError):
@@ -296,11 +307,13 @@ class Daemon:
         self._issue_executor_factory = executor_factory
 
     def get_task(self, task_id: str) -> Task | None:
-        return self._tasks.get(task_id)
+        with self._tasks_lock:
+            return self._tasks.get(task_id)
 
     def cancel_task(self, task_id: str) -> Task:
         """Cancel a queued task. Raises ValueError if not found or not cancellable."""
-        task = self._tasks.get(task_id)
+        with self._tasks_lock:
+            task = self._tasks.get(task_id)
         if task is None:
             raise KeyError(task_id)
         if task.status is not TaskStatus.QUEUED:
@@ -324,10 +337,12 @@ class Daemon:
         return task
 
     def state(self) -> DaemonState:
+        with self._tasks_lock:
+            tasks_snapshot = dict(self._tasks)
         return DaemonState(
             version="0.1.0",
             config_path=None,
-            tasks=dict(self._tasks),
+            tasks=tasks_snapshot,
             started_at=self._started_at,
             backends_available=self._router.available_backends(),
         )
@@ -347,8 +362,13 @@ class Daemon:
     async def _execute(self, task: Task) -> None:
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now(timezone.utc)
-        with contextlib.suppress(Exception):
+        try:
             self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
+        except Exception:
+            # Don't silently swallow — a failing task_store is an operational
+            # signal operators need to see in Loki/Grafana. The task itself
+            # still proceeds (status lives on ``task`` in memory).
+            log.exception("task store write failed for task=%s", task.id)
         await self._events.publish(
             Event(kind=EventKind.TASK_STARTED, payload={"id": task.id, "prompt": task.prompt})
         )
@@ -427,8 +447,10 @@ class Daemon:
             # Persist the final task state so restarts see exactly what the
             # daemon saw. Save rather than update_status because status may
             # have flipped more than once through the try/except chain.
-            with contextlib.suppress(Exception):
+            try:
                 self._task_store.save(task)
+            except Exception:
+                log.exception("task store write failed for task=%s", task.id)
 
     async def _execute_issue(self, task: Task, decision: Any) -> None:
         """Run the issue → PR flow. Called with status already RUNNING."""
