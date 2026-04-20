@@ -13,9 +13,10 @@ from __future__ import annotations
 import inspect
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
 
 __all__ = [
+    "HookRunnerProtocol",
     "ToolHandler",
     "ToolParam",
     "ToolRegistry",
@@ -24,6 +25,36 @@ __all__ = [
     "ToolSpec",
     "mcp_tool",
 ]
+
+
+class _PreToolOutcome(Protocol):
+    """What a pre_tool hook runner returns — structural, no import cycle."""
+
+    blocked: bool
+    detail: str
+    failing_command: str
+
+
+class _PostToolOutcome(Protocol):
+    """What a post_tool hook runner returns — structural, no import cycle."""
+
+    errored: bool
+    detail: str
+    failing_command: str
+
+
+class HookRunnerProtocol(Protocol):
+    """The structural contract ToolRegistry expects for hook integration.
+
+    ``maxwell_daemon.hooks.HookRunner`` satisfies this protocol; tests can
+    substitute any object with the same method shape.
+    """
+
+    async def run_pre_tool(self, tool_name: str, tool_input: dict[str, Any]) -> _PreToolOutcome: ...
+    async def run_post_tool(
+        self, tool_name: str, tool_input: dict[str, Any], *, tool_output: str
+    ) -> _PostToolOutcome: ...
+
 
 #: JSON-schema primitive types we model in tool params. Complex structures are
 #: represented as ``"object"`` or ``"array"``; a tool that needs nested validation
@@ -108,10 +139,17 @@ class ToolSpec:
 
 
 class ToolRegistry:
-    """Holds ``ToolSpec``s. Emits schemas. Dispatches calls."""
+    """Holds ``ToolSpec``s. Emits schemas. Dispatches calls.
 
-    def __init__(self) -> None:
+    When a ``hook_runner`` is supplied, every :meth:`invoke` fires
+    ``pre_tool`` (which can block the call) and ``post_tool`` (which can
+    turn a successful tool call into an agent-visible error). Default
+    ``hook_runner=None`` preserves byte-for-byte pre-existing behaviour.
+    """
+
+    def __init__(self, *, hook_runner: HookRunnerProtocol | None = None) -> None:
         self._specs: dict[str, ToolSpec] = {}
+        self._hook_runner = hook_runner
 
     def register(self, spec: ToolSpec) -> None:
         if spec.name in self._specs:
@@ -140,15 +178,49 @@ class ToolRegistry:
         return [s.to_openai() for s in self._specs.values()]
 
     async def invoke(self, name: str, arguments: dict[str, Any]) -> ToolResult:
-        """Call the handler for ``name`` with ``arguments``. Errors become ToolResult(is_error=True)."""
+        """Call the handler for ``name`` with ``arguments``.
+
+        Hook phases (only when ``hook_runner`` was passed at construction):
+
+          1. ``pre_tool`` — if any pre-tool hook blocks, we return an error
+             ``ToolResult`` without calling the handler.
+          2. handler — errors surface as ``ToolResult(is_error=True)``.
+          3. ``post_tool`` — only fires when the handler succeeded. Hook
+             errors turn the success into an agent-visible error while
+             preserving the original output for the agent's reference.
+        """
         spec = self.get(name)  # raises ToolRegistryError on unknown — caller bug, not model bug
+
+        if self._hook_runner is not None:
+            pre = await self._hook_runner.run_pre_tool(name, arguments)
+            if pre.blocked:
+                return ToolResult(
+                    content=(
+                        f"pre_tool hook refused the call: {pre.failing_command}\n{pre.detail}"
+                    ),
+                    is_error=True,
+                )
+
         try:
             result = spec.handler(**arguments)
             if inspect.isawaitable(result):
                 result = await result
-            return ToolResult(content=_stringify(result), is_error=False)
+            content = _stringify(result)
         except Exception as exc:
             return ToolResult(content=f"{type(exc).__name__}: {exc}", is_error=True)
+
+        if self._hook_runner is not None:
+            post = await self._hook_runner.run_post_tool(name, arguments, tool_output=content)
+            if post.errored:
+                return ToolResult(
+                    content=(
+                        f"{content}\n\n"
+                        f"post_tool hook error ({post.failing_command}):\n{post.detail}"
+                    ),
+                    is_error=True,
+                )
+
+        return ToolResult(content=content, is_error=False)
 
 
 def mcp_tool(

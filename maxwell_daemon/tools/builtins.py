@@ -21,6 +21,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from maxwell_daemon.tools.mcp import (
+    HookRunnerProtocol,
     ToolParam,
     ToolRegistry,
     mcp_tool,
@@ -278,13 +279,22 @@ def make_grep_files(root: Path) -> Callable[..., str]:
 
 
 # ── default registry ────────────────────────────────────────────────────────
-def build_default_registry(root: Path, *, bash_runner: BashRunner | None = None) -> ToolRegistry:
+def build_default_registry(
+    root: Path,
+    *,
+    bash_runner: BashRunner | None = None,
+    hook_runner: HookRunnerProtocol | None = None,
+) -> ToolRegistry:
     """Return a ``ToolRegistry`` with all six built-in tools bound to ``root``.
+
+    When ``hook_runner`` is supplied, every tool invocation passes through
+    ``pre_tool`` and ``post_tool`` gates — deterministic, LLM-bypass-proof
+    code-standards enforcement (see :mod:`maxwell_daemon.hooks`).
 
     Callers who want a different tool set can build their own registry and
     register only what they need — this helper is the agent-loop default.
     """
-    reg = ToolRegistry()
+    reg = ToolRegistry(hook_runner=hook_runner)
     reg.register_from_function(make_read_file(root))
     reg.register_from_function(make_write_file(root))
     reg.register_from_function(make_edit_file(root))
