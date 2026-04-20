@@ -64,6 +64,13 @@ class _GitHubProto(Protocol):
     ) -> Any: ...
 
 
+class _GitHubBranchProto(Protocol):
+    """Minimal protocol for branch resolution — used by resolve_pr_target_branch."""
+
+    async def list_branches(self, repo: str) -> list[str]: ...
+    async def get_default_branch(self, repo: str) -> str: ...
+
+
 class _WorkspaceProto(Protocol):
     async def ensure_clone(self, repo: str, *, task_id: str) -> Any: ...
     async def create_branch(
@@ -426,6 +433,37 @@ class IssueExecutor:
             return default
         value = getattr(overrides, attr, None)
         return value if value is not None else default
+
+    @staticmethod
+    async def resolve_pr_target_branch(
+        github: _GitHubBranchProto,
+        repo: str,
+        *,
+        preferred: str,
+        fallback_to_default: bool,
+    ) -> str:
+        """Pick the branch a PR should target.
+
+        If ``preferred`` exists on the remote, use it. Otherwise:
+          * ``fallback_to_default=True``  → silently fall back to the default branch.
+          * ``fallback_to_default=False`` → raise ``IssueExecutionError`` so the
+            operator notices a misconfigured fleet manifest early.
+
+        Skips the branch listing when ``preferred`` already is the default
+        (common for CONDUCTOR itself merging directly to ``main``).
+        """
+        default = await github.get_default_branch(repo)
+        if preferred == default:
+            return preferred
+        branches = await github.list_branches(repo)
+        if preferred in branches:
+            return preferred
+        if not fallback_to_default:
+            raise IssueExecutionError(
+                f"configured pr_target_branch {preferred!r} not found on {repo!r} "
+                "and fallback is disabled"
+            )
+        return default
 
     async def _refine_diff(
         self,

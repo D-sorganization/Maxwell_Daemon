@@ -159,6 +159,27 @@ class GitHubClient:
         out = await self._gh(*argv)
         return out.decode().strip()
 
+    async def list_branches(self, repo: str) -> list[str]:
+        """Return every branch name on the remote, paginated across all pages.
+
+        Used by the executor to decide whether a configured ``pr_target_branch``
+        (e.g. ``staging``) actually exists before we base a PR on it.
+        """
+        self._validate_repo(repo)
+        out = await self._gh("api", f"repos/{repo}/branches", "--paginate")
+        payload = json.loads(out) if out else []
+        return [str(b.get("name", "")) for b in payload if b.get("name")]
+
+    async def get_default_branch(self, repo: str) -> str:
+        """Return the repo's default branch (e.g. ``main`` or ``master``)."""
+        self._validate_repo(repo)
+        out = await self._gh("api", f"repos/{repo}")
+        payload = json.loads(out) if out else {}
+        branch = payload.get("default_branch")
+        if not branch:
+            raise GhCliError(f"repos/{repo} response missing default_branch field")
+        return str(branch)
+
     async def create_pull_request(
         self,
         repo: str,

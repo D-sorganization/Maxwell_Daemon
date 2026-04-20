@@ -1,0 +1,56 @@
+# CONDUCTOR fleet manifest — single source of truth for which repos the fleet
+# manages, their slot limits, budget caps, PR targets, and the labels we watch.
+#
+# Resolution order when no explicit path is given:
+#   1. $CONDUCTOR_FLEET_CONFIG
+#   2. ./fleet.yaml           ← this file, when checked out at the project root
+#   3. ~/.conductor/fleet.yaml
+#
+# Inheritance: any field left unset on a repo entry inherits the matching
+# `default_*` from the `fleet:` block.
+version: 1
+
+fleet:
+  name: D-sorganization Fleet
+  auto_promote_staging: false        # flip on once the PR auto-merge daemon lands (#68)
+  discovery_interval_seconds: 300
+  default_slots: 2
+  default_budget_per_story: 0.50
+  default_pr_target_branch: staging
+  default_pr_fallback_to_default: true
+  default_watch_labels:
+    - "gaai:deliver"
+    - "conductor:ready"
+
+repos:
+  - name: AffineDrift
+    org: D-sorganization
+
+  - name: UpstreamDrift
+    org: D-sorganization
+    slots: 3
+    budget_per_story: 0.75              # larger repo, higher cap
+
+  - name: Gasification_Model
+    org: D-sorganization
+
+  - name: Tools
+    org: D-sorganization
+    slots: 3
+
+  - name: Worksheet-Workshop
+    org: D-sorganization
+
+  - name: Repository_Management
+    org: D-sorganization
+    slots: 1
+    budget_per_story: 0.30
+    pr_target_branch: main              # no staging branch here
+    watch_labels: ["conductor:ready"]
+
+  - name: CONDUCTOR
+    org: D-sorganization
+    slots: 1
+    budget_per_story: 0.75
+    pr_target_branch: main              # CONDUCTOR itself merges directly to main
+    watch_labels: ["conductor:ready"]
