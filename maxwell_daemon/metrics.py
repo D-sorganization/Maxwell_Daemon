@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import FastAPI, Response
-from prometheus_client import CollectorRegistry, Counter, Histogram, generate_latest
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, generate_latest
 
 __all__ = [
     "MAXWELL_COST_FORECAST_USD",
@@ -19,6 +19,7 @@ __all__ = [
     "MAXWELL_REQUEST_COST",
     "MAXWELL_REQUEST_DURATION",
     "MAXWELL_TOKENS_TOTAL",
+    "MAXWELL_COST_FORECAST_USD",
     "build_registry",
     "mount_metrics_endpoint",
     "record_request",
@@ -54,6 +55,11 @@ MAXWELL_FREE_REQUESTS_TOTAL = Counter(
         "distinguish 'never ran' from 'ran many free requests'."
     ),
     labelnames=("backend", "model"),
+)
+
+MAXWELL_COST_FORECAST_USD = Gauge(
+    "maxwell_daemon_cost_forecast_usd",
+    "Linear month-end spend forecast from the cost ledger",
 )
 
 
