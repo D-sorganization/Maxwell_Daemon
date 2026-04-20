@@ -1,0 +1,191 @@
+"""Model Context Protocol — agent-agnostic tool declarations.
+
+Every tool is a ``ToolSpec`` (name + description + params + handler). A registry
+collects specs and emits provider-specific schemas (Anthropic ``tools`` dicts,
+OpenAI function-calling dicts, …) so one set of handlers serves every backend.
+
+The decorator ``@mcp_tool`` attaches a ``ToolSpec`` to a function so it can be
+registered in bulk without repeating metadata.
+"""
+
+from __future__ import annotations
+
+import inspect
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from typing import Any, Literal, TypeVar
+
+__all__ = [
+    "ToolHandler",
+    "ToolParam",
+    "ToolRegistry",
+    "ToolRegistryError",
+    "ToolResult",
+    "ToolSpec",
+    "mcp_tool",
+]
+
+#: JSON-schema primitive types we model in tool params. Complex structures are
+#: represented as ``"object"`` or ``"array"``; a tool that needs nested validation
+#: should do it inside the handler.
+ParamType = Literal["string", "integer", "number", "boolean", "array", "object"]
+
+ToolHandler = Callable[..., Any] | Callable[..., Awaitable[Any]]
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+class ToolRegistryError(Exception):
+    """Raised when the registry is asked to do something inconsistent."""
+
+
+@dataclass(slots=True, frozen=True)
+class ToolParam:
+    """A declared parameter on a tool."""
+
+    name: str
+    type: ParamType
+    description: str
+    required: bool = True
+    enum: list[Any] | None = None
+
+    def to_schema(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"type": self.type, "description": self.description}
+        if self.enum is not None:
+            out["enum"] = list(self.enum)
+        return out
+
+
+@dataclass(slots=True, frozen=True)
+class ToolResult:
+    """Outcome of a tool invocation.
+
+    ``is_error=True`` signals a handler failure in a form the model can see and
+    recover from; the exception is rendered into ``content`` so the agent can
+    decide what to do next.
+    """
+
+    content: str
+    is_error: bool = False
+
+
+def _noop_handler() -> None:
+    return None
+
+
+@dataclass(slots=True)
+class ToolSpec:
+    """Declarative tool definition used by every backend."""
+
+    name: str
+    description: str
+    params: list[ToolParam] = field(default_factory=list)
+    handler: ToolHandler = field(default=_noop_handler)
+
+    def _schema_body(self) -> dict[str, Any]:
+        properties: dict[str, Any] = {p.name: p.to_schema() for p in self.params}
+        required = [p.name for p in self.params if p.required]
+        return {"type": "object", "properties": properties, "required": required}
+
+    def to_anthropic(self) -> dict[str, Any]:
+        """Emit the dict the Anthropic SDK expects in ``messages.create(tools=[…])``."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self._schema_body(),
+        }
+
+    def to_openai(self) -> dict[str, Any]:
+        """Emit the dict the OpenAI SDK expects for function calling."""
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self._schema_body(),
+            },
+        }
+
+
+class ToolRegistry:
+    """Holds ``ToolSpec``s. Emits schemas. Dispatches calls."""
+
+    def __init__(self) -> None:
+        self._specs: dict[str, ToolSpec] = {}
+
+    def register(self, spec: ToolSpec) -> None:
+        if spec.name in self._specs:
+            raise ToolRegistryError(f"tool {spec.name!r} already registered")
+        self._specs[spec.name] = spec
+
+    def register_from_function(self, fn: Callable[..., Any]) -> None:
+        """Register a function previously decorated with ``@mcp_tool``."""
+        spec = getattr(fn, "__mcp_tool__", None)
+        if not isinstance(spec, ToolSpec):
+            raise ToolRegistryError(f"{fn!r} is not decorated with @mcp_tool — nothing to register")
+        self.register(spec)
+
+    def get(self, name: str) -> ToolSpec:
+        if name not in self._specs:
+            raise ToolRegistryError(f"unknown tool {name!r}")
+        return self._specs[name]
+
+    def names(self) -> list[str]:
+        return sorted(self._specs.keys())
+
+    def to_anthropic(self) -> list[dict[str, Any]]:
+        return [s.to_anthropic() for s in self._specs.values()]
+
+    def to_openai(self) -> list[dict[str, Any]]:
+        return [s.to_openai() for s in self._specs.values()]
+
+    async def invoke(self, name: str, arguments: dict[str, Any]) -> ToolResult:
+        """Call the handler for ``name`` with ``arguments``. Errors become ToolResult(is_error=True)."""
+        spec = self.get(name)  # raises ToolRegistryError on unknown — caller bug, not model bug
+        try:
+            result = spec.handler(**arguments)
+            if inspect.isawaitable(result):
+                result = await result
+            return ToolResult(content=_stringify(result), is_error=False)
+        except Exception as exc:
+            return ToolResult(content=f"{type(exc).__name__}: {exc}", is_error=True)
+
+
+def mcp_tool(
+    *,
+    description: str,
+    params: list[ToolParam] | None = None,
+    name: str | None = None,
+) -> Callable[[F], F]:
+    """Attach a ``ToolSpec`` to a function so a registry can pick it up.
+
+    The wrapped function is returned unchanged — we only stamp ``__mcp_tool__``
+    on it so the registry can inspect it later. Default ``name`` is the
+    function's own ``__name__``.
+    """
+
+    def decorator(fn: F) -> F:
+        fn_name = getattr(fn, "__name__", "tool") or "tool"
+        spec = ToolSpec(
+            name=name or fn_name,
+            description=description,
+            params=list(params or []),
+            handler=fn,
+        )
+        fn.__mcp_tool__ = spec  # type: ignore[attr-defined]
+        return fn
+
+    return decorator
+
+
+def _stringify(value: Any) -> str:
+    """Coerce a handler return to the string representation backends expect.
+
+    ``None`` becomes an empty string so empty returns don't surface as the
+    literal ``"None"`` to the model — which would be confusing context.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return repr(value)
