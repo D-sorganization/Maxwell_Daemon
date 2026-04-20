@@ -54,6 +54,7 @@ dev = [
     "ruff>=0.6.0",
     "mypy>=1.11.0",
     "opentelemetry-sdk>=1.30.0",
+    "tomli>=2.0.0",
     "types-pyyaml",
 ]
 all = ["maxwell-daemon[ollama,google,azure,grpc,dev]"]
@@ -99,6 +100,10 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = ["prometheus_client", "prometheus_client.*", "opentelemetry.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tomli"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
