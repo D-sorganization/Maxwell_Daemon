@@ -32,7 +32,7 @@ from maxwell_daemon.contracts import require
 if sys.version_info >= (3, 11):  # pragma: no cover — import guarded by runtime version
     import tomllib
 else:  # pragma: no cover — Python 3.10 fallback path
-    import tomli as tomllib  # type: ignore[import-not-found]
+    import tomli as tomllib
 
 __all__ = [
     "CIPatternDetector",
