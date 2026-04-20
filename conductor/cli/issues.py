@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -90,13 +90,35 @@ def dispatch_batch(
         Path | None,
         typer.Option("--from-file", "-f", help="Text file: lines of owner/repo#N[:mode]"),
     ] = None,
-    repo: Annotated[
-        str | None,
-        typer.Option("--repo", help="owner/repo to pull open issues from"),
+    repos: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--repo",
+            help="owner/repo — repeat for multiple repos",
+        ),
+    ] = None,
+    all_fleet: Annotated[
+        bool,
+        typer.Option("--all", help="Expand to every enabled repo from fleet.yaml"),
+    ] = False,
+    fleet_manifest: Annotated[
+        Path | None,
+        typer.Option("--fleet-manifest", help="Path to fleet.yaml (default: cwd/~/.conductor)"),
     ] = None,
     label: Annotated[str | None, typer.Option("--label", help="Filter by label")] = None,
     mode: Annotated[str, typer.Option("--mode")] = "plan",
     limit: Annotated[int, typer.Option("--limit")] = 100,
+    max_stories: Annotated[
+        int | None,
+        typer.Option(
+            "--max-stories",
+            help="Per-repo cap on how many issues to submit this run",
+        ),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Print what would be dispatched without submitting"),
+    ] = False,
     daemon_url: Annotated[
         str, typer.Option("--daemon-url", envvar="CONDUCTOR_DAEMON_URL")
     ] = "http://127.0.0.1:8080",
@@ -104,26 +126,58 @@ def dispatch_batch(
         str | None, typer.Option("--auth-token", envvar="CONDUCTOR_API_TOKEN")
     ] = None,
 ) -> None:
-    """Dispatch many issues in one call.
+    """Dispatch many issues across one or more repos.
 
-    Two input modes:
-      * ``--from-file`` — one ``owner/repo#NUM[:mode]`` per line (``#`` comments allowed)
-      * ``--repo o/r [--label X]`` — pull open issues matching the label filter
+    Input modes (combinable):
+      * ``--from-file`` — one ``owner/repo#NUM[:mode]`` per line
+      * ``--repo o/r`` (repeatable) — pull open issues matching the label filter
+      * ``--all`` — expand to every enabled repo in ``fleet.yaml``
+
+    Flags:
+      * ``--max-stories N`` — cap submissions per repo
+      * ``--dry-run`` — print the plan, submit nothing
     """
-    if from_file is None and repo is None:
-        console.print("[red]✗[/red] Pass either --from-file or --repo.")
+    from conductor.cli.batch_dispatch import (
+        BatchDispatchPlanner,
+        resolve_repos_from_manifest,
+    )
+    from conductor.config.fleet import FleetManifestError, load_fleet_manifest
+
+    if not from_file and not repos and not all_fleet:
+        console.print("[red]✗[/red] Pass --from-file, --repo, or --all.")
         raise typer.Exit(1)
 
+    # File input short-circuits the planner: the file itself is the plan.
     items: list[dict[str, object]] = []
     if from_file is not None:
         items.extend(_parse_batch_file(from_file, default_mode=mode))
-    if repo is not None:
+
+    # Collect target repos (explicit + fleet-expanded).
+    target_repos: list[str] = list(repos or [])
+    if all_fleet:
+        try:
+            manifest = load_fleet_manifest(path=fleet_manifest)
+        except FleetManifestError as e:
+            console.print(f"[red]✗[/red] {e}")
+            raise typer.Exit(1) from None
+        target_repos.extend(resolve_repos_from_manifest(manifest))
+
+    # De-dupe while preserving caller order — multiple --repo + --all may overlap.
+    target_repos = list(dict.fromkeys(target_repos))
+
+    if target_repos:
         client = GitHubClient()
-        issues = asyncio.run(client.list_issues(repo, state="open", limit=limit))
-        for issue in issues:
-            if label is not None and label not in issue.labels:
-                continue
-            items.append({"repo": repo, "number": issue.number, "mode": mode})
+        planner = BatchDispatchPlanner(list_issues=client.list_issues, max_stories=max_stories)
+        plan = asyncio.run(
+            planner.plan(repos=target_repos, label=label, mode=mode, state="open", limit=limit)
+        )
+
+        _render_plan_summary(plan, dry_run=dry_run, label=label, mode=mode, max_stories=max_stories)
+        items.extend({"repo": it.repo, "number": it.number, "mode": it.mode} for it in plan.items)
+
+    if dry_run:
+        console.print("[yellow]Dry run — nothing submitted.[/yellow]")
+        return
 
     if not items:
         console.print("[yellow]No issues matched.[/yellow]")
@@ -151,6 +205,37 @@ def dispatch_batch(
     )
     for failure in body.get("failures", []):
         console.print(f"  [red]✗[/red] {failure['repo']}#{failure['number']} — {failure['error']}")
+
+
+def _render_plan_summary(
+    plan: Any,
+    *,
+    dry_run: bool,
+    label: str | None,
+    mode: str,
+    max_stories: int | None,
+) -> None:
+    """Print a per-repo rollup table. Purely cosmetic — no dispatch side effects."""
+    filter_bits = [f"mode={mode}"]
+    if label:
+        filter_bits.append(f"label={label}")
+    if max_stories is not None:
+        filter_bits.append(f"max-stories={max_stories}")
+    header = f"{'Dry run: ' if dry_run else ''}Dispatching {len(plan.summaries)} repo(s)"
+    console.print(f"\n[bold]{header}[/bold]  ([dim]{', '.join(filter_bits)}[/dim])\n")
+
+    t = Table(header_style="bold cyan")
+    t.add_column("Repo")
+    t.add_column("Eligible", justify="right")
+    t.add_column("Submitted", justify="right")
+    t.add_column("Skipped", justify="right")
+    for s in plan.summaries:
+        t.add_row(s.repo, str(s.eligible), str(s.submitted), str(s.skipped))
+    console.print(t)
+    console.print(
+        f"\n[bold]Total[/bold]: {plan.total_submitted()} submitted, "
+        f"{plan.total_skipped()} skipped.\n"
+    )
 
 
 def _parse_batch_file(path: Path, *, default_mode: str) -> list[dict[str, object]]:
