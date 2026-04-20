@@ -524,6 +524,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Touch swipe to navigate tabs (left/right swipe)
+  const views = ["tasks", "fleet", "cost", "history", "monitor", "repos", "debug"];
+  let touchStartX = 0;
+  let touchStartY = 0;
+  document.addEventListener("touchstart", (ev) => {
+    touchStartX = ev.touches[0].clientX;
+    touchStartY = ev.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener("touchend", (ev) => {
+    const dx = ev.changedTouches[0].clientX - touchStartX;
+    const dy = ev.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return; // not a horizontal swipe
+    const current = views.indexOf(state.currentView);
+    if (current === -1) return;
+    const next = dx < 0
+      ? Math.min(current + 1, views.length - 1)
+      : Math.max(current - 1, 0);
+    if (next !== current) switchView(views[next]);
+  }, { passive: true });
+
+  // Handle ?view= URL param on load (PWA shortcut links)
+  const viewParam = new URLSearchParams(location.search).get("view");
+  if (viewParam && views.includes(viewParam)) switchView(viewParam);
+
   // Initial load
   fetchTasks().catch(console.error);
   fetchBackends().catch(console.error);

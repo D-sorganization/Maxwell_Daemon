@@ -376,3 +376,62 @@ kbd {
   .timeline li { grid-template-columns: 1fr auto; }
   .timeline .ts { grid-column: 1 / -1; }
 }
+
+/* ---- PWA / mobile touch targets --------------------------------------- */
+
+/* Safe area insets for notched phones (iPhone X+) */
+body {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+/* All interactive elements meet 44×44px WCAG touch target minimum */
+button, .tab, select, input[type="checkbox"], input[type="radio"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Tab bar scrolls horizontally on narrow screens; larger tap area */
+.tab-bar { -webkit-overflow-scrolling: touch; }
+.tab { padding: 12px 16px; }
+
+/* Table rows: taller for easier tapping on mobile */
+@media (max-width: 768px) {
+  th, td { padding: 12px 14px; }
+  .timeline li { padding: 14px; }
+  button { padding: 10px 14px; }
+  header { padding: 12px 16px; }
+  main { padding: 12px 16px; }
+  footer { padding: 12px 16px; }
+
+  /* Quick-action floating button for dispatching tasks */
+  #new-task-btn {
+    position: fixed;
+    right: max(16px, env(safe-area-inset-right, 16px));
+    bottom: max(72px, calc(72px + env(safe-area-inset-bottom, 0)));
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    border-radius: 50%;
+    font-size: 24px;
+    line-height: 1;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Prevent text selection during swipe gestures on touch screens */
+.tab-bar, table thead { user-select: none; -webkit-user-select: none; }
+
+/* Smooth momentum scrolling for scrollable areas */
+.monitor-log, #detail-output, .repos-grid {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
