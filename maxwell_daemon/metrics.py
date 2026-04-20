@@ -19,6 +19,7 @@ __all__ = [
     "MAXWELL_REQUEST_COST",
     "MAXWELL_REQUEST_DURATION",
     "MAXWELL_TOKENS_TOTAL",
+    "MAXWELL_COST_FORECAST_USD",
     "build_registry",
     "mount_metrics_endpoint",
     "record_request",
@@ -60,6 +61,7 @@ MAXWELL_COST_FORECAST_USD = Gauge(
     "maxwell_daemon_cost_forecast_usd",
     "Linear month-end spend forecast from the cost ledger",
 )
+
 
 MAXWELL_REQUEST_DURATION = Histogram(
     "maxwell_daemon_request_duration_seconds",

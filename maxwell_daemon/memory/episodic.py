@@ -257,7 +257,7 @@ def _fts_escape(query: str) -> str:
         if t
         and t not in _STOP_WORDS
         and t.replace("-", "").replace("_", "").isalnum()
-        and len(t) > 2
+        and len(t) >= 2
     ]
     if not terms:
         return ""

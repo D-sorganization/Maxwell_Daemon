@@ -231,6 +231,13 @@ def create_app(
             "uptime_seconds": (datetime.now(timezone.utc) - state.started_at).total_seconds(),
         }
 
+    @app.get("/readyz")
+    async def readyz() -> dict[str, Any]:
+        state = daemon.state()
+        if not state.backends_available:
+            raise HTTPException(status_code=503, detail="no backends available")
+        return {"status": "ready"}
+
     @app.get("/api/v1/backends", dependencies=[Depends(auth)])
     async def list_backends() -> dict[str, Any]:
         return {"backends": daemon.state().backends_available}
@@ -446,7 +453,10 @@ def create_app(
             else None
         )
         if config_secret is None:
-            return JSONResponse({"disabled": True}, status_code=status.HTTP_200_OK)
+            return JSONResponse(
+                {"detail": "webhooks disabled", "disabled": True},
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         if not verify_signature(config_secret, body, signature):
             return JSONResponse(
                 {"detail": "invalid signature"},
