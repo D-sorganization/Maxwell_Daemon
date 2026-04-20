@@ -83,7 +83,16 @@ class TestPresetCLI:
 
         r = runner.invoke(
             app,
-            ["tasks", "preset", "save", "triage", "--status", "failed", "--kind", "issue"],
+            [
+                "tasks",
+                "preset",
+                "save",
+                "triage",
+                "--status",
+                "failed",
+                "--kind",
+                "issue",
+            ],
         )
         assert r.exit_code == 0
         r = runner.invoke(app, ["tasks", "preset", "list"])

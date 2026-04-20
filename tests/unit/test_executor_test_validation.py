@@ -31,7 +31,14 @@ class _GH:
         return self.issue
 
     async def create_pull_request(
-        self, repo: str, *, head: str, base: str, title: str, body: str, draft: bool = True
+        self,
+        repo: str,
+        *,
+        head: str,
+        base: str,
+        title: str,
+        body: str,
+        draft: bool = True,
     ) -> PullRequest:
         self.pr_calls.append({"body": body})
         return PullRequest(number=1, url="u", draft=draft)

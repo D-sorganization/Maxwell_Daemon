@@ -26,7 +26,11 @@ __all__ = [
     "tracing_enabled",
 ]
 
-_state: dict[str, Any] = {"enabled": False, "tracer_provider": None, "memory_exporter": None}
+_state: dict[str, Any] = {
+    "enabled": False,
+    "tracer_provider": None,
+    "memory_exporter": None,
+}
 
 
 def tracing_enabled() -> bool:
@@ -60,7 +64,10 @@ def configure_tracing(
         from opentelemetry import trace
         from opentelemetry.sdk.resources import Resource
         from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export import (
+            BatchSpanProcessor,
+            SimpleSpanProcessor,
+        )
     except ImportError:  # optional dep missing
         _state.update(enabled=False)
         return

@@ -48,7 +48,14 @@ class FakeGitHub:
         draft: bool = True,
     ) -> PullRequest:
         self.pr_calls.append(
-            {"repo": repo, "head": head, "base": base, "title": title, "body": body, "draft": draft}
+            {
+                "repo": repo,
+                "head": head,
+                "base": base,
+                "title": title,
+                "body": body,
+                "draft": draft,
+            }
         )
         return self.created_pr
 
@@ -164,7 +171,10 @@ class TestImplementMode:
         with pytest.raises(IssueExecutionError, match="no diff"):
             asyncio.run(
                 executor.execute_issue(
-                    repo="owner/repo", issue_number=42, model="fake-model", mode="implement"
+                    repo="owner/repo",
+                    issue_number=42,
+                    model="fake-model",
+                    mode="implement",
                 )
             )
 

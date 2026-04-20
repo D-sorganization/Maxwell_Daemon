@@ -87,7 +87,11 @@ class DocsProvider:
     """First-match-wins file loader for repo-level contributor docs."""
 
     workspace: Path
-    candidates: Sequence[str] = ("CLAUDE.md", "CONTRIBUTING.md", ".github/CONTRIBUTING.md")
+    candidates: Sequence[str] = (
+        "CLAUDE.md",
+        "CONTRIBUTING.md",
+        ".github/CONTRIBUTING.md",
+    )
     name: str = "docs"
 
     async def render(self, *, query: str, budget_chars: int) -> ContextProviderResult:

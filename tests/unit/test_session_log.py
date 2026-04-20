@@ -166,7 +166,11 @@ class TestReplay:
         )
         log.append(
             ObservationEvent(
-                session_id="s", seq=2, tool="read_file", content="def buggy(): ...", is_error=False
+                session_id="s",
+                seq=2,
+                tool="read_file",
+                content="def buggy(): ...",
+                is_error=False,
             )
         )
         log.append(AgentFinish(session_id="s", seq=3, reason="end_turn", final_text="fixed"))
@@ -185,7 +189,11 @@ class TestReplay:
         log.append(ToolUseEvent(session_id="s", seq=0, tool="read_file", arguments={"path": "x"}))
         log.append(
             ObservationEvent(
-                session_id="s", seq=1, tool="read_file", content="not found", is_error=True
+                session_id="s",
+                seq=1,
+                tool="read_file",
+                content="not found",
+                is_error=True,
             )
         )
         transcript = replay_transcript(tmp_path / "s.jsonl")
@@ -196,7 +204,10 @@ class TestReplay:
         log.append(UserMessage(session_id="s", seq=0, content="task"))
         log.append(
             CondensationEvent(
-                session_id="s", seq=1, summarised_range=(2, 15), summary="did some stuff"
+                session_id="s",
+                seq=1,
+                summarised_range=(2, 15),
+                summary="did some stuff",
             )
         )
         log.append(AgentFinish(session_id="s", seq=2, reason="end_turn", final_text="ok"))

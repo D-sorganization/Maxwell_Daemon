@@ -75,7 +75,12 @@ def config() -> WebhookConfig:
         secret="secret",
         allowed_repos=["owner/allowed"],
         routes=[
-            WebhookRoute(event="issues", action="opened", label="maxwell-daemon-plan", mode="plan"),
+            WebhookRoute(
+                event="issues",
+                action="opened",
+                label="maxwell-daemon-plan",
+                mode="plan",
+            ),
             WebhookRoute(
                 event="issues",
                 action="opened",

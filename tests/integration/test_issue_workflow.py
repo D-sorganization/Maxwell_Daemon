@@ -154,7 +154,10 @@ def full_system(
 
 
 def _wait_done(
-    client: TestClient, loop: asyncio.AbstractEventLoop, task_id: str, timeout: float = 5.0
+    client: TestClient,
+    loop: asyncio.AbstractEventLoop,
+    task_id: str,
+    timeout: float = 5.0,
 ) -> dict[str, Any]:
     deadline = loop.time() + timeout
     while loop.time() < deadline:
@@ -175,7 +178,11 @@ class TestIssueCreationAndDispatch:
         # 1. Create the issue.
         r = client.post(
             "/api/v1/issues",
-            json={"repo": "owner/project", "title": "Bug in parser", "body": "Repro: ..."},
+            json={
+                "repo": "owner/project",
+                "title": "Bug in parser",
+                "body": "Repro: ...",
+            },
         )
         assert r.status_code == 201
         assert r.json()["url"].endswith("/issues/1")

@@ -48,6 +48,20 @@ class SlowBackend(ILLMBackend):
         return BackendCapabilities(cost_per_1k_input_tokens=0.001, cost_per_1k_output_tokens=0.002)
 
 
+async def _wait_for_status(daemon: Daemon, task_id: str, expected: TaskStatus) -> None:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 3.0
+    while loop.time() < deadline:
+        task = daemon.get_task(task_id)
+        if task and task.status is expected:
+            return
+        await asyncio.sleep(0.02)
+    final = daemon.get_task(task_id)
+    raise AssertionError(
+        f"task {task_id} did not reach {expected}; final={final.status if final else None}"
+    )
+
+
 @pytest.fixture
 def slow_daemon(
     tmp_path: Path,
@@ -69,8 +83,7 @@ class TestGracefulShutdown:
         async def body() -> None:
             await slow_daemon.start(worker_count=1)
             task = slow_daemon.submit("hi")
-            # Give the worker a chance to pick it up.
-            await asyncio.sleep(0.05)
+            await _wait_for_status(slow_daemon, task.id, TaskStatus.RUNNING)
             await slow_daemon.stop(drain=True, timeout=2.0)
             # After graceful drain, the task should be completed, not cancelled.
             final = slow_daemon.get_task(task.id)

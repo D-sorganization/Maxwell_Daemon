@@ -98,7 +98,14 @@ class TestIssueList:
             "GitHubClient",
             lambda: _FakeGH(
                 issues=[
-                    Issue(number=1, title="T", body="", state="OPEN", labels=["bug"], url="u"),
+                    Issue(
+                        number=1,
+                        title="T",
+                        body="",
+                        state="OPEN",
+                        labels=["bug"],
+                        url="u",
+                    ),
                 ]
             ),
         )
@@ -121,8 +128,22 @@ class TestIssueDispatchBatchFromRepo:
             "GitHubClient",
             lambda: _FakeGH(
                 issues=[
-                    Issue(number=1, title="a", body="", state="OPEN", labels=["triage"], url="u"),
-                    Issue(number=2, title="b", body="", state="OPEN", labels=["other"], url="u"),
+                    Issue(
+                        number=1,
+                        title="a",
+                        body="",
+                        state="OPEN",
+                        labels=["triage"],
+                        url="u",
+                    ),
+                    Issue(
+                        number=2,
+                        title="b",
+                        body="",
+                        state="OPEN",
+                        labels=["other"],
+                        url="u",
+                    ),
                 ]
             ),
         )

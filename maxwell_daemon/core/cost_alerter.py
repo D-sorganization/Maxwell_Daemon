@@ -120,9 +120,21 @@ def format_slack_payload(dispatch: AlertDispatch) -> dict[str, Any]:
                         "value": f"${dispatch.spent_usd:.2f}",
                         "short": True,
                     },
-                    {"title": "Forecast", "value": f"${dispatch.forecast_usd:.2f}", "short": True},
-                    {"title": "Limit", "value": f"${dispatch.limit_usd:.2f}", "short": True},
-                    {"title": "Utilisation", "value": f"{dispatch.utilisation:.1%}", "short": True},
+                    {
+                        "title": "Forecast",
+                        "value": f"${dispatch.forecast_usd:.2f}",
+                        "short": True,
+                    },
+                    {
+                        "title": "Limit",
+                        "value": f"${dispatch.limit_usd:.2f}",
+                        "short": True,
+                    },
+                    {
+                        "title": "Utilisation",
+                        "value": f"{dispatch.utilisation:.1%}",
+                        "short": True,
+                    },
                 ],
             }
         ],

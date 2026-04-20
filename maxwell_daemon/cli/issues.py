@@ -104,7 +104,8 @@ def dispatch_batch(
     fleet_manifest: Annotated[
         Path | None,
         typer.Option(
-            "--fleet-manifest", help="Path to fleet.yaml (default: cwd/~/.maxwell-daemon)"
+            "--fleet-manifest",
+            help="Path to fleet.yaml (default: cwd/~/.maxwell-daemon)",
         ),
     ] = None,
     label: Annotated[str | None, typer.Option("--label", help="Filter by label")] = None,

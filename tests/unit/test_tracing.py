@@ -43,7 +43,9 @@ class TestTracingEnabled:
             configure_tracing(endpoint=None)
 
     def test_span_attributes_reach_exporter(self) -> None:
-        from maxwell_daemon.tracing import _test_exporter  # internal: memory exporter for tests
+        from maxwell_daemon.tracing import (
+            _test_exporter,
+        )  # internal: memory exporter for tests
 
         try:
             configure_tracing(service_name="maxwell-daemon-test", use_memory_exporter=True)

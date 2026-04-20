@@ -105,7 +105,12 @@ class Daemon:
         default_store = Path.home() / ".local/share/maxwell-daemon/tasks.db"
         self._task_store = TaskStore(task_store_path or default_store)
         # Memory store — co-located with the ledger for easy backup.
-        from maxwell_daemon.memory import EpisodicStore, MemoryManager, RepoProfile, ScratchPad
+        from maxwell_daemon.memory import (
+            EpisodicStore,
+            MemoryManager,
+            RepoProfile,
+            ScratchPad,
+        )
 
         default_memory = Path.home() / ".local/share/maxwell-daemon/memory.db"
         self._memory = MemoryManager(
@@ -187,6 +192,8 @@ class Daemon:
             w.cancel()
         await asyncio.gather(*self._workers, return_exceptions=True)
         self._workers.clear()
+        if hasattr(self._router, "aclose_all"):
+            await self._router.aclose_all()
         log.info("daemon stopped")
 
     def submit(
@@ -338,7 +345,8 @@ class Daemon:
             bg = loop.create_task(
                 self._events.publish(
                     Event(
-                        kind=EventKind.TASK_FAILED, payload={"id": task_id, "reason": "cancelled"}
+                        kind=EventKind.TASK_FAILED,
+                        payload={"id": task_id, "reason": "cancelled"},
                     )
                 )
             )
@@ -375,12 +383,13 @@ class Daemon:
         try:
             self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
         except Exception:
-            # Don't silently swallow — a failing task_store is an operational
-            # signal operators need to see in Loki/Grafana. The task itself
-            # still proceeds (status lives on ``task`` in memory).
             log.exception("task store write failed for task=%s", task.id)
+            raise
         await self._events.publish(
-            Event(kind=EventKind.TASK_STARTED, payload={"id": task.id, "prompt": task.prompt})
+            Event(
+                kind=EventKind.TASK_STARTED,
+                payload={"id": task.id, "prompt": task.prompt},
+            )
         )
         decision_backend = decision_model = "unknown"
         try:
@@ -441,7 +450,11 @@ class Daemon:
             await self._events.publish(
                 Event(
                     kind=EventKind.TASK_FAILED,
-                    payload={"id": task.id, "error": str(e), "reason": "budget_exceeded"},
+                    payload={
+                        "id": task.id,
+                        "error": str(e),
+                        "reason": "budget_exceeded",
+                    },
                 )
             )
         except Exception as e:
@@ -461,6 +474,13 @@ class Daemon:
                 self._task_store.save(task)
             except Exception:
                 log.exception("task store write failed for task=%s", task.id)
+            if (
+                self._memory is not None
+                and hasattr(self._memory, "scratchpad")
+                and getattr(self._memory, "scratchpad", None) is not None
+            ):
+                with contextlib.suppress(AttributeError):
+                    self._memory.scratchpad.clear(task.id)
 
     async def _execute_issue(self, task: Task, decision: Any) -> None:
         """Run the issue → PR flow. Called with status already RUNNING."""

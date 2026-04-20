@@ -48,7 +48,10 @@ def main() -> int:
     violations = _check(files)
     if violations:
         print("\n".join(violations), file=sys.stderr)
-        print(f"\nERROR: {len(violations)} untracked TODO/FIXME comment(s)", file=sys.stderr)
+        print(
+            f"\nERROR: {len(violations)} untracked TODO/FIXME comment(s)",
+            file=sys.stderr,
+        )
         return 1
     print(f"OK: No untracked TODO/FIXME comments in {len(files)} file(s).")
     return 0

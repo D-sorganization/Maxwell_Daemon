@@ -80,7 +80,11 @@ def make_read_file(root: Path) -> Callable[..., str]:
         name="read_file",
         description="Read a UTF-8 text file from the workspace. Returns the file contents.",
         params=[
-            ToolParam(name="path", type="string", description="Path relative to the workspace root")
+            ToolParam(
+                name="path",
+                type="string",
+                description="Path relative to the workspace root",
+            )
         ],
     )
     def read_file(path: str) -> str:
@@ -102,7 +106,9 @@ def make_write_file(root: Path) -> Callable[..., str]:
         ),
         params=[
             ToolParam(
-                name="path", type="string", description="Path relative to the workspace root"
+                name="path",
+                type="string",
+                description="Path relative to the workspace root",
             ),
             ToolParam(name="content", type="string", description="Full file content to write"),
         ],
@@ -127,7 +133,9 @@ def make_edit_file(root: Path) -> Callable[..., str]:
         ),
         params=[
             ToolParam(
-                name="path", type="string", description="Path relative to the workspace root"
+                name="path",
+                type="string",
+                description="Path relative to the workspace root",
             ),
             ToolParam(name="old_string", type="string", description="Exact text to replace"),
             ToolParam(name="new_string", type="string", description="Replacement text"),
@@ -253,7 +261,11 @@ def make_glob_files(root: Path) -> Callable[..., str]:
             "the workspace root. Use ``**/`` for recursive matching."
         ),
         params=[
-            ToolParam(name="pattern", type="string", description="Glob pattern (e.g. '**/*.py')"),
+            ToolParam(
+                name="pattern",
+                type="string",
+                description="Glob pattern (e.g. '**/*.py')",
+            ),
         ],
     )
     def glob_files(pattern: str) -> str:

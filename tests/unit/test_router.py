@@ -112,7 +112,10 @@ class TestRouter:
         assert decision.model == "custom-model"
 
     def test_available_backends(self, config: MaxwellDaemonConfig) -> None:
-        assert sorted(BackendRouter(config).available_backends()) == ["local", "primary"]
+        assert sorted(BackendRouter(config).available_backends()) == [
+            "local",
+            "primary",
+        ]
 
     def test_instance_cached(self, config: MaxwellDaemonConfig) -> None:
         router = BackendRouter(config)

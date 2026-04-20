@@ -119,7 +119,12 @@ class WebhookRouter:
         number = int(issue.get("number", 0))
         if number <= 0:
             return []
-        labels = {label["name"] for label in issue.get("labels", [])}
+        labels = set()
+        for label in issue.get("labels", []):
+            if isinstance(label, dict) and "name" in label:
+                labels.add(label["name"])
+            elif isinstance(label, str):
+                labels.add(label)
 
         out: list[WebhookDispatch] = []
         for route in routes:

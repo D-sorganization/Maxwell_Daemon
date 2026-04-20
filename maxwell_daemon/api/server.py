@@ -446,9 +446,7 @@ def create_app(
             else None
         )
         if config_secret is None:
-            return JSONResponse(
-                {"detail": "webhooks disabled"}, status_code=status.HTTP_404_NOT_FOUND
-            )
+            return JSONResponse({"disabled": True}, status_code=status.HTTP_200_OK)
         if not verify_signature(config_secret, body, signature):
             return JSONResponse(
                 {"detail": "invalid signature"},

@@ -102,7 +102,13 @@ class TestBranchLifecycle:
         cmds = [c[0] for c in git.calls]
         assert ("git", "add", "-A") in cmds
         assert ("git", "commit", "-m", "Fix #42") in cmds
-        assert ("git", "push", "--set-upstream", "origin", "maxwell-daemon/issue-42") in cmds
+        assert (
+            "git",
+            "push",
+            "--set-upstream",
+            "origin",
+            "maxwell-daemon/issue-42",
+        ) in cmds
 
 
 class TestApplyDiff:

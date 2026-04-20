@@ -111,7 +111,10 @@ class TestAbEndpoint:
 
 class TestDaemonAbSubmit:
     def test_submit_ab_sets_group(
-        self, dual_config: MaxwellDaemonConfig, isolated_ledger_path: Path, tmp_path: Path
+        self,
+        dual_config: MaxwellDaemonConfig,
+        isolated_ledger_path: Path,
+        tmp_path: Path,
     ) -> None:
         d = Daemon(
             dual_config,

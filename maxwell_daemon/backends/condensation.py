@@ -52,7 +52,10 @@ class Condenser:
         keep_recent: int,
         summarizer: SummarizerFn,
     ) -> None:
-        require(threshold_tokens >= 1, f"threshold_tokens must be >= 1 (got {threshold_tokens})")
+        require(
+            threshold_tokens >= 1,
+            f"threshold_tokens must be >= 1 (got {threshold_tokens})",
+        )
         require(keep_recent >= 1, f"keep_recent must be >= 1 (got {keep_recent})")
         self._threshold = threshold_tokens
         self._keep_recent = keep_recent

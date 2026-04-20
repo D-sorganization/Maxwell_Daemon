@@ -6,7 +6,11 @@ import asyncio
 from typing import Any
 
 from maxwell_daemon.gh import Issue
-from maxwell_daemon.gh.discovery import DiscoveryFilter, DiscoveryResult, discover_issues
+from maxwell_daemon.gh.discovery import (
+    DiscoveryFilter,
+    DiscoveryResult,
+    discover_issues,
+)
 
 
 class _FakeGH:

@@ -13,6 +13,7 @@ from fastapi import FastAPI, Response
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, generate_latest
 
 __all__ = [
+    "MAXWELL_COST_FORECAST_USD",
     "MAXWELL_FREE_REQUESTS_TOTAL",
     "MAXWELL_REQUESTS_TOTAL",
     "MAXWELL_REQUEST_COST",

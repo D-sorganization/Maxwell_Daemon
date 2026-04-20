@@ -7,7 +7,12 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import anthropic
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from maxwell_daemon.backends.base import (
     BackendCapabilities,

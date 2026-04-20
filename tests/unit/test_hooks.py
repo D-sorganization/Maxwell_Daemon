@@ -73,8 +73,7 @@ class TestLoadHookConfig:
         assert cfg == HookConfig()
 
     def test_loads_from_yaml(self, tmp_path: Path) -> None:
-        (tmp_path / "h.yaml").write_text(
-            """
+        (tmp_path / "h.yaml").write_text("""
 hooks:
   pre_tool:
     - match: run_bash
@@ -88,8 +87,7 @@ hooks:
     - "scripts/warmup.sh"
   on_stop:
     - "scripts/summary.sh"
-"""
-        )
+""")
         cfg = load_hook_config(tmp_path / "h.yaml")
         assert len(cfg.pre_tool) == 1
         assert cfg.pre_tool[0].match == "run_bash"

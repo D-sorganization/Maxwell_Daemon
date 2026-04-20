@@ -141,7 +141,12 @@ class TestFleetManifestValidation:
                 },
                 "repos": [
                     {"name": "R1", "org": "a"},  # inherits
-                    {"name": "R2", "org": "a", "slots": 9, "pr_target_branch": "main"},  # overrides
+                    {
+                        "name": "R2",
+                        "org": "a",
+                        "slots": 9,
+                        "pr_target_branch": "main",
+                    },  # overrides
                 ],
             }
         )

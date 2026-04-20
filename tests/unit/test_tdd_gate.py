@@ -53,7 +53,12 @@ class TestShapes:
         from dataclasses import FrozenInstanceError
 
         r = RedGreenResult(
-            red_ran=True, red_failed=True, green_ran=True, green_passed=True, honest=True, detail=""
+            red_ran=True,
+            red_failed=True,
+            green_ran=True,
+            green_passed=True,
+            honest=True,
+            detail="",
         )
         with pytest.raises(FrozenInstanceError):
             r.honest = False  # type: ignore[misc]

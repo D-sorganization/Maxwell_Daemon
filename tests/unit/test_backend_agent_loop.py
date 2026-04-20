@@ -398,7 +398,13 @@ class TestToolRegistryIntegration:
                 _response(
                     stop_reason="tool_use",
                     text=None,
-                    tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "target.txt"}}],
+                    tool_calls=[
+                        {
+                            "id": "t1",
+                            "name": "read_file",
+                            "input": {"path": "target.txt"},
+                        }
+                    ],
                 ),
                 _response(text="got it"),
             ],
