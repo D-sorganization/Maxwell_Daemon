@@ -85,7 +85,9 @@ class TestConfigLoad:
     def test_default_backend_must_exist(self) -> None:
         cfg = MaxwellDaemonConfig.model_validate(
             {
-                "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
+                "backends": {
+                    "claude": {"type": "claude", "model": "claude-sonnet-4-6"}
+                },
                 "agent": {"default_backend": "nonexistent"},
             }
         )

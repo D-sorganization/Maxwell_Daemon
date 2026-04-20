@@ -81,7 +81,9 @@ class TestBranchLifecycle:
         git = FakeGit()
         ws = Workspace(root=tmp_path, runner=git)
         asyncio.run(
-            ws.create_branch("owner/repo", "maxwell-daemon/issue-42", base="main", task_id="t-1")
+            ws.create_branch(
+                "owner/repo", "maxwell-daemon/issue-42", base="main", task_id="t-1"
+            )
         )
         cmds = [c[0] for c in git.calls]
         assert ("git", "checkout", "main") in cmds
@@ -102,7 +104,13 @@ class TestBranchLifecycle:
         cmds = [c[0] for c in git.calls]
         assert ("git", "add", "-A") in cmds
         assert ("git", "commit", "-m", "Fix #42") in cmds
-        assert ("git", "push", "--set-upstream", "origin", "maxwell-daemon/issue-42") in cmds
+        assert (
+            "git",
+            "push",
+            "--set-upstream",
+            "origin",
+            "maxwell-daemon/issue-42",
+        ) in cmds
 
 
 class TestApplyDiff:

@@ -29,7 +29,11 @@ def e2e_config_path(tmp_path: Path, register_recording_backend: None) -> Path:
             },
             "agent": {"default_backend": "primary"},
             "repos": [
-                {"name": "cheap-repo", "path": str(tmp_path / "cheap"), "backend": "local"},
+                {
+                    "name": "cheap-repo",
+                    "path": str(tmp_path / "cheap"),
+                    "backend": "local",
+                },
             ],
             "budget": {"monthly_limit_usd": 100.0, "hard_stop": False},
         }

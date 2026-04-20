@@ -52,7 +52,10 @@ class Condenser:
         keep_recent: int,
         summarizer: SummarizerFn,
     ) -> None:
-        require(threshold_tokens >= 1, f"threshold_tokens must be >= 1 (got {threshold_tokens})")
+        require(
+            threshold_tokens >= 1,
+            f"threshold_tokens must be >= 1 (got {threshold_tokens})",
+        )
         require(keep_recent >= 1, f"keep_recent must be >= 1 (got {keep_recent})")
         self._threshold = threshold_tokens
         self._keep_recent = keep_recent
@@ -62,7 +65,9 @@ class Condenser:
         """True when accumulated prompt tokens have reached the threshold."""
         return total_tokens >= self._threshold
 
-    async def condense(self, messages: list[dict[str, object]]) -> list[dict[str, object]]:
+    async def condense(
+        self, messages: list[dict[str, object]]
+    ) -> list[dict[str, object]]:
         """Return a shorter message list, or the input if compression isn't useful.
 
         The output shape is ``[anchor, summary, *tail]`` with the summary as

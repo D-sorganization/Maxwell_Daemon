@@ -7,7 +7,12 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import anthropic
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from maxwell_daemon.backends.base import (
     BackendCapabilities,
@@ -50,10 +55,16 @@ class ClaudeBackend(ILLMBackend):
     ) -> None:
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
-            raise BackendUnavailableError("ANTHROPIC_API_KEY not set and no api_key passed")
-        self._client = anthropic.AsyncAnthropic(api_key=key, base_url=base_url, timeout=timeout)
+            raise BackendUnavailableError(
+                "ANTHROPIC_API_KEY not set and no api_key passed"
+            )
+        self._client = anthropic.AsyncAnthropic(
+            api_key=key, base_url=base_url, timeout=timeout
+        )
 
-    def _split_system(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
+    def _split_system(
+        self, messages: list[Message]
+    ) -> tuple[str | None, list[dict[str, Any]]]:
         system: str | None = None
         out: list[dict[str, Any]] = []
         for m in messages:
@@ -64,7 +75,9 @@ class ClaudeBackend(ILLMBackend):
         return system, out
 
     @retry(
-        retry=retry_if_exception_type((anthropic.APIConnectionError, anthropic.RateLimitError)),
+        retry=retry_if_exception_type(
+            (anthropic.APIConnectionError, anthropic.RateLimitError)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         reraise=True,
@@ -90,7 +103,9 @@ class ClaudeBackend(ILLMBackend):
             **kwargs,
         )
         text_parts = [
-            getattr(b, "text", "") for b in resp.content if getattr(b, "type", None) == "text"
+            getattr(b, "text", "")
+            for b in resp.content
+            if getattr(b, "type", None) == "text"
         ]
         return BackendResponse(
             content="".join(text_parts),

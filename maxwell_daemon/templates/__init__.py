@@ -43,7 +43,10 @@ _LABEL_MAP: dict[str, IssueKind] = {
 
 # Title-keyword classifiers, checked when no label matched.
 _TITLE_RULES: tuple[tuple[re.Pattern[str], IssueKind], ...] = (
-    (re.compile(r"\b(crash|segfault|exception|traceback|error when)\b", re.I), IssueKind.BUG),
+    (
+        re.compile(r"\b(crash|segfault|exception|traceback|error when)\b", re.I),
+        IssueKind.BUG,
+    ),
     (re.compile(r"\bbug\b|\bfix\b", re.I), IssueKind.BUG),
     (re.compile(r"\btypo|docs?:|readme\b", re.I), IssueKind.DOCS),
     (re.compile(r"\brefactor|cleanup|simplif", re.I), IssueKind.REFACTOR),

@@ -81,3 +81,16 @@ class BackendRouter:
 
     def available_backends(self) -> list[str]:
         return [name for name, cfg in self._config.backends.items() if cfg.enabled]
+
+    async def aclose_all(self) -> None:
+        """Close all instantiated backends."""
+        for backend in self._instances.values():
+            close_method = getattr(backend, "aclose", None)
+            if close_method is not None:
+                import asyncio
+                import contextlib
+
+                with contextlib.suppress(Exception):
+                    res = close_method()
+                    if asyncio.iscoroutine(res) or hasattr(res, "__await__"):
+                        await res

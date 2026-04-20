@@ -21,7 +21,9 @@ class _StubRunner:
         self.canned = canned
         self.calls: list[tuple[str, ...]] = []
 
-    async def __call__(self, *argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
+    async def __call__(
+        self, *argv: str, cwd: str | None = None
+    ) -> tuple[int, bytes, bytes]:
         self.calls.append(tuple(argv))
         for key, resp in self.canned.items():
             if argv[: len(key)] == key:
@@ -32,7 +34,9 @@ class _StubRunner:
 class TestListBranches:
     async def test_returns_branch_names(self) -> None:
         payload = json.dumps([{"name": "main"}, {"name": "staging"}, {"name": "dev"}])
-        runner = _StubRunner({("gh", "api", "repos/acme/foo/branches"): (0, payload.encode(), b"")})
+        runner = _StubRunner(
+            {("gh", "api", "repos/acme/foo/branches"): (0, payload.encode(), b"")}
+        )
         gh = GitHubClient(runner=runner)
         branches = await gh.list_branches("acme/foo")
         assert branches == ["main", "staging", "dev"]
@@ -43,7 +47,9 @@ class TestListBranches:
             await gh.list_branches("not-valid")
 
     async def test_gh_error_propagates(self) -> None:
-        runner = _StubRunner({("gh", "api", "repos/acme/foo/branches"): (1, b"", b"api boom")})
+        runner = _StubRunner(
+            {("gh", "api", "repos/acme/foo/branches"): (1, b"", b"api boom")}
+        )
         gh = GitHubClient(runner=runner)
         with pytest.raises(GhCliError, match="api boom"):
             await gh.list_branches("acme/foo")
@@ -51,7 +57,9 @@ class TestListBranches:
     async def test_paginates_or_limits(self) -> None:
         """Sanity: we pass --paginate so gh collects all pages (large fleets)."""
         payload = json.dumps([{"name": "main"}])
-        runner = _StubRunner({("gh", "api", "repos/acme/foo/branches"): (0, payload.encode(), b"")})
+        runner = _StubRunner(
+            {("gh", "api", "repos/acme/foo/branches"): (0, payload.encode(), b"")}
+        )
         gh = GitHubClient(runner=runner)
         await gh.list_branches("acme/foo")
         argv = runner.calls[0]
@@ -61,7 +69,9 @@ class TestListBranches:
 class TestGetDefaultBranch:
     async def test_returns_default_branch(self) -> None:
         payload = json.dumps({"default_branch": "trunk"})
-        runner = _StubRunner({("gh", "api", "repos/acme/foo"): (0, payload.encode(), b"")})
+        runner = _StubRunner(
+            {("gh", "api", "repos/acme/foo"): (0, payload.encode(), b"")}
+        )
         gh = GitHubClient(runner=runner)
         assert await gh.get_default_branch("acme/foo") == "trunk"
 

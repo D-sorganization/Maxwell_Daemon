@@ -38,16 +38,22 @@ class _FakeGH:
     ) -> str:
         return self._create_url
 
-    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 50) -> list[Issue]:
+    async def list_issues(
+        self, repo: str, *, state: str = "open", limit: int = 50
+    ) -> list[Issue]:
         return self._issues
 
 
 class TestIssueNew:
-    def test_creates_issue(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_creates_issue(
+        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from maxwell_daemon import cli
 
         monkeypatch.setattr(cli.issues, "GitHubClient", lambda: _FakeGH())
-        r = runner.invoke(app, ["issue", "new", "owner/repo", "Fix it", "--body", "bug"])
+        r = runner.invoke(
+            app, ["issue", "new", "owner/repo", "Fix it", "--body", "bug"]
+        )
         assert r.exit_code == 0
         assert "issues/7" in r.stdout
 
@@ -90,7 +96,9 @@ class TestIssueList:
         assert r.exit_code == 0
         assert "No issues" in r.stdout
 
-    def test_renders_table(self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_renders_table(
+        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from maxwell_daemon import cli
 
         monkeypatch.setattr(
@@ -98,7 +106,14 @@ class TestIssueList:
             "GitHubClient",
             lambda: _FakeGH(
                 issues=[
-                    Issue(number=1, title="T", body="", state="OPEN", labels=["bug"], url="u"),
+                    Issue(
+                        number=1,
+                        title="T",
+                        body="",
+                        state="OPEN",
+                        labels=["bug"],
+                        url="u",
+                    ),
                 ]
             ),
         )
@@ -121,8 +136,22 @@ class TestIssueDispatchBatchFromRepo:
             "GitHubClient",
             lambda: _FakeGH(
                 issues=[
-                    Issue(number=1, title="a", body="", state="OPEN", labels=["triage"], url="u"),
-                    Issue(number=2, title="b", body="", state="OPEN", labels=["other"], url="u"),
+                    Issue(
+                        number=1,
+                        title="a",
+                        body="",
+                        state="OPEN",
+                        labels=["triage"],
+                        url="u",
+                    ),
+                    Issue(
+                        number=2,
+                        title="b",
+                        body="",
+                        state="OPEN",
+                        labels=["other"],
+                        url="u",
+                    ),
                 ]
             ),
         )
@@ -153,7 +182,9 @@ class TestIssueDispatchBatchFromRepo:
             )
         assert r.exit_code == 0, r.stdout
         # Only the 'triage' issue should have been dispatched.
-        assert captured == [{"items": [{"repo": "owner/repo", "number": 1, "mode": "plan"}]}]
+        assert captured == [
+            {"items": [{"repo": "owner/repo", "number": 1, "mode": "plan"}]}
+        ]
 
     def test_requires_either_file_or_repo(self, runner: CliRunner) -> None:
         r = runner.invoke(app, ["issue", "dispatch-batch"])

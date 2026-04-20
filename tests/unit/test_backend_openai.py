@@ -21,7 +21,9 @@ class TestConfiguration:
         with pytest.raises(BackendUnavailableError):
             OpenAIBackend()
 
-    def test_base_url_alone_is_enough_for_local(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_base_url_alone_is_enough_for_local(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         backend = OpenAIBackend(base_url="http://localhost:8000/v1")
         assert backend is not None

@@ -74,7 +74,9 @@ class TestAbEndpoint:
         ab_groups = {t.ab_group for t in issue_tasks if t.ab_group}
         assert len(ab_groups) == 1
 
-    def test_requires_at_least_two_backends(self, client: tuple[TestClient, Daemon]) -> None:
+    def test_requires_at_least_two_backends(
+        self, client: tuple[TestClient, Daemon]
+    ) -> None:
         c, _ = client
         r = c.post(
             "/api/v1/issues/ab-dispatch",
@@ -82,7 +84,9 @@ class TestAbEndpoint:
         )
         assert r.status_code == 422
 
-    def test_rejects_duplicate_backends(self, client: tuple[TestClient, Daemon]) -> None:
+    def test_rejects_duplicate_backends(
+        self, client: tuple[TestClient, Daemon]
+    ) -> None:
         c, _ = client
         r = c.post(
             "/api/v1/issues/ab-dispatch",
@@ -111,7 +115,10 @@ class TestAbEndpoint:
 
 class TestDaemonAbSubmit:
     def test_submit_ab_sets_group(
-        self, dual_config: MaxwellDaemonConfig, isolated_ledger_path: Path, tmp_path: Path
+        self,
+        dual_config: MaxwellDaemonConfig,
+        isolated_ledger_path: Path,
+        tmp_path: Path,
     ) -> None:
         d = Daemon(
             dual_config,

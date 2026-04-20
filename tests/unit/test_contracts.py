@@ -38,7 +38,9 @@ class TestRequire:
         with pytest.raises(PreconditionError, match="x must be < 10"):
             require(False, "x must be < 10")
 
-    def test_disabled_contracts_skip_check(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_disabled_contracts_skip_check(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("MAXWELL_CONTRACTS", "off")
         # With the flag read on each call, no reload is needed.
         require(False, "should be skipped")

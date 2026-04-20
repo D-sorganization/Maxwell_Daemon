@@ -80,7 +80,11 @@ def make_read_file(root: Path) -> Callable[..., str]:
         name="read_file",
         description="Read a UTF-8 text file from the workspace. Returns the file contents.",
         params=[
-            ToolParam(name="path", type="string", description="Path relative to the workspace root")
+            ToolParam(
+                name="path",
+                type="string",
+                description="Path relative to the workspace root",
+            )
         ],
     )
     def read_file(path: str) -> str:
@@ -102,9 +106,13 @@ def make_write_file(root: Path) -> Callable[..., str]:
         ),
         params=[
             ToolParam(
-                name="path", type="string", description="Path relative to the workspace root"
+                name="path",
+                type="string",
+                description="Path relative to the workspace root",
             ),
-            ToolParam(name="content", type="string", description="Full file content to write"),
+            ToolParam(
+                name="content", type="string", description="Full file content to write"
+            ),
         ],
     )
     def write_file(path: str, content: str) -> str:
@@ -127,9 +135,13 @@ def make_edit_file(root: Path) -> Callable[..., str]:
         ),
         params=[
             ToolParam(
-                name="path", type="string", description="Path relative to the workspace root"
+                name="path",
+                type="string",
+                description="Path relative to the workspace root",
             ),
-            ToolParam(name="old_string", type="string", description="Exact text to replace"),
+            ToolParam(
+                name="old_string", type="string", description="Exact text to replace"
+            ),
             ToolParam(name="new_string", type="string", description="Replacement text"),
         ],
     )
@@ -180,7 +192,9 @@ def _build_run_bash_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k in allowed}
 
 
-async def _default_runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
+async def _default_runner(
+    cmd: list[str], cwd: str, timeout: float
+) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=cwd,
@@ -225,7 +239,9 @@ def make_run_bash(
         ],
     )
     async def run_bash(command: str, timeout_seconds: int | float | None = None) -> str:
-        timeout = float(timeout_seconds) if timeout_seconds is not None else default_timeout
+        timeout = (
+            float(timeout_seconds) if timeout_seconds is not None else default_timeout
+        )
         cwd = str(root.resolve())
         # ``-c`` (no ``-l``) so login-profile files don't run and leak state.
         rc, stdout, stderr = await run(["bash", "-c", command], cwd, timeout)
@@ -253,13 +269,19 @@ def make_glob_files(root: Path) -> Callable[..., str]:
             "the workspace root. Use ``**/`` for recursive matching."
         ),
         params=[
-            ToolParam(name="pattern", type="string", description="Glob pattern (e.g. '**/*.py')"),
+            ToolParam(
+                name="pattern",
+                type="string",
+                description="Glob pattern (e.g. '**/*.py')",
+            ),
         ],
     )
     def glob_files(pattern: str) -> str:
         root_resolved = root.resolve()
         matches = sorted(
-            str(p.relative_to(root_resolved)) for p in root_resolved.glob(pattern) if p.is_file()
+            str(p.relative_to(root_resolved))
+            for p in root_resolved.glob(pattern)
+            if p.is_file()
         )
         if not matches:
             return f"no matches for pattern {pattern!r}"
@@ -277,7 +299,9 @@ def make_grep_files(root: Path) -> Callable[..., str]:
             "matching lines as ``path:lineno:line``. Optionally scoped to a glob."
         ),
         params=[
-            ToolParam(name="pattern", type="string", description="Python regex pattern"),
+            ToolParam(
+                name="pattern", type="string", description="Python regex pattern"
+            ),
             ToolParam(
                 name="glob",
                 type="string",

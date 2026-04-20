@@ -43,7 +43,9 @@ class FakeGitHubClient:
     ) -> str:
         return f"https://github.com/{repo}/issues/7"
 
-    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 25) -> list[Issue]:
+    async def list_issues(
+        self, repo: str, *, state: str = "open", limit: int = 25
+    ) -> list[Issue]:
         return [
             Issue(
                 number=1,
@@ -63,7 +65,9 @@ def daemon(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[Daemon]:
-    monkeypatch.setattr("maxwell_daemon.api.server.GitHubClient", FakeGitHubClient, raising=False)
+    monkeypatch.setattr(
+        "maxwell_daemon.api.server.GitHubClient", FakeGitHubClient, raising=False
+    )
     monkeypatch.setattr("maxwell_daemon.gh.GitHubClient", FakeGitHubClient)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

@@ -90,7 +90,9 @@ class WebhookRouter:
         self._config = config
         self._daemon = daemon
 
-    def handle(self, *, event_type: str, payload: dict[str, Any]) -> list[WebhookDispatch]:
+    def handle(
+        self, *, event_type: str, payload: dict[str, Any]
+    ) -> list[WebhookDispatch]:
         if event_type == "ping":
             return []
 
@@ -101,7 +103,9 @@ class WebhookRouter:
             return []
 
         matching_routes = [
-            r for r in self._config.routes if r.matches(event_type=event_type, action=action)
+            r
+            for r in self._config.routes
+            if r.matches(event_type=event_type, action=action)
         ]
         if not matching_routes:
             return []
@@ -119,13 +123,20 @@ class WebhookRouter:
         number = int(issue.get("number", 0))
         if number <= 0:
             return []
-        labels = {label["name"] for label in issue.get("labels", [])}
+        labels = set()
+        for label in issue.get("labels", []):
+            if isinstance(label, dict) and "name" in label:
+                labels.add(label["name"])
+            elif isinstance(label, str):
+                labels.add(label)
 
         out: list[WebhookDispatch] = []
         for route in routes:
             if route.label and route.label not in labels:
                 continue
-            task = self._daemon.submit_issue(repo=repo, issue_number=number, mode=route.mode)
+            task = self._daemon.submit_issue(
+                repo=repo, issue_number=number, mode=route.mode
+            )
             out.append(
                 WebhookDispatch(
                     task_id=task.id,
@@ -148,7 +159,9 @@ class WebhookRouter:
         for route in routes:
             if not route.trigger or route.trigger not in comment_body:
                 continue
-            task = self._daemon.submit_issue(repo=repo, issue_number=issue_number, mode=route.mode)
+            task = self._daemon.submit_issue(
+                repo=repo, issue_number=issue_number, mode=route.mode
+            )
             out.append(
                 WebhookDispatch(
                     task_id=task.id,

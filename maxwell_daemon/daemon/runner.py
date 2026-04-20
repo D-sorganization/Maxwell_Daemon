@@ -105,7 +105,12 @@ class Daemon:
         default_store = Path.home() / ".local/share/maxwell-daemon/tasks.db"
         self._task_store = TaskStore(task_store_path or default_store)
         # Memory store — co-located with the ledger for easy backup.
-        from maxwell_daemon.memory import EpisodicStore, MemoryManager, RepoProfile, ScratchPad
+        from maxwell_daemon.memory import (
+            EpisodicStore,
+            MemoryManager,
+            RepoProfile,
+            ScratchPad,
+        )
 
         default_memory = Path.home() / ".local/share/maxwell-daemon/memory.db"
         self._memory = MemoryManager(
@@ -150,7 +155,9 @@ class Daemon:
             self.recover()
         self._running = True
         for i in range(worker_count):
-            self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
+            self._workers.append(
+                asyncio.create_task(self._worker_loop(i), name=f"worker-{i}")
+            )
         log.info("daemon started with %d workers", worker_count)
 
     def recover(self) -> list[Task]:
@@ -187,6 +194,8 @@ class Daemon:
             w.cancel()
         await asyncio.gather(*self._workers, return_exceptions=True)
         self._workers.clear()
+        if hasattr(self._router, "aclose_all"):
+            await self._router.aclose_all()
         log.info("daemon stopped")
 
     def submit(
@@ -216,7 +225,9 @@ class Daemon:
             loop = asyncio.get_running_loop()
             # Task kept alive via strong reference in _bg_tasks.
             bg = loop.create_task(
-                self._events.publish(Event(kind=EventKind.TASK_QUEUED, payload={"id": task.id}))
+                self._events.publish(
+                    Event(kind=EventKind.TASK_QUEUED, payload={"id": task.id})
+                )
             )
             self._bg_tasks.add(bg)
             bg.add_done_callback(self._bg_tasks.discard)
@@ -332,13 +343,16 @@ class Daemon:
             raise ValueError(
                 f"task {task_id} is {task.status.value}; only queued tasks can be cancelled"
             )
-        self._task_store.update_status(task.id, TaskStatus.CANCELLED, finished_at=task.finished_at)
+        self._task_store.update_status(
+            task.id, TaskStatus.CANCELLED, finished_at=task.finished_at
+        )
         with contextlib.suppress(RuntimeError):
             loop = asyncio.get_running_loop()
             bg = loop.create_task(
                 self._events.publish(
                     Event(
-                        kind=EventKind.TASK_FAILED, payload={"id": task_id, "reason": "cancelled"}
+                        kind=EventKind.TASK_FAILED,
+                        payload={"id": task_id, "reason": "cancelled"},
                     )
                 )
             )
@@ -373,14 +387,17 @@ class Daemon:
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now(timezone.utc)
         try:
-            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
+            self._task_store.update_status(
+                task.id, TaskStatus.RUNNING, started_at=task.started_at
+            )
         except Exception:
-            # Don't silently swallow — a failing task_store is an operational
-            # signal operators need to see in Loki/Grafana. The task itself
-            # still proceeds (status lives on ``task`` in memory).
             log.exception("task store write failed for task=%s", task.id)
+            raise
         await self._events.publish(
-            Event(kind=EventKind.TASK_STARTED, payload={"id": task.id, "prompt": task.prompt})
+            Event(
+                kind=EventKind.TASK_STARTED,
+                payload={"id": task.id, "prompt": task.prompt},
+            )
         )
         decision_backend = decision_model = "unknown"
         try:
@@ -421,7 +438,9 @@ class Daemon:
                 status="success",
                 tokens=resp.usage.total_tokens,
                 cost_usd=task.cost_usd,
-                duration_seconds=(datetime.now(timezone.utc) - task.started_at).total_seconds(),
+                duration_seconds=(
+                    datetime.now(timezone.utc) - task.started_at
+                ).total_seconds(),
             )
             await self._events.publish(
                 Event(
@@ -441,16 +460,24 @@ class Daemon:
             await self._events.publish(
                 Event(
                     kind=EventKind.TASK_FAILED,
-                    payload={"id": task.id, "error": str(e), "reason": "budget_exceeded"},
+                    payload={
+                        "id": task.id,
+                        "error": str(e),
+                        "reason": "budget_exceeded",
+                    },
                 )
             )
         except Exception as e:
             log.exception("task %s failed", task.id)
             task.status = TaskStatus.FAILED
             task.error = str(e)
-            record_request(backend=decision_backend, model=decision_model, status="error")
+            record_request(
+                backend=decision_backend, model=decision_model, status="error"
+            )
             await self._events.publish(
-                Event(kind=EventKind.TASK_FAILED, payload={"id": task.id, "error": str(e)})
+                Event(
+                    kind=EventKind.TASK_FAILED, payload={"id": task.id, "error": str(e)}
+                )
             )
         finally:
             task.finished_at = datetime.now(timezone.utc)
@@ -461,6 +488,13 @@ class Daemon:
                 self._task_store.save(task)
             except Exception:
                 log.exception("task store write failed for task=%s", task.id)
+            if (
+                self._memory is not None
+                and hasattr(self._memory, "scratchpad")
+                and getattr(self._memory, "scratchpad", None) is not None
+            ):
+                with contextlib.suppress(AttributeError):
+                    self._memory.scratchpad.clear(task.id)
 
     async def _execute_issue(self, task: Task, decision: Any) -> None:
         """Run the issue → PR flow. Called with status already RUNNING."""

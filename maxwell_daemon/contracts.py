@@ -41,7 +41,9 @@ F = TypeVar("F", bound=Callable[..., Any])
 C = TypeVar("C", bound=type)
 
 
-class ContractViolation(AssertionError):  # noqa: N818  — "Violation" conveys contract semantics more clearly than "Error"
+class ContractViolation(
+    AssertionError
+):  # noqa: N818  — "Violation" conveys contract semantics more clearly than "Error"
     """Base class for all contract failures."""
 
 

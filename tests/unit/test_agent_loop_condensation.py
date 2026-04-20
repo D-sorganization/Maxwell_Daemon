@@ -46,7 +46,9 @@ def _response(
     return resp
 
 
-def _install_mock_client(backend: AgentLoopBackend, responses: list[MagicMock]) -> AsyncMock:
+def _install_mock_client(
+    backend: AgentLoopBackend, responses: list[MagicMock]
+) -> AsyncMock:
     client = MagicMock()
     client.messages = MagicMock()
     client.messages.create = AsyncMock(side_effect=list(responses))
@@ -75,7 +77,9 @@ class _FakeCondenser:
 
 
 class TestCondenserIntegration:
-    async def test_not_called_when_no_condenser_configured(self, tmp_path: Path) -> None:
+    async def test_not_called_when_no_condenser_configured(
+        self, tmp_path: Path
+    ) -> None:
         backend = AgentLoopBackend(workspace_dir=str(tmp_path))  # no condenser
         _install_mock_client(backend, [_response()])
         await backend.complete(

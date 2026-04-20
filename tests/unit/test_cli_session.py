@@ -36,10 +36,16 @@ class TestSessionReplay:
     def test_replay_prints_transcript(self, runner: CliRunner, tmp_path: Path) -> None:
         log = SessionLog(session_id="alpha", directory=tmp_path)
         log.append(UserMessage(session_id="alpha", seq=0, content="hello there"))
-        result = runner.invoke(session_app, ["replay", "alpha", "--directory", str(tmp_path)])
+        result = runner.invoke(
+            session_app, ["replay", "alpha", "--directory", str(tmp_path)]
+        )
         assert result.exit_code == 0
         assert "hello there" in result.output
 
-    def test_missing_session_exits_nonzero(self, runner: CliRunner, tmp_path: Path) -> None:
-        result = runner.invoke(session_app, ["replay", "nonexistent", "--directory", str(tmp_path)])
+    def test_missing_session_exits_nonzero(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        result = runner.invoke(
+            session_app, ["replay", "nonexistent", "--directory", str(tmp_path)]
+        )
         assert result.exit_code == 1

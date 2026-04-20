@@ -38,8 +38,7 @@ class TestFileEdit:
 
 class TestParseUdiff:
     def test_single_file_single_hunk(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             diff --git a/foo.py b/foo.py
             --- a/foo.py
             +++ b/foo.py
@@ -48,8 +47,7 @@ class TestParseUdiff:
             -old
             +new
              line3
-            """
-        )
+            """)
         edits = parse_udiff(text)
         assert len(edits) == 1
         assert edits[0].path == "foo.py"
@@ -59,8 +57,7 @@ class TestParseUdiff:
         assert "+new" in edits[0].content
 
     def test_two_files_multiple_hunks(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             diff --git a/foo.py b/foo.py
             --- a/foo.py
             +++ b/foo.py
@@ -78,8 +75,7 @@ class TestParseUdiff:
             @@ -1,1 +1,1 @@
             -old
             +new
-            """
-        )
+            """)
         edits = parse_udiff(text)
         assert [e.path for e in edits] == ["foo.py", "bar.py"]
         # First file should contain both hunk headers (each has opening + closing @@).
@@ -87,48 +83,42 @@ class TestParseUdiff:
         assert edits[0].content.count("@@ -10,2 +10,2 @@") == 1
 
     def test_create_new_file(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             diff --git a/new.py b/new.py
             --- /dev/null
             +++ b/new.py
             @@ -0,0 +1,2 @@
             +hello
             +world
-            """
-        )
+            """)
         edits = parse_udiff(text)
         assert len(edits) == 1
         assert edits[0].path == "new.py"
         assert edits[0].kind == "create"
 
     def test_delete_file(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             diff --git a/gone.py b/gone.py
             --- a/gone.py
             +++ /dev/null
             @@ -1,2 +0,0 @@
             -hello
             -world
-            """
-        )
+            """)
         edits = parse_udiff(text)
         assert len(edits) == 1
         assert edits[0].path == "gone.py"
         assert edits[0].kind == "delete"
 
     def test_malformed_hunk_header_rejected(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             diff --git a/foo.py b/foo.py
             --- a/foo.py
             +++ b/foo.py
             @@ not a real header @@
             -old
             +new
-            """
-        )
+            """)
         with pytest.raises(DiffParseError, match="hunk"):
             parse_udiff(text)
 
@@ -142,16 +132,14 @@ class TestParseUdiff:
 
 class TestParseSearchReplace:
     def test_single_block(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             file: foo.py
             <<<<<<< SEARCH
             old text
             =======
             new text
             >>>>>>> REPLACE
-            """
-        )
+            """)
         edits = parse_search_replace(text)
         assert len(edits) == 1
         e = edits[0]
@@ -162,8 +150,7 @@ class TestParseSearchReplace:
         assert "new text" in e.content
 
     def test_multiple_blocks_different_files(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             file: foo.py
             <<<<<<< SEARCH
             a
@@ -177,47 +164,40 @@ class TestParseSearchReplace:
             =======
             B
             >>>>>>> REPLACE
-            """
-        )
+            """)
         edits = parse_search_replace(text)
         assert [e.path for e in edits] == ["foo.py", "bar.py"]
 
     def test_missing_separator_rejected(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             file: foo.py
             <<<<<<< SEARCH
             old
             new
             >>>>>>> REPLACE
-            """
-        )
+            """)
         with pytest.raises(DiffParseError, match="separator"):
             parse_search_replace(text)
 
     def test_missing_replace_marker_rejected(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             file: foo.py
             <<<<<<< SEARCH
             old
             =======
             new
-            """
-        )
+            """)
         with pytest.raises(DiffParseError, match="REPLACE"):
             parse_search_replace(text)
 
     def test_missing_file_preamble_rejected(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             <<<<<<< SEARCH
             old
             =======
             new
             >>>>>>> REPLACE
-            """
-        )
+            """)
         with pytest.raises(DiffParseError, match="file"):
             parse_search_replace(text)
 
@@ -227,14 +207,12 @@ class TestParseSearchReplace:
 
 class TestParseWholeFile:
     def test_single_file(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             --- foo.py ---
             print("hello")
             x = 1
             --- end ---
-            """
-        )
+            """)
         edits = parse_whole_file(text)
         assert len(edits) == 1
         e = edits[0]
@@ -245,8 +223,7 @@ class TestParseWholeFile:
         assert "x = 1" in e.content
 
     def test_multiple_files(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             --- foo.py ---
             a = 1
             --- end ---
@@ -254,18 +231,15 @@ class TestParseWholeFile:
             --- bar/baz.py ---
             b = 2
             --- end ---
-            """
-        )
+            """)
         edits = parse_whole_file(text)
         assert [e.path for e in edits] == ["foo.py", "bar/baz.py"]
 
     def test_missing_end_rejected(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             --- foo.py ---
             print("hello")
-            """
-        )
+            """)
         with pytest.raises(DiffParseError, match="end"):
             parse_whole_file(text)
 
@@ -275,31 +249,27 @@ class TestParseWholeFile:
 
 class TestParseAny:
     def test_picks_first_working_format(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             diff --git a/foo.py b/foo.py
             --- a/foo.py
             +++ b/foo.py
             @@ -1,1 +1,1 @@
             -old
             +new
-            """
-        )
+            """)
         edits = parse_any(text)
         assert len(edits) == 1
         assert edits[0].format is DiffFormat.UDIFF
 
     def test_falls_through_to_next_format(self) -> None:
-        text = dedent(
-            """\
+        text = dedent("""\
             file: foo.py
             <<<<<<< SEARCH
             old
             =======
             new
             >>>>>>> REPLACE
-            """
-        )
+            """)
         edits = parse_any(text)
         assert len(edits) == 1
         assert edits[0].format is DiffFormat.SEARCH_REPLACE
@@ -308,13 +278,11 @@ class TestParseAny:
         # The text is valid whole_file but also happens to be valid udiff?
         # No — whole-file markers don't look like udiff, so udiff would fail.
         # We confirm prefer order is respected by asking for WHOLE_FILE first.
-        text = dedent(
-            """\
+        text = dedent("""\
             --- foo.py ---
             a = 1
             --- end ---
-            """
-        )
+            """)
         edits = parse_any(text, prefer=(DiffFormat.WHOLE_FILE,))
         assert len(edits) == 1
         assert edits[0].format is DiffFormat.WHOLE_FILE

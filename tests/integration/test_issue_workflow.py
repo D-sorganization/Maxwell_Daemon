@@ -68,11 +68,17 @@ class StubGitHub:
         body: str,
         draft: bool = True,
     ) -> PullRequest:
-        self._prs.append({"repo": repo, "head": head, "base": base, "title": title, "body": body})
+        self._prs.append(
+            {"repo": repo, "head": head, "base": base, "title": title, "body": body}
+        )
         n = 1000 + len(self._prs)
-        return PullRequest(number=n, url=f"https://github.com/{repo}/pull/{n}", draft=draft)
+        return PullRequest(
+            number=n, url=f"https://github.com/{repo}/pull/{n}", draft=draft
+        )
 
-    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 25) -> list[Issue]:
+    async def list_issues(
+        self, repo: str, *, state: str = "open", limit: int = 25
+    ) -> list[Issue]:
         return [i for (r, _), i in self._issues.items() if r == repo]
 
 
@@ -102,7 +108,9 @@ class StubBackend(ILLMBackend):
         return True
 
     def capabilities(self, model: str) -> BackendCapabilities:
-        return BackendCapabilities(cost_per_1k_input_tokens=0.001, cost_per_1k_output_tokens=0.002)
+        return BackendCapabilities(
+            cost_per_1k_input_tokens=0.001, cost_per_1k_output_tokens=0.002
+        )
 
 
 @pytest.fixture
@@ -139,7 +147,9 @@ def full_system(
     daemon.set_issue_collaborators(
         github_client=stub_gh,
         workspace=object(),  # unused in plan mode
-        executor_factory=lambda gh, ws, be: IssueExecutor(github=stub_gh, workspace=ws, backend=be),
+        executor_factory=lambda gh, ws, be: IssueExecutor(
+            github=stub_gh, workspace=ws, backend=be
+        ),
     )
 
     loop.run_until_complete(daemon.start(worker_count=1))
@@ -154,7 +164,10 @@ def full_system(
 
 
 def _wait_done(
-    client: TestClient, loop: asyncio.AbstractEventLoop, task_id: str, timeout: float = 5.0
+    client: TestClient,
+    loop: asyncio.AbstractEventLoop,
+    task_id: str,
+    timeout: float = 5.0,
 ) -> dict[str, Any]:
     deadline = loop.time() + timeout
     while loop.time() < deadline:
@@ -175,7 +188,11 @@ class TestIssueCreationAndDispatch:
         # 1. Create the issue.
         r = client.post(
             "/api/v1/issues",
-            json={"repo": "owner/project", "title": "Bug in parser", "body": "Repro: ..."},
+            json={
+                "repo": "owner/project",
+                "title": "Bug in parser",
+                "body": "Repro: ...",
+            },
         )
         assert r.status_code == 201
         assert r.json()["url"].endswith("/issues/1")

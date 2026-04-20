@@ -102,8 +102,12 @@ class _PrStateLike(Protocol):
 
 class _GhLike(Protocol):
     async def get_pr(self, repo: str, number: int) -> Any: ...
-    async def get_check_runs(self, repo: str, head_sha: str) -> list[dict[str, str]]: ...
-    async def enable_auto_merge(self, repo: str, number: int, *, method: str) -> None: ...
+    async def get_check_runs(
+        self, repo: str, head_sha: str
+    ) -> list[dict[str, str]]: ...
+    async def enable_auto_merge(
+        self, repo: str, number: int, *, method: str
+    ) -> None: ...
     async def update_branch(self, repo: str, number: int) -> None: ...
     async def add_label(self, repo: str, number: int, label: str) -> None: ...
 
@@ -136,7 +140,9 @@ class PrMergeDaemon:
             )
 
         if pr.merged:
-            return PrShepherdResult(repo=pr.repo, number=pr.number, decision=PrMergeDecision.MERGED)
+            return PrShepherdResult(
+                repo=pr.repo, number=pr.number, decision=PrMergeDecision.MERGED
+            )
 
         if cfg.required_label not in pr.labels:
             return PrShepherdResult(
@@ -221,7 +227,9 @@ class PrMergeDaemon:
             try:
                 results.append(await self.shepherd(pr, gh=gh))
             except Exception:
-                log.warning("shepherd raised for pr=%s/%s", pr.repo, pr.number, exc_info=True)
+                log.warning(
+                    "shepherd raised for pr=%s/%s", pr.repo, pr.number, exc_info=True
+                )
                 results.append(
                     PrShepherdResult(
                         repo=pr.repo,

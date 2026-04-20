@@ -141,7 +141,12 @@ class TestFleetManifestValidation:
                 },
                 "repos": [
                     {"name": "R1", "org": "a"},  # inherits
-                    {"name": "R2", "org": "a", "slots": 9, "pr_target_branch": "main"},  # overrides
+                    {
+                        "name": "R2",
+                        "org": "a",
+                        "slots": 9,
+                        "pr_target_branch": "main",
+                    },  # overrides
                 ],
             }
         )
@@ -173,7 +178,9 @@ class TestLoadFleetManifest:
         manifest = load_fleet_manifest(path=path)
         assert manifest.fleet.name == "Explicit"
 
-    def test_priority_cwd_over_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_priority_cwd_over_home(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         cwd = tmp_path / "cwd"
         cwd.mkdir()
         home_maxwell = tmp_path / "home" / ".maxwell-daemon"
@@ -200,7 +207,9 @@ class TestLoadFleetManifest:
         manifest = load_fleet_manifest()
         assert manifest.fleet.name == "CWD"
 
-    def test_falls_back_to_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_falls_back_to_home(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         empty_cwd = tmp_path / "empty"
         empty_cwd.mkdir()
         home_maxwell = tmp_path / "home" / ".maxwell-daemon"
