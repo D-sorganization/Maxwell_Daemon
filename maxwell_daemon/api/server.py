@@ -189,9 +189,7 @@ def create_app(
     _mount_web_ui(app)
     auth = _auth_dep(auth_token)
 
-    _audit: AuditLogger | None = (
-        AuditLogger(audit_log_path) if audit_log_path is not None else None
-    )
+    _audit: AuditLogger | None = AuditLogger(audit_log_path) if audit_log_path is not None else None
 
     # Rate-limit middleware — installs only when config declares a default group.
     api_cfg = daemon._config.api
