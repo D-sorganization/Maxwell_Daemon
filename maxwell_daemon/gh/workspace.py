@@ -22,7 +22,7 @@ import asyncio
 import re
 import shutil
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 __all__ = ["Workspace", "WorkspaceError"]
@@ -125,7 +125,7 @@ class Workspace:
         Intended for a cron/systemd-timer job — the daemon itself doesn't prune
         so concurrent task cleanup can never race an in-flight task.
         """
-        now = datetime.now().timestamp()
+        now = datetime.now(timezone.utc).timestamp()
         cutoff = now - max_age.total_seconds()
         removed: list[Path] = []
         if not self._root.is_dir():

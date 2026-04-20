@@ -22,6 +22,7 @@ turns before returning the final text response.
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from collections.abc import AsyncIterator, Callable
@@ -52,6 +53,8 @@ __all__ = [
     "BudgetExceededError",
     "WallClockTimeoutError",
 ]
+
+log = logging.getLogger(__name__)
 
 
 # ── Module-level config ───────────────────────────────────────────────────────
@@ -261,7 +264,7 @@ class AgentLoopBackend(ILLMBackend):
             return
         # Import lazily so the ledger dependency is optional — tests that inject
         # a MagicMock ledger don't have to stub CostRecord.
-        with suppress(Exception):
+        try:
             from maxwell_daemon.core.ledger import CostRecord
 
             self._ledger.record(
@@ -275,6 +278,8 @@ class AgentLoopBackend(ILLMBackend):
                     agent_id=agent_id,
                 )
             )
+        except Exception:
+            log.exception("Failed to record cost")
 
     # ── ILLMBackend interface ────────────────────────────────────────────────
 
@@ -301,9 +306,10 @@ class AgentLoopBackend(ILLMBackend):
         ``budget_per_story_usd`` / ``wall_clock_timeout_seconds``.
         """
         effective_model = model or self._default_model
-        effective_workspace = Path(
-            workspace_dir or self._default_workspace or os.getcwd()
-        ).resolve()
+        workspace_raw = workspace_dir or self._default_workspace
+        if not workspace_raw:
+            raise ValueError("No workspace specified")
+        effective_workspace = Path(workspace_raw).resolve()
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
         tool_registry = self._registry_factory(effective_workspace)

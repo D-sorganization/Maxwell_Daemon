@@ -115,7 +115,10 @@ class OllamaAgentLoopBackend(ILLMBackend):
         max_turns: int | None = None,
         **_: Any,
     ) -> BackendResponse:
-        effective_workspace = Path(workspace_dir or self._workspace or os.getcwd()).resolve()
+        workspace_raw = workspace_dir or self._workspace
+        if not workspace_raw:
+            raise ValueError("No workspace specified")
+        effective_workspace = Path(workspace_raw).resolve()
         effective_model = model or self.default_model
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
