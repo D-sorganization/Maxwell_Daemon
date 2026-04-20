@@ -214,27 +214,40 @@ def _build_run_bash_env() -> dict[str, str]:
 
 
 def get_sandboxed_bash_cmd(cmd: list[str], root: str) -> list[str]:
-    import sys
     import shutil
-    
+    import sys
+
     if sys.platform == "darwin":
         if shutil.which("sandbox-exec"):
-            return ["sandbox-exec", "-f", "/usr/share/sandbox/pure_computation.sb"] + cmd
+            return [
+                "sandbox-exec",
+                "-f",
+                "/usr/share/sandbox/pure_computation.sb",
+                *cmd,
+            ]
     elif sys.platform.startswith("linux"):
         # landlock-restrict if available, else bwrap fallback
         if shutil.which("landlock-restrict"):
-            return ["landlock-restrict", "--ro", "/", "--rw", root] + cmd
+            return ["landlock-restrict", "--ro", "/", "--rw", root, *cmd]
         if shutil.which("bwrap"):
             tmpfs_dir = os.path.join(os.sep, "tmp")
             return [
                 "bwrap",
                 "--unshare-all",
-                "--ro-bind", "/", "/",
-                "--bind", root, root,
-                "--dev", "/dev",
-                "--proc", "/proc",
-                "--tmpfs", tmpfs_dir,
-            ] + cmd
+                "--ro-bind",
+                "/",
+                "/",
+                "--bind",
+                root,
+                root,
+                "--dev",
+                "/dev",
+                "--proc",
+                "/proc",
+                "--tmpfs",
+                tmpfs_dir,
+                *cmd,
+            ]
     return cmd
 
 
