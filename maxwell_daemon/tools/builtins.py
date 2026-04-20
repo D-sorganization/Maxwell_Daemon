@@ -225,6 +225,7 @@ def get_sandboxed_bash_cmd(cmd: list[str], root: str) -> list[str]:
         if shutil.which("landlock-restrict"):
             return ["landlock-restrict", "--ro", "/", "--rw", root] + cmd
         if shutil.which("bwrap"):
+            tmpfs_dir = os.path.join(os.sep, "tmp")
             return [
                 "bwrap",
                 "--unshare-all",
@@ -232,7 +233,7 @@ def get_sandboxed_bash_cmd(cmd: list[str], root: str) -> list[str]:
                 "--bind", root, root,
                 "--dev", "/dev",
                 "--proc", "/proc",
-                "--tmpfs", "/tmp",
+                "--tmpfs", tmpfs_dir,
             ] + cmd
     return cmd
 

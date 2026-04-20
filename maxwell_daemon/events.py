@@ -12,6 +12,7 @@ downstream consumer plug in without the daemon knowing they exist.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -113,8 +114,6 @@ class _Subscription:
         # Safety net: if the subscription is GC'd without explicit close,
         # still deregister from the bus so subscriber_count() stays accurate.
         if getattr(self, "_closed", False) is False:
-            try:
+            with contextlib.suppress(Exception):
                 self._bus._unsubscribe(self._queue)
-            except Exception:
-                pass
             self._closed = True
