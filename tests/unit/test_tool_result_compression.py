@@ -83,23 +83,17 @@ class TestHeadTailTruncation:
     def test_head_tail_applied_when_too_long(self) -> None:
         lines = [f"line {i}" for i in range(500)]
         output = "\n".join(lines)
-        compressor = ToolResultCompressor(
-            head_lines=5, tail_lines=5, max_chars=100
-        )
+        compressor = ToolResultCompressor(head_lines=5, tail_lines=5, max_chars=100)
         result = compressor.compress("run_bash", output)
         assert result.strategy == "head_tail"
         # First 5 lines preserved verbatim.
         assert result.content.startswith("line 0\nline 1\nline 2\nline 3\nline 4\n")
         # Last 5 lines preserved verbatim.
-        assert result.content.rstrip().endswith(
-            "line 495\nline 496\nline 497\nline 498\nline 499"
-        )
+        assert result.content.rstrip().endswith("line 495\nline 496\nline 497\nline 498\nline 499")
 
     def test_head_tail_contains_truncation_marker(self) -> None:
         output = "\n".join(f"L{i}" for i in range(200))
-        compressor = ToolResultCompressor(
-            head_lines=3, tail_lines=3, max_chars=20
-        )
+        compressor = ToolResultCompressor(head_lines=3, tail_lines=3, max_chars=20)
         result = compressor.compress("run_bash", output)
         assert "truncated" in result.content
         # Marker should record how many lines vanished: 200 - 3 - 3 = 194.
@@ -107,17 +101,13 @@ class TestHeadTailTruncation:
 
     def test_head_tail_compressed_shorter_than_original(self) -> None:
         output = "\n".join(f"line {i}" for i in range(1000))
-        compressor = ToolResultCompressor(
-            head_lines=10, tail_lines=10, max_chars=50
-        )
+        compressor = ToolResultCompressor(head_lines=10, tail_lines=10, max_chars=50)
         result = compressor.compress("run_bash", output)
         assert len(result.content) < len(output)
 
     def test_unknown_tool_still_head_tail_when_long(self) -> None:
         output = "\n".join(f"line {i}" for i in range(400))
-        compressor = ToolResultCompressor(
-            head_lines=2, tail_lines=2, max_chars=30
-        )
+        compressor = ToolResultCompressor(head_lines=2, tail_lines=2, max_chars=30)
         result = compressor.compress("unknown_tool", output)
         assert result.strategy == "head_tail"
 
@@ -158,9 +148,7 @@ class TestDedup:
         # the strategy must then fall through to head_tail.
         lines = [f"unique_{i}" for i in range(500)]
         output = "\n".join(lines)
-        compressor = ToolResultCompressor(
-            head_lines=3, tail_lines=3, max_chars=50
-        )
+        compressor = ToolResultCompressor(head_lines=3, tail_lines=3, max_chars=50)
         result = compressor.compress("grep_files", output)
         assert result.strategy == "head_tail"
         assert "truncated" in result.content
@@ -169,9 +157,7 @@ class TestDedup:
         # run_bash isn't in the dedup set; duplicate lines are untouched when
         # we go through head_tail.
         output = ("same\n" * 200) + "end\n"
-        compressor = ToolResultCompressor(
-            head_lines=5, tail_lines=5, max_chars=30
-        )
+        compressor = ToolResultCompressor(head_lines=5, tail_lines=5, max_chars=30)
         result = compressor.compress("run_bash", output)
         assert result.strategy == "head_tail"
 
@@ -202,9 +188,7 @@ class TestCompressionResultAccounting:
 
     def test_accounting_on_truncation_compressed_is_smaller(self) -> None:
         output = "\n".join(f"line_{i}" for i in range(1000))
-        compressor = ToolResultCompressor(
-            head_lines=5, tail_lines=5, max_chars=50
-        )
+        compressor = ToolResultCompressor(head_lines=5, tail_lines=5, max_chars=50)
         result = compressor.compress("run_bash", output)
         assert result.compressed_bytes < result.original_bytes
 
