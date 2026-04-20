@@ -41,6 +41,7 @@ from conductor.backends.base import (
     MessageRole,
     TokenUsage,
 )
+from conductor.backends.condensation import Condenser
 from conductor.backends.registry import registry
 from conductor.gh.ci_patterns import detect_ci_profile
 from conductor.tools import ToolRegistry, build_default_registry
@@ -142,6 +143,7 @@ class AgentLoopBackend(ILLMBackend):
         wall_clock_timeout_seconds: float | None = None,
         enable_prompt_caching: bool = True,
         registry_factory: Callable[[Path], ToolRegistry] | None = None,
+        condenser: Condenser | None = None,
     ) -> None:
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
@@ -158,6 +160,7 @@ class AgentLoopBackend(ILLMBackend):
         self._wall_clock_timeout = wall_clock_timeout_seconds
         self._enable_cache = enable_prompt_caching
         self._registry_factory = registry_factory or build_default_registry
+        self._condenser = condenser
 
     # ── System prompt assembly ───────────────────────────────────────────────
 
@@ -327,6 +330,13 @@ class AgentLoopBackend(ILLMBackend):
                     f"agent loop exceeded wall-clock timeout of "
                     f"{self._wall_clock_timeout}s at turn {turn + 1}"
                 )
+
+            # Condense message history if context is getting long. The
+            # condenser no-ops when the list is already short enough.
+            if self._condenser is not None and self._condenser.should_condense(
+                total_usage.prompt_tokens
+            ):
+                sdk_messages = await self._condenser.condense(sdk_messages)
 
             response = await self._client.messages.create(
                 model=effective_model,
