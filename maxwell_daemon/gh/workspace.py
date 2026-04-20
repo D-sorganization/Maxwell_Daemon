@@ -44,9 +44,15 @@ async def _default_runner(
     cwd: str | None = None,
     stdin: bytes | None = None,
 ) -> tuple[int, bytes, bytes]:
+    import os
+
+    env = os.environ.copy()
+    env["GIT_CONFIG_GLOBAL"] = "/dev/null"
+    env["GIT_CONFIG_SYSTEM"] = "/dev/null"
     proc = await asyncio.create_subprocess_exec(
         *argv,
         cwd=cwd,
+        env=env,
         stdin=asyncio.subprocess.PIPE if stdin is not None else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

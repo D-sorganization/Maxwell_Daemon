@@ -212,8 +212,9 @@ class Daemon:
             backend=backend,
             model=model,
         )
-        # dict[k] = v is GIL-atomic — no lock needed for a single-key write.
-        self._tasks[task.id] = task
+        # Write to self._tasks under lock to prevent iteration errors
+        with self._tasks_lock:
+            self._tasks[task.id] = task
         self._task_store.save(task)
         self._queue.put_nowait(task)
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
@@ -252,8 +253,9 @@ class Daemon:
             issue_number=issue_number,
             issue_mode=mode,
         )
-        # dict[k] = v is GIL-atomic — no lock needed for a single-key write.
-        self._tasks[task.id] = task
+        # Write to self._tasks under lock to prevent iteration errors
+        with self._tasks_lock:
+            self._tasks[task.id] = task
         self._task_store.save(task)
         self._queue.put_nowait(task)
         with contextlib.suppress(RuntimeError):

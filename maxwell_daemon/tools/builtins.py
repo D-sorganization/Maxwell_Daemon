@@ -114,9 +114,21 @@ def make_write_file(root: Path) -> Callable[..., str]:
         ],
     )
     def write_file(path: str, content: str) -> str:
+        import os
+        import tempfile
+
         resolved = _resolve(root, path)
         resolved.parent.mkdir(parents=True, exist_ok=True)
-        resolved.write_text(content, encoding="utf-8")
+        fd, tmp_path = tempfile.mkstemp(dir=resolved.parent, text=True)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, resolved)
+        except Exception:
+            os.unlink(tmp_path)
+            raise
         return f"wrote {len(content)} bytes to {path}"
 
     return write_file
@@ -154,7 +166,20 @@ def make_edit_file(root: Path) -> Callable[..., str]:
                 f"old_string appears {occurrences} times in {path!r} — "
                 "refuse ambiguous edits; include more surrounding context"
             )
-        resolved.write_text(content.replace(old_string, new_string), encoding="utf-8")
+        import os
+        import tempfile
+
+        new_content = content.replace(old_string, new_string)
+        fd, tmp_path = tempfile.mkstemp(dir=resolved.parent, text=True)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(new_content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, resolved)
+        except Exception:
+            os.unlink(tmp_path)
+            raise
         return f"edited {path}"
 
     return edit_file
