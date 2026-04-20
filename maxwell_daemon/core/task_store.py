@@ -199,7 +199,7 @@ class TaskStore:
         if status is not None:
             query += " WHERE status = ?"
             args.append(status.value)
-        query += " ORDER BY datetime(created_at) DESC LIMIT ?"
+        query += " ORDER BY created_at DESC LIMIT ?"
         args.append(limit)
         with self._connect() as conn:
             rows = conn.execute(query, args).fetchall()

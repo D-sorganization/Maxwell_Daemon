@@ -73,7 +73,7 @@ async def discover_issues(
         across discovery runs.
     """
     filters = filters or DiscoveryFilter()
-    seen = already_dispatched or set()
+    seen = already_dispatched if already_dispatched is not None else set()
     issues = await github.list_issues(repo, state=state, limit=limit)
 
     dispatched: list[str] = []
