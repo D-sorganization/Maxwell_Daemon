@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
 import subprocess
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -300,14 +301,25 @@ def _matches(pattern: str, name: str) -> bool:
 
 
 def _substitute(command: str, tool_input: dict[str, Any]) -> str:
-    """Replace ``{{key}}`` tokens in ``command`` with ``str(tool_input[key])``.
+    """Replace ``{{key}}`` tokens in ``command`` with a shell-safe rendering.
+
+    Every substituted value is passed through :func:`shlex.quote` so values
+    containing shell metacharacters (``;``, ``&``, ``|``, backticks, etc.)
+    land as a single shell token — hook commands run under ``bash -c`` and
+    this is the thin layer that stops an attacker-controlled tool input from
+    breaking out of the intended argument.
+
+    Structured values (``dict`` / ``list``) are serialised via
+    :func:`json.dumps` first so hook scripts can still parse them; the result
+    is then ``shlex.quote``d exactly like any other value.
 
     Missing keys are left as-is so hook authors can spot unresolved placeholders
     in logs rather than having them silently replaced with ``""``.
     """
     out = command
     for key, value in tool_input.items():
-        out = out.replace(f"{{{{{key}}}}}", str(value))
+        rendered = json.dumps(value, default=str) if isinstance(value, (dict, list)) else str(value)
+        out = out.replace(f"{{{{{key}}}}}", shlex.quote(rendered))
     return out
 
 

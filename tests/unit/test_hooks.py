@@ -166,7 +166,38 @@ class TestPostToolHook:
         cfg = HookConfig(post_tool=(HookSpec(match="write_file", command="check {{path}}"),))
         hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
         await hr.run_post_tool("write_file", {"path": "a.py"}, tool_output="")
+        # Safe strings pass through shlex.quote unchanged.
         assert runner.calls[0]["command"] == "check a.py"
+
+    async def test_placeholder_substitution_quotes_shell_metacharacters(
+        self, tmp_path: Path
+    ) -> None:
+        """Values with shell metacharacters must be ``shlex.quote``d so the
+        shell sees them as a single token rather than a command separator."""
+        runner = _Runner()
+        cfg = HookConfig(post_tool=(HookSpec(match="*", command="echo {{path}}"),))
+        hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
+        await hr.run_post_tool("write_file", {"path": "x; evil"}, tool_output="")
+        cmd = runner.calls[0]["command"]
+        # The unsafe value is single-quoted; no unescaped semicolon slips in.
+        assert "'x; evil'" in cmd
+        assert "echo x; evil" not in cmd
+
+    async def test_placeholder_substitution_serialises_structured_values(
+        self, tmp_path: Path
+    ) -> None:
+        """Dict / list values serialise to JSON and are a single shell token."""
+        import json
+        import shlex
+
+        runner = _Runner()
+        cfg = HookConfig(post_tool=(HookSpec(match="*", command="lint {{config}}"),))
+        hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
+        await hr.run_post_tool("write_file", {"config": {"foo": "bar"}}, tool_output="")
+        cmd = runner.calls[0]["command"]
+        # Expect a single shlex-quoted JSON string — parseable by a hook script.
+        expected = shlex.quote(json.dumps({"foo": "bar"}))
+        assert cmd == f"lint {expected}"
 
     async def test_env_carries_tool_output(self, tmp_path: Path) -> None:
         runner = _Runner()
