@@ -15,7 +15,7 @@ from conductor.backends.base import BackendError, ILLMBackend
 
 log = logging.getLogger(__name__)
 
-_BUILTIN_BACKENDS = ("claude", "openai", "azure", "ollama", "claude_code")
+_BUILTIN_BACKENDS = ("claude", "openai", "azure", "ollama", "claude_code", "agent_loop")
 
 
 class BackendRegistry:

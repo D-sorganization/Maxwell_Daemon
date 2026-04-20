@@ -24,3 +24,9 @@ __all__ = [
     "TokenUsage",
     "registry",
 ]
+
+# Ensure agent-loop backend is registered when this package is imported.
+try:
+    import conductor.backends.agent_loop as _agent_loop_mod  # noqa: F401
+except ImportError:
+    pass
