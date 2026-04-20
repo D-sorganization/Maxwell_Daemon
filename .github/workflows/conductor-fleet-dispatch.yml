@@ -1,0 +1,133 @@
+name: Conductor Fleet Dispatch
+
+# Remote trigger equivalent to GAAI's agent-gaai-fleet-dispatch.yml.
+# Fires on manual UI dispatch or a weekday morning cron. Runs the conductor
+# CLI against whichever repos fleet.yaml declares.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Fleet action"
+        required: true
+        type: choice
+        options:
+          - full-run   # discover + deliver: dispatch-batch --all with the deliver label
+          - discover   # dispatch-batch in plan mode (no PR body diff)
+          - deliver    # dispatch-batch in implement mode
+          - status     # placeholder — see follow-up issue
+          - stop       # placeholder — see follow-up issue
+          - cleanup    # placeholder — see follow-up issue
+      repos:
+        description: 'Comma-separated repo names, or "all" to read fleet.yaml'
+        required: false
+        default: "all"
+        type: string
+      label:
+        description: "Issue label to dispatch (default: conductor:ready)"
+        required: false
+        default: "conductor:ready"
+        type: string
+      max_stories:
+        description: "Max stories per repo (0 = unlimited)"
+        required: false
+        default: "0"
+        type: string
+      dry_run:
+        description: "Dry run — print plan without submitting"
+        required: false
+        default: false
+        type: boolean
+
+  # Weekday morning discovery pass. Takes the default fleet label and a
+  # conservative max-stories cap so a schedule misconfiguration can't
+  # flood the fleet.
+  schedule:
+    - cron: "0 8 * * 1-5"
+
+concurrency:
+  group: conductor-fleet-dispatch
+  cancel-in-progress: false
+
+jobs:
+  fleet-dispatch:
+    runs-on: [self-hosted, conductor-fleet]
+    timeout-minutes: 120
+    env:
+      GITHUB_TOKEN: ${{ secrets.CONDUCTOR_GH_TOKEN || secrets.GITHUB_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CONDUCTOR_FLEET_CONFIG: ${{ github.workspace }}/fleet.yaml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install conductor
+        run: pip install -e ".[dev]"
+
+      - name: Resolve inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Schedule runs have no workflow_dispatch inputs — fall back to sane defaults.
+          ACTION="${{ inputs.action || 'full-run' }}"
+          REPOS="${{ inputs.repos || 'all' }}"
+          LABEL="${{ inputs.label || 'conductor:ready' }}"
+          MAX="${{ inputs.max_stories || '3' }}"
+          DRY_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then DRY_FLAG="--dry-run"; fi
+
+          # Translate the repo selector into --all or repeated --repo flags.
+          if [ "$REPOS" = "all" ]; then
+            REPO_FLAGS="--all"
+          else
+            REPO_FLAGS=""
+            IFS=',' read -ra R <<< "$REPOS"
+            for r in "${R[@]}"; do REPO_FLAGS="$REPO_FLAGS --repo $(echo $r | xargs)"; done
+          fi
+
+          MAX_FLAG=""
+          if [ "$MAX" != "0" ]; then MAX_FLAG="--max-stories $MAX"; fi
+
+          {
+            echo "action=$ACTION"
+            echo "repo_flags=$REPO_FLAGS"
+            echo "max_flag=$MAX_FLAG"
+            echo "label=$LABEL"
+            echo "dry_flag=$DRY_FLAG"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ steps.inputs.outputs.action }}" in
+            full-run|deliver)
+              conductor issue dispatch-batch \
+                ${{ steps.inputs.outputs.repo_flags }} \
+                --label "${{ steps.inputs.outputs.label }}" \
+                --mode implement \
+                ${{ steps.inputs.outputs.max_flag }} \
+                ${{ steps.inputs.outputs.dry_flag }}
+              ;;
+            discover)
+              conductor issue dispatch-batch \
+                ${{ steps.inputs.outputs.repo_flags }} \
+                --label "${{ steps.inputs.outputs.label }}" \
+                --mode plan \
+                ${{ steps.inputs.outputs.max_flag }} \
+                ${{ steps.inputs.outputs.dry_flag }}
+              ;;
+            status|stop|cleanup)
+              echo "::notice::action '${{ steps.inputs.outputs.action }}' is a placeholder — tracked in follow-up issue."
+              ;;
+            *)
+              echo "::error::unknown action '${{ steps.inputs.outputs.action }}'"
+              exit 1
+              ;;
+          esac
