@@ -59,6 +59,10 @@ class AgentConfig(BaseModel):
     default_backend: str = "claude"
 
 
+class ToolConfig(BaseModel):
+    approval_tier: Literal["suggest", "auto-edit", "full-auto"] = "full-auto"
+
+
 class RepoConfig(BaseModel):
     name: str
     path: Path
@@ -136,6 +140,7 @@ class MaxwellDaemonConfig(BaseModel):
     version: str = "1"
     backends: dict[str, BackendConfig] = Field(default_factory=dict)
     agent: AgentConfig = Field(default_factory=lambda: AgentConfig())
+    tools: ToolConfig = Field(default_factory=lambda: ToolConfig())
     repos: list[RepoConfig] = Field(default_factory=list)
     fleet: FleetConfig = Field(default_factory=lambda: FleetConfig())
     api: APIConfig = Field(default_factory=lambda: APIConfig())

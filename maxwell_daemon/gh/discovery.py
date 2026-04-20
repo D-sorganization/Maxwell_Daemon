@@ -73,7 +73,7 @@ async def discover_issues(
         across discovery runs.
     """
     filters = filters or DiscoveryFilter()
-    seen = already_dispatched or set()
+    seen = already_dispatched if already_dispatched is not None else set()
     issues = await github.list_issues(repo, state=state, limit=limit)
 
     dispatched: list[str] = []
@@ -90,6 +90,7 @@ async def discover_issues(
             continue
         task = daemon.submit_issue(repo=repo, issue_number=issue.number, mode=mode)
         dispatched.append(task.id)
+        seen.add(issue.number)
 
     return DiscoveryResult(
         repo=repo,
