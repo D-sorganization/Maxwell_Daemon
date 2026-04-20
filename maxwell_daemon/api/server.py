@@ -35,6 +35,7 @@ from fastapi import (
 from pydantic import BaseModel, Field, field_validator
 
 from maxwell_daemon import __version__
+from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task
 from maxwell_daemon.logging import bind_context
@@ -172,6 +173,7 @@ def create_app(
     *,
     auth_token: str | None = None,
     github_client: Any = None,
+    audit_log_path: _Path | None = None,
 ) -> FastAPI:
     """Build the FastAPI app.
 
@@ -186,6 +188,10 @@ def create_app(
     mount_metrics_endpoint(app)
     _mount_web_ui(app)
     auth = _auth_dep(auth_token)
+
+    _audit: AuditLogger | None = (
+        AuditLogger(audit_log_path) if audit_log_path is not None else None
+    )
 
     # Rate-limit middleware — installs only when config declares a default group.
     api_cfg = daemon._config.api
@@ -213,6 +219,16 @@ def create_app(
         with bind_context(request_id=request_id):
             response: Response = await call_next(request)
         response.headers["x-request-id"] = request_id
+        if _audit is not None and not request.url.path.startswith("/ui"):
+            auth_header = request.headers.get("authorization", "")
+            user = auth_header.removeprefix("Bearer ").strip() if auth_header else None
+            _audit.log_api_call(
+                method=request.method,
+                path=request.url.path,
+                status=response.status_code,
+                user=user,
+                request_id=request_id,
+            )
         return response
 
     def _gh() -> Any:
@@ -481,6 +497,33 @@ def create_app(
                 "discovery_interval_seconds": fleet_section.get("discovery_interval_seconds", 300),
             },
             "repos": repos,
+        }
+
+    @app.get("/api/v1/audit", dependencies=[Depends(auth)])
+    async def audit_log(
+        limit: int = Query(default=200, ge=1, le=10_000),
+        offset: int = Query(default=0, ge=0),
+    ) -> dict[str, Any]:
+        """Return paginated audit log entries (oldest first)."""
+        if _audit is None:
+            return {"entries": [], "audit_enabled": False}
+        return {
+            "entries": _audit.entries(limit=limit, offset=offset),
+            "audit_enabled": True,
+        }
+
+    @app.get("/api/v1/audit/verify", dependencies=[Depends(auth)])
+    async def audit_verify() -> dict[str, Any]:
+        """Verify the audit log hash chain.  Returns violations (empty = clean)."""
+        from maxwell_daemon.audit import verify_chain
+
+        if _audit is None or audit_log_path is None:
+            return {"clean": True, "violations": [], "audit_enabled": False}
+        violations = verify_chain(audit_log_path)
+        return {
+            "clean": len(violations) == 0,
+            "violations": violations,
+            "audit_enabled": True,
         }
 
     @app.get("/api/v1/cost", dependencies=[Depends(auth)])
