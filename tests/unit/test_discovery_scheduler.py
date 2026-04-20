@@ -21,7 +21,6 @@ from maxwell_daemon.daemon.scheduler import (
 )
 from maxwell_daemon.gh.client import Issue
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
