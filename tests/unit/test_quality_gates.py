@@ -21,9 +21,7 @@ class _RecordingRunner:
         self.calls: list[tuple[str, ...]] = []
         self._responses: dict[tuple[str, ...], tuple[int, bytes, bytes]] = {}
 
-    def respond(
-        self, *argv: str, rc: int = 0, stdout: bytes = b"", stderr: bytes = b""
-    ) -> None:
+    def respond(self, *argv: str, rc: int = 0, stdout: bytes = b"", stderr: bytes = b"") -> None:
         self._responses[argv] = (rc, stdout, stderr)
 
     async def __call__(

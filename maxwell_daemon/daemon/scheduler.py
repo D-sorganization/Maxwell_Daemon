@@ -103,13 +103,9 @@ class DiscoveryScheduler:
                 # ``discover_issues`` completes. Two calls is acceptable here
                 # — list_issues is cheap and the alternative would be
                 # threading a mutable out-param through discover_issues.
-                current_issues = await self._github.list_issues(
-                    spec.repo, state="open", limit=50
-                )
+                current_issues = await self._github.list_issues(spec.repo, state="open", limit=50)
             except Exception:
-                log.warning(
-                    "discovery list failed for repo=%s", spec.repo, exc_info=True
-                )
+                log.warning("discovery list failed for repo=%s", spec.repo, exc_info=True)
                 continue
 
             try:
@@ -122,9 +118,7 @@ class DiscoveryScheduler:
                     already_dispatched=seen,
                 )
             except Exception:
-                log.warning(
-                    "discovery tick failed for repo=%s", spec.repo, exc_info=True
-                )
+                log.warning("discovery tick failed for repo=%s", spec.repo, exc_info=True)
                 continue
 
             total_scanned += result.scanned
@@ -187,7 +181,5 @@ class _SnapshotLister:
     def __init__(self, issues: list[Any]) -> None:
         self._issues = issues
 
-    async def list_issues(
-        self, repo: str, *, state: str = "open", limit: int = 50
-    ) -> list[Any]:
+    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 50) -> list[Any]:
         return self._issues

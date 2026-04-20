@@ -155,9 +155,7 @@ class Daemon:
             self.recover()
         self._running = True
         for i in range(worker_count):
-            self._workers.append(
-                asyncio.create_task(self._worker_loop(i), name=f"worker-{i}")
-            )
+            self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
         log.info("daemon started with %d workers", worker_count)
 
     def recover(self) -> list[Task]:
@@ -225,9 +223,7 @@ class Daemon:
             loop = asyncio.get_running_loop()
             # Task kept alive via strong reference in _bg_tasks.
             bg = loop.create_task(
-                self._events.publish(
-                    Event(kind=EventKind.TASK_QUEUED, payload={"id": task.id})
-                )
+                self._events.publish(Event(kind=EventKind.TASK_QUEUED, payload={"id": task.id}))
             )
             self._bg_tasks.add(bg)
             bg.add_done_callback(self._bg_tasks.discard)
@@ -343,9 +339,7 @@ class Daemon:
             raise ValueError(
                 f"task {task_id} is {task.status.value}; only queued tasks can be cancelled"
             )
-        self._task_store.update_status(
-            task.id, TaskStatus.CANCELLED, finished_at=task.finished_at
-        )
+        self._task_store.update_status(task.id, TaskStatus.CANCELLED, finished_at=task.finished_at)
         with contextlib.suppress(RuntimeError):
             loop = asyncio.get_running_loop()
             bg = loop.create_task(
@@ -387,9 +381,7 @@ class Daemon:
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now(timezone.utc)
         try:
-            self._task_store.update_status(
-                task.id, TaskStatus.RUNNING, started_at=task.started_at
-            )
+            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
         except Exception:
             log.exception("task store write failed for task=%s", task.id)
             raise
@@ -438,9 +430,7 @@ class Daemon:
                 status="success",
                 tokens=resp.usage.total_tokens,
                 cost_usd=task.cost_usd,
-                duration_seconds=(
-                    datetime.now(timezone.utc) - task.started_at
-                ).total_seconds(),
+                duration_seconds=(datetime.now(timezone.utc) - task.started_at).total_seconds(),
             )
             await self._events.publish(
                 Event(
@@ -471,13 +461,9 @@ class Daemon:
             log.exception("task %s failed", task.id)
             task.status = TaskStatus.FAILED
             task.error = str(e)
-            record_request(
-                backend=decision_backend, model=decision_model, status="error"
-            )
+            record_request(backend=decision_backend, model=decision_model, status="error")
             await self._events.publish(
-                Event(
-                    kind=EventKind.TASK_FAILED, payload={"id": task.id, "error": str(e)}
-                )
+                Event(kind=EventKind.TASK_FAILED, payload={"id": task.id, "error": str(e)})
             )
         finally:
             task.finished_at = datetime.now(timezone.utc)

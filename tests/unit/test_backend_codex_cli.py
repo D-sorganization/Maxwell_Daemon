@@ -27,9 +27,7 @@ class _Runner:
         self._stderr: bytes = b""
         self._rc: int = 0
 
-    def respond(
-        self, *, rc: int = 0, stdout: bytes | str = b"", stderr: bytes | str = b""
-    ) -> None:
+    def respond(self, *, rc: int = 0, stdout: bytes | str = b"", stderr: bytes | str = b"") -> None:
         self._rc = rc
         self._stdout = stdout.encode() if isinstance(stdout, str) else stdout
         self._stderr = stderr.encode() if isinstance(stderr, str) else stderr

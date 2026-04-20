@@ -57,9 +57,7 @@ class _FakeGitHub:
     def __init__(self, canned: dict[str, list[Issue]]) -> None:
         self._canned = canned
 
-    async def list_issues(
-        self, repo: str, *, state: str = "open", limit: int = 50
-    ) -> list[Issue]:
+    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 50) -> list[Issue]:
         return list(self._canned.get(repo, []))
 
 
@@ -91,9 +89,7 @@ class TestShapes:
 
 class TestRunOnce:
     async def test_dispatches_new_issues_from_one_repo(self) -> None:
-        gh = _FakeGitHub(
-            {"a/b": [_issue(1, labels=["deliver"]), _issue(2, labels=["deliver"])]}
-        )
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"]), _issue(2, labels=["deliver"])]})
         daemon = _FakeDaemon()
         sched = DiscoveryScheduler(
             github=gh,
@@ -106,9 +102,7 @@ class TestRunOnce:
         assert [s["issue_number"] for s in daemon.submitted] == [1, 2]
 
     async def test_label_filter_drops_non_matching(self) -> None:
-        gh = _FakeGitHub(
-            {"a/b": [_issue(1, labels=["deliver"]), _issue(2, labels=["other"])]}
-        )
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"]), _issue(2, labels=["other"])]})
         daemon = _FakeDaemon()
         sched = DiscoveryScheduler(
             github=gh,

@@ -85,9 +85,7 @@ class EmbeddingProvider(Protocol):
     @property
     def dimensions(self) -> int: ...
 
-    async def embed_batch(
-        self, texts: tuple[str, ...]
-    ) -> tuple[EmbeddingResult, ...]: ...
+    async def embed_batch(self, texts: tuple[str, ...]) -> tuple[EmbeddingResult, ...]: ...
 
 
 class StubEmbeddingProvider:
@@ -226,9 +224,7 @@ def cosine_similarity(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     always a bug, never something the caller wants to silently paper over.
     """
     if len(a) != len(b):
-        raise ValueError(
-            f"cosine_similarity: dimension mismatch ({len(a)} vs {len(b)})"
-        )
+        raise ValueError(f"cosine_similarity: dimension mismatch ({len(a)} vs {len(b)})")
     if not a:
         return 0.0
 

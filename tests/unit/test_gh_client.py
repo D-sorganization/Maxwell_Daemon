@@ -39,9 +39,7 @@ class FakeRunner:
             stderr = stderr.encode()
         self._responses[argv] = (returncode, stdout, stderr)
 
-    async def __call__(
-        self, *argv: str, cwd: str | None = None
-    ) -> tuple[int, bytes, bytes]:
+    async def __call__(self, *argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
         self.calls.append(argv)
         return self._responses.get(argv, (0, b"", b""))
 
@@ -125,9 +123,7 @@ class TestCreateIssue:
         client = GitHubClient(runner=fake_runner)
 
         url = asyncio.run(
-            client.create_issue(
-                "owner/repo", title="Something broke", body="details here"
-            )
+            client.create_issue("owner/repo", title="Something broke", body="details here")
         )
 
         assert url == "https://github.com/owner/repo/issues/99"
@@ -228,9 +224,7 @@ class TestAuth:
         assert asyncio.run(client.check_auth()) is True
 
     def test_check_auth_failure(self, fake_runner: FakeRunner) -> None:
-        fake_runner.respond(
-            "gh", "auth", "status", returncode=1, stderr=b"not logged in"
-        )
+        fake_runner.respond("gh", "auth", "status", returncode=1, stderr=b"not logged in")
         client = GitHubClient(runner=fake_runner)
         assert asyncio.run(client.check_auth()) is False
 

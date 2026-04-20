@@ -55,9 +55,7 @@ def _mount_web_ui(app: FastAPI) -> None:
     if not _UI_DIR.is_dir():
         return  # Missing assets — skip mounting rather than fail startup.
 
-    app.mount(
-        "/ui/", StaticFiles(directory=_UI_DIR, html=True), name="maxwell-daemon-ui"
-    )
+    app.mount("/ui/", StaticFiles(directory=_UI_DIR, html=True), name="maxwell-daemon-ui")
 
     @app.get("/ui", include_in_schema=False)
     async def _ui_no_slash() -> RedirectResponse:
@@ -72,9 +70,7 @@ class TaskSubmit(BaseModel):
 
 
 class IssueCreate(BaseModel):
-    repo: str = Field(
-        ..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"
-    )
+    repo: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
     title: str = Field(..., min_length=1)
     body: str = ""
     labels: list[str] = Field(default_factory=list)
@@ -83,9 +79,7 @@ class IssueCreate(BaseModel):
 
 
 class IssueDispatch(BaseModel):
-    repo: str = Field(
-        ..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"
-    )
+    repo: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
     number: int = Field(..., ge=1)
     mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
     backend: str | None = None
@@ -97,9 +91,7 @@ class IssueBatchDispatch(BaseModel):
 
 
 class IssueAbDispatch(BaseModel):
-    repo: str = Field(
-        ..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"
-    )
+    repo: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
     number: int = Field(..., ge=1)
     backends: list[str] = Field(..., min_length=2, max_length=4)
     mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
@@ -236,9 +228,7 @@ def create_app(
         return {
             "status": "ok",
             "version": state.version,
-            "uptime_seconds": (
-                datetime.now(timezone.utc) - state.started_at
-            ).total_seconds(),
+            "uptime_seconds": (datetime.now(timezone.utc) - state.started_at).total_seconds(),
         }
 
     @app.get("/api/v1/backends", dependencies=[Depends(auth)])
@@ -394,9 +384,7 @@ def create_app(
                 )
                 dispatched.append(TaskView.from_task(task))
             except Exception as e:
-                failures.append(
-                    {"repo": item.repo, "number": item.number, "error": str(e)}
-                )
+                failures.append({"repo": item.repo, "number": item.number, "error": str(e)})
         return {
             "dispatched": len(dispatched),
             "failed": len(failures),

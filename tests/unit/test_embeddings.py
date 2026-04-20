@@ -117,9 +117,7 @@ class TestOpenAIProvider:
         assert provider.name == "openai"
         assert provider.model == "text-embedding-3-small"
 
-    def test_raises_when_no_key_and_no_client(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_raises_when_no_key_and_no_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         with pytest.raises(BackendUnavailableError):
             OpenAIEmbeddingProvider()

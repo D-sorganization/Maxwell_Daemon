@@ -64,9 +64,7 @@ class TestUpdateStatus:
     def test_transitions_recorded(self, store: TaskStore) -> None:
         task = _fresh_task()
         store.save(task)
-        store.update_status(
-            task.id, TaskStatus.RUNNING, started_at=datetime.now(timezone.utc)
-        )
+        store.update_status(task.id, TaskStatus.RUNNING, started_at=datetime.now(timezone.utc))
         loaded = store.get(task.id)
         assert loaded.status is TaskStatus.RUNNING
         assert loaded.started_at is not None

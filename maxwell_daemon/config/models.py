@@ -17,9 +17,7 @@ class BackendConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    type: str = Field(
-        ..., description="Backend type: claude, openai, ollama, google, azure"
-    )
+    type: str = Field(..., description="Backend type: claude, openai, ollama, google, azure")
     model: str = Field(..., description="Default model id for this backend")
     api_key: SecretStr | None = Field(
         None,
@@ -65,9 +63,7 @@ class RepoConfig(BaseModel):
     name: str
     path: Path
     slots: int = Field(2, ge=1, le=16, description="Max concurrent agents on this repo")
-    backend: str | None = Field(
-        None, description="Override default backend for this repo"
-    )
+    backend: str | None = Field(None, description="Override default backend for this repo")
     model: str | None = None
     tags: list[str] = Field(default_factory=list)
     # Per-repo overrides of IssueExecutor behaviour. None = use executor default.
@@ -148,9 +144,7 @@ class MaxwellDaemonConfig(BaseModel):
 
     @field_validator("backends")
     @classmethod
-    def _require_default_exists(
-        cls, v: dict[str, BackendConfig]
-    ) -> dict[str, BackendConfig]:
+    def _require_default_exists(cls, v: dict[str, BackendConfig]) -> dict[str, BackendConfig]:
         if not v:
             raise ValueError("At least one backend must be configured")
         return v

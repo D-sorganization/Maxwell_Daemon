@@ -37,29 +37,20 @@ class TestEventShapes:
     def test_tool_use_frozen(self) -> None:
         from dataclasses import FrozenInstanceError
 
-        e = ToolUseEvent(
-            session_id="s", seq=2, tool="read_file", arguments={"path": "x"}
-        )
+        e = ToolUseEvent(session_id="s", seq=2, tool="read_file", arguments={"path": "x"})
         with pytest.raises(FrozenInstanceError):
             e.tool = "write_file"  # type: ignore[misc]
 
     def test_every_event_has_kind_field(self) -> None:
         """Kind is the discriminator when we serialise to JSON."""
         assert UserMessage(session_id="s", seq=0, content="").kind == "user_message"
+        assert ToolUseEvent(session_id="s", seq=0, tool="t", arguments={}).kind == "tool_use"
         assert (
-            ToolUseEvent(session_id="s", seq=0, tool="t", arguments={}).kind
-            == "tool_use"
-        )
-        assert (
-            ObservationEvent(
-                session_id="s", seq=0, tool="t", content="", is_error=False
-            ).kind
+            ObservationEvent(session_id="s", seq=0, tool="t", content="", is_error=False).kind
             == "observation"
         )
         assert (
-            CondensationEvent(
-                session_id="s", seq=0, summarised_range=(1, 5), summary=""
-            ).kind
+            CondensationEvent(session_id="s", seq=0, summarised_range=(1, 5), summary="").kind
             == "condensation"
         )
         assert (
@@ -120,19 +111,13 @@ class TestLoadEvents:
     def test_load_round_trip(self, tmp_path: Path) -> None:
         log = SessionLog(session_id="s", directory=tmp_path)
         log.append(UserMessage(session_id="s", seq=0, content="hello"))
-        log.append(
-            ToolUseEvent(
-                session_id="s", seq=1, tool="read_file", arguments={"path": "x"}
-            )
-        )
+        log.append(ToolUseEvent(session_id="s", seq=1, tool="read_file", arguments={"path": "x"}))
         log.append(
             ObservationEvent(
                 session_id="s", seq=2, tool="read_file", content="body", is_error=False
             )
         )
-        log.append(
-            AgentFinish(session_id="s", seq=3, reason="end_turn", final_text="done")
-        )
+        log.append(AgentFinish(session_id="s", seq=3, reason="end_turn", final_text="done"))
 
         events = tuple(load_events(tmp_path / "s.jsonl"))
         assert [type(e).__name__ for e in events] == [
@@ -177,9 +162,7 @@ class TestReplay:
         log = SessionLog(session_id="s", directory=tmp_path)
         log.append(UserMessage(session_id="s", seq=0, content="fix this bug"))
         log.append(
-            ToolUseEvent(
-                session_id="s", seq=1, tool="read_file", arguments={"path": "bug.py"}
-            )
+            ToolUseEvent(session_id="s", seq=1, tool="read_file", arguments={"path": "bug.py"})
         )
         log.append(
             ObservationEvent(
@@ -190,9 +173,7 @@ class TestReplay:
                 is_error=False,
             )
         )
-        log.append(
-            AgentFinish(session_id="s", seq=3, reason="end_turn", final_text="fixed")
-        )
+        log.append(AgentFinish(session_id="s", seq=3, reason="end_turn", final_text="fixed"))
 
         transcript = replay_transcript(tmp_path / "s.jsonl")
         assert "fix this bug" in transcript
@@ -205,11 +186,7 @@ class TestReplay:
 
     def test_replay_marks_tool_errors(self, tmp_path: Path) -> None:
         log = SessionLog(session_id="s", directory=tmp_path)
-        log.append(
-            ToolUseEvent(
-                session_id="s", seq=0, tool="read_file", arguments={"path": "x"}
-            )
-        )
+        log.append(ToolUseEvent(session_id="s", seq=0, tool="read_file", arguments={"path": "x"}))
         log.append(
             ObservationEvent(
                 session_id="s",
@@ -233,13 +210,9 @@ class TestReplay:
                 summary="did some stuff",
             )
         )
-        log.append(
-            AgentFinish(session_id="s", seq=2, reason="end_turn", final_text="ok")
-        )
+        log.append(AgentFinish(session_id="s", seq=2, reason="end_turn", final_text="ok"))
         transcript = replay_transcript(tmp_path / "s.jsonl")
-        assert (
-            "condensation" in transcript.lower() or "summarised" in transcript.lower()
-        )
+        assert "condensation" in transcript.lower() or "summarised" in transcript.lower()
         assert "did some stuff" in transcript
 
 

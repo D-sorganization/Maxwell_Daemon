@@ -15,9 +15,7 @@ from maxwell_daemon.tracing import (
 
 
 class TestTracingDisabledByDefault:
-    def test_tracing_disabled_when_unconfigured(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_tracing_disabled_when_unconfigured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Explicit: ensure no prior configure left state on.
         monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
         assert tracing_enabled() is False
@@ -38,9 +36,7 @@ class TestTracingDisabledByDefault:
 class TestTracingEnabled:
     def test_configure_enables(self, monkeypatch: pytest.MonkeyPatch) -> None:
         try:
-            configure_tracing(
-                service_name="maxwell-daemon-test", use_memory_exporter=True
-            )
+            configure_tracing(service_name="maxwell-daemon-test", use_memory_exporter=True)
             assert tracing_enabled() is True
             assert get_tracer("test") is not None
         finally:
@@ -52,9 +48,7 @@ class TestTracingEnabled:
         )  # internal: memory exporter for tests
 
         try:
-            configure_tracing(
-                service_name="maxwell-daemon-test", use_memory_exporter=True
-            )
+            configure_tracing(service_name="maxwell-daemon-test", use_memory_exporter=True)
 
             async def trace_something() -> None:
                 async with span("maxwell_daemon.unit", {"answer": 42, "tag": "x"}):
@@ -73,9 +67,7 @@ class TestTracingEnabled:
         from maxwell_daemon.tracing import _test_exporter
 
         try:
-            configure_tracing(
-                service_name="maxwell-daemon-test", use_memory_exporter=True
-            )
+            configure_tracing(service_name="maxwell-daemon-test", use_memory_exporter=True)
 
             async def boom() -> None:
                 async with span("maxwell_daemon.boom"):

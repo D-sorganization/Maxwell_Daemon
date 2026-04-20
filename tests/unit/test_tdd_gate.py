@@ -31,14 +31,10 @@ class _FakeRunner:
     outcomes: list[RunOutcome] = field(default_factory=list)
     calls: list[dict[str, object]] = field(default_factory=list)
 
-    async def __call__(
-        self, *, workspace: Path, test_paths: tuple[str, ...]
-    ) -> RunOutcome:
+    async def __call__(self, *, workspace: Path, test_paths: tuple[str, ...]) -> RunOutcome:
         self.calls.append({"workspace": str(workspace), "test_paths": test_paths})
         if not self.outcomes:
-            return RunOutcome(
-                passed=True, returncode=0, output="", duration_seconds=0.0
-            )
+            return RunOutcome(passed=True, returncode=0, output="", duration_seconds=0.0)
         return self.outcomes.pop(0)
 
 
@@ -117,9 +113,7 @@ class TestRedGreenHappyPath:
         async def implement() -> None:
             pass
 
-        await gate.verify_red_green(
-            test_paths=("tests/unit/test_new.py",), implement=implement
-        )
+        await gate.verify_red_green(test_paths=("tests/unit/test_new.py",), implement=implement)
         assert len(runner.calls) == 2
         assert runner.calls[0]["test_paths"] == ("tests/unit/test_new.py",)
 
@@ -128,15 +122,11 @@ class TestRedGreenHappyPath:
 
 
 class TestDishonestTest:
-    async def test_green_from_the_start_flagged_as_not_honest(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_green_from_the_start_flagged_as_not_honest(self, tmp_path: Path) -> None:
         """If the new test passes before any implementation, it was a no-op test."""
         runner = _FakeRunner(
             outcomes=[
-                RunOutcome(
-                    passed=True, returncode=0, output=""
-                ),  # RED returned passing
+                RunOutcome(passed=True, returncode=0, output=""),  # RED returned passing
                 # No green run expected — gate should raise on red-phase result.
             ]
         )
@@ -180,9 +170,7 @@ class TestImplementationRegressed:
 
 
 class TestImplementCallbackContract:
-    async def test_implement_called_once_between_red_and_green(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_implement_called_once_between_red_and_green(self, tmp_path: Path) -> None:
         call_log: list[str] = []
         runner = _FakeRunner(
             outcomes=[
@@ -195,18 +183,12 @@ class TestImplementCallbackContract:
         async def implement() -> None:
             call_log.append("implement")
 
-        await gate.verify_red_green(
-            test_paths=("tests/unit/test_new.py",), implement=implement
-        )
+        await gate.verify_red_green(test_paths=("tests/unit/test_new.py",), implement=implement)
         assert call_log == ["implement"]
 
-    async def test_implement_not_called_when_test_is_dishonest(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_implement_not_called_when_test_is_dishonest(self, tmp_path: Path) -> None:
         call_log: list[str] = []
-        runner = _FakeRunner(
-            outcomes=[RunOutcome(passed=True, returncode=0, output="")]
-        )
+        runner = _FakeRunner(outcomes=[RunOutcome(passed=True, returncode=0, output="")])
         gate = TddGate(workspace=tmp_path, test_runner=runner)
 
         async def implement() -> None:

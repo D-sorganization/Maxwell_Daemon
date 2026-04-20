@@ -89,9 +89,7 @@ def _parse_rule(path: Path) -> Rule:
     text = path.read_text(encoding="utf-8", errors="replace")
     match = _FRONTMATTER_RE.match(text)
     if match is None:
-        raise RuleLoadError(
-            f"{path}: no YAML frontmatter block (expected --- ... --- at top)"
-        )
+        raise RuleLoadError(f"{path}: no YAML frontmatter block (expected --- ... --- at top)")
     try:
         parsed: Any = yaml.safe_load(match.group("yaml")) or {}
     except yaml.YAMLError as e:

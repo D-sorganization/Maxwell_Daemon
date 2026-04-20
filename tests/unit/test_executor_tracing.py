@@ -45,9 +45,7 @@ class _GH:
 class _Backend(ILLMBackend):
     name = "b"
 
-    async def complete(
-        self, messages: list[Message], *, model: str, **_: Any
-    ) -> BackendResponse:
+    async def complete(self, messages: list[Message], *, model: str, **_: Any) -> BackendResponse:
         return BackendResponse(
             content=json.dumps({"plan": "p", "diff": ""}),
             finish_reason="stop",
@@ -86,17 +84,9 @@ class TestSpans:
     def test_plan_mode_emits_fetch_draft_and_open_pr(self) -> None:
         try:
             configure_tracing(use_memory_exporter=True)
-            gh = _GH(
-                issue=Issue(
-                    number=1, title="t", body="b", state="OPEN", labels=[], url="u"
-                )
-            )
+            gh = _GH(issue=Issue(number=1, title="t", body="b", state="OPEN", labels=[], url="u"))
             executor = IssueExecutor(github=gh, workspace=_WS(), backend=_Backend())
-            asyncio.run(
-                executor.execute_issue(
-                    repo="o/r", issue_number=1, model="m", mode="plan"
-                )
-            )
+            asyncio.run(executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="plan"))
             names = {s.name for s in _test_exporter().get_finished_spans()}
             assert {
                 "maxwell_daemon.issue.fetch",
@@ -109,17 +99,9 @@ class TestSpans:
     def test_spans_carry_issue_number_attribute(self) -> None:
         try:
             configure_tracing(use_memory_exporter=True)
-            gh = _GH(
-                issue=Issue(
-                    number=7, title="t", body="b", state="OPEN", labels=[], url="u"
-                )
-            )
+            gh = _GH(issue=Issue(number=7, title="t", body="b", state="OPEN", labels=[], url="u"))
             executor = IssueExecutor(github=gh, workspace=_WS(), backend=_Backend())
-            asyncio.run(
-                executor.execute_issue(
-                    repo="o/r", issue_number=7, model="m", mode="plan"
-                )
-            )
+            asyncio.run(executor.execute_issue(repo="o/r", issue_number=7, model="m", mode="plan"))
             fetch = next(
                 s
                 for s in _test_exporter().get_finished_spans()

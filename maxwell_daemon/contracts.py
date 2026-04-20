@@ -41,9 +41,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 C = TypeVar("C", bound=type)
 
 
-class ContractViolationError(
-    AssertionError
-):
+class ContractViolationError(AssertionError):
     """Base class for all contract failures."""
 
 

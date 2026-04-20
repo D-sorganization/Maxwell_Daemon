@@ -74,12 +74,8 @@ class FakeBackend(ILLMBackend):
 
 class TestTokenUsage:
     def test_addition_sums_all_fields(self) -> None:
-        a = TokenUsage(
-            prompt_tokens=10, completion_tokens=20, total_tokens=30, cached_tokens=5
-        )
-        b = TokenUsage(
-            prompt_tokens=1, completion_tokens=2, total_tokens=3, cached_tokens=1
-        )
+        a = TokenUsage(prompt_tokens=10, completion_tokens=20, total_tokens=30, cached_tokens=5)
+        b = TokenUsage(prompt_tokens=1, completion_tokens=2, total_tokens=3, cached_tokens=1)
         result = a + b
         assert result.prompt_tokens == 11
         assert result.completion_tokens == 22

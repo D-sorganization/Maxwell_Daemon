@@ -58,9 +58,7 @@ class TestSystemPromptSplit:
 
     def test_no_system_returns_none(self) -> None:
         backend = ClaudeBackend()
-        sys, msgs = backend._split_system(
-            [Message(role=MessageRole.USER, content="hi")]
-        )
+        sys, msgs = backend._split_system([Message(role=MessageRole.USER, content="hi")])
         assert sys is None
         assert len(msgs) == 1
 

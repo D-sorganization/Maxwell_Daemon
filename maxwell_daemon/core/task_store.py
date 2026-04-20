@@ -85,9 +85,7 @@ class TaskStore:
         self._lock = threading.Lock()
         with self._connect() as conn:
             conn.executescript(_SCHEMA_BASE)
-            existing_cols = {
-                row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()
-            }
+            existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
             for col, ddl in _MIGRATIONS:
                 if col not in existing_cols:
                     conn.execute(ddl)
@@ -192,14 +190,10 @@ class TaskStore:
 
     def get(self, task_id: str) -> Task | None:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM tasks WHERE id = ?", (task_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _row_to_task(row) if row else None
 
-    def list_tasks(
-        self, *, limit: int = 100, status: TaskStatus | None = None
-    ) -> list[Task]:
+    def list_tasks(self, *, limit: int = 100, status: TaskStatus | None = None) -> list[Task]:
         query = "SELECT * FROM tasks"
         args: list[object] = []
         if status is not None:

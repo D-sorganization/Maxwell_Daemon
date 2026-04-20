@@ -90,9 +90,7 @@ class TestTaskStoreErrorLogging:
             _run(body())
 
         # The fix replaces suppress(Exception) with an explicit log.exception.
-        matched = [
-            r for r in caplog.records if "task store write failed" in r.getMessage()
-        ]
+        matched = [r for r in caplog.records if "task store write failed" in r.getMessage()]
         assert matched, (
             "expected 'task store write failed' log.exception; "
             f"records={[r.getMessage() for r in caplog.records]}"

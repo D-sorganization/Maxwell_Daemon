@@ -72,9 +72,7 @@ class OpenAIBackend(ILLMBackend):
         )
 
     @retry(
-        retry=retry_if_exception_type(
-            (openai.APIConnectionError, openai.RateLimitError)
-        ),
+        retry=retry_if_exception_type((openai.APIConnectionError, openai.RateLimitError)),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         reraise=True,
@@ -91,9 +89,7 @@ class OpenAIBackend(ILLMBackend):
     ) -> BackendResponse:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [
-                {"role": m.role.value, "content": m.content} for m in messages
-            ],
+            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
             "temperature": temperature,
         }
         if max_tokens is not None:
@@ -130,9 +126,7 @@ class OpenAIBackend(ILLMBackend):
     ) -> AsyncIterator[str]:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [
-                {"role": m.role.value, "content": m.content} for m in messages
-            ],
+            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
             "temperature": temperature,
             "stream": True,
         }

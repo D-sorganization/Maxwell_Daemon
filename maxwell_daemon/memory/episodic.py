@@ -185,9 +185,7 @@ class EpisodicStore:
             rows = conn.execute(sql, args).fetchall()
         return [_row_to_episode(r) for r in rows]
 
-    def render_related(
-        self, query: str, *, repo: str | None = None, limit: int = 3
-    ) -> str:
+    def render_related(self, query: str, *, repo: str | None = None, limit: int = 3) -> str:
         hits = self.search(query, repo=repo, limit=limit)
         if not hits:
             return ""

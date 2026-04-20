@@ -66,10 +66,7 @@ class TestSelectModel:
         assert select_model(ModelTier.SIMPLE, tier_map, fallback="sonnet") == "sonnet"
 
     def test_empty_tier_map_returns_fallback(self) -> None:
-        assert (
-            select_model(ModelTier.SIMPLE, {}, fallback="some-default")
-            == "some-default"
-        )
+        assert select_model(ModelTier.SIMPLE, {}, fallback="some-default") == "some-default"
 
     def test_no_fallback_no_entry_raises(self) -> None:
         with pytest.raises(ValueError):
