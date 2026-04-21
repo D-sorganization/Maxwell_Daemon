@@ -129,14 +129,18 @@ class FleetDispatcher:
         # Machines mutate (their active_tasks grows) as we assign. Work on a
         # mutable dict keyed by name so we can swap in updated snapshots.
         live: dict[str, MachineState] = {m.name: m for m in machines}
-        remaining: list[TaskRequirement] = list(tasks)
+        # Track assigned task IDs in a set for O(1) membership checks, avoiding
+        # the O(n) list.remove() scan on each assignment (fixes GH #161).
+        assigned_ids: set[str] = set()
         assignments: list[Assignment] = []
 
-        while remaining:
+        while len(assigned_ids) < len(tasks):
             best: tuple[int, str, str, TaskRequirement, MachineState] | None = None
             # Iterate in a deterministic order so ties resolve the same way
             # every run. We sort by (-score, task_id, machine_name) at the end.
-            for task in remaining:
+            for task in tasks:
+                if task.task_id in assigned_ids:
+                    continue
                 for machine in live.values():
                     score = score_machine(machine, task)
                     if score is None:
@@ -163,9 +167,9 @@ class FleetDispatcher:
             assignments.append(Assignment(task_id=task_id, machine_name=machine_name))
             # "Consume" a slot by incrementing active_tasks on the live copy.
             live[machine_name] = replace(machine, active_tasks=machine.active_tasks + 1)
-            remaining.remove(task)
+            assigned_ids.add(task_id)
 
         return DispatchPlan(
             assignments=tuple(assignments),
-            unassigned=tuple(t.task_id for t in remaining),
+            unassigned=tuple(t.task_id for t in tasks if t.task_id not in assigned_ids),
         )

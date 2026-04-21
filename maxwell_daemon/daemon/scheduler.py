@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import random
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -76,6 +77,7 @@ class DiscoveryScheduler:
         daemon: Any,
         repos: list[DiscoveryRepoSpec],
         interval_seconds: float = 300.0,
+        jitter: bool = True,
     ) -> None:
         require(
             interval_seconds > 0,
@@ -85,6 +87,7 @@ class DiscoveryScheduler:
         self._daemon = daemon
         self._repos = list(repos)
         self._interval = float(interval_seconds)
+        self._jitter = jitter
         # Per-repo set of issue numbers we've seen in any prior tick.
         self._dispatched: dict[str, set[int]] = {}
         self._task: asyncio.Task[None] | None = None
@@ -145,7 +148,7 @@ class DiscoveryScheduler:
             self._stop_event.set()
         if self._task is not None:
             try:
-                await asyncio.wait_for(self._task, timeout=self._interval + 1.0)
+                await asyncio.wait_for(self._task, timeout=5.0)
             except (TimeoutError, asyncio.TimeoutError):
                 self._task.cancel()
                 with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -155,6 +158,16 @@ class DiscoveryScheduler:
 
     async def _loop(self) -> None:
         assert self._stop_event is not None
+        # Startup jitter: spread first-tick firing across the interval to
+        # prevent thundering herd when multiple daemons start together.
+        if self._jitter:
+            jitter_delay = random.uniform(0, self._interval)
+            log.debug("discovery scheduler startup jitter=%.2fs", jitter_delay)
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=jitter_delay)
+                return  # stop signalled during jitter delay
+            except (TimeoutError, asyncio.TimeoutError):
+                pass  # jitter elapsed, proceed to first tick
         while not self._stop_event.is_set():
             try:
                 await self.run_once()
