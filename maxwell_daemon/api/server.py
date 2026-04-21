@@ -603,6 +603,191 @@ def create_app(
             status_code=status.HTTP_200_OK,
         )
 
+    # ── SSH endpoints ────────────────────────────────────────────────────────
+    # asyncssh is optional (pip install maxwell-daemon[ssh]).  All SSH routes
+    # return 503 if it is not installed.
+
+    _ssh_pool_ref: dict[str, Any] = {}  # lazy singleton
+
+    def _ssh_pool() -> Any:
+        if "pool" not in _ssh_pool_ref:
+            try:
+                from maxwell_daemon.ssh.session import SSHSessionPool
+
+                _ssh_pool_ref["pool"] = SSHSessionPool()
+            except ImportError:
+                return None
+        return _ssh_pool_ref.get("pool")
+
+    def _ssh_unavailable() -> Any:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            {"detail": "SSH support not installed — pip install maxwell-daemon[ssh]"},
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    @app.get("/api/v1/ssh/sessions", dependencies=[Depends(auth)])
+    async def ssh_sessions() -> Any:
+        """List active SSH sessions."""
+        pool = _ssh_pool()
+        if pool is None:
+            return _ssh_unavailable()
+        return {"sessions": pool.sessions()}
+
+    @app.get("/api/v1/ssh/keys", dependencies=[Depends(auth)])
+    async def ssh_list_keys() -> Any:
+        """List machines that have stored SSH keys."""
+        try:
+            from maxwell_daemon.ssh.keys import SSHKeyStore
+        except ImportError:
+            return _ssh_unavailable()
+        store = SSHKeyStore()
+        return {"machines": store.list_machines()}
+
+    @app.get("/api/v1/ssh/keys/{machine}", dependencies=[Depends(auth)])
+    async def ssh_get_key(machine: str) -> Any:
+        """Return the public key for *machine*, generating it if absent."""
+        try:
+            from maxwell_daemon.ssh.keys import SSHKeyStore
+        except ImportError:
+            return _ssh_unavailable()
+        store = SSHKeyStore()
+        _, pub = store.get_or_generate(machine)
+        return {"machine": machine, "public_key": pub}
+
+    @app.delete("/api/v1/ssh/keys/{machine}", dependencies=[Depends(auth)])
+    async def ssh_delete_key(machine: str) -> Any:
+        """Remove stored SSH keys for *machine*."""
+        try:
+            from maxwell_daemon.ssh.keys import SSHKeyStore
+        except ImportError:
+            return _ssh_unavailable()
+        SSHKeyStore().remove(machine)
+        return {"machine": machine, "deleted": True}
+
+    class SSHConnectRequest(BaseModel):
+        host: str
+        port: int = 22
+        user: str
+        password: str | None = None
+
+    @app.post("/api/v1/ssh/connect", dependencies=[Depends(auth)])
+    async def ssh_connect(payload: SSHConnectRequest) -> Any:
+        """Open (or reuse) an SSH session and return its summary."""
+        pool = _ssh_pool()
+        if pool is None:
+            return _ssh_unavailable()
+        session = await pool.get(
+            payload.host,
+            user=payload.user,
+            port=payload.port,
+            password=payload.password,
+        )
+        return {
+            "host": payload.host,
+            "port": payload.port,
+            "user": payload.user,
+            "age_seconds": round(session.age_seconds, 1),
+        }
+
+    class SSHRunRequest(BaseModel):
+        host: str
+        port: int = 22
+        user: str
+        command: str
+        timeout_seconds: float = 30.0
+
+    @app.post("/api/v1/ssh/run", dependencies=[Depends(auth)])
+    async def ssh_run(payload: SSHRunRequest) -> Any:
+        """Run a command on a remote machine and return its output."""
+        pool = _ssh_pool()
+        if pool is None:
+            return _ssh_unavailable()
+        session = await pool.get(payload.host, user=payload.user, port=payload.port)
+        result = await session.run(payload.command, timeout=payload.timeout_seconds)
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exit_code": result.exit_code,
+        }
+
+    @app.get("/api/v1/ssh/files", dependencies=[Depends(auth)])
+    async def ssh_list_files(
+        host: str = Query(...),
+        user: str = Query(...),
+        port: int = Query(default=22),
+        path: str = Query(default="/"),
+    ) -> Any:
+        """List files on a remote machine via SFTP."""
+        pool = _ssh_pool()
+        if pool is None:
+            return _ssh_unavailable()
+        session = await pool.get(host, user=user, port=port)
+        entries = await session.list_dir(path)
+        return {
+            "path": path,
+            "entries": [
+                {
+                    "name": e.name,
+                    "path": e.path,
+                    "size": e.size,
+                    "is_dir": e.is_dir,
+                    "modified": e.modified,
+                }
+                for e in entries
+            ],
+        }
+
+    @app.websocket("/api/v1/ssh/shell")
+    async def ssh_shell_ws(ws: WebSocket) -> None:
+        """Interactive shell over WebSocket.
+
+        Query params: ``host``, ``user``, ``port`` (default 22), ``token``
+        (bearer token for auth), ``command`` (default ``bash``).
+
+        Frames: text frames sent from client are written to stdin.
+        Text frames sent to client contain stdout/stderr chunks.
+        Session ends when the command exits or the client disconnects.
+        Max session duration: 1 hour.
+        """
+        if auth_token is not None:
+            presented = ws.query_params.get("token") or ""
+            if not hmac.compare_digest(presented.encode(), auth_token.encode()):
+                await ws.close(code=1008)
+                return
+
+        pool = _ssh_pool()
+        if pool is None:
+            await ws.accept()
+            await ws.send_text('{"error": "SSH not installed"}')
+            await ws.close(code=1011)
+            return
+
+        host = ws.query_params.get("host") or ""
+        user = ws.query_params.get("user") or ""
+        port = int(ws.query_params.get("port") or "22")
+        command = ws.query_params.get("command") or "bash"
+
+        if not host or not user:
+            await ws.accept()
+            await ws.send_text('{"error": "host and user are required"}')
+            await ws.close(code=1008)
+            return
+
+        await ws.accept()
+        try:
+            session = await pool.get(host, user=user, port=port)
+            async for chunk in session.shell_stream(command):
+                await ws.send_bytes(chunk)
+        except WebSocketDisconnect:
+            return
+        except Exception as exc:
+            import json as _json_mod
+
+            await ws.send_text(_json_mod.dumps({"error": str(exc)}))
+            await ws.close(code=1011)
+
     @app.websocket("/api/v1/events")
     async def events_ws(ws: WebSocket) -> None:
         """Stream daemon events as JSON frames to the client.

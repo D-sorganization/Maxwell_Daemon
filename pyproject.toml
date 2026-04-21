@@ -45,6 +45,7 @@ ollama = ["ollama>=0.3.0"]
 google = ["google-cloud-aiplatform>=1.70.0"]
 azure = ["azure-identity>=1.18.0"]
 grpc = ["grpcio>=1.66.0", "grpcio-tools>=1.66.0", "protobuf>=5.28.0"]
+ssh = ["asyncssh>=2.14.0"]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
@@ -57,7 +58,7 @@ dev = [
     "tomli>=2.0.0",
     "types-pyyaml",
 ]
-all = ["maxwell-daemon[ollama,google,azure,grpc,dev]"]
+all = ["maxwell-daemon[ollama,google,azure,grpc,ssh,dev]"]
 
 [project.scripts]
 maxwell-daemon = "maxwell_daemon.cli.main:app"
