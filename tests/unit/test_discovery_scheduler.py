@@ -386,6 +386,7 @@ class TestSchedulerLoop:
 
     async def test_loop_continues_after_run_once_exception(self, tmp_path: Path) -> None:
         """Exceptions from run_once in _loop are swallowed — the loop keeps running."""
+
         gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
         daemon = _FakeDaemon()
         sched = DiscoveryScheduler(

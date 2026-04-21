@@ -173,3 +173,91 @@ class TestState:
         save_config(minimal_config, cfg_path)
         d = Daemon.from_config_path(cfg_path)
         assert "primary" in d.state().backends_available
+
+
+class TestSubmitThreadsafe:
+    """Tests for Daemon.submit_threadsafe() — cross-thread task submission (#164)."""
+
+    def test_submit_threadsafe_before_start_raises(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """submit_threadsafe() raises RuntimeError when daemon is not started."""
+        import pytest
+
+        d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
+        with pytest.raises(RuntimeError, match="daemon must be started"):
+            d.submit_threadsafe("hello")
+
+    def test_loop_is_none_before_start(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """_loop is None before start() is called."""
+        d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
+        assert d._loop is None
+
+    def test_loop_captured_after_start(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """_loop is set to the running event loop after start()."""
+
+        async def body(d: Daemon) -> None:
+            assert d._loop is not None
+            assert d._loop is asyncio.get_running_loop()
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+    def test_submit_threadsafe_from_background_thread_enqueues_task(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """submit_threadsafe() called from a background thread successfully enqueues a task.
+
+        The background thread is run via asyncio.to_thread so the event loop
+        remains free to service the coroutine scheduled by run_coroutine_threadsafe.
+        """
+        result: dict[str, Any] = {}
+
+        async def body(d: Daemon) -> None:
+            def background() -> Any:
+                # Runs in a worker thread; event loop stays free.
+                return d.submit_threadsafe("hello from thread")
+
+            task = await asyncio.to_thread(background)
+            result["task"] = task
+            assert d.get_task(task.id) is task
+            final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
+            assert final.result == "ok"
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+        assert result["task"] is not None
+
+    def test_submit_threadsafe_task_is_processed(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """submit_threadsafe() tasks are dequeued and executed by workers."""
+
+        async def body(d: Daemon) -> None:
+            def background() -> Any:
+                return d.submit_threadsafe("process me")
+
+            task = await asyncio.to_thread(background)
+            final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
+            assert final.status == TaskStatus.COMPLETED
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+    def test_submit_threadsafe_returns_task_object(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """submit_threadsafe() returns a Task instance with the submitted prompt."""
+
+        async def body(d: Daemon) -> None:
+            def background() -> Any:
+                return d.submit_threadsafe("my prompt")
+
+            task = await asyncio.to_thread(background)
+            assert isinstance(task, Task)
+            assert task.prompt == "my prompt"
+            assert task.status in (TaskStatus.QUEUED, TaskStatus.RUNNING, TaskStatus.COMPLETED)
+            await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
