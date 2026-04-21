@@ -14,10 +14,10 @@ re-dispatch it if needed.
 
 Connection model
 ----------------
-A single ``sqlite3.Connection`` is opened at construction time and reused for
-every operation.  WAL journal mode lets readers proceed concurrently with the
-single writer.  A ``threading.Lock`` serialises access to the connection itself
-so thread-pool workers don't race on the same handle.
+Each operation opens a short-lived ``sqlite3.Connection`` with a long busy
+timeout.  WAL journal mode lets readers proceed concurrently with the single
+writer.  A ``threading.Lock`` serialises write operations so thread-pool workers
+do not contend inside SQLite during writes.
 
 Async safety
 ------------
@@ -33,6 +33,8 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -96,26 +98,29 @@ class TaskStore:
     def __init__(self, db_path: Path) -> None:
         self._path = Path(db_path).expanduser()
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        # Persistent connection — avoids per-operation open/close overhead.
-        self._conn = sqlite3.connect(
-            str(self._path),
-            isolation_level=None,  # autocommit
-            check_same_thread=False,
-        )
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA busy_timeout=5000")
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        # Apply schema and migrations at startup.
-        self._conn.executescript(_SCHEMA_BASE)
-        existing_cols = {
-            row[1] for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()
-        }
-        for col, ddl in _MIGRATIONS:
-            if col not in existing_cols:
-                self._conn.execute(ddl)
-        self._conn.executescript(_SCHEMA_POST_MIGRATION)
-        # threading.Lock guards the connection; only held by thread-pool workers.
         self._lock = threading.Lock()
+        with self._connect() as conn:
+            # WAL mode persists at the DB level; set once during initialization
+            # to avoid extra lock churn on every short-lived connection.
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.executescript(_SCHEMA_BASE)
+            existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+            for col, ddl in _MIGRATIONS:
+                if col not in existing_cols:
+                    conn.execute(ddl)
+            # Indexes that reference migrated columns run after the migration
+            # so old DBs don't explode before they get upgraded.
+            conn.executescript(_SCHEMA_POST_MIGRATION)
+
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        conn = sqlite3.connect(self._path, isolation_level=None, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout=30000")
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     # ── Sync internals ────────────────────────────────────────────────────────
 
@@ -142,8 +147,8 @@ class TaskStore:
             _iso(task.started_at),
             _iso(task.finished_at),
         )
-        with self._lock:
-            self._conn.execute(
+        with self._lock, self._connect() as conn:
+            conn.execute(
                 """
                 INSERT INTO tasks (
                     id, created_at, updated_at, kind, status, prompt,
@@ -180,8 +185,8 @@ class TaskStore:
         finished_at: datetime | None = None,
     ) -> None:
         now = datetime.now().isoformat()
-        with self._lock:
-            cursor = self._conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
             if cursor.fetchone() is None:
                 raise KeyError(task_id)
             sets = ["status = ?", "updated_at = ?"]
@@ -198,14 +203,14 @@ class TaskStore:
                     sets.append(f"{field} = ?")
                     args.append(value)
             args.append(task_id)
-            self._conn.execute(
+            conn.execute(
                 f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?",  # nosec B608
                 args,
             )
 
     def _get_sync(self, task_id: str) -> Task | None:
-        with self._lock:
-            row = self._conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _row_to_task(row) if row else None
 
     def _list_sync(self, *, limit: int = 100, status: TaskStatus | None = None) -> list[Task]:
@@ -216,16 +221,16 @@ class TaskStore:
             args.append(status.value)
         query += " ORDER BY created_at DESC LIMIT ?"
         args.append(limit)
-        with self._lock:
-            rows = self._conn.execute(query, args).fetchall()
+        with self._connect() as conn:
+            rows = conn.execute(query, args).fetchall()
         return [_row_to_task(r) for r in rows]
 
     def _recover_sync(self) -> list[Task]:
         from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
 
         now = datetime.now().isoformat()
-        with self._lock:
-            self._conn.execute(
+        with self._lock, self._connect() as conn:
+            conn.execute(
                 """
                 UPDATE tasks
                 SET status = ?, error = ?, finished_at = ?, updated_at = ?
@@ -239,7 +244,7 @@ class TaskStore:
                     _TaskStatus.RUNNING.value,
                 ),
             )
-            rows = self._conn.execute(
+            rows = conn.execute(
                 "SELECT * FROM tasks WHERE status = ? ORDER BY created_at",
                 (_TaskStatus.QUEUED.value,),
             ).fetchall()
@@ -333,9 +338,8 @@ class TaskStore:
         return await loop.run_in_executor(None, lambda: self._list_sync(limit=limit, status=status))
 
     def close(self) -> None:
-        """Close the persistent connection. Call on daemon shutdown."""
-        with self._lock:
-            self._conn.close()
+        """Compatibility hook for stores that do not keep an open connection."""
+        return None
 
 
 def _row_to_task(row: sqlite3.Row) -> Task:

@@ -13,7 +13,7 @@ import pytest
 
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.backends.base import BackendUnavailableError
-from maxwell_daemon.backends.codex_cli import CodexCLIBackend
+from maxwell_daemon.backends.codex_cli import CodexCLIBackend, _default_runner
 
 
 class _Runner:
@@ -41,6 +41,16 @@ class _Runner:
         return self._rc, self._stdout, self._stderr
 
 
+class _FakeProcess:
+    def __init__(self) -> None:
+        self.returncode = 0
+        self.stdin_seen: bytes | None = None
+
+    async def communicate(self, input: bytes | None = None) -> tuple[bytes, bytes]:
+        self.stdin_seen = input
+        return b"stdout", b"stderr"
+
+
 # ---------------------------------------------------------------- construction
 
 
@@ -50,6 +60,34 @@ class TestConstruction:
         assert backend._binary == "codex"
         assert backend._approval == "suggest"
         assert backend._profile is None
+
+
+class TestDefaultRunner:
+    def test_default_runner_invokes_subprocess_with_stdin(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        process = _FakeProcess()
+        captured: dict[str, Any] = {}
+
+        async def fake_exec(*argv: str, **kwargs: Any) -> _FakeProcess:
+            captured["argv"] = argv
+            captured["kwargs"] = kwargs
+            return process
+
+        monkeypatch.setattr(
+            "maxwell_daemon.backends.codex_cli.asyncio.create_subprocess_exec", fake_exec
+        )
+
+        rc, stdout, stderr = asyncio.run(
+            _default_runner("codex", "exec", cwd="repo", stdin=b"prompt")
+        )
+
+        assert rc == 0
+        assert stdout == b"stdout"
+        assert stderr == b"stderr"
+        assert process.stdin_seen == b"prompt"
+        assert captured["argv"] == ("codex", "exec")
+        assert captured["kwargs"]["cwd"] == "repo"
 
 
 # ---------------------------------------------------------------- complete()

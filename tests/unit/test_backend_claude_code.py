@@ -10,7 +10,7 @@ import pytest
 
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.backends.base import BackendUnavailableError
-from maxwell_daemon.backends.claude_code import ClaudeCodeCLIBackend
+from maxwell_daemon.backends.claude_code import ClaudeCodeCLIBackend, _default_runner
 
 
 class _Runner:
@@ -30,6 +30,35 @@ class _Runner:
     ) -> tuple[int, bytes, bytes]:
         self.calls.append(argv)
         return self._rc, self._stdout, self._stderr
+
+
+class _FakeProcess:
+    returncode = 0
+
+    async def communicate(self) -> tuple[bytes, bytes]:
+        return b"stdout", b"stderr"
+
+
+class TestDefaultRunner:
+    def test_default_runner_invokes_subprocess(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, Any] = {}
+
+        async def fake_exec(*argv: str, **kwargs: Any) -> _FakeProcess:
+            captured["argv"] = argv
+            captured["kwargs"] = kwargs
+            return _FakeProcess()
+
+        monkeypatch.setattr(
+            "maxwell_daemon.backends.claude_code.asyncio.create_subprocess_exec", fake_exec
+        )
+
+        rc, stdout, stderr = asyncio.run(_default_runner("claude", "-p", "hi", cwd="repo"))
+
+        assert rc == 0
+        assert stdout == b"stdout"
+        assert stderr == b"stderr"
+        assert captured["argv"] == ("claude", "-p", "hi")
+        assert captured["kwargs"]["cwd"] == "repo"
 
 
 class TestAuth:
@@ -94,6 +123,19 @@ class TestComplete:
                 )
             )
 
+    def test_missing_binary_raises_unavailable(self) -> None:
+        async def runner(*a: Any, **kw: Any) -> tuple[int, bytes, bytes]:
+            raise FileNotFoundError("claude")
+
+        backend = ClaudeCodeCLIBackend(runner=runner)
+        with pytest.raises(BackendUnavailableError, match="claude CLI unreachable"):
+            asyncio.run(
+                backend.complete(
+                    [Message(role=MessageRole.USER, content="hi")],
+                    model="claude-sonnet-4-6",
+                )
+            )
+
     def test_malformed_json_raises(self) -> None:
         r = _Runner()
         r.respond(rc=0, stdout=b"not json")
@@ -105,6 +147,24 @@ class TestComplete:
                     model="claude-sonnet-4-6",
                 )
             )
+
+
+class TestStream:
+    def test_stream_yields_complete_content_once(self) -> None:
+        r = _Runner()
+        r.respond(rc=0, stdout=json.dumps({"result": "streamed"}))
+        backend = ClaudeCodeCLIBackend(runner=r)
+
+        async def collect() -> list[str]:
+            return [
+                chunk
+                async for chunk in backend.stream(
+                    [Message(role=MessageRole.USER, content="hi")],
+                    model="claude-sonnet-4-6",
+                )
+            ]
+
+        assert asyncio.run(collect()) == ["streamed"]
 
 
 class TestCapabilities:
