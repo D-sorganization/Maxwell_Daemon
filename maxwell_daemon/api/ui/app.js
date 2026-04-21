@@ -453,6 +453,9 @@ function openEventStream() {
   });
 }
 
+let _fetchTasksTimer = null;
+const _fetchTaskDetailTimers = new Map();
+
 function handleEvent(evt) {
   const p = evt.payload || {};
   if (evt.kind === "test_output" && p.task_id) {
@@ -465,8 +468,16 @@ function handleEvent(evt) {
     return;
   }
   if (p.id) {
-    fetchTaskDetail(p.id).catch(() => {});
-    fetchTasks().catch(() => {});
+    // Debounce detail fetch per task ID
+    clearTimeout(_fetchTaskDetailTimers.get(p.id));
+    _fetchTaskDetailTimers.set(
+      p.id,
+      setTimeout(() => fetchTaskDetail(p.id).catch(() => {}), 300)
+    );
+
+    // Debounce global tasks list fetch
+    clearTimeout(_fetchTasksTimer);
+    _fetchTasksTimer = setTimeout(() => fetchTasks().catch(() => {}), 300);
   }
 }
 
