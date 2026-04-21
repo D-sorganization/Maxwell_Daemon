@@ -85,8 +85,7 @@ class TestConfigLoad:
     def test_default_backend_must_exist(self) -> None:
         from pydantic import ValidationError
 
-        # Validation now happens eagerly at model construction (not lazily).
-        with pytest.raises(ValidationError, match="not defined in backends"):
+        with pytest.raises(ValidationError, match="not found in backends"):
             MaxwellDaemonConfig.model_validate(
                 {
                     "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
