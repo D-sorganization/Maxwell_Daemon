@@ -81,6 +81,8 @@ class DaemonState:
     tasks: dict[str, Task]
     started_at: datetime
     backends_available: list[str]
+    worker_count: int = 0
+    queue_depth: int = 0
 
 
 class Daemon:
@@ -158,6 +160,35 @@ class Daemon:
         for i in range(worker_count):
             self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
         log.info("daemon started with %d workers", worker_count)
+
+    async def set_worker_count(self, n: int) -> None:
+        """Rescale the worker pool to exactly *n* workers at runtime.
+
+        :param n: desired number of workers (must be >= 1).
+        :raises PreconditionError: if *n* < 1.
+        """
+        from maxwell_daemon.contracts import require
+
+        require(n >= 1, "worker count must be at least 1")
+
+        current = len(self._workers)
+        if n > current:
+            # Spawn additional workers.
+            for i in range(current, n):
+                task = asyncio.create_task(
+                    self._worker_loop(i), name=f"worker-{i}"
+                )
+                self._workers.append(task)
+            log.info("set_worker_count: added %d worker(s); total=%d", n - current, n)
+        elif n < current:
+            # Cancel the excess workers from the end of the list.
+            to_cancel = self._workers[n:]
+            self._workers = self._workers[:n]
+            for worker in to_cancel:
+                worker.cancel()
+            if to_cancel:
+                await asyncio.gather(*to_cancel, return_exceptions=True)
+            log.info("set_worker_count: removed %d worker(s); total=%d", current - n, n)
 
     def recover(self) -> list[Task]:
         """Re-queue tasks from a prior daemon run. Called automatically from start()."""
@@ -372,6 +403,8 @@ class Daemon:
             tasks=tasks_snapshot,
             started_at=self._started_at,
             backends_available=self._router.available_backends(),
+            worker_count=len(self._workers),
+            queue_depth=self._queue.qsize(),
         )
 
     async def _worker_loop(self, worker_id: int) -> None:
