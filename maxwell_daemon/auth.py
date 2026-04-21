@@ -32,6 +32,7 @@ __all__ = [
     "Role",
     "TokenClaims",
     "require_role",
+    "require_role_or_token",
 ]
 
 
@@ -166,5 +167,68 @@ def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:
                 f"role {claims.role.value!r} lacks {minimum.value!r} privileges",
             )
         return claims
+
+    return _dep
+
+
+def require_role_or_token(
+    minimum: Role,
+    jwt_config: JWTConfig | None,
+    static_token: str | None,
+) -> Any:
+    """FastAPI dependency factory supporting both JWT RBAC and static bearer token.
+
+    This is the backward-compatible variant:
+
+    * If a valid JWT is presented and ``jwt_config`` is set, the JWT role is
+      checked against ``minimum``.
+    * If the static bearer token is presented (and matches ``static_token``),
+      the caller is treated as ``Role.admin`` — full access.
+    * If neither JWT nor static token is configured, the dependency is a no-op
+      (open access, for local/dev deployments).
+
+    Returns the decoded ``TokenClaims`` when a JWT is used, or a synthetic
+    ``TokenClaims`` with ``sub="static-token"`` / ``role=Role.admin`` when
+    the static token is used.
+    """
+    import hmac as _hmac
+    from datetime import datetime, timezone
+    from typing import Annotated
+
+    from fastapi import Header, HTTPException, status
+
+    async def _dep(authorization: Annotated[str | None, Header()] = None) -> TokenClaims | None:
+        # No auth configured at all — open access.
+        if jwt_config is None and static_token is None:
+            return None
+
+        if authorization is None or not authorization.startswith("Bearer "):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token")
+
+        raw = authorization.removeprefix("Bearer ").strip()
+
+        # Try JWT first when configured.
+        if jwt_config is not None:
+            try:
+                claims = jwt_config.decode_token(raw)
+                if not claims.has_role(minimum):
+                    raise HTTPException(
+                        status.HTTP_403_FORBIDDEN,
+                        f"role {claims.role.value!r} lacks {minimum.value!r} privileges",
+                    )
+                return claims
+            except HTTPException:
+                raise
+            except Exception:
+                # JWT decode failed — fall through to static token check.
+                pass
+
+        # Static token fallback (treated as admin).
+        if static_token is not None:
+            if _hmac.compare_digest(raw.encode(), static_token.encode()):
+                exp = datetime(9999, 12, 31, tzinfo=timezone.utc)
+                return TokenClaims(sub="static-token", role=Role.admin, exp=exp)
+
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token")
 
     return _dep
