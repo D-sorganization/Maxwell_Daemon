@@ -169,6 +169,53 @@ def _auth_dep(token: str | None) -> Any:
     return _check
 
 
+def _make_rbac_dep(
+    minimum: Role,
+    static_token: str | None,
+    jwt_config: JWTConfig | None,
+) -> Any:
+    """Return a FastAPI dependency that enforces *minimum* role.
+
+    Accepts EITHER:
+    - A valid static admin bearer token (treated as Role.admin), OR
+    - A valid JWT bearer token whose role is >= *minimum*.
+
+    When neither JWT config nor static token is configured, all requests pass
+    (open/dev mode — same behaviour as the existing ``_auth_dep(None)``).
+    """
+
+    async def _dep(authorization: Annotated[str | None, Header()] = None) -> None:
+        # Open mode — nothing to enforce.
+        if static_token is None and jwt_config is None:
+            return
+
+        if authorization is None or not authorization.startswith("Bearer "):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bearer token required")
+
+        raw = authorization.removeprefix("Bearer ").strip()
+
+        # Fast path: static admin token — always grants admin-level access.
+        if static_token is not None and hmac.compare_digest(raw.encode(), static_token.encode()):
+            return  # admitted as admin
+
+        # JWT path.
+        if jwt_config is None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token")
+
+        try:
+            claims = jwt_config.decode_token(raw)
+        except Exception as exc:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"invalid token: {exc}") from exc
+
+        if not claims.has_role(minimum):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"role {claims.role.value!r} lacks {minimum.value!r} privileges",
+            )
+
+    return _dep
+
+
 def create_app(
     daemon: Daemon,
     *,
@@ -189,7 +236,28 @@ def create_app(
     )
     mount_metrics_endpoint(app)
     _mount_web_ui(app)
-    auth = _auth_dep(auth_token)
+    # When jwt_config is provided, RBAC deps handle all auth (both static and JWT).
+    # The `auth` dep becomes a pass-through so endpoints with Depends(auth) still
+    # work with JWT tokens without double-checking the static token.
+    auth = _auth_dep(None if jwt_config is not None else auth_token)
+
+    # RBAC dependency factories — only active when jwt_config is provided.
+    # When jwt_config is None the daemon falls back to static bearer-token auth
+    # (``auth`` dep above) and role enforcement is skipped.
+    def _require_viewer() -> Any:
+        if jwt_config is not None:
+            return _make_rbac_dep(Role.viewer, auth_token, jwt_config)
+        return auth
+
+    def _require_operator() -> Any:
+        if jwt_config is not None:
+            return _make_rbac_dep(Role.operator, auth_token, jwt_config)
+        return auth
+
+    def _require_admin() -> Any:
+        if jwt_config is not None:
+            return _make_rbac_dep(Role.admin, auth_token, jwt_config)
+        return auth
 
     _audit: AuditLogger | None = AuditLogger(audit_log_path) if audit_log_path is not None else None
 
@@ -300,13 +368,13 @@ def create_app(
             raise HTTPException(status_code=503, detail="no backends available")
         return {"status": "ready"}
 
-    @app.get("/api/v1/backends", dependencies=[Depends(auth)])
+    @app.get("/api/v1/backends", dependencies=[Depends(_require_viewer())])
     async def list_backends() -> dict[str, Any]:
         return {"backends": daemon.state().backends_available}
 
     @app.post(
         "/api/v1/tasks",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(auth), Depends(_require_operator())],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def submit_task(payload: TaskSubmit) -> TaskView:
@@ -318,7 +386,7 @@ def create_app(
         )
         return TaskView.from_task(task)
 
-    @app.get("/api/v1/tasks", dependencies=[Depends(auth)])
+    @app.get("/api/v1/tasks", dependencies=[Depends(_require_viewer())])
     async def list_tasks(
         status: Annotated[str | None, Query()] = None,
         kind: Annotated[str | None, Query()] = None,
@@ -335,14 +403,16 @@ def create_app(
         tasks.sort(key=lambda t: t.created_at, reverse=True)
         return [TaskView.from_task(t) for t in tasks[:limit]]
 
-    @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(auth)])
+    @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
     async def get_task(task_id: str) -> TaskView:
         t = daemon.get_task(task_id)
         if t is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
         return TaskView.from_task(t)
 
-    @app.post("/api/v1/tasks/{task_id}/cancel", dependencies=[Depends(auth)])
+    @app.post(
+        "/api/v1/tasks/{task_id}/cancel", dependencies=[Depends(auth), Depends(_require_operator())]
+    )
     async def cancel_task(task_id: str) -> TaskView:
         try:
             cancelled = daemon.cancel_task(task_id)
@@ -354,7 +424,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(auth), Depends(_require_operator())],
         status_code=status.HTTP_201_CREATED,
     )
     async def create_issue(payload: IssueCreate) -> dict[str, Any]:
@@ -386,7 +456,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/dispatch",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(auth), Depends(_require_admin())],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def dispatch_issue(payload: IssueDispatch) -> TaskView:
@@ -402,7 +472,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/ab-dispatch",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(auth), Depends(_require_operator())],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def ab_dispatch_issue(payload: IssueAbDispatch) -> dict[str, Any]:
@@ -430,7 +500,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/batch-dispatch",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(auth), Depends(_require_operator())],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def batch_dispatch_issues(payload: IssueBatchDispatch) -> dict[str, Any]:
@@ -461,7 +531,7 @@ def create_app(
             "failures": failures,
         }
 
-    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(auth)])
+    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(_require_viewer())])
     async def list_repo_issues(
         owner: str, name: str, state: str = "open", limit: int = 25
     ) -> list[dict[str, Any]]:
@@ -478,7 +548,7 @@ def create_app(
             for i in issues
         ]
 
-    @app.get("/api/v1/fleet", dependencies=[Depends(auth)])
+    @app.get("/api/v1/fleet", dependencies=[Depends(_require_viewer())])
     async def fleet_overview() -> dict[str, Any]:
         """Return fleet manifest data merged with live task counts per repo."""
         import os
@@ -545,7 +615,7 @@ def create_app(
             "repos": repos,
         }
 
-    @app.get("/api/v1/audit", dependencies=[Depends(auth)])
+    @app.get("/api/v1/audit", dependencies=[Depends(_require_viewer())])
     async def audit_log(
         limit: int = Query(default=200, ge=1, le=10_000),
         offset: int = Query(default=0, ge=0),
@@ -558,7 +628,7 @@ def create_app(
             "audit_enabled": True,
         }
 
-    @app.get("/api/v1/audit/verify", dependencies=[Depends(auth)])
+    @app.get("/api/v1/audit/verify", dependencies=[Depends(_require_viewer())])
     async def audit_verify() -> dict[str, Any]:
         """Verify the audit log hash chain.  Returns violations (empty = clean)."""
         from maxwell_daemon.audit import verify_chain
@@ -572,7 +642,27 @@ def create_app(
             "audit_enabled": True,
         }
 
-    @app.get("/api/v1/cost", dependencies=[Depends(auth)])
+    @app.get("/api/v1/workers", dependencies=[Depends(_require_viewer())])
+    async def workers_status() -> dict[str, Any]:
+        """Return current worker count and queue depth."""
+        state = daemon.state()
+        return {
+            "worker_count": state.worker_count,
+            "queue_depth": state.queue_depth,
+        }
+
+    @app.put("/api/v1/workers", dependencies=[Depends(_require_viewer())])
+    async def set_workers(count: int) -> dict[str, Any]:
+        """Rescale the worker pool to *count* workers."""
+        from maxwell_daemon.contracts import PreconditionError
+
+        try:
+            await daemon.set_worker_count(count)
+        except PreconditionError as e:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
+        return {"worker_count": count}
+
+    @app.get("/api/v1/cost", dependencies=[Depends(_require_viewer())])
     async def cost_summary() -> CostSummary:
         now = datetime.now(timezone.utc)
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -650,6 +740,245 @@ def create_app(
             {"event": event_type, "dispatched": len(dispatches)},
             status_code=status.HTTP_200_OK,
         )
+
+    # ── SSH endpoints ────────────────────────────────────────────────────────
+    # asyncssh is optional (pip install maxwell-daemon[ssh]).  All SSH routes
+    # return 503 if it is not installed.
+
+    _ssh_pool_ref: dict[str, Any] = {}  # lazy singleton
+
+    def _ssh_pool() -> Any:
+        if "pool" not in _ssh_pool_ref:
+            try:
+                from maxwell_daemon.ssh.session import SSHSessionPool
+
+                _ssh_pool_ref["pool"] = SSHSessionPool()
+            except ImportError:
+                return None
+        return _ssh_pool_ref.get("pool")
+
+    def _ssh_unavailable() -> Any:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            {"detail": "SSH support not installed — pip install maxwell-daemon[ssh]"},
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    @app.get("/api/v1/ssh/sessions", dependencies=[Depends(_require_admin())])
+    async def ssh_sessions() -> Any:
+        """List active SSH sessions."""
+        pool = _ssh_pool()
+        if pool is None:
+            return _ssh_unavailable()
+        return {"sessions": pool.sessions()}
+
+    @app.get("/api/v1/ssh/keys", dependencies=[Depends(_require_admin())])
+    async def ssh_list_keys() -> Any:
+        """List machines that have stored SSH keys."""
+        try:
+            from maxwell_daemon.ssh.keys import SSHKeyStore
+        except ImportError:
+            return _ssh_unavailable()
+        store = SSHKeyStore()
+        return {"machines": store.list_machines()}
+
+    @app.get("/api/v1/ssh/keys/{machine}", dependencies=[Depends(_require_admin())])
+    async def ssh_get_key(machine: str) -> Any:
+        """Return the public key for *machine*, generating it if absent."""
+        try:
+            from maxwell_daemon.ssh.keys import SSHKeyStore
+        except ImportError:
+            return _ssh_unavailable()
+        store = SSHKeyStore()
+        _, pub = store.get_or_generate(machine)
+        return {"machine": machine, "public_key": pub}
+
+    @app.delete("/api/v1/ssh/keys/{machine}", dependencies=[Depends(_require_admin())])
+    async def ssh_delete_key(machine: str) -> Any:
+        """Remove stored SSH keys for *machine*."""
+        try:
+            from maxwell_daemon.ssh.keys import SSHKeyStore
+        except ImportError:
+            return _ssh_unavailable()
+        SSHKeyStore().remove(machine)
+        return {"machine": machine, "deleted": True}
+
+    class SSHConnectRequest(BaseModel):
+        host: str
+        port: int = 22
+        user: str
+        password: str | None = None
+
+    @app.post("/api/v1/ssh/connect", dependencies=[Depends(auth), Depends(_require_admin())])
+    async def ssh_connect(payload: SSHConnectRequest) -> Any:
+        """Open (or reuse) an SSH session and return its summary."""
+        pool = _ssh_pool()
+        if pool is None:
+            return _ssh_unavailable()
+        session = await pool.get(
+            payload.host,
+            user=payload.user,
+            port=payload.port,
+            password=payload.password,
+        )
+        return {
+            "host": payload.host,
+            "port": payload.port,
+            "user": payload.user,
+            "age_seconds": round(session.age_seconds, 1),
+        }
+
+    class SSHRunRequest(BaseModel):
+        host: str
+        port: int = 22
+        user: str
+        command: str
+        timeout_seconds: float = 30.0
+
+    @app.post("/api/v1/ssh/run", dependencies=[Depends(auth), Depends(_require_admin())])
+    async def ssh_run(payload: SSHRunRequest) -> Any:
+        """Run a command on a remote machine and return its output."""
+        pool = _ssh_pool()
+        if pool is None:
+            return _ssh_unavailable()
+        session = await pool.get(payload.host, user=payload.user, port=payload.port)
+        result = await session.run(payload.command, timeout=payload.timeout_seconds)
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exit_code": result.exit_code,
+        }
+
+    @app.get("/api/v1/ssh/files", dependencies=[Depends(_require_admin())])
+    async def ssh_list_files(
+        host: str = Query(...),
+        user: str = Query(...),
+        port: int = Query(default=22),
+        path: str = Query(default="/"),
+    ) -> Any:
+        """List files on a remote machine via SFTP."""
+        pool = _ssh_pool()
+        if pool is None:
+            return _ssh_unavailable()
+        session = await pool.get(host, user=user, port=port)
+        entries = await session.list_dir(path)
+        return {
+            "path": path,
+            "entries": [
+                {
+                    "name": e.name,
+                    "path": e.path,
+                    "size": e.size,
+                    "is_dir": e.is_dir,
+                    "modified": e.modified,
+                }
+                for e in entries
+            ],
+        }
+
+    # Whitelist of shell commands that are permitted over the SSH WebSocket.
+    # Only bare command names (no arguments) are accepted — the interactive
+    # shell session itself handles all subsequent user input.
+    _ssh_allowed_commands: frozenset[str] = frozenset({"bash", "sh", "zsh", "fish", "rbash"})
+
+    @app.websocket("/api/v1/ssh/shell")
+    async def ssh_shell_ws(ws: WebSocket) -> None:
+        """Interactive shell over WebSocket.
+
+        Query params: ``host``, ``user``, ``port`` (default 22), ``token``
+        (bearer token for auth), ``command`` (default ``bash``).
+
+        The ``command`` parameter is validated against an explicit whitelist of
+        permitted shell executables.  Arbitrary shell strings, pipes, and
+        redirections are rejected to prevent remote code execution via command
+        injection (CVE / Issue #138).
+
+        Frames: text frames sent from client are written to stdin.
+        Text frames sent to client contain stdout/stderr chunks.
+        Session ends when the command exits or the client disconnects.
+        Max session duration: 1 hour.
+        """
+        import json as _json_mod
+
+        if auth_token is not None:
+            presented = ws.query_params.get("token") or ""
+            authenticated = False
+            if auth_token is not None and hmac.compare_digest(
+                presented.encode(), auth_token.encode()
+            ):
+                authenticated = True
+            elif jwt_config is not None and presented:
+                try:
+                    _ws_claims = jwt_config.decode_token(presented)
+                    if _ws_claims.has_role(Role.admin):
+                        authenticated = True
+                except Exception:  # nosec B110 — invalid JWT, fall through
+                    pass
+            if not authenticated:
+                await ws.close(code=1008)
+                return
+
+        pool = _ssh_pool()
+        if pool is None:
+            await ws.accept()
+            await ws.send_text('{"error": "SSH not installed"}')
+            await ws.close(code=1011)
+            return
+
+        host = ws.query_params.get("host") or ""
+        user = ws.query_params.get("user") or ""
+
+        # Validate port — must be a valid integer in 1-65535
+        raw_port = ws.query_params.get("port") or "22"
+        try:
+            port = int(raw_port)
+            if not (1 <= port <= 65535):
+                raise ValueError("port out of range")
+        except ValueError:
+            await ws.accept()
+            await ws.send_text('{"error": "invalid port"}')
+            await ws.close(code=1008)
+            return
+
+        # Validate command against whitelist — reject anything that is not a
+        # known-safe shell executable name.  This prevents injection of shell
+        # metacharacters, pipes, subshells, or arbitrary binaries.
+        raw_command = ws.query_params.get("command") or "bash"
+        command = raw_command.strip()
+        if command not in _ssh_allowed_commands:
+            await ws.accept()
+            await ws.send_text(
+                _json_mod.dumps(
+                    {
+                        "error": (
+                            f"command {command!r} is not permitted; "
+                            f"allowed: {sorted(_ssh_allowed_commands)}"
+                        )
+                    }
+                )
+            )
+            await ws.close(code=1008)
+            return
+
+        if not host or not user:
+            await ws.accept()
+            await ws.send_text('{"error": "host and user are required"}')
+            await ws.close(code=1008)
+            return
+
+        await ws.accept()
+        try:
+            session = await pool.get(host, user=user, port=port)
+            # Pass command as a single-element list so asyncssh treats it as an
+            # exec request rather than a shell string — no shell interpolation.
+            async for chunk in session.shell_stream(command):
+                await ws.send_bytes(chunk)
+        except WebSocketDisconnect:
+            return
+        except Exception as exc:
+            await ws.send_text(_json_mod.dumps({"error": str(exc)}))
+            await ws.close(code=1011)
 
     @app.websocket("/api/v1/events")
     async def events_ws(ws: WebSocket) -> None:

@@ -148,8 +148,19 @@ class TestAuditLogger:
         removed = logger.rotate()
         assert removed == 1
         remaining = logger.entries()
-        assert len(remaining) == 1
-        assert remaining[0]["path"] == "/new"
+        # After rotation: the kept "/new" entry plus the log_rotation audit event.
+        assert len(remaining) == 2
+        paths = [e.get("path") for e in remaining]
+        assert "/new" in paths
+        rotation_entries = [
+            e for e in remaining if e.get("details", {}).get("operation") == "log_rotation"
+        ]
+        assert len(rotation_entries) == 1
+        assert rotation_entries[0]["details"]["removed"] == 1
+        # The chain must be clean after rotation.
+        from maxwell_daemon.audit import verify_chain
+
+        assert verify_chain(path) == []
 
     def test_new_logger_reads_tail_from_file(self, log_path: Path) -> None:
         """A fresh AuditLogger instance reads the existing tail hash."""

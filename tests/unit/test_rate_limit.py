@@ -131,3 +131,48 @@ class TestMiddleware:
         client = TestClient(app)
         for _ in range(20):
             assert client.get("/health").status_code == 200
+
+
+class TestRetryAfterFull:
+    def test_retry_after_returns_zero_when_tokens_available(self) -> None:
+        from maxwell_daemon.api.rate_limit import TokenBucket
+
+        b = TokenBucket(capacity=5, refill_per_second=1.0)
+        assert b.retry_after_seconds() == 0.0
+
+
+class TestClassify:
+    def test_writes_classified_for_post(self) -> None:
+        from maxwell_daemon.api.rate_limit import _classify
+
+        assert _classify("POST", "/api/tasks") == "writes"
+        assert _classify("DELETE", "/api/tasks/1") == "writes"
+
+    def test_gets_classified_as_default(self) -> None:
+        from maxwell_daemon.api.rate_limit import _classify
+
+        assert _classify("GET", "/api/tasks") == "default"
+
+
+class TestClientKey:
+    def test_bearer_token_hashed(self) -> None:
+        from unittest.mock import MagicMock
+
+        from maxwell_daemon.api.rate_limit import _client_key
+
+        req = MagicMock()
+        req.headers.get.return_value = "Bearer mysecrettoken"
+        key = _client_key(req)
+        assert key.startswith("tok:")
+        assert "mysecrettoken" not in key
+
+    def test_no_bearer_uses_ip(self) -> None:
+        from unittest.mock import MagicMock
+
+        from maxwell_daemon.api.rate_limit import _client_key
+
+        req = MagicMock()
+        req.headers.get.return_value = ""
+        req.client.host = "1.2.3.4"
+        key = _client_key(req)
+        assert key == "ip:1.2.3.4"

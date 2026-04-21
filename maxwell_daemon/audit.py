@@ -37,6 +37,27 @@ __all__ = [
 _GENESIS_HASH = "0" * 64  # prev_hash sentinel for the first entry
 
 
+def _rechain(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Rebuild ``entry_hash`` and ``prev_hash`` for every entry after rotation.
+
+    After old entries are pruned the first surviving entry still carries a
+    ``prev_hash`` that points to a deleted record.  This helper walks the
+    kept entries in order, resetting ``prev_hash`` to the previous entry's
+    recomputed hash (or ``_GENESIS_HASH`` for the new first entry) and
+    recomputing ``entry_hash`` from scratch so the chain is self-consistent.
+    """
+    prev = _GENESIS_HASH
+    result: list[dict[str, Any]] = []
+    for entry in entries:
+        e = dict(entry)
+        e["prev_hash"] = prev
+        payload = json.dumps({k: v for k, v in e.items() if k != "entry_hash"}, sort_keys=True)
+        e["entry_hash"] = hashlib.sha256(payload.encode()).hexdigest()
+        prev = e["entry_hash"]
+        result.append(e)
+    return result
+
+
 class AuditViolationError(RuntimeError):
     """Raised by ``verify_chain`` when the hash chain is broken."""
 
@@ -166,25 +187,58 @@ class AuditLogger:
         from datetime import timedelta
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
-        lines = self._path.read_text(encoding="utf-8").splitlines()
-        kept: list[str] = []
+
+        # Count how many entries will be pruned before logging the rotation event.
+        lines_before = self._path.read_text(encoding="utf-8").splitlines()
         removed = 0
-        for line in lines:
+        for line in lines_before:
             line = line.strip()
             if not line:
                 continue
             try:
                 entry = json.loads(line)
                 ts = datetime.fromisoformat(entry.get("timestamp", ""))
-                if ts >= cutoff:
-                    kept.append(line)
-                else:
+                if ts < cutoff:
                     removed += 1
             except (json.JSONDecodeError, ValueError):
-                kept.append(line)  # keep malformed lines; chain verifier will flag them
-        if removed:
-            self._write_lines(kept)
-            self._last_hash = None  # invalidate cache
+                pass
+
+        if not removed:
+            return 0
+
+        # Log the rotation event FIRST so it is part of the kept chain.
+        self.log_agent_operation(
+            operation="log_rotation",
+            details={"removed": removed, "cutoff": cutoff.isoformat()},
+        )
+
+        # Re-read the file (now includes the rotation entry just appended).
+        lines = self._path.read_text(encoding="utf-8").splitlines()
+        kept_dicts: list[dict[str, Any]] = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                ts_str = entry.get("timestamp", "")
+                # Keep the rotation entry (agent_operation) and all recent entries.
+                # Malformed / unparseable timestamps are kept as well.
+                try:
+                    ts = datetime.fromisoformat(ts_str)
+                    if ts >= cutoff or entry.get("details", {}).get("operation") == "log_rotation":
+                        kept_dicts.append(entry)
+                except ValueError:
+                    kept_dicts.append(entry)
+            except json.JSONDecodeError:
+                pass  # drop malformed lines during rotation; they would break the chain
+
+        # Rebuild the hash chain so verify_chain() continues to pass.
+        rechained = _rechain(kept_dicts)
+        kept_lines = [json.dumps(e, separators=(",", ":")) for e in rechained]
+        self._write_lines(kept_lines)
+        # Update the cached tail hash to the last rechained entry.
+        self._last_hash = rechained[-1]["entry_hash"] if rechained else None
         return removed
 
     # ── internals ───────────────────────────────────────────────────────────

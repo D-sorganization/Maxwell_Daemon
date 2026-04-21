@@ -19,6 +19,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from maxwell_daemon import __version__
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
 from maxwell_daemon.core import (
@@ -80,6 +81,8 @@ class DaemonState:
     tasks: dict[str, Task]
     started_at: datetime
     backends_available: list[str]
+    worker_count: int = 0
+    queue_depth: int = 0
 
 
 class Daemon:
@@ -135,6 +138,9 @@ class Daemon:
         self._bg_tasks: set[asyncio.Task[None]] = set()
         self._started_at = datetime.now(timezone.utc)
         self._running = False
+        # Captured in :meth:`start`; used by :meth:`submit_threadsafe` to
+        # schedule cross-thread queue puts via the running event loop.
+        self._loop: asyncio.AbstractEventLoop | None = None
         # Lazily-built collaborators — injected by tests, built on demand in prod.
         self._github_client: Any = None
         self._workspace: Any = None
@@ -154,9 +160,37 @@ class Daemon:
         if recover:
             self.recover()
         self._running = True
+        self._loop = asyncio.get_running_loop()
         for i in range(worker_count):
             self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
         log.info("daemon started with %d workers", worker_count)
+
+    async def set_worker_count(self, n: int) -> None:
+        """Rescale the worker pool to exactly *n* workers at runtime.
+
+        :param n: desired number of workers (must be >= 1).
+        :raises PreconditionError: if *n* < 1.
+        """
+        from maxwell_daemon.contracts import require
+
+        require(n >= 1, "worker count must be at least 1")
+
+        current = len(self._workers)
+        if n > current:
+            # Spawn additional workers.
+            for i in range(current, n):
+                task = asyncio.create_task(self._worker_loop(i), name=f"worker-{i}")
+                self._workers.append(task)
+            log.info("set_worker_count: added %d worker(s); total=%d", n - current, n)
+        elif n < current:
+            # Cancel the excess workers from the end of the list.
+            to_cancel = self._workers[n:]
+            self._workers = self._workers[:n]
+            for worker in to_cancel:
+                worker.cancel()
+            if to_cancel:
+                await asyncio.gather(*to_cancel, return_exceptions=True)
+            log.info("set_worker_count: removed %d worker(s); total=%d", current - n, n)
 
     def recover(self) -> list[Task]:
         """Re-queue tasks from a prior daemon run. Called automatically from start()."""
@@ -210,6 +244,12 @@ class Daemon:
         backend: str | None = None,
         model: str | None = None,
     ) -> Task:
+        """Enqueue a prompt task. **Event-loop thread only.**
+
+        Must be called from the same thread that runs the daemon's event loop.
+        If you need to submit from a background thread or sync context, use
+        :meth:`submit_threadsafe` instead.
+        """
         task = Task(
             id=uuid.uuid4().hex[:12],
             prompt=prompt,
@@ -234,6 +274,41 @@ class Daemon:
             )
             self._bg_tasks.add(bg)
             bg.add_done_callback(self._bg_tasks.discard)
+        return task
+
+    def submit_threadsafe(
+        self,
+        prompt: str,
+        *,
+        repo: str | None = None,
+        backend: str | None = None,
+        model: str | None = None,
+    ) -> Task:
+        """Enqueue a prompt task from any thread. **Cross-thread safe.**
+
+        Unlike :meth:`submit`, this method is safe to call from threads that
+        are *not* running the daemon's event loop (e.g. WSGI middleware,
+        background threads, sync test clients).  It uses
+        ``asyncio.run_coroutine_threadsafe`` to schedule the queue put on the
+        running event loop so the sleeping worker is reliably woken.
+
+        :raises RuntimeError: if the daemon has not been started yet
+            (``self._loop`` is ``None``).
+        """
+        if self._loop is None:
+            raise RuntimeError("daemon must be started before submit_threadsafe()")
+        task = Task(
+            id=uuid.uuid4().hex[:12],
+            prompt=prompt,
+            kind=TaskKind.PROMPT,
+            repo=repo,
+            backend=backend,
+            model=model,
+        )
+        with self._tasks_lock:
+            self._tasks[task.id] = task
+        self._task_store.save(task)
+        asyncio.run_coroutine_threadsafe(self._queue.put(task), self._loop).result(timeout=5.0)
         return task
 
     def submit_issue(
@@ -366,11 +441,13 @@ class Daemon:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
         return DaemonState(
-            version="0.1.0",
+            version=__version__,
             config_path=None,
             tasks=tasks_snapshot,
             started_at=self._started_at,
             backends_available=self._router.available_backends(),
+            worker_count=len(self._workers),
+            queue_depth=self._queue.qsize(),
         )
 
     async def _worker_loop(self, worker_id: int) -> None:
@@ -382,20 +459,34 @@ class Daemon:
                 task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
             except asyncio.TimeoutError:
                 continue
-            # Tasks cancelled while queued shouldn't be executed.
+            # Tasks cancelled while queued should not be executed.
             if task.status is TaskStatus.CANCELLED:
                 continue
             with bind_context(task_id=task.id, worker_id=worker_id):
+                # Attempt to mark the task RUNNING in the durable store before
+                # executing.  If that write fails (disk full, lock contention),
+                # re-queue the task so it is retried rather than silently lost.
+                # Double-execution is still possible if the DB write succeeds but
+                # the worker crashes before execution completes; preventing that
+                # fully requires a lease/heartbeat mechanism (future work).
+                task.started_at = datetime.now(timezone.utc)
+                try:
+                    self._task_store.update_status(
+                        task.id, TaskStatus.RUNNING, started_at=task.started_at
+                    )
+                except Exception as exc:
+                    log.error(
+                        "failed to mark task %s RUNNING: %s; re-queuing",
+                        task.id,
+                        exc,
+                    )
+                    task.started_at = None
+                    await self._queue.put(task)
+                    continue
                 await self._execute(task)
 
     async def _execute(self, task: Task) -> None:
         task.status = TaskStatus.RUNNING
-        task.started_at = datetime.now(timezone.utc)
-        try:
-            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
-        except Exception:
-            log.exception("task store write failed for task=%s", task.id)
-            raise
         await self._events.publish(
             Event(
                 kind=EventKind.TASK_STARTED,
@@ -441,7 +532,11 @@ class Daemon:
                 status="success",
                 tokens=resp.usage.total_tokens,
                 cost_usd=task.cost_usd,
-                duration_seconds=(datetime.now(timezone.utc) - task.started_at).total_seconds(),
+                duration_seconds=(
+                    (datetime.now(timezone.utc) - task.started_at).total_seconds()
+                    if task.started_at is not None
+                    else 0.0
+                ),
             )
             await self._events.publish(
                 Event(
@@ -501,8 +596,10 @@ class Daemon:
         from maxwell_daemon.gh.executor import IssueExecutor
         from maxwell_daemon.gh.workspace import Workspace
 
-        assert task.issue_repo is not None
-        assert task.issue_number is not None
+        if task.issue_repo is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_repo set")
+        if task.issue_number is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_number set")
 
         github = self._github_client or GitHubClient()
         workspace = self._workspace or Workspace(root=self._workspace_root)

@@ -123,7 +123,7 @@ See the [full issue roadmap](https://github.com/D-sorganization/Maxwell-Daemon/i
 | 6      | VS Code extension, desktop app  | ⚪ Planned |
 | 7      | Observability & cost analytics  | 🟡 Ledger done, Prometheus next |
 | 8      | Encryption, RBAC, audit logging | ⚪ Planned |
-| 9      | Docs site, community            | ⚪ Planned |
+| 9      | Docs site, community            | 🟡 Community standards scaffolded |
 | 10     | 1.0.0 release                   | ⚪ Target Q3 2026 |
 
 ## Contributing

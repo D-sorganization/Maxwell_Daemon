@@ -11,15 +11,31 @@ On startup, ``recover_pending()`` re-queues all ``QUEUED`` tasks and marks any
 know whether a previously-running task finished before the crash, so we default
 to the safe assumption — the human will see the failed task in the UI and can
 re-dispatch it if needed.
+
+Connection model
+----------------
+Each operation opens a short-lived ``sqlite3.Connection`` with a long busy
+timeout.  WAL journal mode lets readers proceed concurrently with the single
+writer.  A ``threading.Lock`` serialises write operations so thread-pool workers
+do not contend inside SQLite during writes.
+
+Async safety
+------------
+All public ``async`` methods dispatch their SQLite work via
+``asyncio.run_in_executor`` so they never block the event loop.  The sync
+variants (``save``, ``update_status``, ``get``, ``list_tasks``,
+``recover_pending``) remain available for startup / shutdown paths that run
+outside an event loop.
 """
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -74,8 +90,19 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+def _parse_iso_required(value: str) -> datetime:
+    # Legacy DBs may contain naive ISO strings written before this module
+    # became timezone-aware. Treat those as UTC so comparisons with
+    # ``datetime.now(timezone.utc)`` elsewhere in the codebase don't raise
+    # ``TypeError: can't compare offset-naive and offset-aware datetimes``.
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 def _parse_iso(value: str | None) -> datetime | None:
-    return datetime.fromisoformat(value) if value else None
+    return _parse_iso_required(value) if value else None
 
 
 class TaskStore:
@@ -84,6 +111,9 @@ class TaskStore:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         with self._connect() as conn:
+            # WAL mode persists at the DB level; set once during initialization
+            # to avoid extra lock churn on every short-lived connection.
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA_BASE)
             existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
             for col, ddl in _MIGRATIONS:
@@ -95,17 +125,22 @@ class TaskStore:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self._path, isolation_level=None)
+        conn = sqlite3.connect(self._path, isolation_level=None, timeout=30.0)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
         try:
             yield conn
         finally:
             conn.close()
 
-    def save(self, task: Task) -> None:
-        require(bool(task.id), "TaskStore.save: task.id must be non-empty")
-        now = datetime.now(task.created_at.tzinfo).isoformat()
+    # ── Sync internals ────────────────────────────────────────────────────────
+
+    def _save_sync(self, task: Task) -> None:
+        # Prefer the task's own tzinfo so the updated_at stays in the same
+        # zone as created_at, but fall back to UTC if the task happens to be
+        # naive (e.g. loaded from a legacy DB row).
+        tz = task.created_at.tzinfo or timezone.utc
+        now = datetime.now(tz).isoformat()
         row = (
             task.id,
             task.created_at.isoformat(),
@@ -152,7 +187,7 @@ class TaskStore:
                 row,
             )
 
-    def update_status(
+    def _update_status_sync(
         self,
         task_id: str,
         status: TaskStatus,
@@ -164,7 +199,7 @@ class TaskStore:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
     ) -> None:
-        now = datetime.now().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._lock, self._connect() as conn:
             cursor = conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
             if cursor.fetchone() is None:
@@ -188,12 +223,12 @@ class TaskStore:
                 args,
             )
 
-    def get(self, task_id: str) -> Task | None:
+    def _get_sync(self, task_id: str) -> Task | None:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _row_to_task(row) if row else None
 
-    def list_tasks(self, *, limit: int = 100, status: TaskStatus | None = None) -> list[Task]:
+    def _list_sync(self, *, limit: int = 100, status: TaskStatus | None = None) -> list[Task]:
         query = "SELECT * FROM tasks"
         args: list[object] = []
         if status is not None:
@@ -205,11 +240,10 @@ class TaskStore:
             rows = conn.execute(query, args).fetchall()
         return [_row_to_task(r) for r in rows]
 
-    def recover_pending(self) -> list[Task]:
-        """Mark stale RUNNING tasks as FAILED; return anything still QUEUED."""
+    def _recover_sync(self) -> list[Task]:
         from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
 
-        now = datetime.now().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
@@ -230,6 +264,97 @@ class TaskStore:
                 (_TaskStatus.QUEUED.value,),
             ).fetchall()
         return [_row_to_task(r) for r in rows]
+
+    # ── Sync public API ────────────────────────────────────────────────────────
+
+    def save(self, task: Task) -> None:
+        require(bool(task.id), "TaskStore.save: task.id must be non-empty")
+        self._save_sync(task)
+
+    def update_status(
+        self,
+        task_id: str,
+        status: TaskStatus,
+        *,
+        result: str | None = None,
+        error: str | None = None,
+        pr_url: str | None = None,
+        cost_usd: float | None = None,
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
+    ) -> None:
+        self._update_status_sync(
+            task_id,
+            status,
+            result=result,
+            error=error,
+            pr_url=pr_url,
+            cost_usd=cost_usd,
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+
+    def get(self, task_id: str) -> Task | None:
+        return self._get_sync(task_id)
+
+    def list_tasks(self, *, limit: int = 100, status: TaskStatus | None = None) -> list[Task]:
+        return self._list_sync(limit=limit, status=status)
+
+    def recover_pending(self) -> list[Task]:
+        """Mark stale RUNNING tasks as FAILED; return anything still QUEUED."""
+        return self._recover_sync()
+
+    # ── Async public API ───────────────────────────────────────────────────────
+
+    async def asave(self, task: Task) -> None:
+        """Non-blocking version of :meth:`save` for use in async code."""
+        require(bool(task.id), "TaskStore.asave: task.id must be non-empty")
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._save_sync, task)
+
+    async def aupdate_status(
+        self,
+        task_id: str,
+        status: TaskStatus,
+        *,
+        result: str | None = None,
+        error: str | None = None,
+        pr_url: str | None = None,
+        cost_usd: float | None = None,
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
+    ) -> None:
+        """Non-blocking version of :meth:`update_status` for use in async code."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: self._update_status_sync(
+                task_id,
+                status,
+                result=result,
+                error=error,
+                pr_url=pr_url,
+                cost_usd=cost_usd,
+                started_at=started_at,
+                finished_at=finished_at,
+            ),
+        )
+
+    async def aget(self, task_id: str) -> Task | None:
+        """Non-blocking version of :meth:`get` for use in async code."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._get_sync, task_id)
+
+    async def alist_tasks(
+        self, *, limit: int = 100, status: TaskStatus | None = None
+    ) -> list[Task]:
+        """Non-blocking version of :meth:`list_tasks` for use in async code."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self._list_sync(limit=limit, status=status))
+
+    def close(self) -> None:
+        """Compatibility hook for stores that do not keep an open connection."""
+        return None
 
 
 def _row_to_task(row: sqlite3.Row) -> Task:
@@ -259,7 +384,7 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         error=row["error"],
         pr_url=row["pr_url"],
         cost_usd=row["cost_usd"],
-        created_at=datetime.fromisoformat(row["created_at"]),
+        created_at=_parse_iso_required(row["created_at"]),
         started_at=_parse_iso(row["started_at"]),
         finished_at=_parse_iso(row["finished_at"]),
     )

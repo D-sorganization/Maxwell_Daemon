@@ -64,4 +64,6 @@ nav:
       - CLI: reference/cli.md
       - Tasks CLI: reference/tasks-cli.md
       - REST API: reference/api.md
-  - Contributing: contributing.md
+  - Community:
+      - Contributing: contributing.md
+      - Roadmap and Governance: community/roadmap-governance.md
