@@ -23,18 +23,11 @@ from maxwell_daemon.backends.base import (
     MessageRole,
     TokenUsage,
 )
+from maxwell_daemon.backends.pricing import get_rates
 from maxwell_daemon.backends.registry import registry
 
-# Anthropic public pricing (USD per 1M tokens) as of 2026-04. Keep a single source
-# of truth here so cost estimation and budget alerts stay consistent.
-_MODEL_PRICING: dict[str, tuple[float, float]] = {
-    "claude-opus-4-7": (15.0, 75.0),
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-4-5": (0.80, 4.0),
-    "claude-3-5-sonnet-latest": (3.0, 15.0),
-    "claude-3-5-haiku-latest": (0.80, 4.0),
-}
-
+# Per-model context-window sizes (tokens).  Pricing lives in the central table
+# at :mod:`maxwell_daemon.backends.pricing`.
 _MODEL_CONTEXT: dict[str, int] = {
     "claude-opus-4-7": 1_000_000,
     "claude-sonnet-4-6": 200_000,
@@ -146,7 +139,7 @@ class ClaudeBackend(ILLMBackend):
             return False
 
     def capabilities(self, model: str) -> BackendCapabilities:
-        price_in, price_out = _MODEL_PRICING.get(model, (3.0, 15.0))
+        price_in, price_out = get_rates("claude", model)
         return BackendCapabilities(
             supports_streaming=True,
             supports_tool_use=True,

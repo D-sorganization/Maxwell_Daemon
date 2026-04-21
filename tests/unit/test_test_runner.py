@@ -164,6 +164,6 @@ class TestDefaultRunnerGhTestRunner:
     async def test_runs_real_command(self, tmp_path: Path) -> None:
         from maxwell_daemon.gh.test_runner import _default_runner
 
-        rc, out, err = await _default_runner("echo", "hello", cwd=str(tmp_path))
+        rc, out, _err = await _default_runner("echo", "hello", cwd=str(tmp_path))
         assert rc == 0
         assert b"hello" in out
