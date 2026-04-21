@@ -20,7 +20,14 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["GhCliError", "GitHubClient", "GitHubRateLimitError", "Issue", "PullRequest", "RateLimitError"]
+__all__ = [
+    "GhCliError",
+    "GitHubClient",
+    "GitHubRateLimitError",
+    "Issue",
+    "PullRequest",
+    "RateLimitError",
+]
 
 log = logging.getLogger(__name__)
 
