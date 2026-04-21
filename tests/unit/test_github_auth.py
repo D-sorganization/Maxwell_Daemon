@@ -119,7 +119,10 @@ class TestAppAuth:
         auth = self._make_auth()
         fake_jwt = MagicMock()
         fake_jwt.encode.return_value = "jwt"
-        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}), pytest.raises(ImportError, match="httpx"):
+        with (
+            patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}),
+            pytest.raises(ImportError, match="httpx"),
+        ):
             auth._fetch_installation_token()
 
     def test_fetch_installation_token_success(self) -> None:

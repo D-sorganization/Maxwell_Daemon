@@ -172,6 +172,7 @@ class TestPathFor:
                     return_value=Path("/tmp/outside_root"),
                 ):
                     import contextlib
+
                     with contextlib.suppress(WorkspaceError, Exception):
                         ws.path_for("owner/repo", task_id="t1")
 
