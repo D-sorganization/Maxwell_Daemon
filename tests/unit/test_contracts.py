@@ -122,6 +122,16 @@ class TestPostconditionDecorator:
 
         assert asyncio.run(get_items()) == [1]
 
+    def test_async_violation_raises(self) -> None:
+        import asyncio
+
+        @postcondition(lambda result: result > 10, "large result")
+        async def get_value() -> int:
+            return 3
+
+        with pytest.raises(PostconditionError, match="large result"):
+            asyncio.run(get_value())
+
 
 class TestInvariantClassDecorator:
     def test_invariant_checked_after_public_methods(self) -> None:
@@ -166,7 +176,104 @@ class TestInvariantClassDecorator:
         p.update_both(5)
         assert p.x == p.y == 5
 
+    def test_async_public_methods_checked(self) -> None:
+        import asyncio
+
+        @invariant(lambda self: self.balance >= 0, "balance must be non-negative")
+        class Account:
+            def __init__(self) -> None:
+                self.balance = 0
+
+            async def deposit(self, amount: int) -> None:
+                self.balance += amount
+
+            async def withdraw(self, amount: int) -> None:
+                self.balance -= amount
+
+        async def scenario() -> None:
+            account = Account()
+            await account.deposit(10)
+            assert account.balance == 10
+            with pytest.raises(ContractViolation, match="non-negative"):
+                await account.withdraw(20)
+
+        asyncio.run(scenario())
+
 
 class TestContractsEnabled:
     def test_reports_state(self) -> None:
         assert contracts_enabled() in (True, False)
+
+
+class TestPostconditionDecoratorAsync:
+    def test_async_violation_raises(self) -> None:
+        import asyncio
+
+        @postcondition(lambda result: result > 100, "result > 100")
+        async def too_small_async() -> int:
+            return 5
+
+        with pytest.raises(PostconditionError, match="result > 100"):
+            asyncio.run(too_small_async())
+
+    def test_async_passes_when_ok(self) -> None:
+        import asyncio
+
+        @postcondition(lambda result: result > 0, "must be positive")
+        async def positive() -> int:
+            return 42
+
+        assert asyncio.run(positive()) == 42
+
+    def test_async_skipped_when_contracts_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import asyncio
+
+        monkeypatch.setenv("MAXWELL_CONTRACTS", "off")
+
+        @postcondition(lambda result: result > 100, "result > 100")
+        async def always_small() -> int:
+            return 1
+
+        # Contract is off — should not raise
+        assert asyncio.run(always_small()) == 1
+
+
+class TestInvariantAsyncMethods:
+    def test_async_method_invariant_checked(self) -> None:
+        import asyncio
+
+        @invariant(lambda self: self.value >= 0, "value must be non-negative")
+        class AsyncCounter:
+            def __init__(self) -> None:
+                self.value = 0
+
+            async def increment(self) -> None:
+                self.value += 1
+
+            async def break_invariant(self) -> None:
+                self.value = -1
+
+        c = AsyncCounter()
+        asyncio.run(c.increment())
+        assert c.value == 1
+
+        with pytest.raises(ContractViolation, match="non-negative"):
+            asyncio.run(c.break_invariant())
+
+    def test_async_invariant_skipped_when_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import asyncio
+
+        monkeypatch.setenv("MAXWELL_CONTRACTS", "off")
+
+        @invariant(lambda self: self.value >= 0, "value must be non-negative")
+        class AsyncCounter:
+            def __init__(self) -> None:
+                self.value = 0
+
+            async def break_invariant(self) -> None:
+                self.value = -1
+
+        c = AsyncCounter()
+        # Contracts off — should not raise
+        asyncio.run(c.break_invariant())
+        assert c.value == -1
