@@ -225,7 +225,9 @@ class TestRunOnce:
 
 
 class TestLifecycle:
-    async def test_startup_jitter_elapsed_runs_first_tick(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_startup_jitter_elapsed_runs_first_tick(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
         daemon = _FakeDaemon()
         sched = DiscoveryScheduler(
