@@ -153,11 +153,10 @@ class TestSchemaMigration:
 class TestClose:
     def test_close_terminates_connection(self, store: TaskStore) -> None:
         """close() is a compatibility no-op — must not raise."""
+
         task = _fresh_task()
         store.save(task)
         store.close()
-        # TaskStore uses per-call connections; close() is a compatibility stub
-        # Subsequent reads must still succeed after close()
         assert store.get(task.id) is not None
 
 
