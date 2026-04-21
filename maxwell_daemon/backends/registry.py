@@ -23,6 +23,7 @@ _BUILTIN_BACKENDS = (
     "claude_code",
     "codex_cli",
     "continue_cli",
+    "jules_cli",
     "agent_loop",
 )
 

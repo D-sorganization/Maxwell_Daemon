@@ -88,7 +88,9 @@ class ContinueCLIBackend(ILLMBackend):
         if self._assistant:
             argv.extend(["--assistant", self._assistant])
         try:
-            rc, stdout, stderr = await asyncio.wait_for(self._run(*argv), timeout=self._timeout)
+            rc, stdout, stderr = await asyncio.wait_for(
+                self._run(*argv), timeout=self._timeout
+            )
         except (FileNotFoundError, asyncio.TimeoutError) as e:
             raise BackendUnavailableError(f"cn CLI unreachable: {e}") from e
         if rc != 0:

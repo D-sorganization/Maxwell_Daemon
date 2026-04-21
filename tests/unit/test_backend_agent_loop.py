@@ -61,12 +61,16 @@ def _response(
     if text is not None:
         content.append(_block("text", text=text))
     for tc in tool_calls:
-        content.append(_block("tool_use", id=tc["id"], name=tc["name"], input=tc["input"]))
+        content.append(
+            _block("tool_use", id=tc["id"], name=tc["name"], input=tc["input"])
+        )
     resp.content = content
     return resp
 
 
-def _install_mock_client(backend: AgentLoopBackend, responses: list[MagicMock]) -> AsyncMock:
+def _install_mock_client(
+    backend: AgentLoopBackend, responses: list[MagicMock]
+) -> AsyncMock:
     """Replace the backend's Anthropic client with an AsyncMock cycling ``responses``."""
     client = MagicMock()
     client.messages = MagicMock()
@@ -90,7 +94,9 @@ def _system_as_text(system: str | list[dict[str, Any]]) -> str:
 
 
 class TestTurnLimit:
-    async def test_raises_when_max_turns_exceeded_without_end(self, tmp_path: Path) -> None:
+    async def test_raises_when_max_turns_exceeded_without_end(
+        self, tmp_path: Path
+    ) -> None:
         (tmp_path / "x.txt").write_text("x")
         backend = AgentLoopBackend(max_turns=3, workspace_dir=str(tmp_path))
         looping = _response(
@@ -118,7 +124,9 @@ class TestStopReasonHandling:
         turn_1 = _response(
             stop_reason="tool_use",
             text=None,
-            tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "hello.txt"}}],
+            tool_calls=[
+                {"id": "t1", "name": "read_file", "input": {"path": "hello.txt"}}
+            ],
         )
         turn_2 = _response(stop_reason="end_turn", text="I read it.")
         create = _install_mock_client(backend, [turn_1, turn_2])
@@ -134,7 +142,9 @@ class TestStopReasonHandling:
         assert tr["tool_use_id"] == "t1"
         assert "world" in tr["content"]
 
-    async def test_unknown_stop_reason_terminates_without_raising(self, tmp_path: Path) -> None:
+    async def test_unknown_stop_reason_terminates_without_raising(
+        self, tmp_path: Path
+    ) -> None:
         backend = AgentLoopBackend(workspace_dir=str(tmp_path))
         _install_mock_client(backend, [_response(stop_reason="length", text="partial")])
         out = await backend.complete(_user("hi"), model="claude-sonnet-4-6")
@@ -153,7 +163,9 @@ class TestSystemPrompt:
         blob = _system_as_text(create.call_args.kwargs["system"])
         assert str(tmp_path) in blob
 
-    async def test_ci_profile_injected_when_workspace_has_configs(self, tmp_path: Path) -> None:
+    async def test_ci_profile_injected_when_workspace_has_configs(
+        self, tmp_path: Path
+    ) -> None:
         (tmp_path / "pyproject.toml").write_text(
             "[tool.ruff]\nline-length = 100\n\n[tool.mypy]\nstrict = true\n"
         )
@@ -173,10 +185,14 @@ class TestSystemPrompt:
         blob = _system_as_text(create.call_args.kwargs["system"])
         assert "CI requirements" not in blob
 
-    async def test_repo_map_injected_when_python_files_present(self, tmp_path: Path) -> None:
+    async def test_repo_schematic_injected_when_python_files_present(
+        self, tmp_path: Path
+    ) -> None:
         (tmp_path / "pkg").mkdir()
         (tmp_path / "pkg" / "__init__.py").write_text("")
-        (tmp_path / "pkg" / "core.py").write_text("class Widget: ...\ndef build() -> None: ...\n")
+        (tmp_path / "pkg" / "core.py").write_text(
+            "class Widget: ...\ndef build() -> None: ...\n"
+        )
         backend = AgentLoopBackend(workspace_dir=str(tmp_path))
         create = _install_mock_client(backend, [_response()])
         await backend.complete(_user("hi"), model="claude-sonnet-4-6")
@@ -186,7 +202,9 @@ class TestSystemPrompt:
         assert "Widget" in blob
         assert "build" in blob
 
-    async def test_repo_map_absent_on_workspace_with_no_python(self, tmp_path: Path) -> None:
+    async def test_repo_schematic_absent_on_workspace_with_no_python(
+        self, tmp_path: Path
+    ) -> None:
         (tmp_path / "readme.md").write_text("hi")
         backend = AgentLoopBackend(workspace_dir=str(tmp_path))
         create = _install_mock_client(backend, [_response()])
@@ -236,9 +254,13 @@ class TestPromptCaching:
 
 
 class TestMemoryInjection:
-    async def test_memory_assemble_context_is_called_when_memory_set(self, tmp_path: Path) -> None:
+    async def test_memory_assemble_context_is_called_when_memory_set(
+        self, tmp_path: Path
+    ) -> None:
         memory = MagicMock()
-        memory.assemble_context = MagicMock(return_value="## Prior knowledge\nBe careful.")
+        memory.assemble_context = MagicMock(
+            return_value="## Prior knowledge\nBe careful."
+        )
         backend = AgentLoopBackend(workspace_dir=str(tmp_path), memory=memory)
         create = _install_mock_client(backend, [_response()])
         await backend.complete(
@@ -318,7 +340,9 @@ class TestWallClockTimeout:
                 _response(
                     stop_reason="tool_use",
                     text=None,
-                    tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "x"}}],
+                    tool_calls=[
+                        {"id": "t1", "name": "read_file", "input": {"path": "x"}}
+                    ],
                 )
             ],
         )
@@ -350,7 +374,9 @@ class TestCostLedger:
                 _response(
                     stop_reason="tool_use",
                     text=None,
-                    tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "hi"}}],
+                    tool_calls=[
+                        {"id": "t1", "name": "read_file", "input": {"path": "hi"}}
+                    ],
                 ),
                 _response(text="done"),
             ],
@@ -434,7 +460,9 @@ class TestAsyncClient:
 
 class TestCapabilities:
     def test_reports_tool_use(self, tmp_path: Path) -> None:
-        caps = AgentLoopBackend(workspace_dir=str(tmp_path)).capabilities("claude-sonnet-4-6")
+        caps = AgentLoopBackend(workspace_dir=str(tmp_path)).capabilities(
+            "claude-sonnet-4-6"
+        )
         assert caps.supports_tool_use is True
         assert caps.supports_system_prompt is True
 

@@ -58,7 +58,9 @@ class OllamaBackend(ILLMBackend):
     ) -> BackendResponse:
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "stream": False,
             "options": {"temperature": temperature, **kwargs.get("options", {})},
         }
@@ -80,7 +82,8 @@ class OllamaBackend(ILLMBackend):
             usage=TokenUsage(
                 prompt_tokens=data.get("prompt_eval_count", 0),
                 completion_tokens=data.get("eval_count", 0),
-                total_tokens=data.get("prompt_eval_count", 0) + data.get("eval_count", 0),
+                total_tokens=data.get("prompt_eval_count", 0)
+                + data.get("eval_count", 0),
             ),
             model=data.get("model", model),
             backend=self.name,
@@ -99,14 +102,18 @@ class OllamaBackend(ILLMBackend):
     ) -> AsyncIterator[str]:
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "stream": True,
             "options": {"temperature": temperature},
         }
         if max_tokens is not None:
             payload["options"]["num_predict"] = max_tokens
 
-        async with self._client.stream("POST", f"{self._endpoint}/api/chat", json=payload) as r:
+        async with self._client.stream(
+            "POST", f"{self._endpoint}/api/chat", json=payload
+        ) as r:
             r.raise_for_status()
             async for line in r.aiter_lines():
                 if not line:

@@ -38,7 +38,7 @@ from maxwell_daemon.backends.base import (
 from maxwell_daemon.backends.condensation import Condenser
 from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.gh.ci_patterns import detect_ci_profile
-from maxwell_daemon.gh.repo_map import build_repo_map
+from maxwell_daemon.gh.repo_schematic import build_repo_schematic
 from maxwell_daemon.tools import ToolRegistry, build_default_registry
 
 __all__ = [
@@ -90,9 +90,9 @@ class OllamaAgentLoopBackend(ILLMBackend):
         client: _PostClient | None = None,
         condenser: Condenser | None = None,
     ) -> None:
-        self.base_url = (base_url or os.environ.get("OLLAMA_BASE_URL") or DEFAULT_BASE_URL).rstrip(
-            "/"
-        )
+        self.base_url = (
+            base_url or os.environ.get("OLLAMA_BASE_URL") or DEFAULT_BASE_URL
+        ).rstrip("/")
         self.default_model = model
         self._max_turns = max_turns
         self._workspace = workspace_dir
@@ -154,7 +154,9 @@ class OllamaAgentLoopBackend(ILLMBackend):
             if max_tokens is not None:
                 payload["max_tokens"] = max_tokens
 
-            resp = await self._client.post(f"{self.base_url}/chat/completions", json=payload)
+            resp = await self._client.post(
+                f"{self.base_url}/chat/completions", json=payload
+            )
             resp.raise_for_status()
             body = resp.json()
 
@@ -179,7 +181,11 @@ class OllamaAgentLoopBackend(ILLMBackend):
                     fn = call.get("function") or {}
                     args = _parse_args(fn.get("arguments"))
                     result = await tool_registry.invoke(str(fn.get("name", "")), args)
-                    content = f"ERROR: {result.content}" if result.is_error else result.content
+                    content = (
+                        f"ERROR: {result.content}"
+                        if result.is_error
+                        else result.content
+                    )
                     sdk_messages.append(
                         {
                             "role": "tool",
@@ -198,7 +204,9 @@ class OllamaAgentLoopBackend(ILLMBackend):
                 raw={"turns": turn + 1},
             )
 
-        raise RuntimeError(f"agent loop exceeded max_turns={effective_max_turns} without end_turn")
+        raise RuntimeError(
+            f"agent loop exceeded max_turns={effective_max_turns} without end_turn"
+        )
 
     async def stream(
         self,
@@ -250,7 +258,9 @@ class OllamaAgentLoopBackend(ILLMBackend):
         Without this the underlying :class:`httpx.AsyncClient` leaks TCP
         sockets when the daemon cycles backends between tasks.
         """
-        close = getattr(self._client, "aclose", None) or getattr(self._client, "close", None)
+        close = getattr(self._client, "aclose", None) or getattr(
+            self._client, "close", None
+        )
         if close is None:
             return
         with suppress(Exception):
@@ -260,7 +270,9 @@ class OllamaAgentLoopBackend(ILLMBackend):
 
     # ── System prompt + message assembly ────────────────────────────────────
 
-    def _build_messages(self, messages: list[Message], *, workspace: Path) -> list[dict[str, Any]]:
+    def _build_messages(
+        self, messages: list[Message], *, workspace: Path
+    ) -> list[dict[str, Any]]:
         """Build the ``messages`` payload with system blocks prepended.
 
         Ollama's OpenAI-compatible endpoint uses the standard role-based
@@ -268,7 +280,9 @@ class OllamaAgentLoopBackend(ILLMBackend):
         CI profile, and repo map. No prompt-caching envelope (Ollama is
         local — caching is a cloud-bill concern).
         """
-        system_texts: list[str] = [m.content for m in messages if m.role is MessageRole.SYSTEM]
+        system_texts: list[str] = [
+            m.content for m in messages if m.role is MessageRole.SYSTEM
+        ]
         conversation = [
             {"role": m.role.value, "content": m.content}
             for m in messages
@@ -288,7 +302,7 @@ class OllamaAgentLoopBackend(ILLMBackend):
                 system_parts.append(ci_block)
 
         with suppress(Exception):
-            map_block = build_repo_map(workspace).to_prompt(max_chars=2000)
+            map_block = build_repo_schematic(workspace).to_prompt(max_chars=2000)
             if map_block:
                 system_parts.append(map_block)
 

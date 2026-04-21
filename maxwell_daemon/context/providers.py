@@ -64,7 +64,9 @@ class ContextProvider(Protocol):
 
     name: str
 
-    async def render(self, *, query: str, budget_chars: int) -> ContextProviderResult: ...
+    async def render(
+        self, *, query: str, budget_chars: int
+    ) -> ContextProviderResult: ...
 
 
 # ── Built-in providers ──────────────────────────────────────────────────────
@@ -104,8 +106,32 @@ class DocsProvider:
             except OSError:
                 continue
             text = _truncate_to_budget(body, budget_chars)
-            return ContextProviderResult(name=self.name, text=text, size_chars=len(text))
+            return ContextProviderResult(
+                name=self.name, text=text, size_chars=len(text)
+            )
+
         return ContextProviderResult(name=self.name, text="", size_chars=0)
+
+
+@dataclass(slots=True)
+class RepoSchematicProvider:
+    """Provides the structural map of the repository (files and symbols)."""
+
+    workspace: Path
+    name: str = "repo_schematic"
+
+    async def render(self, *, query: str, budget_chars: int) -> ContextProviderResult:
+        from maxwell_daemon.gh.repo_schematic import build_repo_schematic
+
+        try:
+            map_block = build_repo_schematic(self.workspace).to_prompt(
+                max_chars=budget_chars
+            )
+            return ContextProviderResult(
+                name=self.name, text=map_block, size_chars=len(map_block)
+            )
+        except Exception:
+            return ContextProviderResult(name=self.name, text="", size_chars=0)
 
 
 # ── Registry ────────────────────────────────────────────────────────────────

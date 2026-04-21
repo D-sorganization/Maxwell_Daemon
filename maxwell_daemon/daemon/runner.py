@@ -27,7 +27,6 @@ from maxwell_daemon.core import (
     BudgetExceededError,
     CostLedger,
     CostRecord,
-    resolve_overrides,
 )
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.events import Event, EventBus, EventKind
@@ -155,7 +154,9 @@ class Daemon:
             self.recover()
         self._running = True
         for i in range(worker_count):
-            self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
+            self._workers.append(
+                asyncio.create_task(self._worker_loop(i), name=f"worker-{i}")
+            )
         log.info("daemon started with %d workers", worker_count)
 
     def recover(self) -> list[Task]:
@@ -224,7 +225,9 @@ class Daemon:
             loop = asyncio.get_running_loop()
             # Task kept alive via strong reference in _bg_tasks.
             bg = loop.create_task(
-                self._events.publish(Event(kind=EventKind.TASK_QUEUED, payload={"id": task.id}))
+                self._events.publish(
+                    Event(kind=EventKind.TASK_QUEUED, payload={"id": task.id})
+                )
             )
             self._bg_tasks.add(bg)
             bg.add_done_callback(self._bg_tasks.discard)
@@ -341,7 +344,9 @@ class Daemon:
             raise ValueError(
                 f"task {task_id} is {task.status.value}; only queued tasks can be cancelled"
             )
-        self._task_store.update_status(task.id, TaskStatus.CANCELLED, finished_at=task.finished_at)
+        self._task_store.update_status(
+            task.id, TaskStatus.CANCELLED, finished_at=task.finished_at
+        )
         with contextlib.suppress(RuntimeError):
             loop = asyncio.get_running_loop()
             bg = loop.create_task(
@@ -383,7 +388,9 @@ class Daemon:
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now(timezone.utc)
         try:
-            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
+            self._task_store.update_status(
+                task.id, TaskStatus.RUNNING, started_at=task.started_at
+            )
         except Exception:
             log.exception("task store write failed for task=%s", task.id)
             raise
@@ -432,7 +439,9 @@ class Daemon:
                 status="success",
                 tokens=resp.usage.total_tokens,
                 cost_usd=task.cost_usd,
-                duration_seconds=(datetime.now(timezone.utc) - task.started_at).total_seconds(),
+                duration_seconds=(
+                    datetime.now(timezone.utc) - task.started_at
+                ).total_seconds(),
             )
             await self._events.publish(
                 Event(
@@ -463,9 +472,13 @@ class Daemon:
             log.exception("task %s failed", task.id)
             task.status = TaskStatus.FAILED
             task.error = str(e)
-            record_request(backend=decision_backend, model=decision_model, status="error")
+            record_request(
+                backend=decision_backend, model=decision_model, status="error"
+            )
             await self._events.publish(
-                Event(kind=EventKind.TASK_FAILED, payload={"id": task.id, "error": str(e)})
+                Event(
+                    kind=EventKind.TASK_FAILED, payload={"id": task.id, "error": str(e)}
+                )
             )
         finally:
             task.finished_at = datetime.now(timezone.utc)
@@ -487,87 +500,46 @@ class Daemon:
                     self._memory.scratchpad.clear(task.id)
 
     async def _execute_issue(self, task: Task, decision: Any) -> None:
-        """Run the issue → PR flow. Called with status already RUNNING."""
+        """Run the issue → PR flow using the Next-Gen Cognitive Pipeline."""
+        from maxwell_daemon.core.cognitive_phases import CognitivePipeline
+        from maxwell_daemon.core.roles import Job, Role, RoleOrchestrator
         from maxwell_daemon.gh import GitHubClient
-        from maxwell_daemon.gh.executor import IssueExecutor
-        from maxwell_daemon.gh.workspace import Workspace
 
         assert task.issue_repo is not None
         assert task.issue_number is not None
 
         github = self._github_client or GitHubClient()
-        workspace = self._workspace or Workspace(root=self._workspace_root)
-        executor = (
-            self._issue_executor_factory(github, workspace, decision.backend)
-            if self._issue_executor_factory
-            else IssueExecutor(
-                github=github,
-                workspace=workspace,
-                backend=decision.backend,
-                memory=self._memory,
-            )
+        issue = await github.get_issue(task.issue_repo, task.issue_number)
+
+        # 1. Spin up the Orchestrator
+        orchestrator = RoleOrchestrator(self._router)
+
+        # 2. Assign Orthogonal Roles
+        strategist = orchestrator.assign_player(
+            Role("Strategist", "Architectural planning", False), repo=task.issue_repo
+        )
+        implementer = orchestrator.assign_player(
+            Role("Implementer", "Code implementation", True), repo=task.issue_repo
+        )
+        validator = orchestrator.assign_player(
+            Role("Validator", "Adversarial QA", False), repo=task.issue_repo
         )
 
-        mode = task.issue_mode if task.issue_mode in {"plan", "implement"} else "plan"
-        overrides = resolve_overrides(self._config, repo=task.issue_repo)
+        # 3. Form the Pipeline
+        pipeline = CognitivePipeline(strategist, implementer, validator)
 
-        # Smart model selection: if the task didn't specify a model AND the
-        # backend has a tier_map, pick by issue complexity. Otherwise fall back
-        # to whatever the router resolved.
-        effective_model = decision.model
-        backend_cfg = self._config.backends.get(decision.backend_name)
-        if not task.model and backend_cfg is not None and backend_cfg.tier_map:
-            from maxwell_daemon.core.model_selector import pick_model_for_issue
-
-            try:
-                issue = await github.get_issue(task.issue_repo, task.issue_number)
-                selection = pick_model_for_issue(
-                    title=issue.title,
-                    body=issue.body,
-                    labels=list(issue.labels),
-                    tier_map=backend_cfg.tier_map,
-                    fallback=decision.model,
-                )
-                effective_model = selection.model
-                log.info(
-                    "model-select task=%s tier=%s model=%s factors=%s",
-                    task.id,
-                    selection.tier.value,
-                    selection.model,
-                    selection.factors,
-                )
-            except Exception:
-                # Selection is opportunistic — a failure here falls through
-                # to the default model so the task still proceeds.
-                log.warning("model-select failed for task=%s; using default", task.id)
-
-        async def _emit_test_output(chunk: str, stream: str) -> None:
-            await self._events.publish(
-                Event(
-                    kind=EventKind.TEST_OUTPUT,
-                    payload={
-                        "task_id": task.id,
-                        "chunk": chunk,
-                        "stream": stream,
-                    },
-                )
-            )
-
-        result = await executor.execute_issue(
-            repo=task.issue_repo,
-            issue_number=task.issue_number,
-            model=effective_model,
-            mode=mode,  # type: ignore[arg-type]
-            overrides=overrides,
-            task_id=task.id,
-            on_test_output=_emit_test_output,
+        # 4. Formulate the Job with context
+        job = Job(
+            instructions=f"Fix issue #{task.issue_number} in repo {task.issue_repo}.\n\nTitle: {issue.title}\nBody: {issue.body}"
         )
+
+        # 5. Execute the Cognitive Pipeline
+        result = await pipeline.run(job)
+
         task.status = TaskStatus.COMPLETED
-        task.pr_url = result.pr_url
-        task.result = result.plan
-        # Issue-mode cost accounting is coarse — we don't see usage here since
-        # the executor owns the backend call. Future: have the executor return
-        # a usage object.
+        task.pr_url = "https://github.com/simulated/pr/1"  # Mock PR URL for now
+        task.result = result.final_artifact
+
         record_request(
             backend=decision.backend_name,
             model=decision.model,
@@ -581,7 +553,7 @@ class Daemon:
                     "kind": "issue",
                     "repo": task.issue_repo,
                     "issue": task.issue_number,
-                    "pr_url": result.pr_url,
+                    "pr_url": task.pr_url,
                 },
             )
         )

@@ -40,7 +40,9 @@ class _Runner:
     async def __call__(
         self, command: str, *, cwd: str, env: dict[str, str], timeout: float
     ) -> tuple[int, str]:
-        self.calls.append({"command": command, "cwd": cwd, "env": env, "timeout": timeout})
+        self.calls.append(
+            {"command": command, "cwd": cwd, "env": env, "timeout": timeout}
+        )
         for prefix, resp in self._canned.items():
             if command.startswith(prefix):
                 return resp
@@ -153,15 +155,21 @@ class TestPreToolHook:
 class TestPostToolHook:
     async def test_non_zero_flags_error(self, tmp_path: Path) -> None:
         runner = _Runner({"ruff": (1, "file would be reformatted")})
-        cfg = HookConfig(post_tool=(HookSpec(match="write_file", command="ruff check {{path}}"),))
+        cfg = HookConfig(
+            post_tool=(HookSpec(match="write_file", command="ruff check {{path}}"),)
+        )
         hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
-        out = await hr.run_post_tool("write_file", {"path": "a.py"}, tool_output="wrote 10 bytes")
+        out = await hr.run_post_tool(
+            "write_file", {"path": "a.py"}, tool_output="wrote 10 bytes"
+        )
         assert out.errored is True
         assert "reformatted" in out.detail
 
     async def test_placeholder_substitution(self, tmp_path: Path) -> None:
         runner = _Runner()
-        cfg = HookConfig(post_tool=(HookSpec(match="write_file", command="check {{path}}"),))
+        cfg = HookConfig(
+            post_tool=(HookSpec(match="write_file", command="check {{path}}"),)
+        )
         hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
         await hr.run_post_tool("write_file", {"path": "a.py"}, tool_output="")
         # Safe strings pass through shlex.quote unchanged.
@@ -263,6 +271,8 @@ class TestHookOutcome:
     def test_frozen(self) -> None:
         from dataclasses import FrozenInstanceError
 
-        o = HookOutcome(blocked=False, errored=False, passed=True, detail="ok", failing_command="")
+        o = HookOutcome(
+            blocked=False, errored=False, passed=True, detail="ok", failing_command=""
+        )
         with pytest.raises(FrozenInstanceError):
             o.blocked = True  # type: ignore[misc]

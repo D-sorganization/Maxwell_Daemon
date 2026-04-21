@@ -1,4 +1,4 @@
-"""Tests for RepoMap — compact function/class signature index for large repos.
+"""Tests for RepoSchematic — compact function/class signature index for large repos.
 
 Aider's insight: instead of dumping whole files into the agent's context,
 give it a global ~2k-token outline of what's where. The agent reads full
@@ -14,7 +14,11 @@ from textwrap import dedent
 
 import pytest
 
-from maxwell_daemon.gh.repo_map import RepoMap, RepoMapEntry, build_repo_map
+from maxwell_daemon.gh.repo_schematic import (
+    RepoSchematic,
+    RepoSchematicEntry,
+    build_repo_schematic,
+)
 
 
 def _w(root: Path, relpath: str, body: str) -> Path:
@@ -27,16 +31,16 @@ def _w(root: Path, relpath: str, body: str) -> Path:
 # ── Shape ────────────────────────────────────────────────────────────────────
 
 
-class TestRepoMapShape:
+class TestRepoSchematicShape:
     def test_empty_map_is_empty_string(self) -> None:
-        rm = RepoMap()
+        rm = RepoSchematic()
         assert rm.to_prompt() == ""
         assert rm.entry_count() == 0
 
     def test_frozen(self) -> None:
         from dataclasses import FrozenInstanceError
 
-        e = RepoMapEntry(path="a.py", functions=("foo",), classes=("Bar",))
+        e = RepoSchematicEntry(path="a.py", functions=("foo",), classes=("Bar",))
         with pytest.raises(FrozenInstanceError):
             e.path = "b.py"  # type: ignore[misc]
 
@@ -57,7 +61,7 @@ class TestPythonExtraction:
                 pass
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "pkg/core.py")
         assert set(entry.functions) == {"first", "second"}
 
@@ -71,7 +75,7 @@ class TestPythonExtraction:
                 def method_b(self) -> int: return 1
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "pkg/m.py")
         assert "Foo" in entry.classes
         assert "Foo.method_a" in entry.functions
@@ -86,21 +90,21 @@ class TestPythonExtraction:
             def _private(): ...
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "pkg/m.py")
         assert "public" in entry.functions
         assert "_private" not in entry.functions
 
     def test_async_function_captured(self, tmp_path: Path) -> None:
         _w(tmp_path, "a.py", "async def fetch() -> None: ...\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "a.py")
         assert "fetch" in entry.functions
 
     def test_syntax_error_file_skipped(self, tmp_path: Path) -> None:
         _w(tmp_path, "good.py", "def good(): ...\n")
         _w(tmp_path, "bad.py", "def bad(:\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         paths = {e.path for e in rm.entries}
         assert "good.py" in paths
         # Malformed file is silently skipped so the whole map doesn't break.
@@ -114,14 +118,14 @@ class TestFileDiscovery:
     def test_non_python_files_ignored(self, tmp_path: Path) -> None:
         _w(tmp_path, "readme.md", "# hi\n")
         _w(tmp_path, "a.py", "def a(): ...\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         paths = {e.path for e in rm.entries}
         assert paths == {"a.py"}
 
     def test_hidden_dirs_skipped(self, tmp_path: Path) -> None:
         _w(tmp_path, ".venv/lib.py", "def v(): ...\n")
         _w(tmp_path, "src/a.py", "def a(): ...\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         paths = {e.path for e in rm.entries}
         assert "src/a.py" in paths
         assert ".venv/lib.py" not in paths
@@ -129,7 +133,7 @@ class TestFileDiscovery:
     def test_pycache_skipped(self, tmp_path: Path) -> None:
         _w(tmp_path, "pkg/__pycache__/x.py", "def x(): ...\n")
         _w(tmp_path, "pkg/real.py", "def real(): ...\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         paths = {e.path for e in rm.entries}
         assert "pkg/real.py" in paths
         assert "pkg/__pycache__/x.py" not in paths
@@ -137,7 +141,7 @@ class TestFileDiscovery:
     def test_node_modules_skipped(self, tmp_path: Path) -> None:
         _w(tmp_path, "node_modules/foo/a.py", "def a(): ...\n")
         _w(tmp_path, "main.py", "def main(): ...\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         paths = {e.path for e in rm.entries}
         assert paths == {"main.py"}
 
@@ -148,7 +152,7 @@ class TestFileDiscovery:
 class TestPrompt:
     def test_section_header_present(self, tmp_path: Path) -> None:
         _w(tmp_path, "a.py", "def foo(): ...\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         prompt = rm.to_prompt()
         assert "Repository map" in prompt or "Repo map" in prompt
 
@@ -161,7 +165,7 @@ class TestPrompt:
             def build() -> None: ...
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         prompt = rm.to_prompt()
         assert "pkg/core.py" in prompt
         assert "Widget" in prompt
@@ -170,7 +174,7 @@ class TestPrompt:
     def test_budget_truncation_preserves_structure(self, tmp_path: Path) -> None:
         for i in range(200):
             _w(tmp_path, f"m{i}.py", f"def f{i}(): ...\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         short = rm.to_prompt(max_chars=500)
         assert len(short) <= 600  # allow small header/truncation overhead
         assert "truncated" in short.lower()
@@ -184,7 +188,7 @@ class TestPreconditions:
         from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="workspace"):
-            build_repo_map(tmp_path / "nope")
+            build_repo_schematic(tmp_path / "nope")
 
 
 # ── JavaScript symbol extraction ────────────────────────────────────────────
@@ -207,7 +211,7 @@ class TestJavaScriptExtraction:
             const baz = (x) => x + 1;
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "app/core.js")
         assert "foo" in entry.functions
         assert "bar" in entry.functions
@@ -223,14 +227,14 @@ class TestJavaScriptExtraction:
             function visible() {}
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "a.js")
         assert "visible" in entry.functions
         assert "_hidden" not in entry.functions
 
     def test_jsx_also_parsed(self, tmp_path: Path) -> None:
         _w(tmp_path, "ui/Button.jsx", "export function Button() { return null; }\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "ui/Button.jsx")
         assert "Button" in entry.functions
 
@@ -263,7 +267,7 @@ class TestTypeScriptExtraction:
             };
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "app/core.ts")
         assert "foo" in entry.functions
         assert "bar" in entry.functions
@@ -284,7 +288,7 @@ class TestTypeScriptExtraction:
             export function Btn(props: Props) { return null; }
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "ui/Btn.tsx")
         assert "Btn" in entry.functions
         assert "Props" in entry.classes
@@ -314,7 +318,7 @@ class TestGoExtraction:
             }
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "svc/handler.go")
         assert "Foo" in entry.functions
         assert "foo" not in entry.functions
@@ -333,7 +337,7 @@ class TestGoExtraction:
             func (t *Thing) Describe() string { return "" }
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "svc/m.go")
         assert "Describe" in entry.functions
         assert "Thing" in entry.classes
@@ -368,7 +372,7 @@ class TestRustExtraction:
             }
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "src/lib.rs")
         assert "foo" in entry.functions
         assert "_private" not in entry.functions
@@ -404,7 +408,7 @@ class TestJavaExtraction:
             }
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "src/Foo.java")
         assert "Foo" in entry.classes
         assert "bump" in entry.functions
@@ -420,7 +424,7 @@ class TestJavaExtraction:
             }
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         entry = _entry_for(rm, "src/Doable.java")
         assert "Doable" in entry.classes
 
@@ -473,7 +477,7 @@ class TestPolyglotSweep:
             }
             """,
         )
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         by_path = {e.path: e for e in rm.entries}
 
         assert "py_func" in by_path["py/a.py"].functions
@@ -505,7 +509,7 @@ class TestUnsupportedFilesSkipped:
         _w(tmp_path, "config.yaml", "key: value\n")
         _w(tmp_path, "data.json", '{"key": "value"}\n')
         _w(tmp_path, "real.py", "def real(): ...\n")
-        rm = build_repo_map(tmp_path)
+        rm = build_repo_schematic(tmp_path)
         paths = {e.path for e in rm.entries}
         assert paths == {"real.py"}
 
@@ -513,7 +517,7 @@ class TestUnsupportedFilesSkipped:
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _entry_for(rm: RepoMap, path: str) -> RepoMapEntry:
+def _entry_for(rm: RepoSchematic, path: str) -> RepoSchematicEntry:
     for e in rm.entries:
         if e.path == path:
             return e

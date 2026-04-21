@@ -24,7 +24,9 @@ class TestConfiguration:
     def test_requires_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
         with pytest.raises(BackendUnavailableError, match="api_key"):
-            AzureOpenAIBackend(endpoint="https://x.openai.azure.com", api_version="2024-10-21")
+            AzureOpenAIBackend(
+                endpoint="https://x.openai.azure.com", api_version="2024-10-21"
+            )
 
     def test_reads_from_env_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com")

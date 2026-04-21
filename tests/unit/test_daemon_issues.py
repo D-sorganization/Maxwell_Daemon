@@ -54,19 +54,25 @@ def daemon_with_fake_executor(
     return d
 
 
-async def _run_to_completion(daemon: Daemon, task_id: str, timeout: float = 2.0) -> None:
+async def _run_to_completion(
+    daemon: Daemon, task_id: str, timeout: float = 2.0
+) -> None:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
         t = daemon.get_task(task_id)
         if t and t.status in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
             return
         await asyncio.sleep(0.02)
-    raise AssertionError(f"task {task_id} did not finish: status={t.status if t else None}")
+    raise AssertionError(
+        f"task {task_id} did not finish: status={t.status if t else None}"
+    )
 
 
 class TestSubmitIssue:
     def test_creates_issue_kind_task(self, daemon_with_fake_executor: Daemon) -> None:
-        t = daemon_with_fake_executor.submit_issue(repo="owner/repo", issue_number=42, mode="plan")
+        t = daemon_with_fake_executor.submit_issue(
+            repo="owner/repo", issue_number=42, mode="plan"
+        )
         assert t.kind is TaskKind.ISSUE
         assert t.issue_repo == "owner/repo"
         assert t.issue_number == 42
@@ -74,7 +80,9 @@ class TestSubmitIssue:
 
     def test_rejects_invalid_mode(self, daemon_with_fake_executor: Daemon) -> None:
         with pytest.raises(ValueError, match="mode"):
-            daemon_with_fake_executor.submit_issue(repo="owner/repo", issue_number=1, mode="yolo")
+            daemon_with_fake_executor.submit_issue(
+                repo="owner/repo", issue_number=1, mode="yolo"
+            )
 
 
 class TestIssueDispatch:

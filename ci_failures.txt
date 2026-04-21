@@ -1,0 +1,373 @@
+Lint (ruff)	UNKNOWN STEP	﻿2026-04-20T21:11:09.3758650Z Current runner version: '2.333.1'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.3766014Z Runner name: 'd-sorg-local-Oglaptop-5'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.3766920Z Runner group name: 'default'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.3767739Z Machine name: 'OGLaptop'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.3770068Z ##[group]GITHUB_TOKEN Permissions
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.3772694Z Contents: read
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.3773299Z Metadata: read
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.3773732Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.3776753Z Secret source: Actions
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.3777485Z Prepare workflow directory
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.4506734Z Prepare all required actions
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:09.4645591Z Getting action download info
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:10.0167942Z Download action repository 'actions/checkout@v6' (SHA:de0fac2e4500dabe0009e67214ff5f5447ce83dd)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:10.5273589Z Download action repository 'actions/setup-python@v6' (SHA:a309ff8b426b58ec0e2a45f0f869d46889d02405)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.1605384Z Complete job name: Lint (ruff)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2692315Z ##[group]Run actions/checkout@v6
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2693713Z with:
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2814258Z   repository: D-sorganization/Maxwell-Daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2816270Z   token: ***
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2817184Z   ssh-strict: true
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2818832Z   ssh-user: git
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2819618Z   persist-credentials: true
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2820393Z   clean: true
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2821048Z   sparse-checkout-cone-mode: true
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2821861Z   fetch-depth: 1
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2822469Z   fetch-tags: false
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2823118Z   show-progress: true
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2823769Z   lfs: false
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2824384Z   submodules: false
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2825061Z   set-safe-directory: true
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.2827576Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.3929177Z Syncing repository: D-sorganization/Maxwell-Daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.3932200Z ##[group]Getting Git version info
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.3934002Z Working directory is '/home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.3936821Z [command]/usr/bin/git version
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.3939519Z git version 2.34.1
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.3958356Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.3976380Z Copying '/home/dieterolson/.gitconfig' to '/home/dieterolson/actions-runners/runner-5/_work/_temp/d0cc2bb6-20b1-4ad2-99d5-48cd07eef9c9/.gitconfig'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.3994665Z Temporarily overriding HOME='/home/dieterolson/actions-runners/runner-5/_work/_temp/d0cc2bb6-20b1-4ad2-99d5-48cd07eef9c9' before making global git config changes
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.3997760Z Adding repository directory to the temporary git global config as a safe directory
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4004005Z [command]/usr/bin/git config --global --add safe.directory /home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4059802Z [command]/usr/bin/git config --local --get remote.origin.url
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4094333Z https://github.com/D-sorganization/Maxwell-Daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4116888Z ##[group]Removing previously created refs, to avoid conflicts
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4123856Z [command]/usr/bin/git rev-parse --symbolic-full-name --verify --quiet HEAD
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4148353Z HEAD
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4202049Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4203635Z [command]/usr/bin/git submodule status
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4484983Z ##[group]Cleaning the repository
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.4486938Z [command]/usr/bin/git clean -ffdx
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5454915Z Removing .venv/
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5476598Z [command]/usr/bin/git reset --hard HEAD
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5845336Z HEAD is now at c905b37 Merge 8b46a6cacbd862ebc4ee6ee2162ed0d1ff98d563 into 7658131fdf0bab30590b7266561bf29f97ed3dc0
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5854310Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5863671Z ##[group]Disabling automatic garbage collection
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5869302Z [command]/usr/bin/git config --local gc.auto 0
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5912952Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5914180Z ##[group]Setting up auth
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5915098Z Removing SSH command configuration
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5920441Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.5975591Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.6298308Z Removing HTTP extra header
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.6301716Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.6349685Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.6653500Z Removing includeIf entries pointing to credentials config files
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.6657572Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.6705396Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.7095311Z [command]/usr/bin/git config --file /home/dieterolson/actions-runners/runner-5/_work/_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.7190131Z [command]/usr/bin/git config --local includeIf.gitdir:/home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon/.git.path /home/dieterolson/actions-runners/runner-5/_work/_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.7301276Z [command]/usr/bin/git config --local includeIf.gitdir:/home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon/.git/worktrees/*.path /home/dieterolson/actions-runners/runner-5/_work/_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.7312063Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.7371031Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.7409240Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.7410704Z ##[group]Fetching the repository
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:13.7418940Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +4623ba527821ebc345647a16a2d6b4e48cc9d575:refs/remotes/pull/128/merge
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3337224Z From https://github.com/D-sorganization/Maxwell-Daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3338495Z  * [new ref]         4623ba527821ebc345647a16a2d6b4e48cc9d575 -> pull/128/merge
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3362366Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3363959Z ##[group]Determining the checkout info
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3366460Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3368305Z [command]/usr/bin/git sparse-checkout disable
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3423678Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3472560Z ##[group]Checking out the ref
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3480531Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/128/merge
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3604166Z Previous HEAD position was c905b37 Merge 8b46a6cacbd862ebc4ee6ee2162ed0d1ff98d563 into 7658131fdf0bab30590b7266561bf29f97ed3dc0
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3612563Z HEAD is now at 4623ba5 Merge ad63494340f6c26a11c1f5098479496065396662 into 7658131fdf0bab30590b7266561bf29f97ed3dc0
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3631706Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3699365Z [command]/usr/bin/git log -1 --format=%H
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.3739120Z 4623ba527821ebc345647a16a2d6b4e48cc9d575
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.4077518Z ##[group]Run actions/setup-python@v6
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.4077916Z with:
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.4078166Z   python-version: 3.12
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.4078407Z   check-latest: false
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.4078996Z   token: ***
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.4079235Z   update-environment: true
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.4079764Z   allow-prereleases: false
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.4080026Z   freethreaded: false
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.4080546Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5572384Z ##[group]Installed versions
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5632704Z Successfully set up CPython (3.12.13)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5633869Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5824153Z ##[group]Run python -m venv .venv
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5824637Z [36;1mpython -m venv .venv[0m
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5848268Z shell: /usr/bin/bash -e {0}
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5848689Z env:
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5848999Z   pythonLocation: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5849454Z   PKG_CONFIG_PATH: /opt/runner-tool-cache/Python/3.12.13/x64/lib/pkgconfig
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5849873Z   Python_ROOT_DIR: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5850262Z   Python2_ROOT_DIR: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5850648Z   Python3_ROOT_DIR: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5851053Z   LD_LIBRARY_PATH: /opt/runner-tool-cache/Python/3.12.13/x64/lib
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:14.5851382Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4747000Z ##[group]Run .venv/bin/python -m pip install -e ".[dev]"
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4747571Z [36;1m.venv/bin/python -m pip install -e ".[dev]"[0m
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4769555Z shell: /usr/bin/bash -e {0}
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4769874Z env:
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4770128Z   pythonLocation: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4770508Z   PKG_CONFIG_PATH: /opt/runner-tool-cache/Python/3.12.13/x64/lib/pkgconfig
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4770882Z   Python_ROOT_DIR: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4771206Z   Python2_ROOT_DIR: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4771732Z   Python3_ROOT_DIR: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4772063Z   LD_LIBRARY_PATH: /opt/runner-tool-cache/Python/3.12.13/x64/lib
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.4772346Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.9380038Z Obtaining file:///home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:17.9424753Z   Installing build dependencies: started
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:19.4118555Z   Installing build dependencies: finished with status 'done'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:19.4134830Z   Checking if build backend supports build_editable: started
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:19.4537459Z   Checking if build backend supports build_editable: finished with status 'done'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:19.4551859Z   Getting requirements to build editable: started
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:19.5443230Z   Getting requirements to build editable: finished with status 'done'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:19.5462880Z   Installing backend dependencies: started
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:20.2200785Z   Installing backend dependencies: finished with status 'done'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:20.2219595Z   Preparing editable metadata (pyproject.toml): started
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:20.3570643Z   Preparing editable metadata (pyproject.toml): finished with status 'done'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:20.8208791Z Collecting anthropic>=0.40.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:20.8228389Z   Using cached anthropic-0.96.0-py3-none-any.whl.metadata (3.1 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:20.9290513Z Collecting fastapi>=0.115.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:20.9307269Z   Using cached fastapi-0.136.0-py3-none-any.whl.metadata (28 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.0119657Z Collecting httpx>=0.27.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.0146155Z   Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.1307419Z Collecting openai>=1.50.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.1320918Z   Using cached openai-2.32.0-py3-none-any.whl.metadata (31 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.1819642Z Collecting prometheus-client>=0.20.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.1835152Z   Using cached prometheus_client-0.25.0-py3-none-any.whl.metadata (2.1 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.2740258Z Collecting pydantic-settings>=2.4.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.2759100Z   Using cached pydantic_settings-2.14.0-py3-none-any.whl.metadata (3.4 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.4175230Z Collecting pydantic>=2.8.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.4191194Z   Using cached pydantic-2.13.3-py3-none-any.whl.metadata (108 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.4818694Z Collecting pyyaml>=6.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:21.4835845Z   Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:22.0809366Z Collecting rich>=13.7.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:22.0810657Z   Using cached rich-15.0.0-py3-none-any.whl.metadata (18 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:22.1867248Z Collecting structlog>=24.4.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:22.1880236Z   Using cached structlog-25.5.0-py3-none-any.whl.metadata (9.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.4750075Z Collecting tenacity>=9.0.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.5194160Z   Using cached tenacity-9.1.4-py3-none-any.whl.metadata (1.2 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.5662839Z Collecting typer>=0.12.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.5684562Z   Using cached typer-0.24.1-py3-none-any.whl.metadata (16 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.6346822Z Collecting uvicorn>=0.30.0 (from uvicorn[standard]>=0.30.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.6369161Z   Using cached uvicorn-0.44.0-py3-none-any.whl.metadata (6.7 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.7439964Z Collecting websockets>=13.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.7456306Z   Using cached websockets-16.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.8 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.9745913Z Collecting mypy>=1.11.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:23.9760587Z   Using cached mypy-1.20.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.3 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.0531159Z Collecting opentelemetry-sdk>=1.30.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.0547057Z   Using cached opentelemetry_sdk-1.41.0-py3-none-any.whl.metadata (1.7 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.2113345Z Collecting pytest-asyncio>=0.24.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.2129702Z   Using cached pytest_asyncio-1.3.0-py3-none-any.whl.metadata (4.1 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.3006577Z Collecting pytest-cov>=5.0.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.3019286Z   Using cached pytest_cov-7.1.0-py3-none-any.whl.metadata (32 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.4288322Z Collecting pytest-mock>=3.14.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.4304062Z   Using cached pytest_mock-3.15.1-py3-none-any.whl.metadata (3.9 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.4858266Z Collecting pytest>=8.3.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.4872459Z   Using cached pytest-9.0.3-py3-none-any.whl.metadata (7.6 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.5460865Z Collecting respx>=0.21.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.5475396Z   Using cached respx-0.23.1-py2.py3-none-any.whl.metadata (4.3 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.9512447Z Collecting ruff>=0.6.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:24.9526136Z   Using cached ruff-0.15.11-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (26 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.0203911Z Collecting tomli>=2.0.0 (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.0228003Z   Using cached tomli-2.4.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (10 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.0845364Z Collecting types-pyyaml (from maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.0857619Z   Using cached types_pyyaml-6.0.12.20260408-py3-none-any.whl.metadata (1.7 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.1458766Z Collecting anyio<5,>=3.5.0 (from anthropic>=0.40.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.1474520Z   Using cached anyio-4.13.0-py3-none-any.whl.metadata (4.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.2166721Z Collecting distro<2,>=1.7.0 (from anthropic>=0.40.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.2185039Z   Using cached distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.2747109Z Collecting docstring-parser<1,>=0.15 (from anthropic>=0.40.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.2761514Z   Using cached docstring_parser-0.18.0-py3-none-any.whl.metadata (3.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.3706403Z Collecting jiter<1,>=0.4.0 (from anthropic>=0.40.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.3722503Z   Using cached jiter-0.14.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.2 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.4297154Z Collecting sniffio (from anthropic>=0.40.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.4317876Z   Using cached sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.4993077Z Collecting typing-extensions<5,>=4.14 (from anthropic>=0.40.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.5008008Z   Using cached typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.5638232Z Collecting starlette>=0.46.0 (from fastapi>=0.115.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.5653222Z   Using cached starlette-1.0.0-py3-none-any.whl.metadata (6.3 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.7647875Z Collecting typing-inspection>=0.4.2 (from fastapi>=0.115.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.7664970Z   Using cached typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.8000659Z Collecting annotated-doc>=0.0.2 (from fastapi>=0.115.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.8016018Z   Using cached annotated_doc-0.0.4-py3-none-any.whl.metadata (6.6 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.9693126Z Collecting certifi (from httpx>=0.27.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:25.9711451Z   Using cached certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.0465879Z Collecting httpcore==1.* (from httpx>=0.27.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.0482345Z   Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.0949397Z Collecting idna (from httpx>=0.27.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.0965843Z   Using cached idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.1256836Z Collecting h11>=0.16 (from httpcore==1.*->httpx>=0.27.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.1272240Z   Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.1563906Z Collecting mypy_extensions>=1.0.0 (from mypy>=1.11.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.1578967Z   Using cached mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.1916490Z Collecting pathspec>=1.0.0 (from mypy>=1.11.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.1929829Z   Using cached pathspec-1.0.4-py3-none-any.whl.metadata (13 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.2928168Z Collecting librt>=0.8.0 (from mypy>=1.11.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.2942369Z   Using cached librt-0.9.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (1.3 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.3500802Z Collecting tqdm>4 (from openai>=1.50.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.3513811Z   Using cached tqdm-4.67.3-py3-none-any.whl.metadata (57 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.4164553Z Collecting opentelemetry-api==1.41.0 (from opentelemetry-sdk>=1.30.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.4186118Z   Using cached opentelemetry_api-1.41.0-py3-none-any.whl.metadata (1.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.4506638Z Collecting opentelemetry-semantic-conventions==0.62b0 (from opentelemetry-sdk>=1.30.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.4520402Z   Using cached opentelemetry_semantic_conventions-0.62b0-py3-none-any.whl.metadata (2.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.5090557Z Collecting importlib-metadata<8.8.0,>=6.0 (from opentelemetry-api==1.41.0->opentelemetry-sdk>=1.30.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.5106235Z   Using cached importlib_metadata-8.7.1-py3-none-any.whl.metadata (4.7 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.5644535Z Collecting annotated-types>=0.6.0 (from pydantic>=2.8.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:26.5657990Z   Using cached annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:27.2140389Z Collecting pydantic-core==2.46.3 (from pydantic>=2.8.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:27.2156816Z   Using cached pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:27.8233330Z Collecting python-dotenv>=0.21.0 (from pydantic-settings>=2.4.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:27.8247539Z   Using cached python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:28.8974315Z Collecting iniconfig>=1.0.1 (from pytest>=8.3.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:28.8990140Z   Using cached iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:29.8665384Z Collecting packaging>=22 (from pytest>=8.3.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:29.8680059Z   Using cached packaging-26.1-py3-none-any.whl.metadata (3.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:29.9294589Z Collecting pluggy<2,>=1.5 (from pytest>=8.3.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:29.9312030Z   Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:29.9783371Z Collecting pygments>=2.7.2 (from pytest>=8.3.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:29.9800148Z   Using cached pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.4003520Z Collecting coverage>=7.10.6 (from coverage[toml]>=7.10.6->pytest-cov>=5.0.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.4021653Z   Using cached coverage-7.13.5-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (8.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.5391831Z Collecting markdown-it-py>=2.2.0 (from rich>=13.7.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.5429880Z   Using cached markdown_it_py-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.6118344Z Collecting click>=8.2.1 (from typer>=0.12.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.6134398Z   Using cached click-8.3.2-py3-none-any.whl.metadata (2.6 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.6561699Z Collecting shellingham>=1.3.0 (from typer>=0.12.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.6578738Z   Using cached shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.7585378Z Collecting httptools>=0.6.3 (from uvicorn[standard]>=0.30.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.7601363Z   Using cached httptools-0.7.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (3.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.8357810Z Collecting uvloop>=0.15.1 (from uvicorn[standard]>=0.30.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.8374519Z   Using cached uvloop-0.22.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (4.9 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.9310636Z Collecting watchfiles>=0.20 (from uvicorn[standard]>=0.30.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:30.9332140Z   Using cached watchfiles-1.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.0084765Z Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich>=13.7.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.0097853Z   Using cached mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.0997367Z Collecting zipp>=3.20 (from importlib-metadata<8.8.0,>=6.0->opentelemetry-api==1.41.0->opentelemetry-sdk>=1.30.0->maxwell-daemon==0.1.0)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1013348Z   Using cached zipp-3.23.1-py3-none-any.whl.metadata (3.6 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1190645Z Using cached anthropic-0.96.0-py3-none-any.whl (635 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1220537Z Using cached fastapi-0.136.0-py3-none-any.whl (117 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1234611Z Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1247380Z Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1259534Z Using cached mypy-1.20.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (14.7 MB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1391733Z Using cached openai-2.32.0-py3-none-any.whl (1.2 MB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1414308Z Using cached opentelemetry_sdk-1.41.0-py3-none-any.whl (180 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1431010Z Using cached opentelemetry_api-1.41.0-py3-none-any.whl (69 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1444599Z Using cached opentelemetry_semantic_conventions-0.62b0-py3-none-any.whl (231 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1459605Z Using cached prometheus_client-0.25.0-py3-none-any.whl (64 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1473457Z Using cached pydantic-2.13.3-py3-none-any.whl (471 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1488491Z Using cached pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1531280Z Using cached pydantic_settings-2.14.0-py3-none-any.whl (60 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1544322Z Using cached pytest-9.0.3-py3-none-any.whl (375 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1559465Z Using cached pytest_asyncio-1.3.0-py3-none-any.whl (15 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1572722Z Using cached pytest_cov-7.1.0-py3-none-any.whl (22 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1584457Z Using cached pytest_mock-3.15.1-py3-none-any.whl (10 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1598446Z Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1621812Z Using cached respx-0.23.1-py2.py3-none-any.whl (25 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1633572Z Using cached rich-15.0.0-py3-none-any.whl (310 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1650079Z Using cached ruff-0.15.11-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (11.3 MB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1750991Z Using cached structlog-25.5.0-py3-none-any.whl (72 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1771970Z Using cached tenacity-9.1.4-py3-none-any.whl (28 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1798265Z Using cached tomli-2.4.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (253 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1817162Z Using cached typer-0.24.1-py3-none-any.whl (56 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1829336Z Using cached uvicorn-0.44.0-py3-none-any.whl (69 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1842020Z Using cached websockets-16.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (184 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1856624Z Using cached types_pyyaml-6.0.12.20260408-py3-none-any.whl (20 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1866687Z Using cached annotated_doc-0.0.4-py3-none-any.whl (5.3 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1878527Z Using cached annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1890520Z Using cached anyio-4.13.0-py3-none-any.whl (114 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1903603Z Using cached click-8.3.2-py3-none-any.whl (108 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1916547Z Using cached coverage-7.13.5-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (254 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1943432Z Using cached distro-1.9.0-py3-none-any.whl (20 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1962463Z Using cached docstring_parser-0.18.0-py3-none-any.whl (22 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1975481Z Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.1991690Z Using cached httptools-0.7.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (517 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2009045Z Using cached idna-3.11-py3-none-any.whl (71 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2022291Z Using cached iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2034786Z Using cached jiter-0.14.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (353 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2051618Z Using cached librt-0.9.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (230 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2065241Z Using cached markdown_it_py-4.0.0-py3-none-any.whl (87 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2078125Z Using cached mypy_extensions-1.1.0-py3-none-any.whl (5.0 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2093129Z Using cached packaging-26.1-py3-none-any.whl (95 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2113858Z Using cached pathspec-1.0.4-py3-none-any.whl (55 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2126334Z Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2140471Z Using cached pygments-2.20.0-py3-none-any.whl (1.2 MB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2178836Z Using cached python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2199485Z Using cached shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2224584Z Using cached starlette-1.0.0-py3-none-any.whl (72 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2247410Z Using cached tqdm-4.67.3-py3-none-any.whl (78 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2267398Z Using cached typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2283111Z Using cached typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2299548Z Using cached uvloop-0.22.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (4.4 MB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2367551Z Using cached watchfiles-1.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (456 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2387268Z Using cached certifi-2026.2.25-py3-none-any.whl (153 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2401637Z Using cached sniffio-1.3.1-py3-none-any.whl (10 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2420437Z Using cached importlib_metadata-8.7.1-py3-none-any.whl (27 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2435026Z Using cached mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.2447499Z Using cached zipp-3.23.1-py3-none-any.whl (10 kB)
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.3739496Z Building wheels for collected packages: maxwell-daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.3757443Z   Building editable for maxwell-daemon (pyproject.toml): started
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.4211515Z   Building editable for maxwell-daemon (pyproject.toml): finished with status 'done'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.4224558Z   Created wheel for maxwell-daemon: filename=maxwell_daemon-0.1.0-py3-none-any.whl size=11745 sha256=ece71a5e1b884d5d263b7069ab03cbe03903bd789ca769880624fcb42fae9b09
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.4227498Z   Stored in directory: /tmp/pip-ephem-wheel-cache-uqcmj9w3/wheels/6b/be/77/d95447da3178baea5289715782e8bb4afecbcfbdbdbe594209
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.4256128Z Successfully built maxwell-daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:31.5620159Z Installing collected packages: zipp, websockets, uvloop, typing-extensions, types-pyyaml, tqdm, tomli, tenacity, structlog, sniffio, shellingham, ruff, pyyaml, python-dotenv, pygments, prometheus-client, pluggy, pathspec, packaging, mypy_extensions, mdurl, librt, jiter, iniconfig, idna, httptools, h11, docstring-parser, distro, coverage, click, certifi, annotated-types, annotated-doc, uvicorn, typing-inspection, pytest, pydantic-core, mypy, markdown-it-py, importlib-metadata, httpcore, anyio, watchfiles, starlette, rich, pytest-mock, pytest-cov, pytest-asyncio, pydantic, opentelemetry-api, httpx, typer, respx, pydantic-settings, opentelemetry-semantic-conventions, openai, fastapi, anthropic, opentelemetry-sdk, maxwell-daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:39.9141750Z Successfully installed annotated-doc-0.0.4 annotated-types-0.7.0 anthropic-0.96.0 anyio-4.13.0 certifi-2026.2.25 click-8.3.2 coverage-7.13.5 distro-1.9.0 docstring-parser-0.18.0 fastapi-0.136.0 h11-0.16.0 httpcore-1.0.9 httptools-0.7.1 httpx-0.28.1 idna-3.11 importlib-metadata-8.7.1 iniconfig-2.3.0 jiter-0.14.0 librt-0.9.0 markdown-it-py-4.0.0 maxwell-daemon-0.1.0 mdurl-0.1.2 mypy-1.20.1 mypy_extensions-1.1.0 openai-2.32.0 opentelemetry-api-1.41.0 opentelemetry-sdk-1.41.0 opentelemetry-semantic-conventions-0.62b0 packaging-26.1 pathspec-1.0.4 pluggy-1.6.0 prometheus-client-0.25.0 pydantic-2.13.3 pydantic-core-2.46.3 pydantic-settings-2.14.0 pygments-2.20.0 pytest-9.0.3 pytest-asyncio-1.3.0 pytest-cov-7.1.0 pytest-mock-3.15.1 python-dotenv-1.2.2 pyyaml-6.0.3 respx-0.23.1 rich-15.0.0 ruff-0.15.11 shellingham-1.5.4 sniffio-1.3.1 starlette-1.0.0 structlog-25.5.0 tenacity-9.1.4 tomli-2.4.1 tqdm-4.67.3 typer-0.24.1 types-pyyaml-6.0.12.20260408 typing-extensions-4.15.0 typing-inspection-0.4.2 uvicorn-0.44.0 uvloop-0.22.1 watchfiles-1.1.1 websockets-16.0 zipp-3.23.1
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:39.9705722Z 
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:39.9708040Z [notice] A new release of pip is available: 25.0.1 -> 26.0.1
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:39.9709181Z [notice] To update, run: python -m pip install --upgrade pip
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3031764Z ##[group]Run .venv/bin/python -m ruff check . --output-format=github
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3032254Z [36;1m.venv/bin/python -m ruff check . --output-format=github[0m
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3048258Z shell: /usr/bin/bash -e {0}
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3048509Z env:
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3048761Z   pythonLocation: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3049109Z   PKG_CONFIG_PATH: /opt/runner-tool-cache/Python/3.12.13/x64/lib/pkgconfig
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3049452Z   Python_ROOT_DIR: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3049951Z   Python2_ROOT_DIR: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3050248Z   Python3_ROOT_DIR: /opt/runner-tool-cache/Python/3.12.13/x64
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3050545Z   LD_LIBRARY_PATH: /opt/runner-tool-cache/Python/3.12.13/x64/lib
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3050803Z ##[endgroup]
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3757948Z ##[error]maxwell_daemon/metrics.py:15:11: RUF022 `__all__` is not sorted
+Lint (ruff)	UNKNOWN STEP	  help: Apply an isort-style sorting to `__all__`
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3798248Z ##[error]Process completed with exit code 1.
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.3914438Z Post job cleanup.
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5052902Z [command]/usr/bin/git version
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5128061Z git version 2.34.1
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5194394Z Copying '/home/dieterolson/.gitconfig' to '/home/dieterolson/actions-runners/runner-5/_work/_temp/a5c9765f-b8e3-4e8a-95b1-a5550fa7dad0/.gitconfig'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5225851Z Temporarily overriding HOME='/home/dieterolson/actions-runners/runner-5/_work/_temp/a5c9765f-b8e3-4e8a-95b1-a5550fa7dad0' before making global git config changes
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5226953Z Adding repository directory to the temporary git global config as a safe directory
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5240674Z [command]/usr/bin/git config --global --add safe.directory /home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5318427Z Removing SSH command configuration
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5326640Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5416836Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5905173Z Removing HTTP extra header
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5912947Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.5959829Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6445557Z Removing includeIf entries pointing to credentials config files
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6451209Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6505641Z includeif.gitdir:/home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon/.git.path
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6506421Z includeif.gitdir:/home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon/.git/worktrees/*.path
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6506916Z includeif.gitdir:/github/workspace/.git.path
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6507243Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6560454Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon/.git.path
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6597178Z /home/dieterolson/actions-runners/runner-5/_work/_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6615408Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon/.git.path /home/dieterolson/actions-runners/runner-5/_work/_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6678607Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon/.git/worktrees/*.path
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6727668Z /home/dieterolson/actions-runners/runner-5/_work/_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6742168Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/dieterolson/actions-runners/runner-5/_work/Maxwell-Daemon/Maxwell-Daemon/.git/worktrees/*.path /home/dieterolson/actions-runners/runner-5/_work/_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6823863Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6865312Z /github/runner_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6908380Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.6968389Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.7006230Z /github/runner_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.7034837Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.7105857Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.7466950Z Removing credentials config '/home/dieterolson/actions-runners/runner-5/_work/_temp/git-credentials-c0df269c-0973-4c0e-b9b4-188be1b54fbb.config'
+Lint (ruff)	UNKNOWN STEP	2026-04-20T21:11:40.7710402Z Cleaning up orphan processes

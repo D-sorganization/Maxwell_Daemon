@@ -140,7 +140,9 @@ class TestPostToolSkippedOnHandlerError:
 
 
 class TestNoHookRunner:
-    async def test_registry_without_runner_behaves_like_before(self, tmp_path: Path) -> None:
+    async def test_registry_without_runner_behaves_like_before(
+        self, tmp_path: Path
+    ) -> None:
         reg = ToolRegistry()  # no hook runner
         reg.register(_echo_spec())
         result = await reg.invoke("echo", {"text": "hi"})
@@ -148,7 +150,9 @@ class TestNoHookRunner:
 
 
 class TestPreToolRunsBeforePostTool:
-    async def test_pre_tool_block_means_post_tool_does_not_run(self, tmp_path: Path) -> None:
+    async def test_pre_tool_block_means_post_tool_does_not_run(
+        self, tmp_path: Path
+    ) -> None:
         runner = _Runner({"block.sh": (1, "blocked")})
         hook_runner = HookRunner(
             HookConfig(

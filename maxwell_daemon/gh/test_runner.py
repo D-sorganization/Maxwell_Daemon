@@ -168,7 +168,9 @@ class TestRunner:
         if on_chunk is not None and _runner_accepts_on_chunk(self._run):
             kwargs["on_chunk"] = on_chunk
         try:
-            rc, stdout, stderr = await asyncio.wait_for(self._run(*argv, **kwargs), timeout=timeout)
+            rc, stdout, stderr = await asyncio.wait_for(
+                self._run(*argv, **kwargs), timeout=timeout
+            )
         except asyncio.TimeoutError:
             return TestResult(
                 passed=False,

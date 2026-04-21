@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
-DASHBOARD = Path(__file__).resolve().parents[2] / "grafana" / "maxwell-daemon-dashboard.json"
+DASHBOARD = (
+    Path(__file__).resolve().parents[2] / "grafana" / "maxwell-daemon-dashboard.json"
+)
 
 
 @pytest.fixture(scope="module")
@@ -26,7 +28,9 @@ class TestDashboardShape:
         assert len(dashboard["panels"]) >= 5
 
     def test_templating_has_datasource(self, dashboard: dict) -> None:
-        assert any(v.get("name") == "DS_PROMETHEUS" for v in dashboard["templating"]["list"])
+        assert any(
+            v.get("name") == "DS_PROMETHEUS" for v in dashboard["templating"]["list"]
+        )
 
 
 class TestMetricsAreReal:
@@ -68,6 +72,6 @@ class TestMetricsAreReal:
         referenced = self._referenced_metrics(dashboard)
         exported = self._exported_metrics()
         missing = referenced - exported
-        assert not missing, (
-            f"Dashboard references metrics not exported by maxwell_daemon.metrics: {missing}"
-        )
+        assert (
+            not missing
+        ), f"Dashboard references metrics not exported by maxwell_daemon.metrics: {missing}"

@@ -46,7 +46,9 @@ async def _with_daemon(
     body: Callable[[Daemon], Awaitable[T]],
 ) -> T:
     d = Daemon(
-        config, ledger_path=ledger_path, task_store_path=ledger_path.with_suffix(".tasks.db")
+        config,
+        ledger_path=ledger_path,
+        task_store_path=ledger_path.with_suffix(".tasks.db"),
     )
     await d.start(worker_count=worker_count)
     try:
@@ -62,7 +64,11 @@ class TestLifecycle:
         async def body(d: Daemon) -> None:
             assert len(d._workers) == 3
 
-        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=3, body=body))
+        _run(
+            _with_daemon(
+                minimal_config, isolated_ledger_path, worker_count=3, body=body
+            )
+        )
 
     def test_stop_cancels_workers(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
@@ -82,7 +88,11 @@ class TestLifecycle:
             await d.start(worker_count=5)
             assert len(d._workers) == 2
 
-        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=2, body=body))
+        _run(
+            _with_daemon(
+                minimal_config, isolated_ledger_path, worker_count=2, body=body
+            )
+        )
 
 
 class TestTaskExecution:
@@ -98,7 +108,11 @@ class TestTaskExecution:
             assert final.started_at is not None
             assert final.finished_at is not None
 
-        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+        _run(
+            _with_daemon(
+                minimal_config, isolated_ledger_path, worker_count=1, body=body
+            )
+        )
 
     def test_failed_task_records_error(
         self, isolated_ledger_path: Path, register_recording_backend: None
@@ -137,7 +151,11 @@ class TestTaskExecution:
                 await _wait_for_status(d, t.id, TaskStatus.COMPLETED)
             assert all(d.get_task(t.id).status == TaskStatus.COMPLETED for t in tasks)
 
-        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=4, body=body))
+        _run(
+            _with_daemon(
+                minimal_config, isolated_ledger_path, worker_count=4, body=body
+            )
+        )
 
     def test_cost_is_recorded_in_ledger(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
@@ -147,7 +165,11 @@ class TestTaskExecution:
             await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
             assert d._ledger.month_to_date() > 0
 
-        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+        _run(
+            _with_daemon(
+                minimal_config, isolated_ledger_path, worker_count=1, body=body
+            )
+        )
 
 
 class TestState:
@@ -158,7 +180,11 @@ class TestState:
             state = d.state()
             assert "primary" in state.backends_available
 
-        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+        _run(
+            _with_daemon(
+                minimal_config, isolated_ledger_path, worker_count=1, body=body
+            )
+        )
 
     def test_from_config_path_roundtrip(
         self,

@@ -29,8 +29,7 @@ def builder() -> ContextBuilder:
 
 
 def _setup_ruff_repo(root: Path) -> None:
-    (root / "pyproject.toml").write_text(
-        dedent("""
+    (root / "pyproject.toml").write_text(dedent("""
             [tool.ruff]
             line-length = 100
 
@@ -39,8 +38,7 @@ def _setup_ruff_repo(root: Path) -> None:
 
             [tool.pytest.ini_options]
             addopts = "--cov-fail-under=80"
-            """).lstrip()
-    )
+            """).lstrip())
 
 
 class TestContextBuilderCIProfile:

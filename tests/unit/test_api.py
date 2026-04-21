@@ -14,7 +14,9 @@ from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
-def daemon(minimal_config: MaxwellDaemonConfig, isolated_ledger_path) -> Iterator[Daemon]:
+def daemon(
+    minimal_config: MaxwellDaemonConfig, isolated_ledger_path
+) -> Iterator[Daemon]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
@@ -102,7 +104,9 @@ class TestCostEndpoint:
 
 
 class TestAuth:
-    def test_protected_endpoint_rejects_missing_token(self, auth_client: TestClient) -> None:
+    def test_protected_endpoint_rejects_missing_token(
+        self, auth_client: TestClient
+    ) -> None:
         r = auth_client.get("/api/v1/backends")
         assert r.status_code == 401
 

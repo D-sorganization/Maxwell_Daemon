@@ -33,7 +33,9 @@ def _read_xml_coverage(xml_path: Path) -> float:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--xml", default="coverage.xml", type=Path)
-    parser.add_argument("--update", action="store_true", help="Ratchet floor up to current")
+    parser.add_argument(
+        "--update", action="store_true", help="Ratchet floor up to current"
+    )
     args = parser.parse_args()
 
     if not args.xml.exists():
@@ -59,7 +61,9 @@ def main() -> int:
         return 1
 
     if args.update and current > floor:
-        FLOOR_FILE.write_text(json.dumps({"floor_percent": round(current, 2)}, indent=2) + "\n")
+        FLOOR_FILE.write_text(
+            json.dumps({"floor_percent": round(current, 2)}, indent=2) + "\n"
+        )
         print(f"OK: Ratcheted floor upward: {floor:.2f}% -> {current:.2f}%")
     else:
         print("OK: Coverage floor met.")

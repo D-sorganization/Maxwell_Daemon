@@ -86,7 +86,9 @@ class _ScriptedBackend(ILLMBackend):
         self._responses = responses
         self.calls: list[list[Message]] = []
 
-    async def complete(self, messages: list[Message], *, model: str, **_: Any) -> BackendResponse:
+    async def complete(
+        self, messages: list[Message], *, model: str, **_: Any
+    ) -> BackendResponse:
         self.calls.append(messages)
         payload = self._responses[min(len(self.calls) - 1, len(self._responses) - 1)]
         return BackendResponse(
@@ -128,9 +130,13 @@ class TestsPassFastPath:
                 )
             ]
         )
-        executor = IssueExecutor(github=gh, workspace=ws, backend=backend, test_runner=runner)
+        executor = IssueExecutor(
+            github=gh, workspace=ws, backend=backend, test_runner=runner
+        )
         result = asyncio.run(
-            executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="implement")
+            executor.execute_issue(
+                repo="o/r", issue_number=1, model="m", mode="implement"
+            )
         )
         assert result.applied_diff is True
         assert "tests passed" in gh.pr_calls[0]["body"].lower()
@@ -174,7 +180,9 @@ class TestsFailRetry:
             max_test_retries=2,
         )
         result = asyncio.run(
-            executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="implement")
+            executor.execute_issue(
+                repo="o/r", issue_number=1, model="m", mode="implement"
+            )
         )
         assert result.applied_diff is True
         assert runner.calls == 2
@@ -207,7 +215,9 @@ class TestsFailRetry:
         )
         with pytest.raises(IssueExecutionError, match="tests still failing"):
             asyncio.run(
-                executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="implement")
+                executor.execute_issue(
+                    repo="o/r", issue_number=1, model="m", mode="implement"
+                )
             )
         assert runner.calls == 2  # initial + 1 retry
 
@@ -220,7 +230,9 @@ class TestRunnerOptional:
         backend = _ScriptedBackend([{"plan": "p", "diff": "diff --git a/x b/x\n"}])
         executor = IssueExecutor(github=gh, workspace=ws, backend=backend)
         result = asyncio.run(
-            executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="implement")
+            executor.execute_issue(
+                repo="o/r", issue_number=1, model="m", mode="implement"
+            )
         )
         assert result.applied_diff is True
         assert "tests" not in gh.pr_calls[0]["body"].lower()

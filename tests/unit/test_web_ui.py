@@ -15,7 +15,9 @@ from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
-def client(minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path) -> Iterator[TestClient]:
+def client(
+    minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+) -> Iterator[TestClient]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     d = Daemon(minimal_config, ledger_path=isolated_ledger_path)

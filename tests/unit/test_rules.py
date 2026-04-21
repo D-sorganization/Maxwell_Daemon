@@ -127,7 +127,9 @@ class TestLoadRules:
         rules = load_rules(rd)
         assert [r.name for r in rules] == ["real"]
 
-    def test_default_values_when_frontmatter_fields_missing(self, tmp_path: Path) -> None:
+    def test_default_values_when_frontmatter_fields_missing(
+        self, tmp_path: Path
+    ) -> None:
         rd = tmp_path / "rules"
         rd.mkdir()
         (rd / "minimal.md").write_text("---\ndescription: minimal\n---\nbody\n")

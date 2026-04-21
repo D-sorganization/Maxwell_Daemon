@@ -156,7 +156,9 @@ class TestBaseBranchAllowList:
             labels=["maxwell:auto-merge-ok"],
         )
         gh = _StubGh(pr)
-        daemon = PrMergeDaemon(config=_default_config(allowed_base_branches=("staging", "main")))
+        daemon = PrMergeDaemon(
+            config=_default_config(allowed_base_branches=("staging", "main"))
+        )
         result = await daemon.shepherd(pr, gh=gh)
         assert result.decision in {
             PrMergeDecision.ENABLED_AUTO_MERGE,

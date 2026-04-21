@@ -24,7 +24,9 @@ def cfg() -> MaxwellDaemonConfig:
 
 
 class TestRecovery:
-    def test_queued_task_requeued_on_start(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
+    def test_queued_task_requeued_on_start(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
         task_store_path = tmp_path / "tasks.db"
         # Simulate a previous daemon run by writing directly to the store.
         from datetime import datetime, timezone
@@ -74,7 +76,9 @@ class TestRecovery:
         assert loaded.error is not None
         assert "crashed" in loaded.error.lower()
 
-    def test_submit_persists_immediately(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
+    def test_submit_persists_immediately(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
         task_store_path = tmp_path / "tasks.db"
         d = Daemon(cfg, ledger_path=tmp_path / "l.db", task_store_path=task_store_path)
         task = d.submit("hello")
@@ -82,7 +86,9 @@ class TestRecovery:
         store = TaskStore(task_store_path)
         assert store.get(task.id) is not None
 
-    def test_cancel_persists_status(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
+    def test_cancel_persists_status(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
         task_store_path = tmp_path / "tasks.db"
         d = Daemon(cfg, ledger_path=tmp_path / "l.db", task_store_path=task_store_path)
         task = d.submit("hi")
@@ -93,7 +99,9 @@ class TestRecovery:
 
 
 class TestExecutionPersistence:
-    def test_completed_task_persists(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
+    def test_completed_task_persists(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
         from maxwell_daemon.backends import registry
         from tests.conftest import RecordingBackend
 

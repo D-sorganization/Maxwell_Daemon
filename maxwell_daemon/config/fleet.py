@@ -99,7 +99,9 @@ class FleetManifest(BaseModel):
 
     @field_validator("repos")
     @classmethod
-    def _reject_duplicate_names(cls, repos: list[FleetRepoEntry]) -> list[FleetRepoEntry]:
+    def _reject_duplicate_names(
+        cls, repos: list[FleetRepoEntry]
+    ) -> list[FleetRepoEntry]:
         seen: set[str] = set()
         for r in repos:
             if r.name in seen:
