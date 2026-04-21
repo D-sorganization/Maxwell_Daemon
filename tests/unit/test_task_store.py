@@ -153,7 +153,6 @@ class TestSchemaMigration:
 class TestClose:
     def test_close_terminates_connection(self, store: TaskStore) -> None:
         """close() should not raise."""
-        import sqlite3
 
         task = _fresh_task()
         store.save(task)
