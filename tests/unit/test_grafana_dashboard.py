@@ -68,6 +68,6 @@ class TestMetricsAreReal:
         referenced = self._referenced_metrics(dashboard)
         exported = self._exported_metrics()
         missing = referenced - exported
-        assert (
-            not missing
-        ), f"Dashboard references metrics not exported by maxwell_daemon.metrics: {missing}"
+        assert not missing, (
+            f"Dashboard references metrics not exported by maxwell_daemon.metrics: {missing}"
+        )
