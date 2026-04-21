@@ -51,11 +51,14 @@ nav:
       - Quick start: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
       - Autonomous workflow: getting-started/autonomous-workflow.md
+      - Examples: getting-started/examples.md
+      - Troubleshooting: getting-started/troubleshooting.md
   - Architecture:
       - Overview: architecture/overview.md
       - Backend interface: architecture/backends.md
       - Design by Contract: architecture/contracts.md
   - Operations:
+      - Deployment guide: operations/deployment.md
       - Deployment (Ansible): operations/ansible.md
       - Observability: operations/observability.md
       - Budgets: operations/budgets.md
@@ -64,6 +67,7 @@ nav:
       - CLI: reference/cli.md
       - Tasks CLI: reference/tasks-cli.md
       - REST API: reference/api.md
+      - Configuration: reference/configuration.md
   - Community:
       - Contributing: contributing.md
       - Roadmap and Governance: community/roadmap-governance.md
