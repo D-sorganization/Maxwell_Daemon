@@ -93,8 +93,12 @@ class MachineConfig(BaseModel):
     capacity: int = Field(2, ge=1)
     tags: list[str] = Field(default_factory=list)
     ssh_key: Path | None = None
-    tls: bool = Field(True, description="Use HTTPS (set False for HTTP-only local/test deployments)")
-    tls_verify: bool = Field(True, description="Verify TLS certificate (set False for self-signed certs)")
+    tls: bool = Field(
+        True, description="Use HTTPS (set False for HTTP-only local/test deployments)"
+    )
+    tls_verify: bool = Field(
+        True, description="Verify TLS certificate (set False for self-signed certs)"
+    )
 
 
 class FleetConfig(BaseModel):
