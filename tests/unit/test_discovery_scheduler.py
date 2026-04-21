@@ -9,7 +9,9 @@ All time is simulated via an injected clock to keep tests deterministic.
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -88,7 +90,7 @@ class TestShapes:
 
 
 class TestRunOnce:
-    async def test_dispatches_new_issues_from_one_repo(self) -> None:
+    async def test_dispatches_new_issues_from_one_repo(self, tmp_path: Path) -> None:
         gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"]), _issue(2, labels=["deliver"])]})
         daemon = _FakeDaemon()
         sched = DiscoveryScheduler(
@@ -96,30 +98,33 @@ class TestRunOnce:
             daemon=daemon,
             repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
             interval_seconds=60,
+            dedup_path=tmp_path / "dedup.json",
         )
         tick = await sched.run_once()
         assert tick.dispatched == 2
         assert [s["issue_number"] for s in daemon.submitted] == [1, 2]
 
-    async def test_label_filter_drops_non_matching(self) -> None:
+    async def test_label_filter_drops_non_matching(self, tmp_path: Path) -> None:
         gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"]), _issue(2, labels=["other"])]})
         daemon = _FakeDaemon()
         sched = DiscoveryScheduler(
             github=gh,
             daemon=daemon,
             repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=tmp_path / "dedup.json",
         )
         tick = await sched.run_once()
         assert tick.dispatched == 1
         assert daemon.submitted[0]["issue_number"] == 1
 
-    async def test_already_dispatched_is_skipped_next_run(self) -> None:
+    async def test_already_dispatched_is_skipped_next_run(self, tmp_path: Path) -> None:
         gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
         daemon = _FakeDaemon()
         sched = DiscoveryScheduler(
             github=gh,
             daemon=daemon,
             repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=tmp_path / "dedup.json",
         )
         first = await sched.run_once()
         second = await sched.run_once()
@@ -127,7 +132,7 @@ class TestRunOnce:
         assert second.dispatched == 0
         assert len(daemon.submitted) == 1
 
-    async def test_fans_out_across_multiple_repos(self) -> None:
+    async def test_fans_out_across_multiple_repos(self, tmp_path: Path) -> None:
         gh = _FakeGitHub(
             {
                 "a/b": [_issue(1, labels=["deliver"])],
@@ -142,13 +147,14 @@ class TestRunOnce:
                 DiscoveryRepoSpec(repo="a/b", labels={"deliver"}),
                 DiscoveryRepoSpec(repo="c/d", labels={"deliver"}),
             ],
+            dedup_path=tmp_path / "dedup.json",
         )
         tick = await sched.run_once()
         assert tick.dispatched == 2
         submitted_repos = {s["repo"] for s in daemon.submitted}
         assert submitted_repos == {"a/b", "c/d"}
 
-    async def test_broken_repo_does_not_kill_tick(self) -> None:
+    async def test_broken_repo_does_not_kill_tick(self, tmp_path: Path) -> None:
         class _Flaky:
             async def list_issues(
                 self, repo: str, *, state: str = "open", limit: int = 50
@@ -165,18 +171,61 @@ class TestRunOnce:
                 DiscoveryRepoSpec(repo="bad/repo", labels={"deliver"}),
                 DiscoveryRepoSpec(repo="ok/repo", labels={"deliver"}),
             ],
+            dedup_path=tmp_path / "dedup.json",
         )
         tick = await sched.run_once()
         # Broken repo didn't prevent ok/repo from dispatching.
         assert tick.dispatched == 1
         assert daemon.submitted[0]["repo"] == "ok/repo"
 
+    async def test_dedup_persisted_to_disk(self, tmp_path: Path) -> None:
+        """Dispatched issue numbers are written to the dedup file (#149)."""
+        dedup_file = tmp_path / "dedup.json"
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"]), _issue(2, labels=["deliver"])]})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=dedup_file,
+        )
+        await sched.run_once()
+        assert dedup_file.exists(), "dedup file must be written after dispatch"
+        persisted = json.loads(dedup_file.read_text())
+        assert set(persisted.get("a/b", [])) == {1, 2}
+
+    async def test_dedup_loaded_on_restart(self, tmp_path: Path) -> None:
+        """A new scheduler instance loads persisted dedup and skips already-seen issues (#149)."""
+        dedup_file = tmp_path / "dedup.json"
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+
+        # First "run" — dispatches issue 1 and persists the dedup file.
+        sched1 = DiscoveryScheduler(
+            github=gh,
+            daemon=_FakeDaemon(),
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=dedup_file,
+        )
+        await sched1.run_once()
+
+        # Simulate a restart: create a fresh scheduler with the same dedup file.
+        daemon2 = _FakeDaemon()
+        sched2 = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon2,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=dedup_file,
+        )
+        tick = await sched2.run_once()
+        assert tick.dispatched == 0, "issue already dispatched in previous run must not re-dispatch"
+        assert len(daemon2.submitted) == 0
+
 
 # ── Start/stop lifecycle ─────────────────────────────────────────────────────
 
 
 class TestLifecycle:
-    async def test_start_schedules_periodic_ticks(self) -> None:
+    async def test_start_schedules_periodic_ticks(self, tmp_path: Path) -> None:
         """Start the scheduler, wait long enough for 1-2 ticks, stop, verify calls."""
         gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
         daemon = _FakeDaemon()
@@ -185,6 +234,7 @@ class TestLifecycle:
             daemon=daemon,
             repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
             interval_seconds=0.01,  # tiny interval for test
+            dedup_path=tmp_path / "dedup.json",
         )
         await sched.start()
         await asyncio.sleep(0.05)
@@ -193,22 +243,24 @@ class TestLifecycle:
         assert daemon.submitted
         assert daemon.submitted[0]["issue_number"] == 1
 
-    async def test_stop_is_idempotent(self) -> None:
+    async def test_stop_is_idempotent(self, tmp_path: Path) -> None:
         sched = DiscoveryScheduler(
             github=_FakeGitHub({}),
             daemon=_FakeDaemon(),
             repos=[],
             interval_seconds=60,
+            dedup_path=tmp_path / "dedup.json",
         )
         await sched.stop()  # Safe even if never started.
         await sched.stop()  # Double-stop must not explode.
 
-    async def test_start_twice_is_idempotent(self) -> None:
+    async def test_start_twice_is_idempotent(self, tmp_path: Path) -> None:
         sched = DiscoveryScheduler(
             github=_FakeGitHub({}),
             daemon=_FakeDaemon(),
             repos=[],
             interval_seconds=0.01,
+            dedup_path=tmp_path / "dedup.json",
         )
         await sched.start()
         await sched.start()  # second start is a no-op, not an error
@@ -219,7 +271,7 @@ class TestLifecycle:
 
 
 class TestPreconditions:
-    def test_rejects_zero_interval(self) -> None:
+    def test_rejects_zero_interval(self, tmp_path: Path) -> None:
         from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="interval"):
@@ -228,9 +280,10 @@ class TestPreconditions:
                 daemon=_FakeDaemon(),
                 repos=[],
                 interval_seconds=0,
+                dedup_path=tmp_path / "dedup.json",
             )
 
-    def test_rejects_negative_interval(self) -> None:
+    def test_rejects_negative_interval(self, tmp_path: Path) -> None:
         from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="interval"):
@@ -239,4 +292,5 @@ class TestPreconditions:
                 daemon=_FakeDaemon(),
                 repos=[],
                 interval_seconds=-1,
+                dedup_path=tmp_path / "dedup.json",
             )

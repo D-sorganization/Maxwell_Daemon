@@ -91,7 +91,7 @@ class TestTracingImportError:
         from unittest.mock import patch
 
         otel_modules = [k for k in sys.modules if k.startswith("opentelemetry")]
-        with patch.dict("sys.modules", {m: None for m in otel_modules}):
+        with patch.dict("sys.modules", dict.fromkeys(otel_modules)):
             try:
                 configure_tracing(endpoint="http://localhost:4317", service_name="test")
             except Exception:

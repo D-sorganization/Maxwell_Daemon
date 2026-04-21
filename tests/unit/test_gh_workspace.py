@@ -6,6 +6,7 @@ Tested by substituting the subprocess runner. No actual git invoked here.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from pathlib import Path
 
 import pytest
@@ -87,6 +88,30 @@ class TestBranchLifecycle:
         assert ("git", "checkout", "main") in cmds
         assert ("git", "checkout", "-B", "maxwell-daemon/issue-42") in cmds
 
+    def test_create_branch_skips_checkout_b_when_remote_branch_exists(self, tmp_path: Path) -> None:
+        """When the branch already exists on the remote, checkout + pull instead of -B (#150)."""
+        (tmp_path / "repo" / "t-1" / ".git").mkdir(parents=True)
+        git = FakeGit()
+        branch = "maxwell-daemon/issue-42"
+        # Make ls-remote report the branch as already present on the remote.
+        git.respond(
+            "git",
+            "ls-remote",
+            "--heads",
+            "origin",
+            branch,
+            returncode=0,
+            stdout=b"abc123\trefs/heads/maxwell-daemon/issue-42\n",
+        )
+        ws = Workspace(root=tmp_path, runner=git)
+        asyncio.run(ws.create_branch("owner/repo", branch, base="main", task_id="t-1"))
+        cmds = [c[0] for c in git.calls]
+        # Should check out the existing branch, not create a new one.
+        assert ("git", "checkout", branch) in cmds
+        assert ("git", "pull", "--ff-only", "origin", branch) in cmds
+        # Must NOT attempt to create a new branch (would fail with "already exists").
+        assert ("git", "checkout", "-B", branch) not in cmds
+
     def test_commit_and_push(self, tmp_path: Path) -> None:
         (tmp_path / "repo" / "t-1" / ".git").mkdir(parents=True)
         git = FakeGit()
@@ -166,22 +191,22 @@ class TestPathFor:
                 mock_re2.match.return_value = True
                 # The target path will be outside root after .resolve() if we
                 # pre-create a symlink. Use a known-safe approach: mock resolve.
-                with patch.object(
-                    type(tmp_path / "repo" / "t1"),
-                    "resolve",
-                    return_value=Path("/tmp/outside_root"),
+                with (
+                    patch.object(
+                        type(tmp_path / "repo" / "t1"),
+                        "resolve",
+                        return_value=Path("/tmp/outside_root"),
+                    ),
+                    contextlib.suppress(WorkspaceError, Exception),
                 ):
-                    try:
-                        ws.path_for("owner/repo", task_id="t1")
-                    except (WorkspaceError, Exception):
-                        pass  # either error is acceptable
+                    ws.path_for("owner/repo", task_id="t1")
 
 
 class TestCleanupOld:
     def test_cleanup_removes_old_dirs(self, tmp_path: Path) -> None:
-        from datetime import timedelta
         import os
         import time as _time
+        from datetime import timedelta
 
         ws = Workspace(root=tmp_path)
         repo_dir = tmp_path / "repo"
