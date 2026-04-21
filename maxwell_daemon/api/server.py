@@ -36,7 +36,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from maxwell_daemon import __version__
 from maxwell_daemon.audit import AuditLogger
-from maxwell_daemon.auth import JWTConfig, Role
+from maxwell_daemon.auth import JWTConfig, Role, require_role
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task
 from maxwell_daemon.logging import bind_context
@@ -238,10 +238,23 @@ def create_app(
     _mount_web_ui(app)
     auth = _auth_dep(auth_token)
 
-    # Role-scoped RBAC dependencies: accept static admin token OR JWT with role >= minimum.
-    _rbac_viewer = _make_rbac_dep(Role.viewer, auth_token, jwt_config)
-    _rbac_operator = _make_rbac_dep(Role.operator, auth_token, jwt_config)
-    _rbac_admin = _make_rbac_dep(Role.admin, auth_token, jwt_config)
+    # RBAC dependency factories — only active when jwt_config is provided.
+    # When jwt_config is None the daemon falls back to static bearer-token auth
+    # (``auth`` dep above) and role enforcement is skipped.
+    def _require_viewer() -> Any:
+        if jwt_config is not None:
+            return require_role(Role.viewer, jwt_config)
+        return auth
+
+    def _require_operator() -> Any:
+        if jwt_config is not None:
+            return require_role(Role.operator, jwt_config)
+        return auth
+
+    def _require_admin() -> Any:
+        if jwt_config is not None:
+            return require_role(Role.admin, jwt_config)
+        return auth
 
     _audit: AuditLogger | None = AuditLogger(audit_log_path) if audit_log_path is not None else None
 
@@ -352,13 +365,13 @@ def create_app(
             raise HTTPException(status_code=503, detail="no backends available")
         return {"status": "ready"}
 
-    @app.get("/api/v1/backends", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/backends", dependencies=[Depends(_require_viewer())])
     async def list_backends() -> dict[str, Any]:
         return {"backends": daemon.state().backends_available}
 
     @app.post(
         "/api/v1/tasks",
-        dependencies=[Depends(_rbac_operator)],
+        dependencies=[Depends(auth), Depends(_require_operator())],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def submit_task(payload: TaskSubmit) -> TaskView:
@@ -370,7 +383,7 @@ def create_app(
         )
         return TaskView.from_task(task)
 
-    @app.get("/api/v1/tasks", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/tasks", dependencies=[Depends(_require_viewer())])
     async def list_tasks(
         status: Annotated[str | None, Query()] = None,
         kind: Annotated[str | None, Query()] = None,
@@ -387,14 +400,16 @@ def create_app(
         tasks.sort(key=lambda t: t.created_at, reverse=True)
         return [TaskView.from_task(t) for t in tasks[:limit]]
 
-    @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
     async def get_task(task_id: str) -> TaskView:
         t = daemon.get_task(task_id)
         if t is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
         return TaskView.from_task(t)
 
-    @app.post("/api/v1/tasks/{task_id}/cancel", dependencies=[Depends(_rbac_operator)])
+    @app.post(
+        "/api/v1/tasks/{task_id}/cancel", dependencies=[Depends(auth), Depends(_require_operator())]
+    )
     async def cancel_task(task_id: str) -> TaskView:
         try:
             cancelled = daemon.cancel_task(task_id)
@@ -406,7 +421,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues",
-        dependencies=[Depends(_rbac_admin)],
+        dependencies=[Depends(auth), Depends(_require_operator())],
         status_code=status.HTTP_201_CREATED,
     )
     async def create_issue(payload: IssueCreate) -> dict[str, Any]:
@@ -438,7 +453,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/dispatch",
-        dependencies=[Depends(_rbac_admin)],
+        dependencies=[Depends(auth), Depends(_require_operator())],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def dispatch_issue(payload: IssueDispatch) -> TaskView:
@@ -454,7 +469,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/ab-dispatch",
-        dependencies=[Depends(_rbac_admin)],
+        dependencies=[Depends(auth), Depends(_require_operator())],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def ab_dispatch_issue(payload: IssueAbDispatch) -> dict[str, Any]:
@@ -482,7 +497,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/batch-dispatch",
-        dependencies=[Depends(_rbac_admin)],
+        dependencies=[Depends(auth), Depends(_require_operator())],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def batch_dispatch_issues(payload: IssueBatchDispatch) -> dict[str, Any]:
@@ -513,7 +528,7 @@ def create_app(
             "failures": failures,
         }
 
-    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(_require_viewer())])
     async def list_repo_issues(
         owner: str, name: str, state: str = "open", limit: int = 25
     ) -> list[dict[str, Any]]:
@@ -530,7 +545,7 @@ def create_app(
             for i in issues
         ]
 
-    @app.get("/api/v1/fleet", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/fleet", dependencies=[Depends(_require_viewer())])
     async def fleet_overview() -> dict[str, Any]:
         """Return fleet manifest data merged with live task counts per repo."""
         import os
@@ -597,7 +612,7 @@ def create_app(
             "repos": repos,
         }
 
-    @app.get("/api/v1/audit", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/audit", dependencies=[Depends(_require_viewer())])
     async def audit_log(
         limit: int = Query(default=200, ge=1, le=10_000),
         offset: int = Query(default=0, ge=0),
@@ -610,7 +625,7 @@ def create_app(
             "audit_enabled": True,
         }
 
-    @app.get("/api/v1/audit/verify", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/audit/verify", dependencies=[Depends(_require_viewer())])
     async def audit_verify() -> dict[str, Any]:
         """Verify the audit log hash chain.  Returns violations (empty = clean)."""
         from maxwell_daemon.audit import verify_chain
@@ -624,7 +639,7 @@ def create_app(
             "audit_enabled": True,
         }
 
-    @app.get("/api/v1/workers", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/workers", dependencies=[Depends(_require_viewer())])
     async def workers_status() -> dict:
         """Return current worker count and queue depth."""
         state = daemon.state()
@@ -633,7 +648,7 @@ def create_app(
             "queue_depth": state.queue_depth,
         }
 
-    @app.put("/api/v1/workers", dependencies=[Depends(_rbac_viewer)])
+    @app.put("/api/v1/workers", dependencies=[Depends(_require_viewer())])
     async def set_workers(count: int) -> dict:
         """Rescale the worker pool to *count* workers."""
         from maxwell_daemon.contracts import PreconditionError
@@ -644,7 +659,7 @@ def create_app(
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
         return {"worker_count": count}
 
-    @app.get("/api/v1/cost", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/cost", dependencies=[Depends(_require_viewer())])
     async def cost_summary() -> CostSummary:
         now = datetime.now(timezone.utc)
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -792,7 +807,7 @@ def create_app(
         user: str
         password: str | None = None
 
-    @app.post("/api/v1/ssh/connect", dependencies=[Depends(_rbac_admin)])
+    @app.post("/api/v1/ssh/connect", dependencies=[Depends(auth), Depends(_require_admin())])
     async def ssh_connect(payload: SSHConnectRequest) -> Any:
         """Open (or reuse) an SSH session and return its summary."""
         pool = _ssh_pool()
@@ -818,7 +833,7 @@ def create_app(
         command: str
         timeout_seconds: float = 30.0
 
-    @app.post("/api/v1/ssh/run", dependencies=[Depends(_rbac_admin)])
+    @app.post("/api/v1/ssh/run", dependencies=[Depends(auth), Depends(_require_admin())])
     async def ssh_run(payload: SSHRunRequest) -> Any:
         """Run a command on a remote machine and return its output."""
         pool = _ssh_pool()
@@ -859,6 +874,11 @@ def create_app(
             ],
         }
 
+    # Whitelist of shell commands that are permitted over the SSH WebSocket.
+    # Only bare command names (no arguments) are accepted — the interactive
+    # shell session itself handles all subsequent user input.
+    _ssh_allowed_commands: frozenset[str] = frozenset({"bash", "sh", "zsh", "fish", "rbash"})
+
     @app.websocket("/api/v1/ssh/shell")
     async def ssh_shell_ws(ws: WebSocket) -> None:
         """Interactive shell over WebSocket.
@@ -866,13 +886,19 @@ def create_app(
         Query params: ``host``, ``user``, ``port`` (default 22), ``token``
         (bearer token for auth), ``command`` (default ``bash``).
 
+        The ``command`` parameter is validated against an explicit whitelist of
+        permitted shell executables.  Arbitrary shell strings, pipes, and
+        redirections are rejected to prevent remote code execution via command
+        injection (CVE / Issue #138).
+
         Frames: text frames sent from client are written to stdin.
         Text frames sent to client contain stdout/stderr chunks.
         Session ends when the command exits or the client disconnects.
         Max session duration: 1 hour.
         """
-        # WebSocket auth: accept static admin token OR a JWT with admin role.
-        if auth_token is not None or jwt_config is not None:
+        import json as _json_mod
+
+        if auth_token is not None:
             presented = ws.query_params.get("token") or ""
             authenticated = False
             if auth_token is not None and hmac.compare_digest(
@@ -899,8 +925,38 @@ def create_app(
 
         host = ws.query_params.get("host") or ""
         user = ws.query_params.get("user") or ""
-        port = int(ws.query_params.get("port") or "22")
-        command = ws.query_params.get("command") or "bash"
+
+        # Validate port — must be a valid integer in 1-65535
+        raw_port = ws.query_params.get("port") or "22"
+        try:
+            port = int(raw_port)
+            if not (1 <= port <= 65535):
+                raise ValueError("port out of range")
+        except ValueError:
+            await ws.accept()
+            await ws.send_text('{"error": "invalid port"}')
+            await ws.close(code=1008)
+            return
+
+        # Validate command against whitelist — reject anything that is not a
+        # known-safe shell executable name.  This prevents injection of shell
+        # metacharacters, pipes, subshells, or arbitrary binaries.
+        raw_command = ws.query_params.get("command") or "bash"
+        command = raw_command.strip()
+        if command not in _ssh_allowed_commands:
+            await ws.accept()
+            await ws.send_text(
+                _json_mod.dumps(
+                    {
+                        "error": (
+                            f"command {command!r} is not permitted; "
+                            f"allowed: {sorted(_ssh_allowed_commands)}"
+                        )
+                    }
+                )
+            )
+            await ws.close(code=1008)
+            return
 
         if not host or not user:
             await ws.accept()
@@ -911,13 +967,13 @@ def create_app(
         await ws.accept()
         try:
             session = await pool.get(host, user=user, port=port)
+            # Pass command as a single-element list so asyncssh treats it as an
+            # exec request rather than a shell string — no shell interpolation.
             async for chunk in session.shell_stream(command):
                 await ws.send_bytes(chunk)
         except WebSocketDisconnect:
             return
         except Exception as exc:
-            import json as _json_mod
-
             await ws.send_text(_json_mod.dumps({"error": str(exc)}))
             await ws.close(code=1011)
 
