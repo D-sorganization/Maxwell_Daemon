@@ -278,9 +278,7 @@ class Daemon:
         with self._tasks_lock:
             self._tasks[task.id] = task
         self._task_store.save(task)
-        asyncio.run_coroutine_threadsafe(
-            self._queue.put(task), self._loop
-        ).result(timeout=5.0)
+        asyncio.run_coroutine_threadsafe(self._queue.put(task), self._loop).result(timeout=5.0)
         return task
 
     def submit_issue(
