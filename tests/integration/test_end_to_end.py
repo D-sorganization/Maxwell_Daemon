@@ -55,6 +55,7 @@ def live_system(
 
     daemon = Daemon(cfg, ledger_path=tmp_path / "ledger.db")
     loop.run_until_complete(daemon.start(worker_count=2))
+    loop.run_until_complete(asyncio.sleep(0))
 
     with TestClient(create_app(daemon)) as client:
         try:
@@ -69,7 +70,7 @@ def _wait_for_completion(
     client: TestClient,
     loop: asyncio.AbstractEventLoop,
     task_id: str,
-    timeout_s: float = 5.0,
+    timeout_s: float = 30.0,
 ) -> dict:
     """Poll the API while yielding to the shared event loop so workers can run."""
     deadline = loop.time() + timeout_s

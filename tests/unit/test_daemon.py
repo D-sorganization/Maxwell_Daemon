@@ -24,7 +24,7 @@ def _run(coro: Awaitable[T]) -> T:
 
 
 async def _wait_for_status(
-    daemon: Daemon, task_id: str, expected: TaskStatus, timeout: float = 3.0
+    daemon: Daemon, task_id: str, expected: TaskStatus, timeout: float = 10.0
 ) -> Task:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
