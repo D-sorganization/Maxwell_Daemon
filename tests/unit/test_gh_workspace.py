@@ -171,17 +171,16 @@ class TestPathFor:
                     "resolve",
                     return_value=Path("/tmp/outside_root"),
                 ):
-                    try:
+                    import contextlib
+                    with contextlib.suppress(WorkspaceError, Exception):
                         ws.path_for("owner/repo", task_id="t1")
-                    except (WorkspaceError, Exception):
-                        pass  # either error is acceptable
 
 
 class TestCleanupOld:
     def test_cleanup_removes_old_dirs(self, tmp_path: Path) -> None:
-        from datetime import timedelta
         import os
         import time as _time
+        from datetime import timedelta
 
         ws = Workspace(root=tmp_path)
         repo_dir = tmp_path / "repo"

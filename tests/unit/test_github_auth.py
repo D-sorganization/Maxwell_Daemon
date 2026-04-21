@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -118,9 +119,8 @@ class TestAppAuth:
         auth = self._make_auth()
         fake_jwt = MagicMock()
         fake_jwt.encode.return_value = "jwt"
-        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}):
-            with pytest.raises(ImportError, match="httpx"):
-                auth._fetch_installation_token()
+        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}), pytest.raises(ImportError, match="httpx"):
+            auth._fetch_installation_token()
 
     def test_fetch_installation_token_success(self) -> None:
         auth = self._make_auth()
