@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from maxwell_daemon.backends import Message, MessageRole
+from maxwell_daemon.contracts import require
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
 from maxwell_daemon.core import (
     BackendRouter,
@@ -501,8 +502,8 @@ class Daemon:
         from maxwell_daemon.gh.executor import IssueExecutor
         from maxwell_daemon.gh.workspace import Workspace
 
-        assert task.issue_repo is not None
-        assert task.issue_number is not None
+        require(task.issue_repo is not None, "TaskRunner: issue_repo must be set for ISSUE tasks")
+        require(task.issue_number is not None, "TaskRunner: issue_number must be set for ISSUE tasks")
 
         github = self._github_client or GitHubClient()
         workspace = self._workspace or Workspace(root=self._workspace_root)

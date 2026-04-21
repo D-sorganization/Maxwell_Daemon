@@ -17,6 +17,7 @@ from typing import Any
 
 import httpx
 
+from maxwell_daemon.contracts import require
 from maxwell_daemon.core.budget import BudgetEnforcer
 
 __all__ = [
@@ -91,7 +92,7 @@ class CostAlerter:
         )
 
     async def send(self, dispatch: AlertDispatch) -> None:
-        assert self._webhook_url is not None
+        require(self._webhook_url is not None, "CostAlerter.send: webhook_url must be configured")
         payload = format_slack_payload(dispatch)
         async with httpx.AsyncClient() as client:
             r = await client.post(self._webhook_url, json=payload, timeout=10.0)

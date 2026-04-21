@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from maxwell_daemon.contracts import require
+
 
 @dataclass
 class _AppTokenCache:
@@ -93,7 +95,7 @@ class GitHubAuth:
     @property
     def token(self) -> str:
         if self._mode == "token":
-            assert self._static_token is not None
+            require(self._static_token is not None, "GitHubAuth: _static_token must be set in token mode")
             return self._static_token
         return self._installation_token()
 

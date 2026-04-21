@@ -157,7 +157,7 @@ class DiscoveryScheduler:
         self._stop_event = None
 
     async def _loop(self) -> None:
-        assert self._stop_event is not None
+        require(self._stop_event is not None, "DiscoveryScheduler._loop: stop_event must be set; call start() first")
         # Startup jitter: spread first-tick firing across the interval to
         # prevent thundering herd when multiple daemons start together.
         if self._jitter:

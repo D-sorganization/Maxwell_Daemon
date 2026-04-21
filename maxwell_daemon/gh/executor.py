@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from maxwell_daemon.backends.base import ILLMBackend, Message, MessageRole
+from maxwell_daemon.contracts import require
 from maxwell_daemon.core.repo_overrides import RepoOverrides
 from maxwell_daemon.gh.context import ContextBuilder
 from maxwell_daemon.gh.test_runner import TestResult, TestRunner
@@ -302,7 +303,7 @@ class IssueExecutor:
         Returns the final (plan, diff, test_result). Raises if tests still fail
         after ``max_retries`` refinements.
         """
-        assert self._test_runner is not None
+        require(self._test_runner is not None, "IssueExecutor: test_runner must be set to run tests")
         attempt = 0
         current_plan, current_diff = plan, diff
         repo_path = self._workspace_path(repo, task_id)
