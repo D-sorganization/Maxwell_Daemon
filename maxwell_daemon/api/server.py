@@ -876,11 +876,13 @@ def create_app(
     def _ssh_pool() -> Any:
         if "pool" not in _ssh_pool_ref:
             try:
+                import asyncssh as _asyncssh  # noqa: F401 — presence check only
+
                 from maxwell_daemon.ssh.session import SSHSessionPool
 
                 _ssh_pool_ref["pool"] = SSHSessionPool()
             except ImportError:
-                return None
+                _ssh_pool_ref["pool"] = None
         return _ssh_pool_ref.get("pool")
 
     def _ssh_unavailable() -> Any:

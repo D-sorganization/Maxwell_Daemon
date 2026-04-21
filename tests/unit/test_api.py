@@ -405,3 +405,40 @@ class TestAuth:
             headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
         )
         assert r.status_code == 200
+
+
+class TestSSHEndpointsWithoutAsyncSSH:
+    """Issue #231 — SSH endpoints must return 503 when asyncssh is absent.
+
+    The old guard only caught ImportError from importing SSHSessionPool, but
+    maxwell_daemon.ssh.session imports successfully regardless of asyncssh.
+    The fix adds an explicit ``import asyncssh`` check inside _ssh_pool() so
+    the None sentinel is set correctly and the 503 guard fires.
+    """
+
+    def test_ssh_sessions_returns_503_when_asyncssh_absent(
+        self, daemon: Daemon
+    ) -> None:
+        import sys
+        from unittest.mock import patch
+
+        # Simulate asyncssh being absent by making it unimportable.
+        with patch.dict(sys.modules, {"asyncssh": None}):
+            with TestClient(create_app(daemon)) as c:
+                r = c.get("/api/v1/ssh/sessions")
+        assert r.status_code == 503
+        assert "SSH support not installed" in r.json()["detail"]
+
+    def test_ssh_connect_returns_503_when_asyncssh_absent(
+        self, daemon: Daemon
+    ) -> None:
+        import sys
+        from unittest.mock import patch
+
+        with patch.dict(sys.modules, {"asyncssh": None}):
+            with TestClient(create_app(daemon)) as c:
+                r = c.post(
+                    "/api/v1/ssh/connect",
+                    json={"host": "srv", "user": "ubuntu"},
+                )
+        assert r.status_code == 503
