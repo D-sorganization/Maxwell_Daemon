@@ -45,7 +45,9 @@ async def _with_daemon(
     worker_count: int,
     body: Callable[[Daemon], Awaitable[T]],
 ) -> T:
-    d = Daemon(config, ledger_path=ledger_path)
+    d = Daemon(
+        config, ledger_path=ledger_path, task_store_path=ledger_path.with_suffix(".tasks.db")
+    )
     await d.start(worker_count=worker_count)
     try:
         return await body(d)
