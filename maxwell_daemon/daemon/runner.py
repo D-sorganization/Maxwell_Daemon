@@ -19,6 +19,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from maxwell_daemon import __version__
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
 from maxwell_daemon.core import (
@@ -366,7 +367,7 @@ class Daemon:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
         return DaemonState(
-            version="0.1.0",
+            version=__version__,
             config_path=None,
             tasks=tasks_snapshot,
             started_at=self._started_at,

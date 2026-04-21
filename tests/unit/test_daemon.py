@@ -173,3 +173,38 @@ class TestState:
         save_config(minimal_config, cfg_path)
         d = Daemon.from_config_path(cfg_path)
         assert "primary" in d.state().backends_available
+
+    def test_state_version_is_string(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        async def body(d: Daemon) -> None:
+            state = d.state()
+            assert isinstance(state.version, str)
+            assert len(state.version) > 0
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+    def test_state_version_matches_package_version(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        from maxwell_daemon import __version__
+
+        async def body(d: Daemon) -> None:
+            state = d.state()
+            assert state.version == __version__
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+
+class TestPackageVersion:
+    def test_version_is_string(self) -> None:
+        from maxwell_daemon import __version__
+
+        assert isinstance(__version__, str)
+        assert len(__version__) > 0
+
+    def test_version_not_hardcoded_none(self) -> None:
+        from maxwell_daemon import __version__
+
+        # Should never be None, regardless of whether pkg is installed
+        assert __version__ is not None
