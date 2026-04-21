@@ -236,3 +236,45 @@ class TestCleanupOld:
         (tmp_path / "not-a-dir.txt").write_text("noise")
         removed = ws.cleanup_old(max_age=timedelta(days=1))
         assert removed == []
+
+    def test_cleanup_skips_non_dirs_at_task_level(self, tmp_path: Path) -> None:
+        """Files inside a repo-dir (not subdirs) must be ignored by cleanup_old."""
+        import os
+        import time as _time
+        from datetime import timedelta
+
+        ws = Workspace(root=tmp_path)
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        # Place a file (not a directory) inside the repo_dir — should be skipped.
+        noise_file = repo_dir / "noise.txt"
+        noise_file.write_text("noise")
+        old_time = _time.time() - 200000
+        os.utime(noise_file, (old_time, old_time))
+        removed = ws.cleanup_old(max_age=timedelta(seconds=1))
+        # The file should NOT be in removed — only directories are cleaned up.
+        assert noise_file not in removed
+
+
+class TestPathEscape:
+    def test_path_escape_detected(self, tmp_path: Path) -> None:
+        """path_for raises WorkspaceError when the resolved path escapes the root."""
+        import os
+        import tempfile
+
+        # Create a symlink that points outside tmp_path to simulate path escape.
+        # We create a real directory outside and symlink into the workspace.
+        with tempfile.TemporaryDirectory() as outside_dir:
+            ws = Workspace(root=tmp_path)
+            repo_dir = tmp_path / "repo"
+            repo_dir.mkdir(parents=True, exist_ok=True)
+            # Create a symlink inside repo_dir that points outside
+            link_path = repo_dir / "t-abc123"
+            try:
+                os.symlink(outside_dir, str(link_path))
+                # path_for resolves the path — the symlink leads outside root
+                with pytest.raises(WorkspaceError, match="escape"):
+                    ws.path_for("owner/repo", task_id="t-abc123")
+            except OSError:
+                # Symlinks may not be supported in this environment; skip gracefully
+                pass

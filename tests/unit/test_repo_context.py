@@ -161,3 +161,57 @@ class TestContractViolation:
         builder = ContextBuilder()
         with pytest.raises(PreconditionError):
             asyncio.run(builder.build(tmp_path / "missing", issue_body="x"))
+
+
+class TestFileTreeFailure:
+    def test_returns_empty_when_git_fails(self, tmp_path: Path) -> None:
+        """_file_tree returns empty string when git ls-files exits non-zero."""
+
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
+            return 1, b"", b"not a git repo"
+
+        builder = ContextBuilder(git_runner=fake_git)
+        tree = asyncio.run(builder._file_tree(tmp_path, limit=100))
+        assert tree == ""
+
+
+class TestRecentCommitsFailure:
+    def test_returns_empty_list_when_git_fails(self, tmp_path: Path) -> None:
+        """_recent_commits returns empty list when git log exits non-zero."""
+
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
+            return 1, b"", b"not a git repo"
+
+        builder = ContextBuilder(git_runner=fake_git)
+        commits = asyncio.run(builder._recent_commits(tmp_path, limit=10))
+        assert commits == []
+
+
+class TestFindRelevantFilesFailure:
+    def test_returns_empty_when_git_fails(self, tmp_path: Path) -> None:
+        """_find_relevant_files returns empty dict when git ls-files exits non-zero."""
+
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
+            return 1, b"", b"not a git repo"
+
+        builder = ContextBuilder(git_runner=fake_git)
+        result = asyncio.run(
+            builder._find_relevant_files(tmp_path, "fix the parser module", top_n=5)
+        )
+        assert result == {}
+
+    def test_skips_file_on_oserror(self, tmp_path: Path) -> None:
+        """OSError when reading a matched file is silently skipped."""
+        from unittest.mock import patch
+
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
+            return 0, b"parser.py\n", b""
+
+        builder = ContextBuilder(git_runner=fake_git)
+        # Patch Path.read_bytes to raise OSError for any path
+        with patch("pathlib.Path.read_bytes", side_effect=OSError("permission denied")):
+            result = asyncio.run(
+                builder._find_relevant_files(tmp_path, "fix the parser", top_n=5)
+            )
+        # Should return empty dict without raising
+        assert result == {}
