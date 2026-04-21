@@ -169,6 +169,53 @@ def _auth_dep(token: str | None) -> Any:
     return _check
 
 
+def _make_rbac_dep(
+    minimum: Role,
+    static_token: str | None,
+    jwt_config: JWTConfig | None,
+) -> Any:
+    """Return a FastAPI dependency that enforces *minimum* role.
+
+    Accepts EITHER:
+    - A valid static admin bearer token (treated as Role.admin), OR
+    - A valid JWT bearer token whose role is >= *minimum*.
+
+    When neither JWT config nor static token is configured, all requests pass
+    (open/dev mode — same behaviour as the existing ``_auth_dep(None)``).
+    """
+
+    async def _dep(authorization: Annotated[str | None, Header()] = None) -> None:
+        # Open mode — nothing to enforce.
+        if static_token is None and jwt_config is None:
+            return
+
+        if authorization is None or not authorization.startswith("Bearer "):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bearer token required")
+
+        raw = authorization.removeprefix("Bearer ").strip()
+
+        # Fast path: static admin token — always grants admin-level access.
+        if static_token is not None and hmac.compare_digest(raw.encode(), static_token.encode()):
+            return  # admitted as admin
+
+        # JWT path.
+        if jwt_config is None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token")
+
+        try:
+            claims = jwt_config.decode_token(raw)
+        except Exception as exc:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"invalid token: {exc}") from exc
+
+        if not claims.has_role(minimum):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"role {claims.role.value!r} lacks {minimum.value!r} privileges",
+            )
+
+    return _dep
+
+
 def create_app(
     daemon: Daemon,
     *,
@@ -190,6 +237,11 @@ def create_app(
     mount_metrics_endpoint(app)
     _mount_web_ui(app)
     auth = _auth_dep(auth_token)
+
+    # Role-scoped RBAC dependencies: accept static admin token OR JWT with role >= minimum.
+    _rbac_viewer = _make_rbac_dep(Role.viewer, auth_token, jwt_config)
+    _rbac_operator = _make_rbac_dep(Role.operator, auth_token, jwt_config)
+    _rbac_admin = _make_rbac_dep(Role.admin, auth_token, jwt_config)
 
     _audit: AuditLogger | None = AuditLogger(audit_log_path) if audit_log_path is not None else None
 
@@ -300,13 +352,13 @@ def create_app(
             raise HTTPException(status_code=503, detail="no backends available")
         return {"status": "ready"}
 
-    @app.get("/api/v1/backends", dependencies=[Depends(auth)])
+    @app.get("/api/v1/backends", dependencies=[Depends(_rbac_viewer)])
     async def list_backends() -> dict[str, Any]:
         return {"backends": daemon.state().backends_available}
 
     @app.post(
         "/api/v1/tasks",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(_rbac_operator)],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def submit_task(payload: TaskSubmit) -> TaskView:
@@ -318,7 +370,7 @@ def create_app(
         )
         return TaskView.from_task(task)
 
-    @app.get("/api/v1/tasks", dependencies=[Depends(auth)])
+    @app.get("/api/v1/tasks", dependencies=[Depends(_rbac_viewer)])
     async def list_tasks(
         status: Annotated[str | None, Query()] = None,
         kind: Annotated[str | None, Query()] = None,
@@ -335,14 +387,14 @@ def create_app(
         tasks.sort(key=lambda t: t.created_at, reverse=True)
         return [TaskView.from_task(t) for t in tasks[:limit]]
 
-    @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(auth)])
+    @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(_rbac_viewer)])
     async def get_task(task_id: str) -> TaskView:
         t = daemon.get_task(task_id)
         if t is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
         return TaskView.from_task(t)
 
-    @app.post("/api/v1/tasks/{task_id}/cancel", dependencies=[Depends(auth)])
+    @app.post("/api/v1/tasks/{task_id}/cancel", dependencies=[Depends(_rbac_operator)])
     async def cancel_task(task_id: str) -> TaskView:
         try:
             cancelled = daemon.cancel_task(task_id)
@@ -354,7 +406,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(_rbac_admin)],
         status_code=status.HTTP_201_CREATED,
     )
     async def create_issue(payload: IssueCreate) -> dict[str, Any]:
@@ -386,7 +438,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/dispatch",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(_rbac_admin)],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def dispatch_issue(payload: IssueDispatch) -> TaskView:
@@ -402,7 +454,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/ab-dispatch",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(_rbac_admin)],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def ab_dispatch_issue(payload: IssueAbDispatch) -> dict[str, Any]:
@@ -430,7 +482,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/batch-dispatch",
-        dependencies=[Depends(auth)],
+        dependencies=[Depends(_rbac_admin)],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def batch_dispatch_issues(payload: IssueBatchDispatch) -> dict[str, Any]:
@@ -461,7 +513,7 @@ def create_app(
             "failures": failures,
         }
 
-    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(auth)])
+    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(_rbac_viewer)])
     async def list_repo_issues(
         owner: str, name: str, state: str = "open", limit: int = 25
     ) -> list[dict[str, Any]]:
@@ -478,7 +530,7 @@ def create_app(
             for i in issues
         ]
 
-    @app.get("/api/v1/fleet", dependencies=[Depends(auth)])
+    @app.get("/api/v1/fleet", dependencies=[Depends(_rbac_viewer)])
     async def fleet_overview() -> dict[str, Any]:
         """Return fleet manifest data merged with live task counts per repo."""
         import os
@@ -545,7 +597,7 @@ def create_app(
             "repos": repos,
         }
 
-    @app.get("/api/v1/audit", dependencies=[Depends(auth)])
+    @app.get("/api/v1/audit", dependencies=[Depends(_rbac_viewer)])
     async def audit_log(
         limit: int = Query(default=200, ge=1, le=10_000),
         offset: int = Query(default=0, ge=0),
@@ -558,7 +610,7 @@ def create_app(
             "audit_enabled": True,
         }
 
-    @app.get("/api/v1/audit/verify", dependencies=[Depends(auth)])
+    @app.get("/api/v1/audit/verify", dependencies=[Depends(_rbac_viewer)])
     async def audit_verify() -> dict[str, Any]:
         """Verify the audit log hash chain.  Returns violations (empty = clean)."""
         from maxwell_daemon.audit import verify_chain
@@ -572,7 +624,7 @@ def create_app(
             "audit_enabled": True,
         }
 
-    @app.get("/api/v1/cost", dependencies=[Depends(auth)])
+    @app.get("/api/v1/cost", dependencies=[Depends(_rbac_viewer)])
     async def cost_summary() -> CostSummary:
         now = datetime.now(timezone.utc)
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -675,7 +727,7 @@ def create_app(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
-    @app.get("/api/v1/ssh/sessions", dependencies=[Depends(auth)])
+    @app.get("/api/v1/ssh/sessions", dependencies=[Depends(_rbac_admin)])
     async def ssh_sessions() -> Any:
         """List active SSH sessions."""
         pool = _ssh_pool()
@@ -683,7 +735,7 @@ def create_app(
             return _ssh_unavailable()
         return {"sessions": pool.sessions()}
 
-    @app.get("/api/v1/ssh/keys", dependencies=[Depends(auth)])
+    @app.get("/api/v1/ssh/keys", dependencies=[Depends(_rbac_admin)])
     async def ssh_list_keys() -> Any:
         """List machines that have stored SSH keys."""
         try:
@@ -693,7 +745,7 @@ def create_app(
         store = SSHKeyStore()
         return {"machines": store.list_machines()}
 
-    @app.get("/api/v1/ssh/keys/{machine}", dependencies=[Depends(auth)])
+    @app.get("/api/v1/ssh/keys/{machine}", dependencies=[Depends(_rbac_admin)])
     async def ssh_get_key(machine: str) -> Any:
         """Return the public key for *machine*, generating it if absent."""
         try:
@@ -704,7 +756,7 @@ def create_app(
         _, pub = store.get_or_generate(machine)
         return {"machine": machine, "public_key": pub}
 
-    @app.delete("/api/v1/ssh/keys/{machine}", dependencies=[Depends(auth)])
+    @app.delete("/api/v1/ssh/keys/{machine}", dependencies=[Depends(_rbac_admin)])
     async def ssh_delete_key(machine: str) -> Any:
         """Remove stored SSH keys for *machine*."""
         try:
@@ -720,7 +772,7 @@ def create_app(
         user: str
         password: str | None = None
 
-    @app.post("/api/v1/ssh/connect", dependencies=[Depends(auth)])
+    @app.post("/api/v1/ssh/connect", dependencies=[Depends(_rbac_admin)])
     async def ssh_connect(payload: SSHConnectRequest) -> Any:
         """Open (or reuse) an SSH session and return its summary."""
         pool = _ssh_pool()
@@ -746,7 +798,7 @@ def create_app(
         command: str
         timeout_seconds: float = 30.0
 
-    @app.post("/api/v1/ssh/run", dependencies=[Depends(auth)])
+    @app.post("/api/v1/ssh/run", dependencies=[Depends(_rbac_admin)])
     async def ssh_run(payload: SSHRunRequest) -> Any:
         """Run a command on a remote machine and return its output."""
         pool = _ssh_pool()
@@ -760,7 +812,7 @@ def create_app(
             "exit_code": result.exit_code,
         }
 
-    @app.get("/api/v1/ssh/files", dependencies=[Depends(auth)])
+    @app.get("/api/v1/ssh/files", dependencies=[Depends(_rbac_admin)])
     async def ssh_list_files(
         host: str = Query(...),
         user: str = Query(...),
@@ -799,9 +851,22 @@ def create_app(
         Session ends when the command exits or the client disconnects.
         Max session duration: 1 hour.
         """
-        if auth_token is not None:
+        # WebSocket auth: accept static admin token OR a JWT with admin role.
+        if auth_token is not None or jwt_config is not None:
             presented = ws.query_params.get("token") or ""
-            if not hmac.compare_digest(presented.encode(), auth_token.encode()):
+            authenticated = False
+            if auth_token is not None and hmac.compare_digest(
+                presented.encode(), auth_token.encode()
+            ):
+                authenticated = True
+            elif jwt_config is not None and presented:
+                try:
+                    _ws_claims = jwt_config.decode_token(presented)
+                    if _ws_claims.has_role(Role.admin):
+                        authenticated = True
+                except Exception:  # nosec B110 — invalid JWT, fall through
+                    pass
+            if not authenticated:
                 await ws.close(code=1008)
                 return
 
