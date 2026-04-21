@@ -148,6 +148,8 @@ class AgentLoopBackend(ILLMBackend):
         enable_prompt_caching: bool = True,
         registry_factory: Callable[[Path], ToolRegistry] | None = None,
         condenser: Condenser | None = None,
+        budget: Any | None = None,
+        backend_config: Any | None = None,
     ) -> None:
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
@@ -165,6 +167,10 @@ class AgentLoopBackend(ILLMBackend):
         self._enable_cache = enable_prompt_caching
         self._registry_factory = registry_factory or build_default_registry
         self._condenser = condenser
+        # Optional global BudgetEnforcer (issue #143 — per-turn enforcement).
+        self._budget_enforcer = budget
+        # Optional BackendConfig carrying per-backend pricing (issue #155).
+        self._backend_config = backend_config
 
     # ── System prompt assembly ───────────────────────────────────────────────
 
@@ -242,14 +248,41 @@ class AgentLoopBackend(ILLMBackend):
 
     # ── Cost math ────────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _cost_for(usage: TokenUsage, model: str) -> float:
-        """Compute USD cost for a turn's usage. Uses shared pricing table."""
-        price_in, price_out = _MODEL_PRICING.get(model, (3.0, 15.0))
-        return (
-            usage.prompt_tokens * price_in / 1_000_000
-            + usage.completion_tokens * price_out / 1_000_000
+    def _cost_for(self, usage: TokenUsage, model: str) -> float:
+        """Compute USD cost for a turn's usage.
+
+        Resolution order (issue #155):
+        1. Per-backend pricing from ``BackendConfig`` (covers OpenAI, Azure, Ollama, …).
+        2. Built-in Anthropic pricing table for known Anthropic model names.
+        3. Zero cost with a ``WARNING`` — accurate cost tracking requires config.
+        """
+        # 1. Explicit per-backend pricing from config (non-Anthropic backends).
+        if self._backend_config is not None:
+            price_in = getattr(self._backend_config, "cost_per_million_input_tokens", None)
+            price_out = getattr(self._backend_config, "cost_per_million_output_tokens", None)
+            if price_in is not None and price_out is not None:
+                return (
+                    usage.prompt_tokens * price_in / 1_000_000
+                    + usage.completion_tokens * price_out / 1_000_000
+                )
+
+        # 2. Built-in Anthropic pricing table.
+        if model in _MODEL_PRICING:
+            price_in, price_out = _MODEL_PRICING[model]
+            return (
+                usage.prompt_tokens * price_in / 1_000_000
+                + usage.completion_tokens * price_out / 1_000_000
+            )
+
+        # 3. Unknown model — warn and record $0 so we don't crash or silently
+        #    misattribute cost. Operators should add pricing to BackendConfig.
+        log.warning(
+            "no pricing configured for model %r — cost tracking will be inaccurate. "
+            "Set cost_per_million_input_tokens / cost_per_million_output_tokens in "
+            "your BackendConfig to enable accurate cost tracking.",
+            model,
         )
+        return 0.0
 
     def _record_cost(
         self,
@@ -381,6 +414,7 @@ class AgentLoopBackend(ILLMBackend):
                 agent_id=agent_id,
             )
 
+            # Per-story budget cap (in-memory cumulative, fast path).
             if (
                 self._budget_per_story_usd is not None
                 and cumulative_cost > self._budget_per_story_usd
@@ -390,6 +424,14 @@ class AgentLoopBackend(ILLMBackend):
                     f"${self._budget_per_story_usd:.4f} at turn {turn + 1} "
                     f"(cumulative ${cumulative_cost:.4f})"
                 )
+
+            # Global monthly budget enforcement (issue #143 — checked every turn so
+            # long agent loops cannot overspend after passing the initial check).
+            if self._budget_enforcer is not None:
+                try:
+                    self._budget_enforcer.require_under_budget()
+                except Exception:
+                    raise  # propagate BudgetExceededError to mark task as FAILED
 
             text_parts = [
                 getattr(b, "text", "")
@@ -505,6 +547,14 @@ class AgentLoopBackend(ILLMBackend):
             result = close()
             if hasattr(result, "__await__"):
                 await result
+
+    async def __aenter__(self) -> "AgentLoopBackend":
+        """Support ``async with AgentLoopBackend(...) as backend:`` usage."""
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Close the underlying HTTP client on context manager exit."""
+        await self.aclose()
 
 
 registry.register("agent-loop", AgentLoopBackend)
