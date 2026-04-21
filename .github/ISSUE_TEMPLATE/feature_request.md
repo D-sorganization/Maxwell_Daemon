@@ -18,7 +18,7 @@ Who needs this, and what workflow should improve?
 
 ## Acceptance criteria
 
-- [ ] 
+- [ ]
 
 ## Compatibility and risks
 
