@@ -16,6 +16,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,20 @@ from maxwell_daemon.events import Event, EventBus, EventKind
 from maxwell_daemon.metrics import record_request
 
 log = logging.getLogger("maxwell_daemon.daemon")
+
+
+def _package_version() -> str:
+    """Return the installed package version, falling back to the __version__ attribute."""
+    try:
+        return version("maxwell-daemon")
+    except PackageNotFoundError:
+        pass
+    try:
+        from maxwell_daemon import __version__
+
+        return __version__
+    except Exception:
+        return "unknown"
 
 
 class TaskStatus(str, Enum):
@@ -366,7 +381,7 @@ class Daemon:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
         return DaemonState(
-            version="0.1.0",
+            version=_package_version(),
             config_path=None,
             tasks=tasks_snapshot,
             started_at=self._started_at,
@@ -501,8 +516,10 @@ class Daemon:
         from maxwell_daemon.gh.executor import IssueExecutor
         from maxwell_daemon.gh.workspace import Workspace
 
-        assert task.issue_repo is not None
-        assert task.issue_number is not None
+        if task.issue_repo is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_repo set")
+        if task.issue_number is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_number set")
 
         github = self._github_client or GitHubClient()
         workspace = self._workspace or Workspace(root=self._workspace_root)
