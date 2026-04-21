@@ -133,3 +133,37 @@ class TestResultDataclass:
             output_tail="ok",
         )
         assert r.passed is True
+
+
+class TestDetectCommandEdgeCases:
+    def test_malformed_package_json_falls_through(self, tmp_path: Path) -> None:
+        (tmp_path / "package.json").write_text("not valid json {{{")
+        assert detect_command(tmp_path) is None
+
+    def test_pytest_ini_detected(self, tmp_path: Path) -> None:
+        (tmp_path / "pytest.ini").write_text("[pytest]\n")
+        assert detect_command(tmp_path) == ["python", "-m", "pytest"]
+
+
+class TestRunnerAcceptsOnChunk:
+    def test_regular_runner_returns_false(self) -> None:
+        from maxwell_daemon.gh.test_runner import _runner_accepts_on_chunk
+
+        async def basic(*args: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
+            return 0, b"", b""
+
+        assert _runner_accepts_on_chunk(basic) is False
+
+    def test_non_callable_returns_false(self) -> None:
+        from maxwell_daemon.gh.test_runner import _runner_accepts_on_chunk
+
+        assert _runner_accepts_on_chunk(42) is False  # type: ignore[arg-type]
+
+
+class TestDefaultRunnerGhTestRunner:
+    async def test_runs_real_command(self, tmp_path: Path) -> None:
+        from maxwell_daemon.gh.test_runner import _default_runner
+
+        rc, out, _err = await _default_runner("echo", "hello", cwd=str(tmp_path))
+        assert rc == 0
+        assert b"hello" in out

@@ -11,8 +11,9 @@ Usage::
     from maxwell_daemon.github_auth import GitHubAuth
 
     auth = GitHubAuth.from_config(config)
-    token = auth.token          # always fresh
-    headers = auth.headers      # ready for httpx / requests
+    token = await auth.get_token()   # async (preferred in async contexts)
+    token = auth.token               # sync (legacy, blocks event loop for App tokens)
+    headers = auth.headers           # ready for httpx / requests
 """
 
 from __future__ import annotations
@@ -92,8 +93,16 @@ class GitHubAuth:
 
     @property
     def token(self) -> str:
+        """Return a usable token synchronously.
+
+        .. deprecated::
+            In async contexts prefer ``await auth.get_token()`` to avoid
+            blocking the event loop when refreshing GitHub App installation
+            tokens (each refresh is an HTTP round-trip).
+        """
         if self._mode == "token":
-            assert self._static_token is not None
+            if self._static_token is None:
+                raise ValueError("GitHubAuth is in 'token' mode but no static token was provided")
             return self._static_token
         return self._installation_token()
 
@@ -105,8 +114,20 @@ class GitHubAuth:
             "X-GitHub-Api-Version": "2022-11-28",
         }
 
+    async def get_token(self) -> str:
+        """Return a usable token, using async I/O for App token refreshes.
+
+        Preferred over the synchronous ``.token`` property in async contexts
+        because it does not block the event loop during the GitHub API call.
+        """
+        if self._mode == "token":
+            if self._static_token is None:
+                raise RuntimeError("static token must not be None in token mode")
+            return self._static_token
+        return await self._async_installation_token()
+
     # ------------------------------------------------------------------ #
-    # Internal: App token lifecycle
+    # Internal: App token lifecycle (synchronous — legacy)
     # ------------------------------------------------------------------ #
 
     def _installation_token(self) -> str:
@@ -115,6 +136,15 @@ class GitHubAuth:
             return self._cache.token
 
         token, expires_at = self._fetch_installation_token()
+        self._cache = _AppTokenCache(token=token, expires_at=expires_at)
+        return token
+
+    async def _async_installation_token(self) -> str:
+        """Return a valid installation token using an async HTTP client when refreshing."""
+        if self._cache is not None and self._cache.expires_at - time.monotonic() > 300:
+            return self._cache.token
+
+        token, expires_at = await self._async_fetch_installation_token()
         self._cache = _AppTokenCache(token=token, expires_at=expires_at)
         return token
 
@@ -134,6 +164,8 @@ class GitHubAuth:
 
         now = int(time.time())
         payload = {"iat": now - 60, "exp": now + 600, "iss": str(self._app_id)}
+        if self._private_key_pem is None:
+            raise RuntimeError("GitHub App private key is not configured.")
         jwt_token = _jwt.encode(payload, self._private_key_pem, algorithm="RS256")
 
         resp = _httpx.post(
@@ -149,6 +181,46 @@ class GitHubAuth:
         data = resp.json()
         token: str = data["token"]
         # expires_at is ISO-8601; convert to monotonic seconds remaining
+        import datetime as _dt
+
+        expires_iso: str = data["expires_at"]
+        expires_utc = _dt.datetime.fromisoformat(expires_iso.replace("Z", "+00:00"))
+        seconds_until = (expires_utc - _dt.datetime.now(_dt.timezone.utc)).total_seconds()
+        expires_mono = time.monotonic() + seconds_until
+        return token, expires_mono
+
+    async def _async_fetch_installation_token(self) -> tuple[str, float]:
+        """Call GitHub asynchronously to get a fresh installation token."""
+        try:
+            import jwt as _jwt
+        except ImportError as exc:
+            raise ImportError(
+                "PyJWT is required for GitHub App auth — it is included in maxwell-daemon's default deps."
+            ) from exc
+
+        try:
+            import httpx as _httpx
+        except ImportError as exc:
+            raise ImportError("httpx is required for GitHub App auth.") from exc
+
+        now = int(time.time())
+        payload = {"iat": now - 60, "exp": now + 600, "iss": str(self._app_id)}
+        assert self._private_key_pem is not None
+        jwt_token = _jwt.encode(payload, self._private_key_pem, algorithm="RS256")
+
+        async with _httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"https://api.github.com/app/installations/{self._installation_id}/access_tokens",
+                headers={
+                    "Authorization": f"Bearer {jwt_token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+            )
+
+        resp.raise_for_status()
+        data = resp.json()
+        token: str = data["token"]
         import datetime as _dt
 
         expires_iso: str = data["expires_at"]

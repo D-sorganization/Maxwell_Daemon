@@ -148,3 +148,132 @@ class TestSchemaMigration:
         s1.save(_fresh_task(prompt="x"))
         s2 = TaskStore(db)  # second open should be a no-op, not an error
         assert s2.list_tasks(limit=10)[0].prompt == "x"
+
+
+class TestClose:
+    def test_close_is_idempotent(self) -> None:
+        store = TaskStore(":memory:")
+        store.close()
+        store.close()  # second close must not raise
+
+    def test_close_terminates_connection(self, store: TaskStore) -> None:
+        """close() is a compatibility no-op — must not raise."""
+
+        task = _fresh_task()
+        store.save(task)
+        store.close()
+        assert store.get(task.id) is not None
+
+
+class TestTimezoneAwareTimestamps:
+    """Regression tests for issue #147.
+
+    ``update_status`` and ``recover_pending`` used to write naive
+    ``datetime.now()`` strings, which then failed to compare against aware
+    datetimes produced elsewhere in the codebase.
+    """
+
+    def test_update_status_writes_aware_timestamp(self, store: TaskStore) -> None:
+        task = _fresh_task()
+        store.save(task)
+        store.update_status(task.id, TaskStatus.RUNNING)
+
+        loaded = store.get(task.id)
+        assert loaded is not None
+        assert loaded.created_at.tzinfo is not None
+        # Must be comparable to an aware "now" without TypeError.
+        assert loaded.created_at <= datetime.now(timezone.utc)
+
+    def test_recover_pending_writes_aware_timestamp(self, store: TaskStore) -> None:
+        running = _fresh_task()
+        store.save(running)
+        store.update_status(running.id, TaskStatus.RUNNING)
+
+        store.recover_pending()
+        loaded = store.get(running.id)
+        assert loaded is not None
+        assert loaded.created_at.tzinfo is not None
+        # Cross-module comparison that used to raise TypeError.
+        assert loaded.created_at <= datetime.now(timezone.utc)
+
+    def test_legacy_naive_timestamps_are_read_as_utc(self, tmp_path: Path) -> None:
+        """DBs written before the fix contain naive ISO strings. Reads must
+        promote them to aware UTC so downstream comparisons still work."""
+        import sqlite3
+
+        db = tmp_path / "legacy.db"
+        store = TaskStore(db)
+        # Directly inject a row with a naive ISO timestamp to simulate legacy data.
+        with sqlite3.connect(db) as conn:
+            conn.execute(
+                """
+                INSERT INTO tasks (id, created_at, updated_at, kind, status, prompt)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "legacy-id",
+                    "2024-01-01T12:00:00",  # naive, no +00:00 suffix
+                    "2024-01-01T12:00:00",
+                    TaskKind.PROMPT.value,
+                    TaskStatus.QUEUED.value,
+                    "legacy",
+                ),
+            )
+            conn.commit()
+
+        loaded = store.get("legacy-id")
+        assert loaded is not None
+        assert loaded.created_at.tzinfo is not None
+        assert loaded.created_at <= datetime.now(timezone.utc)
+
+
+class TestAsyncAPI:
+    async def test_asave_and_aget(self, tmp_path: Path) -> None:
+        store = TaskStore(tmp_path / "tasks.db")
+        task = _fresh_task(prompt="async test")
+        await store.asave(task)
+        loaded = await store.aget(task.id)
+        assert loaded is not None
+        assert loaded.prompt == "async test"
+        store.close()
+
+    async def test_aupdate_status(self, tmp_path: Path) -> None:
+        from datetime import datetime, timezone
+
+        store = TaskStore(tmp_path / "tasks.db")
+        task = _fresh_task()
+        await store.asave(task)
+        await store.aupdate_status(
+            task.id,
+            TaskStatus.RUNNING,
+            started_at=datetime.now(timezone.utc),
+        )
+        loaded = await store.aget(task.id)
+        assert loaded is not None
+        assert loaded.status is TaskStatus.RUNNING
+        store.close()
+
+    async def test_alist_tasks(self, tmp_path: Path) -> None:
+        store = TaskStore(tmp_path / "tasks.db")
+        task1 = _fresh_task()
+        task2 = _fresh_task()
+        await store.asave(task1)
+        await store.asave(task2)
+        tasks = await store.alist_tasks(limit=10)
+        assert len(tasks) == 2
+        store.close()
+
+    async def test_aget_missing_returns_none(self, tmp_path: Path) -> None:
+        store = TaskStore(tmp_path / "tasks.db")
+        result = await store.aget("nonexistent-id-xyz")
+        assert result is None
+        store.close()
+
+    async def test_asave_rejects_empty_id(self, tmp_path: Path) -> None:
+        from maxwell_daemon.contracts import PreconditionError
+
+        store = TaskStore(tmp_path / "tasks.db")
+        task = _fresh_task(id="")
+        with pytest.raises(PreconditionError):
+            await store.asave(task)
+        store.close()

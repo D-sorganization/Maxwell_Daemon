@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -60,10 +61,12 @@ class EventBus:
 
     def __init__(self) -> None:
         self._subscribers: set[asyncio.Queue[Event]] = set()
+        self._lock = threading.Lock()
 
     async def publish(self, event: Event) -> None:
-        # No lock needed for a snapshot read; set iteration is atomic.
-        for q in list(self._subscribers):
+        with self._lock:
+            snapshot = list(self._subscribers)
+        for q in snapshot:
             try:
                 q.put_nowait(event)
             except asyncio.QueueFull:
@@ -79,14 +82,17 @@ class EventBus:
         ``aclose()`` or when the last reference is dropped).
         """
         queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=queue_size)
-        self._subscribers.add(queue)
+        with self._lock:
+            self._subscribers.add(queue)
         return _Subscription(self, queue)
 
     def subscriber_count(self) -> int:
-        return len(self._subscribers)
+        with self._lock:
+            return len(self._subscribers)
 
     def _unsubscribe(self, queue: asyncio.Queue[Event]) -> None:
-        self._subscribers.discard(queue)
+        with self._lock:
+            self._subscribers.discard(queue)
 
 
 class _Subscription:

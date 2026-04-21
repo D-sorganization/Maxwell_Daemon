@@ -53,7 +53,11 @@ def live_system(
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    daemon = Daemon(cfg, ledger_path=tmp_path / "ledger.db")
+    daemon = Daemon(
+        cfg,
+        ledger_path=tmp_path / "ledger.db",
+        task_store_path=tmp_path / "tasks.db",
+    )
     loop.run_until_complete(daemon.start(worker_count=2))
     loop.run_until_complete(asyncio.sleep(0))
 
