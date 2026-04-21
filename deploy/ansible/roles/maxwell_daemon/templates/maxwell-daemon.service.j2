@@ -1,0 +1,24 @@
+[Unit]
+Description=Maxwell-Daemon agent orchestrator
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User={{ conductor_user }}
+Group={{ conductor_group }}
+WorkingDirectory={{ conductor_data_dir }}
+ExecStart={{ conductor_venv }}/bin/maxwell-daemon serve \
+    --config {{ conductor_config_dir }}/config.toml
+Restart=on-failure
+RestartSec=5s
+
+# Harden the service
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ conductor_data_dir }} {{ conductor_log_dir }}
+
+[Install]
+WantedBy=multi-user.target

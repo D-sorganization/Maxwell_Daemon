@@ -1,0 +1,23 @@
+---
+# Example fleet inventory — copy to fleet.yml and fill in real hosts.
+all:
+  vars:
+    ansible_user: ubuntu
+    ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+    conductor_version: "latest"   # pip version or "git:main"
+    conductor_port: 8765
+    conductor_config_dir: /etc/maxwell-daemon
+    conductor_data_dir: /var/lib/maxwell-daemon
+
+  children:
+    conductor_primary:
+      hosts:
+        primary-01:
+          ansible_host: 192.0.2.10
+
+    conductor_agents:
+      hosts:
+        agent-01:
+          ansible_host: 192.0.2.20
+        agent-02:
+          ansible_host: 192.0.2.21

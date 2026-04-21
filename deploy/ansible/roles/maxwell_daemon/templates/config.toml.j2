@@ -1,0 +1,29 @@
+# maxwell-daemon configuration — managed by Ansible, do not edit by hand.
+
+[server]
+host = "127.0.0.1"
+port = {{ conductor_port }}
+{% if conductor_tls_cert %}
+tls_cert = "{{ conductor_tls_cert }}"
+tls_key  = "{{ conductor_tls_key }}"
+{% endif %}
+
+[auth]
+jwt_secret = "{{ conductor_jwt_secret }}"
+
+[storage]
+data_dir = "{{ conductor_data_dir }}"
+log_dir  = "{{ conductor_log_dir }}"
+
+[backends]
+default = "{{ conductor_backend }}"
+
+{% if conductor_anthropic_api_key %}
+[backends.anthropic]
+api_key = "{{ conductor_anthropic_api_key }}"
+{% endif %}
+
+{% if conductor_openai_api_key %}
+[backends.openai]
+api_key = "{{ conductor_openai_api_key }}"
+{% endif %}

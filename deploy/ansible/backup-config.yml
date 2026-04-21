@@ -1,0 +1,66 @@
+---
+# backup-config.yml — Archive config and data from all conductor nodes to the control host.
+#
+# Usage:
+#   ansible-playbook -i inventory/fleet.yml backup-config.yml
+#   ansible-playbook -i inventory/fleet.yml backup-config.yml \
+#     -e backup_dest=/mnt/backups/maxwell
+
+- name: Back up maxwell-daemon configuration and data
+  hosts: conductor_primary:conductor_agents
+  become: true
+  gather_facts: true
+
+  vars:
+    backup_dest: "{{ playbook_dir }}/../../backups"
+    backup_ts: "{{ ansible_date_time.iso8601_basic_short }}"
+    remote_archive: /tmp/maxwell-backup-{{ backup_ts }}.tar.gz
+
+  tasks:
+    - name: Create remote archive of config and data dirs
+      ansible.builtin.archive:
+        path:
+          - "{{ conductor_config_dir }}"
+          - "{{ conductor_data_dir }}"
+        dest: "{{ remote_archive }}"
+        format: gz
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Ensure local backup destination exists
+      ansible.builtin.file:
+        path: "{{ backup_dest }}/{{ inventory_hostname }}"
+        state: directory
+        mode: "0750"
+      delegate_to: localhost
+      become: false
+
+    - name: Fetch archive to control host
+      ansible.builtin.fetch:
+        src: "{{ remote_archive }}"
+        dest: "{{ backup_dest }}/{{ inventory_hostname }}/maxwell-backup-{{ backup_ts }}.tar.gz"
+        flat: true
+
+    - name: Remove remote archive
+      ansible.builtin.file:
+        path: "{{ remote_archive }}"
+        state: absent
+
+    - name: Prune backups older than retention period
+      ansible.builtin.find:
+        paths: "{{ backup_dest }}/{{ inventory_hostname }}"
+        patterns: "maxwell-backup-*.tar.gz"
+        age: "{{ conductor_backup_retention_days }}d"
+      register: old_backups
+      delegate_to: localhost
+      become: false
+
+    - name: Delete old backup archives
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_backups.files }}"
+      delegate_to: localhost
+      become: false

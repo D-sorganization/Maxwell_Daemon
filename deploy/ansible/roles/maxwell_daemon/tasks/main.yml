@@ -1,0 +1,88 @@
+---
+- name: Create maxwell group
+  ansible.builtin.group:
+    name: "{{ conductor_group }}"
+    system: true
+
+- name: Create maxwell user
+  ansible.builtin.user:
+    name: "{{ conductor_user }}"
+    group: "{{ conductor_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ conductor_data_dir }}"
+    create_home: false
+
+- name: Create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ conductor_user }}"
+    group: "{{ conductor_group }}"
+    mode: "0750"
+  loop:
+    - "{{ conductor_config_dir }}"
+    - "{{ conductor_data_dir }}"
+    - "{{ conductor_log_dir }}"
+    - /opt/maxwell-daemon
+
+- name: Install system packages
+  ansible.builtin.package:
+    name:
+      - python3
+      - python3-venv
+      - python3-pip
+      - git
+    state: present
+
+- name: Create virtualenv
+  ansible.builtin.command:
+    cmd: python3 -m venv {{ conductor_venv }}
+    creates: "{{ conductor_venv }}/bin/python"
+
+- name: Install maxwell-daemon
+  ansible.builtin.pip:
+    name: >-
+      maxwell-daemon{{ '[all]' if conductor_version == 'latest' else '[all]==' + conductor_version }}
+    virtualenv: "{{ conductor_venv }}"
+    state: "{{ 'latest' if conductor_version == 'latest' else 'present' }}"
+  notify: Restart maxwell-daemon
+
+- name: Install extra packages
+  ansible.builtin.pip:
+    name: "{{ conductor_extra_packages }}"
+    virtualenv: "{{ conductor_venv }}"
+  when: conductor_extra_packages | length > 0
+  notify: Restart maxwell-daemon
+
+- name: Generate JWT secret if not set
+  ansible.builtin.set_fact:
+    conductor_jwt_secret: "{{ lookup('password', '/dev/null length=64 chars=ascii_letters,digits') }}"
+  when: conductor_jwt_secret == ""
+  no_log: true
+
+- name: Deploy configuration
+  ansible.builtin.template:
+    src: config.toml.j2
+    dest: "{{ conductor_config_dir }}/config.toml"
+    owner: "{{ conductor_user }}"
+    group: "{{ conductor_group }}"
+    mode: "0640"
+  notify: Restart maxwell-daemon
+  no_log: true
+
+- name: Deploy systemd unit
+  ansible.builtin.template:
+    src: maxwell-daemon.service.j2
+    dest: /etc/systemd/system/maxwell-daemon.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart maxwell-daemon
+
+- name: Enable and start maxwell-daemon
+  ansible.builtin.systemd:
+    name: maxwell-daemon
+    enabled: true
+    state: started
+    daemon_reload: true

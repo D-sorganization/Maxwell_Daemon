@@ -1,0 +1,86 @@
+---
+# upgrade-conductor.yml — Rolling upgrade of maxwell-daemon across the fleet.
+#
+# Upgrades agents first, then the primary controller.
+# Each node is health-checked before the playbook proceeds to the next.
+#
+# Usage:
+#   ansible-playbook -i inventory/fleet.yml upgrade-conductor.yml \
+#     -e conductor_version=0.2.0
+
+- name: Rolling upgrade — agent nodes
+  hosts: conductor_agents
+  become: true
+  gather_facts: false
+  serial: 1   # one node at a time
+
+  tasks:
+    - name: Stop service before upgrade
+      ansible.builtin.systemd:
+        name: maxwell-daemon
+        state: stopped
+
+    - name: Upgrade maxwell-daemon package
+      ansible.builtin.pip:
+        name: >-
+          maxwell-daemon{{ '[all]' if conductor_version == 'latest' else '[all]==' + conductor_version }}
+        virtualenv: "{{ conductor_venv }}"
+        state: "{{ 'latest' if conductor_version == 'latest' else 'present' }}"
+
+    - name: Start service after upgrade
+      ansible.builtin.systemd:
+        name: maxwell-daemon
+        state: started
+
+    - name: Wait for health endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ conductor_port }}/api/v1/health"
+        status_code: 200
+        timeout: 5
+      retries: 12
+      delay: 5
+      register: health_check
+      until: health_check.status == 200
+
+- name: Rolling upgrade — primary controller
+  hosts: conductor_primary
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Stop primary controller
+      ansible.builtin.systemd:
+        name: maxwell-daemon
+        state: stopped
+
+    - name: Upgrade maxwell-daemon package
+      ansible.builtin.pip:
+        name: >-
+          maxwell-daemon{{ '[all]' if conductor_version == 'latest' else '[all]==' + conductor_version }}
+        virtualenv: "{{ conductor_venv }}"
+        state: "{{ 'latest' if conductor_version == 'latest' else 'present' }}"
+
+    - name: Start primary controller
+      ansible.builtin.systemd:
+        name: maxwell-daemon
+        state: started
+
+    - name: Wait for health endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ conductor_port }}/api/v1/health"
+        status_code: 200
+        timeout: 5
+      retries: 12
+      delay: 5
+      register: health_check
+      until: health_check.status == 200
+
+    - name: Confirm upgraded version
+      ansible.builtin.command:
+        cmd: "{{ conductor_venv }}/bin/maxwell-daemon --version"
+      register: version_out
+      changed_when: false
+
+    - name: Show new version
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} running {{ version_out.stdout }}"
