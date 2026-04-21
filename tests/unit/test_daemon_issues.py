@@ -61,6 +61,9 @@ async def _run_to_completion(daemon: Daemon, task_id: str, timeout: float = 10.0
         if t and t.status in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
             return
         await asyncio.sleep(0.02)
+    t = daemon.get_task(task_id)
+    if t and t.status in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
+        return
     raise AssertionError(f"task {task_id} did not finish: status={t.status if t else None}")
 
 

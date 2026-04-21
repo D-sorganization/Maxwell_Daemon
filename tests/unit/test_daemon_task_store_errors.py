@@ -60,6 +60,9 @@ async def _wait_for_status(
         if task and task.status is expected:
             return
         await asyncio.sleep(0.01)
+    task = daemon.get_task(task_id)
+    if task and task.status is expected:
+        return
     raise AssertionError(f"task {task_id} did not reach {expected}")
 
 
