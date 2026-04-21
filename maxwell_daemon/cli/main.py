@@ -319,7 +319,13 @@ def serve(
     asyncio.run(_boot())
 
     try:
-        fastapi_app = create_app(daemon, auth_token=cfg.api.auth_token)
+        from maxwell_daemon.auth import JWTConfig
+
+        jwt_config: JWTConfig | None = None
+        if cfg.api.jwt_secret is not None:
+            jwt_config = JWTConfig(cfg.api.jwt_secret.get_secret_value())
+
+        fastapi_app = create_app(daemon, auth_token=cfg.api.auth_token, jwt_config=jwt_config)
         console.print(f"[green]✓[/green] Maxwell-Daemon serving on http://{host}:{port}")
         uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
     finally:

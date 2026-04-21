@@ -114,6 +114,52 @@ class TestConfigLoad:
             )
 
 
+class TestAPIConfigJWTSecret:
+    """Issue #230 — jwt_secret field on APIConfig / MaxwellDaemonConfig."""
+
+    def test_jwt_secret_defaults_to_none(self) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(
+            {"backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}}}
+        )
+        assert cfg.api.jwt_secret is None
+
+    def test_jwt_secret_accepted_as_string(self) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
+                "api": {"jwt_secret": "my-secret-value"},
+            }
+        )
+        assert cfg.api.jwt_secret is not None
+        assert cfg.api.jwt_secret.get_secret_value() == "my-secret-value"
+
+    def test_jwt_secret_is_secret_str(self) -> None:
+        """Ensure the value doesn't leak via repr or str."""
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
+                "api": {"jwt_secret": "super-secret-key"},
+            }
+        )
+        assert "super-secret-key" not in repr(cfg.api)
+        assert "super-secret-key" not in str(cfg.api)
+
+    def test_jwt_secret_loaded_from_yaml(self, tmp_path: Path) -> None:
+        """jwt_secret is read correctly from YAML written directly (Ansible/hand-edit path)."""
+        path = tmp_path / "maxwell-daemon.yaml"
+        path.write_text(
+            "backends:\n"
+            "  claude:\n"
+            "    type: claude\n"
+            "    model: claude-sonnet-4-6\n"
+            "api:\n"
+            "  jwt_secret: roundtrip-secret\n"
+        )
+        loaded = load_config(path)
+        assert loaded.api.jwt_secret is not None
+        assert loaded.api.jwt_secret.get_secret_value() == "roundtrip-secret"
+
+
 class TestDefaultConfigPath:
     def test_maxwell_config_env_overrides_default(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
