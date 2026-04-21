@@ -382,20 +382,34 @@ class Daemon:
                 task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
             except asyncio.TimeoutError:
                 continue
-            # Tasks cancelled while queued shouldn't be executed.
+            # Tasks cancelled while queued should not be executed.
             if task.status is TaskStatus.CANCELLED:
                 continue
             with bind_context(task_id=task.id, worker_id=worker_id):
+                # Attempt to mark the task RUNNING in the durable store before
+                # executing.  If that write fails (disk full, lock contention),
+                # re-queue the task so it is retried rather than silently lost.
+                # Double-execution is still possible if the DB write succeeds but
+                # the worker crashes before execution completes; preventing that
+                # fully requires a lease/heartbeat mechanism (future work).
+                task.started_at = datetime.now(timezone.utc)
+                try:
+                    self._task_store.update_status(
+                        task.id, TaskStatus.RUNNING, started_at=task.started_at
+                    )
+                except Exception as exc:
+                    log.error(
+                        "failed to mark task %s RUNNING: %s; re-queuing",
+                        task.id,
+                        exc,
+                    )
+                    task.started_at = None
+                    await self._queue.put(task)
+                    continue
                 await self._execute(task)
 
     async def _execute(self, task: Task) -> None:
         task.status = TaskStatus.RUNNING
-        task.started_at = datetime.now(timezone.utc)
-        try:
-            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
-        except Exception:
-            log.exception("task store write failed for task=%s", task.id)
-            raise
         await self._events.publish(
             Event(
                 kind=EventKind.TASK_STARTED,
