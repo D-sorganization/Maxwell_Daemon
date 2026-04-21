@@ -148,7 +148,6 @@ class TestAppAuth:
         fake_httpx.post.assert_called_once()
 
 
-
 class TestAppConfig:
     def test_from_config_app_mode_reads_pem(self, tmp_path: Path) -> None:
         pem = tmp_path / "key.pem"
