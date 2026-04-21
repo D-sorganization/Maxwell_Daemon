@@ -407,7 +407,10 @@ class TestParseSearchReplaceEdgeCases:
 
     def test_find_preceding_file_preamble_blocked_by_replace_marker(self) -> None:
         """REPLACE marker above SEARCH blocks the preamble scan."""
-        from maxwell_daemon.editing.diff_formats import _find_preceding_file_preamble, _SR_REPLACE_MARKER
+        from maxwell_daemon.editing.diff_formats import (
+            _SR_REPLACE_MARKER,
+            _find_preceding_file_preamble,
+        )
 
         lines = [
             "file: foo.py",

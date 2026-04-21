@@ -1,3 +1,5 @@
+import sqlite3
+
 """Cost ledger — persistence and aggregation."""
 
 from __future__ import annotations
@@ -69,7 +71,7 @@ class TestLedger:
         ledger.record(_record(cost=0.01))
         ledger.close()
         # After close, attempting to use the connection should raise
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.ProgrammingError):
             ledger._conn.execute("SELECT 1")
 
 
