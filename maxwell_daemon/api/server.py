@@ -236,24 +236,27 @@ def create_app(
     )
     mount_metrics_endpoint(app)
     _mount_web_ui(app)
-    auth = _auth_dep(auth_token)
+    # When jwt_config is provided, RBAC deps handle all auth (both static and JWT).
+    # The `auth` dep becomes a pass-through so endpoints with Depends(auth) still
+    # work with JWT tokens without double-checking the static token.
+    auth = _auth_dep(None if jwt_config is not None else auth_token)
 
     # RBAC dependency factories — only active when jwt_config is provided.
     # When jwt_config is None the daemon falls back to static bearer-token auth
     # (``auth`` dep above) and role enforcement is skipped.
     def _require_viewer() -> Any:
         if jwt_config is not None:
-            return require_role(Role.viewer, jwt_config)
+            return _make_rbac_dep(Role.viewer, auth_token, jwt_config)
         return auth
 
     def _require_operator() -> Any:
         if jwt_config is not None:
-            return require_role(Role.operator, jwt_config)
+            return _make_rbac_dep(Role.operator, auth_token, jwt_config)
         return auth
 
     def _require_admin() -> Any:
         if jwt_config is not None:
-            return require_role(Role.admin, jwt_config)
+            return _make_rbac_dep(Role.admin, auth_token, jwt_config)
         return auth
 
     _audit: AuditLogger | None = AuditLogger(audit_log_path) if audit_log_path is not None else None
@@ -453,7 +456,7 @@ def create_app(
 
     @app.post(
         "/api/v1/issues/dispatch",
-        dependencies=[Depends(auth), Depends(_require_operator())],
+        dependencies=[Depends(auth), Depends(_require_admin())],
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def dispatch_issue(payload: IssueDispatch) -> TaskView:
