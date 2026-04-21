@@ -122,6 +122,16 @@ class TestPostconditionDecorator:
 
         assert asyncio.run(get_items()) == [1]
 
+    def test_async_violation_raises(self) -> None:
+        import asyncio
+
+        @postcondition(lambda result: result > 10, "large result")
+        async def get_value() -> int:
+            return 3
+
+        with pytest.raises(PostconditionError, match="large result"):
+            asyncio.run(get_value())
+
 
 class TestInvariantClassDecorator:
     def test_invariant_checked_after_public_methods(self) -> None:
@@ -165,6 +175,29 @@ class TestInvariantClassDecorator:
         p = Paired()
         p.update_both(5)
         assert p.x == p.y == 5
+
+    def test_async_public_methods_checked(self) -> None:
+        import asyncio
+
+        @invariant(lambda self: self.balance >= 0, "balance must be non-negative")
+        class Account:
+            def __init__(self) -> None:
+                self.balance = 0
+
+            async def deposit(self, amount: int) -> None:
+                self.balance += amount
+
+            async def withdraw(self, amount: int) -> None:
+                self.balance -= amount
+
+        async def scenario() -> None:
+            account = Account()
+            await account.deposit(10)
+            assert account.balance == 10
+            with pytest.raises(ContractViolation, match="non-negative"):
+                await account.withdraw(20)
+
+        asyncio.run(scenario())
 
 
 class TestContractsEnabled:

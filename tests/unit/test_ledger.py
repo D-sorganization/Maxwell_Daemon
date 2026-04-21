@@ -63,3 +63,32 @@ class TestLedger:
         a.record(_record(cost=1.23))
         b = CostLedger(db)
         assert b.month_to_date() == pytest.approx(1.23)
+
+    @pytest.mark.asyncio
+    async def test_async_methods_match_sync_queries(self, ledger: CostLedger) -> None:
+        start = datetime.now(timezone.utc) - timedelta(days=1)
+
+        await ledger.arecord(_record(cost=0.75, backend="claude"))
+        await ledger.arecord(_record(cost=0.25, backend="openai"))
+
+        assert await ledger.atotal_since(start) == pytest.approx(1.0)
+        by_backend = await ledger.aby_backend(start)
+        assert by_backend["claude"] == pytest.approx(0.75)
+        assert by_backend["openai"] == pytest.approx(0.25)
+
+    def test_forecast_zero_when_no_spend(self, ledger: CostLedger) -> None:
+        now = datetime(2026, 4, 1, 0, 0, 30, tzinfo=timezone.utc)
+        assert ledger.forecast_month_end(now=now) == 0.0
+
+    def test_forecast_month_end_extrapolates_from_elapsed_fraction(
+        self, ledger: CostLedger
+    ) -> None:
+        now = datetime(2026, 4, 15, 0, 0, 0, tzinfo=timezone.utc)
+        ledger.record(_record(cost=15.0, ts=now))
+
+        assert ledger.forecast_month_end(now=now) == pytest.approx(15.0 * 30 / 14)
+
+    def test_close_releases_connection(self, ledger: CostLedger) -> None:
+        ledger.close()
+        with pytest.raises(Exception, match="closed"):
+            ledger.month_to_date()
