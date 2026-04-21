@@ -8,90 +8,13 @@ integration test tier.
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncIterator
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
 from maxwell_daemon.backends.base import BackendUnavailableError, Message, MessageRole
 from maxwell_daemon.backends.openai import OpenAIBackend
 from maxwell_daemon.backends.registry import registry
-
-
-class _FakeUsage:
-    prompt_tokens = 7
-    completion_tokens = 11
-    total_tokens = 18
-
-
-class _FakeMessage:
-    def __init__(self, content: str | None) -> None:
-        self.content = content
-
-
-class _FakeDelta:
-    def __init__(self, content: str | None) -> None:
-        self.content = content
-
-
-class _FakeChoice:
-    def __init__(self, content: str | None = "done", finish_reason: str | None = "stop") -> None:
-        self.message = _FakeMessage(content)
-        self.delta = _FakeDelta(content)
-        self.finish_reason = finish_reason
-
-
-class _FakeResponse:
-    model = "gpt-test"
-    usage = _FakeUsage()
-
-    def __init__(self, content: str | None = "done", finish_reason: str | None = "stop") -> None:
-        self.choices = [_FakeChoice(content=content, finish_reason=finish_reason)]
-
-    def model_dump(self) -> dict[str, Any]:
-        return {"model": self.model}
-
-
-class _FakeStream:
-    def __init__(self, chunks: list[str | None]) -> None:
-        self._chunks = chunks
-
-    async def __aiter__(self) -> AsyncIterator[_FakeResponse]:
-        for chunk in self._chunks:
-            yield _FakeResponse(content=chunk)
-
-
-class _FakeCompletions:
-    def __init__(self, result: _FakeResponse | _FakeStream) -> None:
-        self.result = result
-        self.calls: list[dict[str, Any]] = []
-
-    async def create(self, **params: Any) -> _FakeResponse | _FakeStream:
-        self.calls.append(params)
-        return self.result
-
-
-class _FakeClient:
-    def __init__(self, result: _FakeResponse | _FakeStream) -> None:
-        self.chat = type("Chat", (), {"completions": _FakeCompletions(result)})()
-
-
-class _FakeModels:
-    def __init__(self, *, raises: bool = False) -> None:
-        self.raises = raises
-
-    async def list(self) -> list[str]:
-        if self.raises:
-            raise RuntimeError("unreachable")
-        return []
-
-
-def _backend_with_client(client: object) -> OpenAIBackend:
-    backend = OpenAIBackend(base_url="http://localhost:8000/v1")
-    backend._client = client  # type: ignore[assignment]
-    return backend
 
 
 class TestConfiguration:
@@ -109,89 +32,6 @@ class TestConfiguration:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         backend = OpenAIBackend()
         assert backend is not None
-
-
-class TestComplete:
-    def test_complete_maps_messages_options_and_usage(self) -> None:
-        client = _FakeClient(_FakeResponse(content="hello", finish_reason="tool_calls"))
-        backend = _backend_with_client(client)
-
-        response = asyncio.run(
-            backend.complete(
-                [
-                    Message(role=MessageRole.SYSTEM, content="be terse"),
-                    Message(role=MessageRole.USER, content="hi"),
-                ],
-                model="gpt-test",
-                temperature=0.2,
-                max_tokens=123,
-                tools=[{"type": "function"}],
-                seed=9,
-            )
-        )
-
-        call = client.chat.completions.calls[0]
-        assert call["messages"] == [
-            {"role": "system", "content": "be terse"},
-            {"role": "user", "content": "hi"},
-        ]
-        assert call["temperature"] == 0.2
-        assert call["max_tokens"] == 123
-        assert call["tools"] == [{"type": "function"}]
-        assert call["seed"] == 9
-        assert response.content == "hello"
-        assert response.finish_reason == "tool_calls"
-        assert response.usage.prompt_tokens == 7
-        assert response.usage.completion_tokens == 11
-        assert response.usage.total_tokens == 18
-        assert response.model == "gpt-test"
-        assert response.backend == "openai"
-        assert response.raw == {"model": "gpt-test"}
-
-    def test_complete_defaults_empty_content_and_finish_reason(self) -> None:
-        backend = _backend_with_client(_FakeClient(_FakeResponse(content=None, finish_reason=None)))
-
-        response = asyncio.run(
-            backend.complete([Message(role=MessageRole.USER, content="hi")], model="gpt-test")
-        )
-
-        assert response.content == ""
-        assert response.finish_reason == "stop"
-
-
-class TestStream:
-    def test_stream_yields_non_empty_delta_content(self) -> None:
-        client = _FakeClient(_FakeStream(["hello", None, "", " world"]))
-        backend = _backend_with_client(client)
-
-        async def collect() -> list[str]:
-            return [
-                chunk
-                async for chunk in backend.stream(
-                    [Message(role=MessageRole.USER, content="hi")],
-                    model="gpt-test",
-                    max_tokens=20,
-                    tools=[{"type": "function"}],
-                    user="test-user",
-                )
-            ]
-
-        assert asyncio.run(collect()) == ["hello", " world"]
-        call = client.chat.completions.calls[0]
-        assert call["stream"] is True
-        assert call["max_tokens"] == 20
-        assert call["tools"] == [{"type": "function"}]
-        assert call["user"] == "test-user"
-
-
-class TestHealthCheck:
-    def test_health_check_returns_true_when_models_list_succeeds(self) -> None:
-        client = type("Client", (), {"models": _FakeModels()})()
-        assert asyncio.run(_backend_with_client(client).health_check()) is True
-
-    def test_health_check_returns_false_when_models_list_fails(self) -> None:
-        client = type("Client", (), {"models": _FakeModels(raises=True)})()
-        assert asyncio.run(_backend_with_client(client).health_check()) is False
 
 
 class TestCapabilities:

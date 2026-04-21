@@ -197,3 +197,110 @@ class TestRouter:
         router.route()
 
         await router.aclose_all()
+
+
+def _make_budget_mock(utilisation: float):
+    """Return a mock BudgetEnforcer with given utilisation."""
+    from unittest.mock import MagicMock
+
+    from maxwell_daemon.core.budget import BudgetCheck
+
+    mock = MagicMock()
+    mock.check.return_value = BudgetCheck(
+        status="ok",
+        spent_usd=utilisation * 100.0,
+        limit_usd=100.0,
+        utilisation=utilisation,
+    )
+    return mock
+
+
+@pytest.fixture
+def config_with_fallback() -> MaxwellDaemonConfig:
+    return MaxwellDaemonConfig.model_validate(
+        {
+            "backends": {
+                "primary": {
+                    "type": "fake_a",
+                    "model": "model-a",
+                    "fallback_backend": "local",
+                    "fallback_threshold_percent": 80.0,
+                },
+                "local": {"type": "fake_b", "model": "model-b"},
+            },
+            "agent": {"default_backend": "primary"},
+            "repos": [],
+        }
+    )
+
+
+class TestBudgetAwareFallback:
+    def test_fallback_triggers_when_over_threshold(
+        self, config_with_fallback: MaxwellDaemonConfig
+    ) -> None:
+        router = BackendRouter(config_with_fallback)
+        decision = router.route(budget_percent=85.0)
+        assert decision.backend_name == "local"
+        assert "fallback" in decision.reason
+
+    def test_fallback_triggers_at_exact_threshold(
+        self, config_with_fallback: MaxwellDaemonConfig
+    ) -> None:
+        router = BackendRouter(config_with_fallback)
+        decision = router.route(budget_percent=80.0)
+        assert decision.backend_name == "local"
+
+    def test_fallback_does_not_trigger_below_threshold(
+        self, config_with_fallback: MaxwellDaemonConfig
+    ) -> None:
+        router = BackendRouter(config_with_fallback)
+        decision = router.route(budget_percent=79.0)
+        assert decision.backend_name == "primary"
+
+    def test_no_fallback_without_budget_enforcer(
+        self, config_with_fallback: MaxwellDaemonConfig
+    ) -> None:
+        router = BackendRouter(config_with_fallback)
+        decision = router.route()
+        assert decision.backend_name == "primary"
+
+    def test_missing_fallback_backend_name_raises_at_config_time(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="fallback_backend"):
+            MaxwellDaemonConfig.model_validate(
+                {
+                    "backends": {
+                        "primary": {
+                            "type": "fake_a",
+                            "model": "model-a",
+                            "fallback_backend": "does-not-exist",
+                            "fallback_threshold_percent": 50.0,
+                        },
+                    },
+                    "agent": {"default_backend": "primary"},
+                    "repos": [],
+                }
+            )
+
+    def test_fallback_applies_to_repo_override(self) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {
+                    "primary": {
+                        "type": "fake_a",
+                        "model": "model-a",
+                        "fallback_backend": "local",
+                        "fallback_threshold_percent": 80.0,
+                    },
+                    "local": {"type": "fake_b", "model": "model-b"},
+                },
+                "agent": {"default_backend": "primary"},
+                "repos": [
+                    {"name": "my-repo", "path": "/tmp/repo", "backend": "primary"},
+                ],
+            }
+        )
+        router = BackendRouter(cfg)
+        decision = router.route(repo="my-repo", budget_percent=95.0)
+        assert decision.backend_name == "local"

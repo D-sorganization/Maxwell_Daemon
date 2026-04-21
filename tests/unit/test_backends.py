@@ -130,6 +130,70 @@ class TestCostEstimation:
         assert "Unknown provider" in caplog.text
         assert "Unknown model" in caplog.text
 
+    def test_anthropic_models_priced_nonzero(self) -> None:
+        # Pin the Anthropic lookup so the existing behavior is regression-guarded
+        # after the OpenAI/Azure tables were added alongside it (#155).
+        for model in ("claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"):
+            price_in, price_out = get_rates("claude", model)
+            assert price_in > 0, f"claude {model} input price should be > 0"
+            assert price_out > price_in, f"claude {model} output should cost more than input"
+
+    @pytest.mark.parametrize("model", ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"])
+    def test_openai_models_priced_nonzero(self, model: str) -> None:
+        price_in, price_out = get_rates("openai", model)
+        assert price_in > 0, f"openai {model} input price should be > 0"
+        assert price_out > 0, f"openai {model} output price should be > 0"
+
+    @pytest.mark.parametrize("model", ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"])
+    def test_azure_models_priced_nonzero(self, model: str) -> None:
+        # Azure OpenAI Service standard deployments charge the same per-token
+        # rates as OpenAI direct; the table mirrors those values.
+        price_in, price_out = get_rates("azure", model)
+        assert price_in > 0, f"azure {model} input price should be > 0"
+        assert price_out > 0, f"azure {model} output price should be > 0"
+
+    def test_cost_for_openai_nonzero(self) -> None:
+        usage = TokenUsage(
+            prompt_tokens=1_000_000, completion_tokens=1_000_000, total_tokens=2_000_000
+        )
+        # gpt-4o: $2.50 in + $10.00 out per 1M = $12.50 for a 1M/1M request.
+        assert cost_for("openai", "gpt-4o", usage) == pytest.approx(12.5)
+
+    def test_cost_for_azure_nonzero(self) -> None:
+        usage = TokenUsage(
+            prompt_tokens=1_000_000, completion_tokens=1_000_000, total_tokens=2_000_000
+        )
+        assert cost_for("azure", "gpt-4o", usage) == pytest.approx(12.5)
+
+    def test_unknown_openai_model_warns_without_crashing(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        usage = TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150)
+        import logging
+
+        caplog.set_level(logging.WARNING, logger="maxwell_daemon.backends.pricing")
+        # Known provider, unknown model — should warn and return 0.0, not raise.
+        cost = cost_for("openai", "gpt-5-fantasy", usage)
+        assert cost == 0.0
+        assert any(
+            "Unknown model" in rec.message and "gpt-5-fantasy" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_unknown_azure_model_warns_without_crashing(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        usage = TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150)
+        import logging
+
+        caplog.set_level(logging.WARNING, logger="maxwell_daemon.backends.pricing")
+        cost = cost_for("azure", "mystery-deployment", usage)
+        assert cost == 0.0
+        assert any(
+            "Unknown model" in rec.message and "mystery-deployment" in rec.message
+            for rec in caplog.records
+        )
+
 
 class TestBackendInterface:
     """Synchronous tests that drive async methods via asyncio.run()."""

@@ -26,6 +26,7 @@ from maxwell_daemon.hooks import (
     HookSpec,
     HookViolationError,
     _default_runner,
+    _matches,
     _parse_specs,
     _parse_strings,
     load_hook_config,
@@ -294,6 +295,52 @@ class TestOnPromptAndOnStop:
         hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
         await hr.run_on_stop(exit_reason="end_turn")
         assert runner.calls[0]["env"]["MAXWELL_EXIT_REASON"] == "end_turn"
+
+
+# ── Glob matching (issue #162) ───────────────────────────────────────────────
+
+
+class TestGlobMatching:
+    """``_matches`` must delegate to :mod:`fnmatch` so hook authors get real
+    glob syntax (``*``, ``?``, ``[seq]``) — not just exact/wildcard as the
+    pre-fix implementation supported. See issue #162."""
+
+    def test_exact_match_still_works(self) -> None:
+        assert _matches("Bash", "Bash") is True
+        assert _matches("Bash", "Read") is False
+
+    def test_bare_wildcard_matches_every_tool(self) -> None:
+        assert _matches("*", "Bash") is True
+        assert _matches("*", "Read") is True
+        assert _matches("*", "") is True
+
+    def test_star_suffix_glob(self) -> None:
+        # Bash* matches Bash and BashOutput but not Read.
+        assert _matches("Bash*", "Bash") is True
+        assert _matches("Bash*", "BashOutput") is True
+        assert _matches("Bash*", "Read") is False
+
+    def test_character_class_glob(self) -> None:
+        # [RW]* matches Read and Write but not Bash.
+        assert _matches("[RW]*", "Read") is True
+        assert _matches("[RW]*", "Write") is True
+        assert _matches("[RW]*", "Bash") is False
+
+    def test_question_mark_glob(self) -> None:
+        # ?ead matches Read (single-char wildcard) but not Reading.
+        assert _matches("?ead", "Read") is True
+        assert _matches("?ead", "Reading") is False
+
+    async def test_star_suffix_filters_runner_calls(self, tmp_path: Path) -> None:
+        """End-to-end: a glob in HookSpec.match fires for matching tools only."""
+        runner = _Runner()
+        cfg = HookConfig(pre_tool=(HookSpec(match="Bash*", command="audit.sh"),))
+        hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
+        await hr.run_pre_tool("Bash", {})
+        await hr.run_pre_tool("BashOutput", {})
+        await hr.run_pre_tool("Read", {})
+        # Only Bash and BashOutput should have fired the hook.
+        assert len(runner.calls) == 2
 
 
 # ── Outcome shape ───────────────────────────────────────────────────────────

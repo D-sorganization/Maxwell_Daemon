@@ -121,6 +121,10 @@ class AgentLoopBackend(ILLMBackend):
     registry_factory:
         Injection seam — callable ``(Path) -> ToolRegistry`` for test doubles.
         Defaults to :func:`maxwell_daemon.tools.build_default_registry`.
+    budget_enforcer:
+        Optional :class:`~maxwell_daemon.core.budget.BudgetEnforcer` — when set,
+        ``require_under_budget()`` is called after every turn so a long agent loop
+        cannot silently overspend the monthly hard-stop limit.
     """
 
     name = "agent-loop"
@@ -140,6 +144,7 @@ class AgentLoopBackend(ILLMBackend):
         enable_prompt_caching: bool = True,
         registry_factory: Callable[[Path], ToolRegistry] | None = None,
         condenser: Condenser | None = None,
+        budget_enforcer: Any | None = None,
     ) -> None:
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
@@ -157,6 +162,7 @@ class AgentLoopBackend(ILLMBackend):
         self._enable_cache = enable_prompt_caching
         self._registry_factory = registry_factory or build_default_registry
         self._condenser = condenser
+        self._budget_enforcer = budget_enforcer
 
     # ── System prompt assembly ───────────────────────────────────────────────
 
@@ -369,6 +375,11 @@ class AgentLoopBackend(ILLMBackend):
                 agent_id=agent_id,
             )
 
+            # Per-turn monthly-budget enforcement — the ledger is now updated so
+            # BudgetEnforcer.require_under_budget() will see the latest spend.
+            if self._budget_enforcer is not None:
+                self._budget_enforcer.require_under_budget()
+
             if (
                 self._budget_per_story_usd is not None
                 and cumulative_cost > self._budget_per_story_usd
@@ -378,6 +389,16 @@ class AgentLoopBackend(ILLMBackend):
                     f"${self._budget_per_story_usd:.4f} at turn {turn + 1} "
                     f"(cumulative ${cumulative_cost:.4f})"
                 )
+
+            # Per-task limit from BudgetConfig (injected via budget_enforcer).
+            if self._budget_enforcer is not None:
+                per_task_limit = getattr(self._budget_enforcer._config, "per_task_limit_usd", None)
+                if per_task_limit is not None and cumulative_cost > per_task_limit:
+                    raise BudgetExceededError(
+                        f"agent loop exceeded per-task budget limit "
+                        f"${per_task_limit:.4f} at turn {turn + 1} "
+                        f"(cumulative ${cumulative_cost:.4f})"
+                    )
 
             text_parts = [
                 getattr(b, "text", "")
