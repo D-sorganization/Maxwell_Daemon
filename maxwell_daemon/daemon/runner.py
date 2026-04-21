@@ -22,6 +22,7 @@ from typing import Any
 from maxwell_daemon import __version__
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
+from maxwell_daemon.config.loader import default_config_path
 from maxwell_daemon.core import (
     BackendRouter,
     BudgetEnforcer,
@@ -90,11 +91,16 @@ class Daemon:
         self,
         config: MaxwellDaemonConfig,
         *,
+        config_path: Path | None = None,
         ledger_path: Path | None = None,
         workspace_root: Path | None = None,
         task_store_path: Path | None = None,
     ) -> None:
         self._config = config
+        # Path used for hot-reload; populated by from_config_path.
+        self._config_path: Path | None = config_path
+        # Protects atomic swap of _config and _router during reload.
+        self._config_lock = threading.Lock()
         self._router = BackendRouter(config)
         self._ledger = CostLedger(
             ledger_path or Path.home() / ".local/share/maxwell-daemon/ledger.db"
@@ -152,7 +158,32 @@ class Daemon:
 
     @classmethod
     def from_config_path(cls, path: Path | str | None = None) -> Daemon:
-        return cls(load_config(path))
+        resolved = Path(path).expanduser() if path else default_config_path()
+        return cls(load_config(resolved), config_path=resolved)
+
+    def reload_config(self) -> Path:
+        """Reload configuration from disk and swap atomically.
+
+        Thread-safe: acquires ``_config_lock`` before updating ``_config`` and
+        ``_router`` so in-flight workers always see a consistent pair. Running
+        workers are *not* interrupted — they complete with the old config and
+        new tasks pick up the new config automatically.
+
+        Returns the path that was reloaded.
+
+        Raises ``FileNotFoundError`` if the config file cannot be found and
+        ``pydantic.ValidationError`` if the new config is invalid — the existing
+        config is left untouched in both cases.
+        """
+        path = self._config_path or default_config_path()
+        # Validate first (outside the lock) so we never swap in a bad config.
+        new_config = load_config(path)
+        new_router = BackendRouter(new_config)
+        with self._config_lock:
+            self._config = new_config
+            self._router = new_router
+        log.info("config reloaded from %s", path)
+        return path
 
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
@@ -707,6 +738,15 @@ def main() -> None:
         loop = asyncio.get_event_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, stop.set)
+
+        def _sighup_handler() -> None:
+            """Reload config in-place on SIGHUP without stopping workers."""
+            try:
+                daemon.reload_config()
+            except Exception:
+                log.exception("config reload failed; keeping existing config")
+
+        loop.add_signal_handler(signal.SIGHUP, _sighup_handler)
         await stop.wait()
         await daemon.stop()
 

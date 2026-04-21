@@ -642,6 +642,34 @@ def create_app(
             "audit_enabled": True,
         }
 
+    @app.post(
+        "/api/reload",
+        dependencies=[Depends(_require_operator())],
+    )
+    async def reload_config() -> dict[str, Any]:
+        """Reload daemon config from disk without restarting.
+
+        Atomically swaps the in-memory config and router so running workers are
+        not interrupted. Requires operator role (or static bearer token when JWT
+        is not configured).
+
+        Returns the path that was reloaded and an ISO-8601 timestamp.
+        """
+        try:
+            path = daemon.reload_config()
+        except FileNotFoundError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"config reload failed: {exc}",
+            ) from exc
+        return {
+            "status": "reloaded",
+            "config_path": str(path),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
     @app.get("/api/v1/workers", dependencies=[Depends(_require_viewer())])
     async def workers_status() -> dict[str, Any]:
         """Return current worker count and queue depth."""
@@ -654,11 +682,9 @@ def create_app(
     @app.put("/api/v1/workers", dependencies=[Depends(_require_viewer())])
     async def set_workers(count: int) -> dict[str, Any]:
         """Rescale the worker pool to *count* workers."""
-        from maxwell_daemon.contracts import PreconditionError
-
         try:
             await daemon.set_worker_count(count)
-        except PreconditionError as e:
+        except ValueError as e:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
         return {"worker_count": count}
 
