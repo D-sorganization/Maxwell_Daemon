@@ -48,6 +48,12 @@ class BudgetConfig(BaseModel):
     )
     alert_warn_multiplier: float = Field(1.1, gt=1.0)
     alert_debounce_hours: int = Field(6, ge=0)
+    per_task_limit_usd: float | None = Field(
+        None,
+        ge=0,
+        description="Hard cap on cumulative cost for a single task/agent-loop invocation. "
+        "None disables the per-task limit.",
+    )
 
 
 class AgentConfig(BaseModel):
