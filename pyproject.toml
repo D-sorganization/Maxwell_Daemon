@@ -129,5 +129,7 @@ warn_required_dynamic_aliases = true
 # Tests contain intentional assertions and fake secrets for fixtures — skip.
 exclude_dirs = ["tests", "docs"]
 # B101 is assert-removed-under-optimisation, which is a style nit not a vuln.
+# B311 is random-for-security; we use random.uniform for jitter (load distribution),
+#       not cryptographic purposes.
 # B404/B603 are about subprocess — we deliberately use subprocess with argv lists.
-skips = ["B101", "B404", "B603"]
+skips = ["B101", "B311", "B404", "B603"]

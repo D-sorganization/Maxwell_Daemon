@@ -25,7 +25,7 @@ from __future__ import annotations
 import secrets
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any
+from typing import Annotated, Any
 
 __all__ = [
     "JWTConfig",
@@ -148,8 +148,6 @@ def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:
     The request must carry ``Authorization: Bearer <JWT>``.  Returns the
     decoded ``TokenClaims`` (so callers can inspect ``claims.sub`` etc.).
     """
-    from typing import Annotated
-
     from fastapi import Header, HTTPException, status
 
     async def _dep(authorization: Annotated[str | None, Header()] = None) -> TokenClaims:
@@ -166,5 +164,13 @@ def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:
                 f"role {claims.role.value!r} lacks {minimum.value!r} privileges",
             )
         return claims
+
+    # Ensure FastAPI can resolve the Header annotation even with PEP 563 (from __future__ import
+    # annotations). Without this, `get_type_hints(_dep)` raises NameError because `Header` is
+    # local to require_role and not in auth.py's module globals.
+    _dep.__annotations__ = {
+        "authorization": Annotated[str | None, Header()],
+        "return": TokenClaims,
+    }
 
     return _dep

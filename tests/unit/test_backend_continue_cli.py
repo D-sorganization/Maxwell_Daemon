@@ -9,7 +9,7 @@ import pytest
 
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.backends.base import BackendUnavailableError
-from maxwell_daemon.backends.continue_cli import ContinueCLIBackend
+from maxwell_daemon.backends.continue_cli import ContinueCLIBackend, _default_runner
 
 
 class _Runner:
@@ -29,6 +29,35 @@ class _Runner:
     ) -> tuple[int, bytes, bytes]:
         self.calls.append(argv)
         return self._rc, self._stdout, self._stderr
+
+
+class _FakeProcess:
+    returncode = 0
+
+    async def communicate(self) -> tuple[bytes, bytes]:
+        return b"stdout", b"stderr"
+
+
+class TestDefaultRunner:
+    def test_default_runner_invokes_subprocess(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, Any] = {}
+
+        async def fake_exec(*argv: str, **kwargs: Any) -> _FakeProcess:
+            captured["argv"] = argv
+            captured["kwargs"] = kwargs
+            return _FakeProcess()
+
+        monkeypatch.setattr(
+            "maxwell_daemon.backends.continue_cli.asyncio.create_subprocess_exec", fake_exec
+        )
+
+        rc, stdout, stderr = asyncio.run(_default_runner("cn", "ask", "hi", cwd="repo"))
+
+        assert rc == 0
+        assert stdout == b"stdout"
+        assert stderr == b"stderr"
+        assert captured["argv"] == ("cn", "ask", "hi")
+        assert captured["kwargs"]["cwd"] == "repo"
 
 
 class TestDefaults:
