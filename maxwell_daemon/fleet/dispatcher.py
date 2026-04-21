@@ -48,6 +48,8 @@ class MachineState:
     tags: tuple[str, ...]
     active_tasks: int = 0
     healthy: bool = True
+    tls: bool = True
+    tls_verify: bool = True
 
     @property
     def available_slots(self) -> int:

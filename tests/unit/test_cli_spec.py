@@ -7,6 +7,7 @@ assert the on-disk outcome. The heavy lifting is in
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from textwrap import dedent
 
@@ -132,7 +133,7 @@ class TestSpecGenerate:
 
         result = runner.invoke(spec_app, ["generate", str(feature), "--output", str(output_path)])
         assert result.exit_code == 1
-        assert "already exists" in result.output
+        assert re.search(r"already\s+exists", result.output)
         assert output_path.read_text().startswith("# sentinel")
 
     def test_overwrite_flag_replaces_existing(self, runner: CliRunner, tmp_path: Path) -> None:
