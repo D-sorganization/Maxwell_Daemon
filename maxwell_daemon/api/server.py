@@ -241,6 +241,11 @@ def create_app(
     # RBAC dependency factories — only active when jwt_config is provided.
     # When jwt_config is None the daemon falls back to static bearer-token auth
     # (``auth`` dep above) and role enforcement is skipped.
+    def _require_viewer() -> Any:
+        if jwt_config is not None:
+            return require_role(Role.viewer, jwt_config)
+        return auth
+
     def _require_operator() -> Any:
         if jwt_config is not None:
             return require_role(Role.operator, jwt_config)
@@ -360,7 +365,7 @@ def create_app(
             raise HTTPException(status_code=503, detail="no backends available")
         return {"status": "ready"}
 
-    @app.get("/api/v1/backends", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/backends", dependencies=[Depends(_require_viewer())])
     async def list_backends() -> dict[str, Any]:
         return {"backends": daemon.state().backends_available}
 
@@ -378,7 +383,7 @@ def create_app(
         )
         return TaskView.from_task(task)
 
-    @app.get("/api/v1/tasks", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/tasks", dependencies=[Depends(_require_viewer())])
     async def list_tasks(
         status: Annotated[str | None, Query()] = None,
         kind: Annotated[str | None, Query()] = None,
@@ -395,7 +400,7 @@ def create_app(
         tasks.sort(key=lambda t: t.created_at, reverse=True)
         return [TaskView.from_task(t) for t in tasks[:limit]]
 
-    @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
     async def get_task(task_id: str) -> TaskView:
         t = daemon.get_task(task_id)
         if t is None:
@@ -523,7 +528,7 @@ def create_app(
             "failures": failures,
         }
 
-    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(_require_viewer())])
     async def list_repo_issues(
         owner: str, name: str, state: str = "open", limit: int = 25
     ) -> list[dict[str, Any]]:
@@ -540,7 +545,7 @@ def create_app(
             for i in issues
         ]
 
-    @app.get("/api/v1/fleet", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/fleet", dependencies=[Depends(_require_viewer())])
     async def fleet_overview() -> dict[str, Any]:
         """Return fleet manifest data merged with live task counts per repo."""
         import os
@@ -607,7 +612,7 @@ def create_app(
             "repos": repos,
         }
 
-    @app.get("/api/v1/audit", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/audit", dependencies=[Depends(_require_viewer())])
     async def audit_log(
         limit: int = Query(default=200, ge=1, le=10_000),
         offset: int = Query(default=0, ge=0),
@@ -620,7 +625,7 @@ def create_app(
             "audit_enabled": True,
         }
 
-    @app.get("/api/v1/audit/verify", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/audit/verify", dependencies=[Depends(_require_viewer())])
     async def audit_verify() -> dict[str, Any]:
         """Verify the audit log hash chain.  Returns violations (empty = clean)."""
         from maxwell_daemon.audit import verify_chain
@@ -634,7 +639,7 @@ def create_app(
             "audit_enabled": True,
         }
 
-    @app.get("/api/v1/workers", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/workers", dependencies=[Depends(_require_viewer())])
     async def workers_status() -> dict:
         """Return current worker count and queue depth."""
         state = daemon.state()
@@ -643,7 +648,7 @@ def create_app(
             "queue_depth": state.queue_depth,
         }
 
-    @app.put("/api/v1/workers", dependencies=[Depends(_rbac_viewer)])
+    @app.put("/api/v1/workers", dependencies=[Depends(_require_viewer())])
     async def set_workers(count: int) -> dict:
         """Rescale the worker pool to *count* workers."""
         from maxwell_daemon.contracts import PreconditionError
@@ -654,7 +659,7 @@ def create_app(
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
         return {"worker_count": count}
 
-    @app.get("/api/v1/cost", dependencies=[Depends(_rbac_viewer)])
+    @app.get("/api/v1/cost", dependencies=[Depends(_require_viewer())])
     async def cost_summary() -> CostSummary:
         now = datetime.now(timezone.utc)
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
