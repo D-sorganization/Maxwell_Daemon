@@ -20,9 +20,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["GhCliError", "GitHubClient", "GitHubRateLimitError", "Issue", "PullRequest"]
-
-log = logging.getLogger(__name__)
+__all__ = ["GhCliError", "GitHubClient", "GitHubRateLimitError", "Issue", "PullRequest", "RateLimitError"]
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +53,8 @@ class GitHubRateLimitError(GhCliError):
         super().__init__(message)
         self.reset_at = reset_at  # Unix timestamp when the limit resets, if known
 
+
+RateLimitError = GitHubRateLimitError
 
 # Exit codes emitted by `gh` when GitHub returns 403 or 429 (rate-limited).
 _RATE_LIMIT_EXIT_CODES: frozenset[int] = frozenset({4})  # gh uses rc=4 for HTTP 4xx
@@ -236,6 +236,71 @@ class GitHubClient:
             return float(reset) if reset is not None else None
         except Exception:
             return None
+
+    async def _request_with_retry(
+        self,
+        *argv: str,
+        max_retries: int = 3,
+        cwd: str | None = None,
+    ) -> bytes:
+        """Run a ``gh`` command, retrying on GitHub API rate-limit errors.
+
+        When the ``gh`` CLI returns a non-zero exit code whose stderr matches
+        known rate-limit patterns (``API rate limit exceeded``, ``429``, etc.)
+        we sleep and retry up to *max_retries* times before raising
+        :class:`RateLimitError`.
+
+        All other non-zero exit codes are raised immediately as
+        :class:`GhCliError` without retrying.
+
+        On every invocation the DEBUG log captures ``X-RateLimit-Remaining``
+        when the header appears in the output, giving proactive visibility into
+        quota consumption.
+        """
+        last_err: GhCliError | None = None
+
+        for attempt in range(max_retries + 1):
+            rc, out, err = await self._run("gh", *argv, cwd=cwd)
+            err_text = err.decode(errors="replace")
+
+            # Log remaining quota at DEBUG level for proactive visibility.
+            remaining_match = _RATE_REMAINING_RE.search(err_text) or _RATE_REMAINING_RE.search(
+                out.decode(errors="replace")
+            )
+            if remaining_match:
+                remaining = int(remaining_match.group(1))
+                log.debug("GitHub X-RateLimit-Remaining: %d", remaining)
+
+            if rc == 0:
+                return out
+
+            # Check whether this is a rate-limit error.
+            if _RATE_LIMIT_PATTERNS.search(err_text):
+                wait = min(_parse_wait_seconds(err_text), 300)  # cap at 5 min
+                last_err = RateLimitError(
+                    f"gh {' '.join(argv)} rate limited "
+                    f"(attempt {attempt + 1}/{max_retries + 1}): {err_text.strip()}"
+                )
+                if attempt < max_retries:
+                    log.warning(
+                        "GitHub rate limited; sleeping %ds (attempt %d/%d)",
+                        wait,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+
+                # All retries exhausted.
+                raise last_err
+
+            # Non-rate-limit error — raise immediately.
+            raise GhCliError(f"gh {' '.join(argv)} failed (rc={rc}): {err_text.strip()}")
+
+        # Unreachable, but satisfies the type checker.
+        if last_err is not None:
+            raise last_err
+        raise GhCliError(f"gh {' '.join(argv)} failed after {max_retries} retries")
 
     async def check_auth(self) -> bool:
         rc, _, _ = await self._run("gh", "auth", "status")
