@@ -13,6 +13,7 @@ All tests inject a recorder runner so no real subprocesses spawn.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,9 @@ from maxwell_daemon.hooks import (
     HookRunner,
     HookSpec,
     HookViolationError,
+    _default_runner,
+    _parse_specs,
+    _parse_strings,
     load_hook_config,
 )
 
@@ -99,6 +103,34 @@ hooks:
     def test_malformed_yaml_rejected(self, tmp_path: Path) -> None:
         (tmp_path / "h.yaml").write_text("not: [valid")
         with pytest.raises(Exception, match="hook"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_root_must_be_mapping(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text("- just\n- a\n- list\n", encoding="utf-8")
+        with pytest.raises(HookViolationError, match="must be a mapping"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_hooks_section_must_be_mapping(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text("hooks: [1, 2, 3]\n", encoding="utf-8")
+        with pytest.raises(HookViolationError, match="non-mapping `hooks:` section"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_pre_tool_specs_must_be_string_or_mapping(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text("hooks:\n  pre_tool:\n    - 123\n", encoding="utf-8")
+        with pytest.raises(HookViolationError, match="string or mapping"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_hook_spec_must_have_string_command(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text(
+            "hooks:\n  pre_tool:\n    - match: run_bash\n      command: 123\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(HookViolationError, match="missing `command:`"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_pre_commit_entries_must_be_strings(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text("hooks:\n  pre_commit:\n    - true\n", encoding="utf-8")
+        with pytest.raises(HookViolationError, match="hook entry must be a string"):
             load_hook_config(tmp_path / "h.yaml")
 
 
@@ -204,6 +236,14 @@ class TestPostToolHook:
         await hr.run_post_tool("run_bash", {}, tool_output="hello")
         assert runner.calls[0]["env"]["MAXWELL_TOOL_OUTPUT"] == "hello"
 
+    async def test_non_matching_post_tool_does_not_run(self, tmp_path: Path) -> None:
+        runner = _Runner()
+        cfg = HookConfig(post_tool=(HookSpec(match="write_file", command="never"),))
+        hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
+        out = await hr.run_post_tool("run_bash", {}, tool_output="")
+        assert out.passed is True
+        assert runner.calls == []
+
 
 # ── pre_commit ───────────────────────────────────────────────────────────────
 
@@ -266,3 +306,75 @@ class TestHookOutcome:
         o = HookOutcome(blocked=False, errored=False, passed=True, detail="ok", failing_command="")
         with pytest.raises(FrozenInstanceError):
             o.blocked = True  # type: ignore[misc]
+
+
+class TestDefaultRunner:
+    @pytest.mark.asyncio
+    async def test_timeout_kills_process(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        class _Proc:
+            def __init__(self) -> None:
+                self.returncode = 0
+                self.killed = False
+                self.waited = False
+
+            async def communicate(self) -> tuple[bytes, bytes]:
+                return (b"", b"")
+
+            def kill(self) -> None:
+                self.killed = True
+
+            async def wait(self) -> None:
+                self.waited = True
+
+        proc = _Proc()
+
+        async def _fake_create(*_: object, **__: object) -> _Proc:
+            return proc
+
+        async def _fake_wait_for(awaitable: object, **__: object) -> object:
+            close = getattr(awaitable, "close", None)
+            if callable(close):
+                close()
+            raise asyncio.TimeoutError
+
+        monkeypatch.setattr("maxwell_daemon.hooks.asyncio.create_subprocess_shell", _fake_create)
+        monkeypatch.setattr("maxwell_daemon.hooks.asyncio.wait_for", _fake_wait_for)
+
+        rc, output = await _default_runner(
+            "echo hi", cwd=str(tmp_path), env={}, timeout=0.01
+        )
+        assert rc == 124
+        assert "timeout after" in output
+        assert proc.killed is True
+        assert proc.waited is True
+
+    @pytest.mark.asyncio
+    async def test_success_returns_decoded_output(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        class _Proc:
+            returncode = None
+
+            async def communicate(self) -> tuple[bytes, bytes]:
+                return (b"ok\xff", b"")
+
+        async def _fake_create(*_: object, **__: object) -> _Proc:
+            return _Proc()
+
+        monkeypatch.setattr("maxwell_daemon.hooks.asyncio.create_subprocess_shell", _fake_create)
+        rc, output = await _default_runner("echo hi", cwd=str(tmp_path), env={}, timeout=1.0)
+        assert rc == 0
+        assert output.startswith("ok")
+
+
+class TestParseHelpers:
+    def test_parse_specs_supports_none_and_strings(self) -> None:
+        assert _parse_specs(None) == []
+        out = _parse_specs(["echo one"])
+        assert len(out) == 1
+        assert out[0].command == "echo one"
+
+    def test_parse_strings_supports_none_and_type_errors(self) -> None:
+        assert _parse_strings(None) == []
+        with pytest.raises(HookViolationError, match="expected a list of commands"):
+            _parse_strings("not-a-list")
