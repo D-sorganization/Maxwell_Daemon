@@ -57,6 +57,14 @@ class AgentConfig(BaseModel):
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
     temperature: float = Field(1.0, ge=0.0, le=2.0)
     default_backend: str = "claude"
+    task_retention_days: int = Field(
+        90,
+        ge=1,
+        description=(
+            "Completed/failed tasks and ledger entries older than this many days "
+            "are deleted on the daily prune pass."
+        ),
+    )
 
 
 class ToolConfig(BaseModel):
@@ -76,6 +84,13 @@ class RepoConfig(BaseModel):
     context_max_chars: int | None = Field(None, ge=0)
     max_test_retries: int | None = Field(None, ge=0)
     max_diff_retries: int | None = Field(None, ge=0)
+    # Per-repo system prompt customisation (fixes #151).
+    # system_prompt_file takes priority: its contents fully replace the default prompt.
+    # system_prompt_prefix is prepended to the default prompt when no file is given.
+    system_prompt_prefix: str = Field("", description="Prepended to the default system prompt")
+    system_prompt_file: str | None = Field(
+        None, description="Path to a file whose contents replace the default system prompt"
+    )
 
     @field_validator("path", mode="before")
     @classmethod

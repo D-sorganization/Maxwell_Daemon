@@ -19,6 +19,7 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -144,16 +145,24 @@ class IssueExecutor:
             {"repo": repo, "issue": issue_number},
         ):
             issue = await self._gh.get_issue(repo, issue_number)
-        branch = f"maxwell-daemon/issue-{issue_number}"
         # Fall back to a derived id when the caller didn't supply one so the
         # executor stays usable in non-Daemon contexts (one-off scripts, tests).
         effective_task_id = task_id or f"issue-{issue_number}"
+        # Append a unique suffix so re-processing the same issue doesn't collide
+        # with an existing branch of the same name (fixes #150).
+        if task_id:
+            branch_suffix = task_id[:8]
+        else:
+            branch_suffix = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        branch = f"maxwell-daemon/issue-{issue_number}-{branch_suffix}"
 
         # Resolve per-call settings: overrides first, executor defaults second.
         ctx_max = self._pick(overrides, "context_max_chars", self._context_max_chars)
         max_diff_retries = self._pick(overrides, "max_diff_retries", self._max_diff_retries)
         max_test_retries = self._pick(overrides, "max_test_retries", self._max_test_retries)
         test_command = overrides.test_command if overrides else None
+        # Resolve system prompt: file content > prefix+default > default (fixes #151).
+        system_prompt = self._resolve_system_prompt(overrides)
 
         # Build context if we have a builder AND we're in implement mode (plan
         # mode doesn't need a clone; enable via a follow-up if it helps).
@@ -185,6 +194,7 @@ class IssueExecutor:
                 context=context_prompt,
                 memory=memory_prompt,
                 labels=list(getattr(issue, "labels", []) or []),
+                system_prompt=system_prompt,
             )
 
         # Record the initial plan to the scratchpad so retries see it.
@@ -212,6 +222,7 @@ class IssueExecutor:
                 diff=diff,
                 max_retries=max_diff_retries,
                 task_id=effective_task_id,
+                system_prompt=system_prompt,
             )
             if self._test_runner is not None:
                 plan, diff, test_result = await self._validate_with_tests(
@@ -228,6 +239,7 @@ class IssueExecutor:
                     max_diff_retries=max_diff_retries,
                     task_id=effective_task_id,
                     on_test_output=on_test_output,
+                    system_prompt=system_prompt,
                 )
             await self._ws.commit_and_push(
                 repo,
@@ -296,6 +308,7 @@ class IssueExecutor:
         max_diff_retries: int,
         task_id: str,
         on_test_output: Any = None,
+        system_prompt: str = _SYSTEM_PROMPT,
     ) -> tuple[str, str, TestResult]:
         """Run repo tests; if they fail, ask the LLM to refine the diff and retry.
 
@@ -329,6 +342,7 @@ class IssueExecutor:
                 previous_plan=current_plan,
                 previous_diff=current_diff,
                 test_output=result.output_tail,
+                system_prompt=system_prompt,
             )
             await self._ws.create_branch(repo, branch, base=base_branch, task_id=task_id)
             await self._apply_with_retry(
@@ -340,6 +354,7 @@ class IssueExecutor:
                 diff=current_diff,
                 max_retries=max_diff_retries,
                 task_id=task_id,
+                system_prompt=system_prompt,
             )
 
     def _workspace_path(self, repo: str, task_id: str | None = None) -> Any:
@@ -373,6 +388,7 @@ class IssueExecutor:
         previous_plan: str,
         previous_diff: str,
         test_output: str,
+        system_prompt: str = _SYSTEM_PROMPT,
     ) -> tuple[str, str]:
         prompt = (
             f"Your previous diff applied cleanly but the repo's own tests now fail.\n\n"
@@ -385,7 +401,7 @@ class IssueExecutor:
         )
         response = await self._backend.complete(
             [
-                Message(role=MessageRole.SYSTEM, content=_SYSTEM_PROMPT),
+                Message(role=MessageRole.SYSTEM, content=system_prompt),
                 Message(role=MessageRole.USER, content=prompt),
             ],
             model=model,
@@ -404,6 +420,7 @@ class IssueExecutor:
         diff: str,
         max_retries: int | None = None,
         task_id: str = "test",
+        system_prompt: str = _SYSTEM_PROMPT,
     ) -> tuple[str, str]:
         """Try to apply the diff; on failure, ask the LLM for a corrected diff."""
         limit = max_retries if max_retries is not None else self._max_diff_retries
@@ -428,6 +445,7 @@ class IssueExecutor:
                     previous_plan=current_plan,
                     previous_diff=current_diff,
                     error=last_error,
+                    system_prompt=system_prompt,
                 )
 
     @staticmethod
@@ -437,6 +455,23 @@ class IssueExecutor:
             return default
         value = getattr(overrides, attr, None)
         return value if value is not None else default
+
+    @staticmethod
+    def _resolve_system_prompt(overrides: RepoOverrides | None) -> str | None:
+        """Return the effective system prompt based on per-repo overrides (fixes #151).
+
+        Priority:
+        1. ``system_prompt_file`` — file contents fully replace the default.
+        2. ``system_prompt_prefix`` — prepended to ``_SYSTEM_PROMPT``.
+        3. ``None`` — caller falls back to the issue-type classifier output.
+        """
+        if overrides is None:
+            return None
+        if overrides.system_prompt_file:
+            return Path(overrides.system_prompt_file).read_text(encoding="utf-8")
+        if overrides.system_prompt_prefix:
+            return overrides.system_prompt_prefix + "\n\n" + _SYSTEM_PROMPT
+        return None
 
     @staticmethod
     async def resolve_pr_target_branch(
@@ -478,6 +513,7 @@ class IssueExecutor:
         previous_plan: str,
         previous_diff: str,
         error: str,
+        system_prompt: str = _SYSTEM_PROMPT,
     ) -> tuple[str, str]:
         prompt = (
             f"Your previous diff did not apply cleanly.\n\n"
@@ -490,7 +526,7 @@ class IssueExecutor:
         )
         response = await self._backend.complete(
             [
-                Message(role=MessageRole.SYSTEM, content=_SYSTEM_PROMPT),
+                Message(role=MessageRole.SYSTEM, content=system_prompt),
                 Message(role=MessageRole.USER, content=prompt),
             ],
             model=model,
@@ -507,11 +543,15 @@ class IssueExecutor:
         context: str = "",
         memory: str = "",
         labels: list[str] | None = None,
+        system_prompt: str | None = None,
     ) -> tuple[str, str]:
         # Pick a specialised system prompt for this kind of issue. Falls back
         # to the default prompt when the classifier can't decide.
-        kind = classify_issue(title=issue_title, body=issue_body, labels=labels or [])
-        system_prompt = render_system_prompt(kind)
+        # If a per-repo system_prompt was resolved, it takes priority over the
+        # issue-type classifier output (fixes #151).
+        if system_prompt is None:
+            kind = classify_issue(title=issue_title, body=issue_body, labels=labels or [])
+            system_prompt = render_system_prompt(kind)
 
         prompt_parts = [f"Issue title: {issue_title}\n"]
         prompt_parts.append(f"Issue body:\n{issue_body or '(empty)'}\n")

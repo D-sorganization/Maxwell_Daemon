@@ -14,15 +14,30 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
+
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 __all__ = ["GhCliError", "GitHubClient", "Issue", "PullRequest"]
 
 
 _REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
 _ISSUE_FIELDS = "number,title,body,state,labels,url"
+
+# Patterns in gh CLI stderr that indicate a GitHub API rate-limit response
+# (HTTP 429 or 403 with X-RateLimit-Remaining: 0).
+_RATE_LIMIT_RE = re.compile(
+    r"(rate.?limit|api rate|secondary rate|too many requests|403|429)",
+    re.IGNORECASE,
+)
+
+
+def _is_rate_limit_error(exc: BaseException) -> bool:
+    """Return True when a GhCliError looks like a GitHub rate-limit response."""
+    return isinstance(exc, GhCliError) and bool(_RATE_LIMIT_RE.search(str(exc)))
 
 RunnerFn = Callable[..., Awaitable[tuple[int, bytes, bytes]]]
 
@@ -89,6 +104,12 @@ class GitHubClient:
         if not _REPO_RE.match(repo):
             raise ValueError(f"Invalid repo {repo!r}: expected 'owner/name' with safe characters")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=60),
+        retry=retry_if_exception(_is_rate_limit_error),
+        reraise=True,
+    )
     async def _gh(self, *argv: str, cwd: str | None = None) -> bytes:
         rc, out, err = await self._run("gh", *argv, cwd=cwd)
         if rc != 0:

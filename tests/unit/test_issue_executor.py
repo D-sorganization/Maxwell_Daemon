@@ -256,4 +256,24 @@ class TestBranchNaming:
         asyncio.run(
             executor.execute_issue(repo="owner/repo", issue_number=42, model="m", mode="plan")
         )
-        assert gh.pr_calls[0]["head"] == "maxwell-daemon/issue-42"
+        # Branch now includes a unique suffix to prevent collision on re-processing (#150).
+        head = gh.pr_calls[0]["head"]
+        assert head.startswith("maxwell-daemon/issue-42-"), head
+
+    def test_branch_uses_task_id_prefix_when_supplied(self) -> None:
+        gh = FakeGitHub(issue=_issue())
+        ws = FakeWorkspace()
+        backend = ScriptedBackend(payload={"plan": "ok", "diff": ""})
+        executor = IssueExecutor(github=gh, workspace=ws, backend=backend)
+
+        asyncio.run(
+            executor.execute_issue(
+                repo="owner/repo",
+                issue_number=42,
+                model="m",
+                mode="plan",
+                task_id="abcd1234efgh",
+            )
+        )
+        # First 8 chars of task_id used as suffix.
+        assert gh.pr_calls[0]["head"] == "maxwell-daemon/issue-42-abcd1234"

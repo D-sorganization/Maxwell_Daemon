@@ -22,6 +22,9 @@ class RepoOverrides:
     context_max_chars: int | None = None
     max_test_retries: int | None = None
     max_diff_retries: int | None = None
+    # Per-repo system prompt customisation (fixes #151).
+    system_prompt_prefix: str = ""
+    system_prompt_file: str | None = None
 
 
 def resolve_overrides(config: MaxwellDaemonConfig, *, repo: str) -> RepoOverrides:
@@ -35,4 +38,6 @@ def resolve_overrides(config: MaxwellDaemonConfig, *, repo: str) -> RepoOverride
         context_max_chars=repo_cfg.context_max_chars,
         max_test_retries=repo_cfg.max_test_retries,
         max_diff_retries=repo_cfg.max_diff_retries,
+        system_prompt_prefix=repo_cfg.system_prompt_prefix,
+        system_prompt_file=repo_cfg.system_prompt_file,
     )
