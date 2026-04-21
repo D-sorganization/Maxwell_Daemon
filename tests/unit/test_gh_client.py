@@ -275,7 +275,6 @@ class TestModels:
         assert Issue.from_gh(payload).is_open is False
 
 
-<<<<<<< HEAD
 class TestRateLimitHandling:
     """GitHubClient retries on rate-limit responses and backs off (#152)."""
 
