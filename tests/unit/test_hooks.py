@@ -13,6 +13,7 @@ All tests inject a recorder runner so no real subprocesses spawn.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ from maxwell_daemon.hooks import (
     HookRunner,
     HookSpec,
     HookViolationError,
+    _default_runner,
     load_hook_config,
 )
 
@@ -99,6 +101,34 @@ hooks:
     def test_malformed_yaml_rejected(self, tmp_path: Path) -> None:
         (tmp_path / "h.yaml").write_text("not: [valid")
         with pytest.raises(Exception, match="hook"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_root_must_be_mapping(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text("- just\n- a\n- list\n", encoding="utf-8")
+        with pytest.raises(HookViolationError, match="must be a mapping"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_hooks_section_must_be_mapping(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text("hooks: [1, 2, 3]\n", encoding="utf-8")
+        with pytest.raises(HookViolationError, match="non-mapping `hooks:` section"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_pre_tool_specs_must_be_string_or_mapping(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text("hooks:\n  pre_tool:\n    - 123\n", encoding="utf-8")
+        with pytest.raises(HookViolationError, match="string or mapping"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_hook_spec_must_have_string_command(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text(
+            "hooks:\n  pre_tool:\n    - match: run_bash\n      command: 123\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(HookViolationError, match="missing `command:`"):
+            load_hook_config(tmp_path / "h.yaml")
+
+    def test_pre_commit_entries_must_be_strings(self, tmp_path: Path) -> None:
+        (tmp_path / "h.yaml").write_text("hooks:\n  pre_commit:\n    - true\n", encoding="utf-8")
+        with pytest.raises(HookViolationError, match="hook entry must be a string"):
             load_hook_config(tmp_path / "h.yaml")
 
 
@@ -203,6 +233,14 @@ class TestPostToolHook:
         hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
         await hr.run_post_tool("run_bash", {}, tool_output="hello")
         assert runner.calls[0]["env"]["MAXWELL_TOOL_OUTPUT"] == "hello"
+
+    async def test_non_matching_post_tool_does_not_run(self, tmp_path: Path) -> None:
+        runner = _Runner()
+        cfg = HookConfig(post_tool=(HookSpec(match="write_file", command="never"),))
+        hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
+        out = await hr.run_post_tool("run_bash", {}, tool_output="")
+        assert out.passed is True
+        assert runner.calls == []
 
 
 # ── pre_commit ───────────────────────────────────────────────────────────────

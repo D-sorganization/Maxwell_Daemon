@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -43,6 +43,14 @@ class TestTokenAuth:
         cfg.github = None
         with pytest.raises(ValueError, match="GitHub token not configured"):
             GitHubAuth.from_config(cfg)
+
+    def test_from_config_reads_github_token_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.setenv("GITHUB_TOKEN", "ghp_from_github_env")
+        cfg = MagicMock()
+        cfg.github = None
+        auth = GitHubAuth.from_config(cfg)
+        assert auth.token == "ghp_from_github_env"
 
 
 class TestAppAuth:
