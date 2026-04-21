@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -153,13 +154,12 @@ class TestSchemaMigration:
 class TestClose:
     def test_close_terminates_connection(self, store: TaskStore) -> None:
         """close() should not raise."""
-        import sqlite3
 
         task = _fresh_task()
         store.save(task)
         store.close()
         # After close the connection should be unusable
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.ProgrammingError):
             store._conn.execute("SELECT 1")
 
 
