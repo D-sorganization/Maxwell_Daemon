@@ -49,14 +49,31 @@ class _Fake(ILLMBackend):
         return BackendCapabilities()
 
 
+class _ClosingFake(_Fake):
+    def __init__(self, **_: Any) -> None:
+        self.closed = False
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+class _ExplodingCloseFake(_Fake):
+    def aclose(self) -> None:
+        raise RuntimeError("close failed")
+
+
 @pytest.fixture(autouse=True)
 def _register_fakes() -> None:
     # Overwrite any existing registration so the test suite is deterministic.
     registry._factories["fake_a"] = _Fake
     registry._factories["fake_b"] = _Fake
+    registry._factories["closing_fake"] = _ClosingFake
+    registry._factories["exploding_close_fake"] = _ExplodingCloseFake
     yield
     registry._factories.pop("fake_a", None)
     registry._factories.pop("fake_b", None)
+    registry._factories.pop("closing_fake", None)
+    registry._factories.pop("exploding_close_fake", None)
 
 
 @pytest.fixture
@@ -122,3 +139,61 @@ class TestRouter:
         a = router.route().backend
         b = router.route().backend
         assert a is b
+
+    def test_disabled_backend_rejected(self, config: MaxwellDaemonConfig) -> None:
+        config.backends["primary"].enabled = False
+        with pytest.raises(RuntimeError, match="disabled"):
+            BackendRouter(config).route()
+
+    def test_passes_raw_api_key_to_backend(self) -> None:
+        captured: dict[str, Any] = {}
+
+        class _CapturingFake(_Fake):
+            def __init__(self, **kwargs: Any) -> None:
+                captured.update(kwargs)
+
+        registry._factories["capturing_fake"] = _CapturingFake
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {
+                    "primary": {
+                        "type": "capturing_fake",
+                        "model": "model-a",
+                        "api_key": "secret",
+                    }
+                },
+                "agent": {"default_backend": "primary"},
+            }
+        )
+
+        BackendRouter(cfg).route()
+
+        assert captured["api_key"] == "secret"
+
+    @pytest.mark.asyncio
+    async def test_aclose_all_awaits_async_backend_close(self) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {"primary": {"type": "closing_fake", "model": "m"}},
+                "agent": {"default_backend": "primary"},
+            }
+        )
+        router = BackendRouter(cfg)
+        backend = router.route().backend
+
+        await router.aclose_all()
+
+        assert backend.closed is True
+
+    @pytest.mark.asyncio
+    async def test_aclose_all_suppresses_backend_close_errors(self) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {"primary": {"type": "exploding_close_fake", "model": "m"}},
+                "agent": {"default_backend": "primary"},
+            }
+        )
+        router = BackendRouter(cfg)
+        router.route()
+
+        await router.aclose_all()

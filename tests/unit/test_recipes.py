@@ -367,3 +367,201 @@ class TestRenderInstructions:
         )
         out = render_instructions(r, {"path": "x.py", "n": 10, "flag": True})
         assert out == "Run x.py 10 times; flag=True."
+
+
+# ── Additional load_recipe validation coverage ───────────────────────────────
+
+
+class TestLoadRecipeAdditionalValidation:
+    def test_version_must_be_int_not_bool(self, tmp_path: Path) -> None:
+        """version: true (a bool) must be rejected — bool is a subclass of int."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: true
+            instructions: go
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="version"):
+            load_recipe(path)
+
+    def test_parameters_must_be_mapping(self, tmp_path: Path) -> None:
+        """parameters as a list must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            parameters:
+              - item1
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="parameters"):
+            load_recipe(path)
+
+    def test_parameter_spec_must_be_mapping(self, tmp_path: Path) -> None:
+        """A parameter spec given as a string must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            parameters:
+              p1: "just a string"
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="mapping"):
+            load_recipe(path)
+
+    def test_parameter_description_must_be_string(self, tmp_path: Path) -> None:
+        """A non-string parameter description must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            parameters:
+              p1:
+                type: string
+                description: 42
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="description"):
+            load_recipe(path)
+
+    def test_parameter_required_must_be_bool(self, tmp_path: Path) -> None:
+        """A non-bool required flag must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            parameters:
+              p1:
+                type: string
+                description: "a param"
+                required: "yes"
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="boolean"):
+            load_recipe(path)
+
+    def test_tools_deny_must_be_list_of_strings(self, tmp_path: Path) -> None:
+        """tools.deny as a string must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            tools:
+              deny: "not a list"
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="tools"):
+            load_recipe(path)
+
+    def test_tools_must_be_mapping(self, tmp_path: Path) -> None:
+        """tools as a list must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            tools:
+              - item
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="tools"):
+            load_recipe(path)
+
+    def test_requires_must_be_mapping(self, tmp_path: Path) -> None:
+        """requires as a list must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            requires:
+              - item
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="requires"):
+            load_recipe(path)
+
+    def test_requires_model_tier_must_be_string(self, tmp_path: Path) -> None:
+        """requires.model_tier as an integer must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            requires:
+              model_tier: 42
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="model_tier"):
+            load_recipe(path)
+
+    def test_requires_max_turns_must_be_int(self, tmp_path: Path) -> None:
+        """requires.max_turns as a float must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            requires:
+              max_turns: 3.5
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="max_turns"):
+            load_recipe(path)
+
+    def test_requires_budget_must_not_be_bool(self, tmp_path: Path) -> None:
+        """requires.budget_per_story_usd as a bool must be rejected."""
+        path = _write_recipe(
+            tmp_path,
+            """
+            name: x
+            description: d
+            version: 1
+            instructions: go
+            requires:
+              budget_per_story_usd: true
+            """,
+        )
+        with pytest.raises(RecipeLoadError, match="budget"):
+            load_recipe(path)
+
+
+class TestTypeMatches:
+    def test_number_rejects_bool(self) -> None:
+        """True should NOT match 'number' type."""
+        from maxwell_daemon.recipes import _type_matches
+
+        assert _type_matches(True, "number") is False
+
+    def test_unknown_type_returns_false(self) -> None:
+        """An undeclared type returns False."""
+        from maxwell_daemon.recipes import _type_matches
+
+        assert _type_matches("anything", "uuid") is False  # type: ignore[arg-type]
