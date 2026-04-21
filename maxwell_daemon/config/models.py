@@ -86,6 +86,14 @@ class RepoConfig(BaseModel):
     context_max_chars: int | None = Field(None, ge=0)
     max_test_retries: int | None = Field(None, ge=0)
     max_diff_retries: int | None = Field(None, ge=0)
+    system_prompt_prefix: str | None = Field(
+        None,
+        description="Prepended to the default system prompt for this repo's agents.",
+    )
+    system_prompt_file: Path | None = Field(
+        None,
+        description="Path to a markdown file whose content is prepended to the system prompt.",
+    )
 
     @field_validator("path", mode="before")
     @classmethod
