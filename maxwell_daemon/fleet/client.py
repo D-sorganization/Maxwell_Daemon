@@ -74,6 +74,8 @@ class HTTPClientProtocol(Protocol):
 
     async def get(self, url: str, *, headers: dict[str, str]) -> HTTPResponseProtocol: ...
 
+    async def aclose(self) -> None: ...
+
 
 class RemoteDaemonClient:
     """Async HTTP client for dispatching tasks to remote daemon instances.
@@ -146,6 +148,14 @@ class RemoteDaemonClient:
             return False
         return response.status_code == 200
 
+    async def aclose(self) -> None:
+        """Close the underlying HTTP connection pool."""
+        close = getattr(self._http, "aclose", None)
+        if close is not None:
+            import contextlib
+            with contextlib.suppress(Exception):
+                await close()
+
     async def refresh_all(self, machines: tuple[MachineState, ...]) -> tuple[MachineState, ...]:
         """Probe every machine in parallel, return snapshots with ``healthy`` updated.
 
@@ -213,5 +223,8 @@ def _make_default_http(timeout_seconds: float) -> HTTPClientProtocol:
 
         async def get(self, url: str, *, headers: dict[str, str]) -> HTTPResponseProtocol:
             return await self._client.get(url, headers=headers)
+
+        async def aclose(self) -> None:
+            await self._client.aclose()
 
     return _HttpxAdapter(timeout_seconds)
