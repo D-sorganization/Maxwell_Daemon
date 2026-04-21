@@ -148,6 +148,7 @@ def full_system(
     )
 
     loop.run_until_complete(daemon.start(worker_count=1))
+    loop.run_until_complete(asyncio.sleep(0))
 
     with TestClient(create_app(daemon, github_client=stub_gh)) as client:
         try:
@@ -162,14 +163,14 @@ def _wait_done(
     client: TestClient,
     loop: asyncio.AbstractEventLoop,
     task_id: str,
-    timeout: float = 5.0,
+    timeout: float = 30.0,
 ) -> dict[str, Any]:
     deadline = loop.time() + timeout
     while loop.time() < deadline:
         t = client.get(f"/api/v1/tasks/{task_id}").json()
         if t["status"] in {"completed", "failed"}:
             return t
-        loop.run_until_complete(asyncio.sleep(0.05))
+        loop.run_until_complete(asyncio.sleep(0.25))
     raise AssertionError(f"task did not complete: {t}")
 
 

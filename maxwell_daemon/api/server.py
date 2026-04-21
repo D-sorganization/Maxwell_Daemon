@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from maxwell_daemon import __version__
 from maxwell_daemon.audit import AuditLogger
+from maxwell_daemon.auth import JWTConfig, Role
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task
 from maxwell_daemon.logging import bind_context
@@ -174,6 +175,7 @@ def create_app(
     auth_token: str | None = None,
     github_client: Any = None,
     audit_log_path: _Path | None = None,
+    jwt_config: JWTConfig | None = None,
 ) -> FastAPI:
     """Build the FastAPI app.
 
@@ -235,6 +237,52 @@ def create_app(
         from maxwell_daemon.gh import GitHubClient
 
         return GitHubClient()
+
+    # ── JWT auth endpoints ────────────────────────────────────────────────────
+
+    class TokenRequest(BaseModel):
+        subject: str = Field(..., min_length=1, max_length=128)
+        role: str = Field(default="viewer", pattern=r"^(admin|operator|viewer|developer)$")
+        expiry_seconds: int | None = Field(default=None, ge=1, le=86400 * 30)
+
+    class TokenResponse(BaseModel):
+        access_token: str
+        token_type: str = "bearer"
+        expires_in: int
+        role: str
+
+    @app.post("/api/v1/auth/token", dependencies=[Depends(auth)])
+    async def issue_token(payload: TokenRequest) -> TokenResponse:
+        """Issue a JWT with the requested role.
+
+        Requires the static bearer token (admin action).  The resulting JWT
+        can then be used in place of the static token for role-scoped access.
+        """
+        if jwt_config is None:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "JWT not configured — set api.jwt_secret in config",
+            )
+        ttl = payload.expiry_seconds or jwt_config.expiry_seconds
+        role = Role(payload.role)
+        token = jwt_config.create_token(payload.subject, role, expiry_seconds=ttl)
+        return TokenResponse(access_token=token, expires_in=ttl, role=role.value)
+
+    @app.get("/api/v1/auth/me")
+    async def whoami(authorization: Annotated[str | None, Header()] = None) -> dict[str, Any]:
+        """Decode and return the caller's JWT claims (or static-token identity)."""
+        if jwt_config is not None and authorization and authorization.startswith("Bearer "):
+            raw = authorization.removeprefix("Bearer ").strip()
+            try:
+                claims = jwt_config.decode_token(raw)
+                return {"sub": claims.sub, "role": claims.role.value, "exp": claims.exp.isoformat()}
+            except Exception:  # nosec B110 — invalid/expired JWT, fall through to token check
+                pass
+        if auth_token is not None and authorization:
+            raw = authorization.removeprefix("Bearer ").strip()
+            if hmac.compare_digest(raw.encode(), auth_token.encode()):
+                return {"sub": "static-token", "role": "admin", "exp": None}
+        return {"sub": "anonymous", "role": None, "exp": None}
 
     @app.get("/health")
     async def health() -> dict[str, Any]:

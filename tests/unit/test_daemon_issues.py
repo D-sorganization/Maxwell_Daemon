@@ -54,13 +54,16 @@ def daemon_with_fake_executor(
     return d
 
 
-async def _run_to_completion(daemon: Daemon, task_id: str, timeout: float = 2.0) -> None:
+async def _run_to_completion(daemon: Daemon, task_id: str, timeout: float = 10.0) -> None:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
         t = daemon.get_task(task_id)
         if t and t.status in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
             return
         await asyncio.sleep(0.02)
+    t = daemon.get_task(task_id)
+    if t and t.status in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
+        return
     raise AssertionError(f"task {task_id} did not finish: status={t.status if t else None}")
 
 

@@ -38,6 +38,7 @@ dependencies = [
     "structlog>=24.4.0",
     "tenacity>=9.0.0",
     "tomli>=2.0.0; python_version < '3.11'",
+    "PyJWT>=2.8.0",
 ]
 
 [project.optional-dependencies]

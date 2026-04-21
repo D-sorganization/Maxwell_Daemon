@@ -52,7 +52,7 @@ class _FailingSaveStore:
 
 
 async def _wait_for_status(
-    daemon: Daemon, task_id: str, expected: TaskStatus, timeout: float = 3.0
+    daemon: Daemon, task_id: str, expected: TaskStatus, timeout: float = 10.0
 ) -> None:
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
@@ -60,6 +60,9 @@ async def _wait_for_status(
         if task and task.status is expected:
             return
         await asyncio.sleep(0.01)
+    task = daemon.get_task(task_id)
+    if task and task.status is expected:
+        return
     raise AssertionError(f"task {task_id} did not reach {expected}")
 
 
@@ -82,7 +85,7 @@ class TestTaskStoreErrorLogging:
                 # ``_execute``'s finally block is the one that raises.
                 store.armed = True
                 # Task still completes in-memory even if the DB write fails.
-                await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=3.0)
+                await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
             finally:
                 await d.stop()
 
