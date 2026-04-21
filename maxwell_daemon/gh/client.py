@@ -20,10 +20,21 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["GhCliError", "GitHubClient", "GitHubRateLimitError", "Issue", "PullRequest"]
+__all__ = ["GhCliError", "GitHubClient", "GitHubRateLimitError", "Issue", "PullRequest", "RateLimitError"]
 
 log = logging.getLogger(__name__)
 
+# Patterns in gh CLI stderr that indicate GitHub API rate limiting.
+_RATE_LIMIT_PATTERNS = re.compile(
+    r"(API rate limit exceeded|rate limit|429|secondary rate limit)",
+    re.IGNORECASE,
+)
+# Pattern to extract X-RateLimit-Reset from gh CLI verbose/error output.
+_RATE_RESET_RE = re.compile(r"X-RateLimit-Reset:\s*(\d+)", re.IGNORECASE)
+# Pattern to extract Retry-After header value from gh CLI error output.
+_RETRY_AFTER_RE = re.compile(r"Retry-After:\s*(\d+)", re.IGNORECASE)
+# Pattern to extract X-RateLimit-Remaining from gh CLI output.
+_RATE_REMAINING_RE = re.compile(r"X-RateLimit-Remaining:\s*(\d+)", re.IGNORECASE)
 
 _REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
 _ISSUE_FIELDS = "number,title,body,state,labels,url"
@@ -42,6 +53,8 @@ class GitHubRateLimitError(GhCliError):
         super().__init__(message)
         self.reset_at = reset_at  # Unix timestamp when the limit resets, if known
 
+
+RateLimitError = GitHubRateLimitError
 
 # Exit codes emitted by `gh` when GitHub returns 403 or 429 (rate-limited).
 _RATE_LIMIT_EXIT_CODES: frozenset[int] = frozenset({4})  # gh uses rc=4 for HTTP 4xx
@@ -108,6 +121,25 @@ async def _default_runner(*argv: str, cwd: str | None = None) -> tuple[int, byte
     )
     stdout, stderr = await proc.communicate()
     return proc.returncode or 0, stdout, stderr
+
+
+def _parse_wait_seconds(err_text: str, *, default: int = 60) -> int:
+    """Extract the best wait duration from gh CLI rate-limit error text.
+
+    Prefers ``X-RateLimit-Reset`` (epoch) over ``Retry-After`` (seconds).
+    Falls back to *default* when neither header is present.
+    """
+    reset_match = _RATE_RESET_RE.search(err_text)
+    if reset_match:
+        reset_ts = int(reset_match.group(1))
+        wait = max(0, reset_ts - int(time.time())) + 1
+        return wait
+
+    retry_match = _RETRY_AFTER_RE.search(err_text)
+    if retry_match:
+        return int(retry_match.group(1))
+
+    return default
 
 
 class GitHubClient:
@@ -205,6 +237,71 @@ class GitHubClient:
         except Exception:
             return None
 
+    async def _request_with_retry(
+        self,
+        *argv: str,
+        max_retries: int = 3,
+        cwd: str | None = None,
+    ) -> bytes:
+        """Run a ``gh`` command, retrying on GitHub API rate-limit errors.
+
+        When the ``gh`` CLI returns a non-zero exit code whose stderr matches
+        known rate-limit patterns (``API rate limit exceeded``, ``429``, etc.)
+        we sleep and retry up to *max_retries* times before raising
+        :class:`RateLimitError`.
+
+        All other non-zero exit codes are raised immediately as
+        :class:`GhCliError` without retrying.
+
+        On every invocation the DEBUG log captures ``X-RateLimit-Remaining``
+        when the header appears in the output, giving proactive visibility into
+        quota consumption.
+        """
+        last_err: GhCliError | None = None
+
+        for attempt in range(max_retries + 1):
+            rc, out, err = await self._run("gh", *argv, cwd=cwd)
+            err_text = err.decode(errors="replace")
+
+            # Log remaining quota at DEBUG level for proactive visibility.
+            remaining_match = _RATE_REMAINING_RE.search(err_text) or _RATE_REMAINING_RE.search(
+                out.decode(errors="replace")
+            )
+            if remaining_match:
+                remaining = int(remaining_match.group(1))
+                log.debug("GitHub X-RateLimit-Remaining: %d", remaining)
+
+            if rc == 0:
+                return out
+
+            # Check whether this is a rate-limit error.
+            if _RATE_LIMIT_PATTERNS.search(err_text):
+                wait = min(_parse_wait_seconds(err_text), 300)  # cap at 5 min
+                last_err = RateLimitError(
+                    f"gh {' '.join(argv)} rate limited "
+                    f"(attempt {attempt + 1}/{max_retries + 1}): {err_text.strip()}"
+                )
+                if attempt < max_retries:
+                    log.warning(
+                        "GitHub rate limited; sleeping %ds (attempt %d/%d)",
+                        wait,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+
+                # All retries exhausted.
+                raise last_err
+
+            # Non-rate-limit error — raise immediately.
+            raise GhCliError(f"gh {' '.join(argv)} failed (rc={rc}): {err_text.strip()}")
+
+        # Unreachable, but satisfies the type checker.
+        if last_err is not None:
+            raise last_err
+        raise GhCliError(f"gh {' '.join(argv)} failed after {max_retries} retries")
+
     async def check_auth(self) -> bool:
         rc, _, _ = await self._run("gh", "auth", "status")
         return rc == 0
@@ -213,7 +310,7 @@ class GitHubClient:
         self._validate_repo(repo)
         if state not in {"open", "closed", "all"}:
             raise ValueError(f"state must be one of open/closed/all, got {state!r}")
-        out = await self._gh(
+        out = await self._request_with_retry(
             "issue",
             "list",
             "--repo",
@@ -230,7 +327,7 @@ class GitHubClient:
 
     async def get_issue(self, repo: str, number: int) -> Issue:
         self._validate_repo(repo)
-        out = await self._gh(
+        out = await self._request_with_retry(
             "issue",
             "view",
             str(int(number)),
@@ -264,7 +361,7 @@ class GitHubClient:
         ]
         if labels:
             argv += ["--label", ",".join(labels)]
-        out = await self._gh(*argv)
+        out = await self._request_with_retry(*argv)
         return out.decode().strip()
 
     async def list_branches(self, repo: str) -> list[str]:
@@ -274,14 +371,14 @@ class GitHubClient:
         (e.g. ``staging``) actually exists before we base a PR on it.
         """
         self._validate_repo(repo)
-        out = await self._gh("api", f"repos/{repo}/branches", "--paginate")
+        out = await self._request_with_retry("api", f"repos/{repo}/branches", "--paginate")
         payload = json.loads(out) if out else []
         return [str(b.get("name", "")) for b in payload if b.get("name")]
 
     async def get_default_branch(self, repo: str) -> str:
         """Return the repo's default branch (e.g. ``main`` or ``master``)."""
         self._validate_repo(repo)
-        out = await self._gh("api", f"repos/{repo}")
+        out = await self._request_with_retry("api", f"repos/{repo}")
         payload = json.loads(out) if out else {}
         branch = payload.get("default_branch")
         if not branch:
@@ -315,6 +412,6 @@ class GitHubClient:
         ]
         if draft:
             argv.append("--draft")
-        out = await self._gh(*argv)
+        out = await self._request_with_retry(*argv)
         url = out.decode().strip().splitlines()[-1]
         return PullRequest.from_url(url, draft=draft)
