@@ -9,13 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 
 class BackendConfig(BaseModel):
     """One LLM backend (Claude, OpenAI, Ollama, ...)."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     type: str = Field(..., description="Backend type: claude, openai, ollama, google, azure")
     model: str = Field(..., description="Default model id for this backend")
@@ -153,6 +153,16 @@ class MaxwellDaemonConfig(BaseModel):
         if not v:
             raise ValueError("At least one backend must be configured")
         return v
+
+    @model_validator(mode="after")
+    def _validate_default_backend(self) -> MaxwellDaemonConfig:
+        name = self.agent.default_backend
+        if self.backends and name not in self.backends:
+            raise ValueError(
+                f"agent.default_backend '{name}' is not defined in backends: "
+                f"{sorted(self.backends)}"
+            )
+        return self
 
     def default_backend_config(self) -> BackendConfig:
         name = self.agent.default_backend
