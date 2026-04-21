@@ -102,3 +102,26 @@ class TestConfigLoad:
                     "bogus_key": True,
                 }
             )
+
+
+class TestDefaultConfigPath:
+    def test_maxwell_config_env_overrides_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from maxwell_daemon.config.loader import default_config_path
+
+        custom = tmp_path / "custom.yaml"
+        monkeypatch.setenv("MAXWELL_CONFIG", str(custom))
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+        assert default_config_path() == custom
+
+    def test_xdg_config_home_respected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from maxwell_daemon.config.loader import default_config_path
+
+        monkeypatch.delenv("MAXWELL_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        result = default_config_path()
+        assert str(tmp_path) in str(result)
+        assert "maxwell-daemon" in str(result)
