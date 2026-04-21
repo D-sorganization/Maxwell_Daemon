@@ -176,9 +176,7 @@ class TestAuditLogger:
 class TestBearerTokenRedaction:
     """Issue #234: bearer tokens must never be persisted in audit entries."""
 
-    def test_bearer_token_in_details_is_redacted(
-        self, logger: AuditLogger, log_path: Path
-    ) -> None:
+    def test_bearer_token_in_details_is_redacted(self, logger: AuditLogger, log_path: Path) -> None:
         logger.log_api_call(
             method="POST",
             path="/api/v1/tasks",
@@ -200,9 +198,7 @@ class TestBearerTokenRedaction:
         obj = json.loads(log_path.read_text())
         assert obj["details"]["auth"] == "Bearer ***"
 
-    def test_non_sensitive_details_pass_through(
-        self, logger: AuditLogger, log_path: Path
-    ) -> None:
+    def test_non_sensitive_details_pass_through(self, logger: AuditLogger, log_path: Path) -> None:
         logger.log_api_call(
             method="GET",
             path="/health",
