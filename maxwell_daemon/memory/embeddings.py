@@ -325,6 +325,20 @@ CREATE INDEX IF NOT EXISTS idx_embedding_cache_created_at
 class EmbeddingCache:
     """SQLite-backed cache keyed by ``(provider_name, text_hash)``.
 
+    ``provider_name`` must be the **full configuration fingerprint** from
+    :attr:`EmbeddingResult.provider_name`, not the bare static
+    :attr:`EmbeddingProvider.name`.  Both built-in providers already encode
+    their config into the result's ``provider_name``:
+
+    * :class:`StubEmbeddingProvider` → ``"stub:<dimensions>"``
+      (e.g. ``"stub:64"``)
+    * :class:`OpenAIEmbeddingProvider` → ``"openai:<model>:<dimensions>"``
+      (e.g. ``"openai:text-embedding-3-small:1536"``)
+
+    This guarantees that switching model or dimensionality after deploying
+    with an existing SQLite file does *not* silently reuse stale vectors —
+    the old rows are simply missed and fresh ones are written.
+
     Same connection-per-call pattern as :class:`CostLedger` — callers need
     only one ``EmbeddingCache`` per process, and the lock serialises writes
     so WAL-mode readers never see a half-populated row.
