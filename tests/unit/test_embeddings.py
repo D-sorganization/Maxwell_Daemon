@@ -79,7 +79,7 @@ class TestStubProvider:
     def test_provider_name_stamped(self) -> None:
         provider = StubEmbeddingProvider(dimensions=32)
         out = _run(provider.embed_batch(("x",)))
-        assert out[0].provider_name == "stub"
+        assert out[0].provider_name == "stub:32"
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +138,7 @@ class TestOpenAIProvider:
         assert isinstance(result, EmbeddingResult)
         assert result.vector == (0.5, 0.5, 0.5)
         assert result.dimensions == 3
-        assert result.provider_name == "openai"
+        assert result.provider_name == "openai:text-embedding-3-small:3"
         assert result.text_hash == hash_text("only")
 
     def test_dimensions_override_forwarded(self) -> None:
