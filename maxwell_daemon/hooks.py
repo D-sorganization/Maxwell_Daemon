@@ -25,6 +25,7 @@ Design notes (per Maxwell-Daemon principles):
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 import json
 import os
 import shlex
@@ -294,10 +295,11 @@ class HookRunner:
 
 
 def _matches(pattern: str, name: str) -> bool:
-    """Tool-name glob: ``"*"`` matches everything; otherwise exact match."""
-    if pattern == "*":
-        return True
-    return pattern == name
+    """Tool-name glob using :func:`fnmatch.fnmatch` for full glob support.
+
+    Supports patterns like ``"*"``, ``"run_*"``, ``"*.py"``, etc.
+    """
+    return fnmatch.fnmatch(name, pattern)
 
 
 def _substitute(command: str, tool_input: dict[str, Any]) -> str:

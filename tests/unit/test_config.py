@@ -83,14 +83,16 @@ class TestConfigLoad:
         assert "sk-test-123" not in repr(cfg.backends["claude"])
 
     def test_default_backend_must_exist(self) -> None:
-        cfg = MaxwellDaemonConfig.model_validate(
-            {
-                "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
-                "agent": {"default_backend": "nonexistent"},
-            }
-        )
-        with pytest.raises(ValueError, match="not found in backends"):
-            cfg.default_backend_config()
+        from pydantic import ValidationError
+
+        # Validation now happens eagerly at model construction (not lazily).
+        with pytest.raises(ValidationError, match="not defined in backends"):
+            MaxwellDaemonConfig.model_validate(
+                {
+                    "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
+                    "agent": {"default_backend": "nonexistent"},
+                }
+            )
 
     def test_rejects_unknown_top_level_keys(self) -> None:
         from pydantic import ValidationError
