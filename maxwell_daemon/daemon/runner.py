@@ -179,9 +179,7 @@ class Daemon:
         if n > current:
             # Spawn additional workers.
             for i in range(current, n):
-                task = asyncio.create_task(
-                    self._worker_loop(i), name=f"worker-{i}"
-                )
+                task = asyncio.create_task(self._worker_loop(i), name=f"worker-{i}")
                 self._workers.append(task)
             log.info("set_worker_count: added %d worker(s); total=%d", n - current, n)
         elif n < current:
