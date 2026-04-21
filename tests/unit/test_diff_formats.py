@@ -294,3 +294,149 @@ class TestParseAny:
         assert "udiff" in msg
         assert "search_replace" in msg
         assert "whole_file" in msg
+
+
+# ── Additional parse_udiff edge cases ───────────────────────────────────────
+
+
+class TestParseUdiffEdgeCases:
+    def test_no_sections_parsed_raises(self) -> None:
+        """Text with a diff --git header but no file headers raises DiffParseError."""
+        text = dedent("""\
+            diff --git a/foo.py b/foo.py
+            some garbage
+            not a hunk
+            """)
+        with pytest.raises(DiffParseError):
+            parse_udiff(text)
+
+    def test_udiff_section_empty_raises(self) -> None:
+        """_parse_udiff_section with empty section raises DiffParseError."""
+        from maxwell_daemon.editing.diff_formats import _parse_udiff_section
+
+        with pytest.raises(DiffParseError, match="empty"):
+            _parse_udiff_section([])
+
+    def test_missing_file_headers_raises(self) -> None:
+        """Section missing --- / +++ headers raises DiffParseError."""
+        text = dedent("""\
+            diff --git a/foo.py b/foo.py
+            @@ -1,1 +1,1 @@
+            -old
+            +new
+            """)
+        with pytest.raises(DiffParseError, match="---"):
+            parse_udiff(text)
+
+    def test_missing_hunk_raises(self) -> None:
+        """Section with --- / +++ but no @@ hunk raises DiffParseError."""
+        text = dedent("""\
+            diff --git a/foo.py b/foo.py
+            --- a/foo.py
+            +++ b/foo.py
+            just some text
+            """)
+        with pytest.raises(DiffParseError, match="hunk"):
+            parse_udiff(text)
+
+    def test_malformed_subsequent_hunk_header_raises(self) -> None:
+        """A malformed @@ header after the first one raises DiffParseError."""
+        text = dedent("""\
+            diff --git a/foo.py b/foo.py
+            --- a/foo.py
+            +++ b/foo.py
+            @@ -1,1 +1,1 @@
+            -old
+            +new
+            @@ not a real hunk header @@
+            more lines
+            """)
+        with pytest.raises(DiffParseError, match="hunk"):
+            parse_udiff(text)
+
+
+# ── Additional parse_whole_file edge cases ────────────────────────────────────
+
+
+class TestParseWholeFileEdgeCases:
+    def test_stray_end_marker_raises(self) -> None:
+        """A '--- end ---' without a matching header raises DiffParseError."""
+        text = "--- end ---\n"
+        with pytest.raises(DiffParseError, match="end"):
+            parse_whole_file(text)
+
+    def test_no_headers_raises(self) -> None:
+        """Text with no '--- path ---' headers at all raises DiffParseError."""
+        text = "just some text\nno headers here\n"
+        with pytest.raises(DiffParseError, match="headers"):
+            parse_whole_file(text)
+
+    def test_missing_end_for_second_file_raises(self) -> None:
+        """A second header appearing before the first block's end raises DiffParseError."""
+        text = dedent("""\
+            --- foo.py ---
+            a = 1
+            --- bar.py ---
+            b = 2
+            --- end ---
+            """)
+        with pytest.raises(DiffParseError, match="end"):
+            parse_whole_file(text)
+
+
+# ── Additional parse_search_replace edge cases ────────────────────────────────
+
+
+class TestParseSearchReplaceEdgeCases:
+    def test_no_search_marker_raises(self) -> None:
+        """Text without any SEARCH marker raises DiffParseError."""
+        text = "file: foo.py\njust some text\n"
+        with pytest.raises(DiffParseError, match="SEARCH"):
+            parse_search_replace(text)
+
+    def test_replace_before_separator_raises(self) -> None:
+        """REPLACE marker appearing before separator raises DiffParseError."""
+        text = dedent("""\
+            file: foo.py
+            <<<<<<< SEARCH
+            old
+            >>>>>>> REPLACE
+            """)
+        with pytest.raises(DiffParseError, match="separator"):
+            parse_search_replace(text)
+
+    def test_find_preceding_file_preamble_blocked_by_replace_marker(self) -> None:
+        """REPLACE marker above SEARCH blocks the preamble scan."""
+        from maxwell_daemon.editing.diff_formats import _find_preceding_file_preamble, _SR_REPLACE_MARKER
+
+        lines = [
+            "file: foo.py",
+            _SR_REPLACE_MARKER,
+            "<<<<<<< SEARCH",
+        ]
+        result = _find_preceding_file_preamble(lines, 2)
+        assert result is None  # blocked by the REPLACE marker
+
+    def test_find_preceding_skips_blank_lines(self) -> None:
+        """Blank lines between file preamble and SEARCH are skipped."""
+        from maxwell_daemon.editing.diff_formats import _find_preceding_file_preamble
+
+        lines = [
+            "file: foo.py",
+            "",
+            "",
+            "<<<<<<< SEARCH",
+        ]
+        result = _find_preceding_file_preamble(lines, 3)
+        assert result == "foo.py"
+
+    def test_find_preceding_returns_none_for_non_file_line(self) -> None:
+        """A non-blank non-file: line immediately above SEARCH returns None."""
+        from maxwell_daemon.editing.diff_formats import _find_preceding_file_preamble
+
+        lines = [
+            "some random text",
+            "<<<<<<< SEARCH",
+        ]
+        result = _find_preceding_file_preamble(lines, 1)
+        assert result is None

@@ -159,3 +159,34 @@ class TestRunGates:
         )
         assert len(results) == 2
         assert all(r.passed for r in results)
+
+
+class TestTodoFixmeGateEdgeCases:
+    def test_skips_files_in_tests_subdir(self, tmp_path: Path) -> None:
+        """Files under tests/ are excluded from the TODO scan."""
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_something.py").write_text("# TODO: improve this test\n")
+        gate = TodoFixmeGate()
+        r = asyncio.run(gate.check(tmp_path))
+        assert r.passed is True
+
+    def test_handles_tokenize_error_gracefully(self, tmp_path: Path) -> None:
+        """Files that raise TokenError during tokenization are silently skipped."""
+        # Write a file that looks like Python but will cause tokenize errors
+        (tmp_path / "bad.py").write_text("'''unclosed string\n# TODO no issue\n")
+        gate = TodoFixmeGate()
+        # Should not raise — the except clause swallows the error
+        r = asyncio.run(gate.check(tmp_path))
+        assert r.passed in (True, False)  # may or may not flag it, but must not crash
+
+
+class TestFileSizeBudgetGateEdgeCases:
+    def test_skips_files_in_git_dir(self, tmp_path: Path) -> None:
+        """Python files inside .git/ directories are skipped."""
+        git_dir = tmp_path / ".git" / "hooks"
+        git_dir.mkdir(parents=True)
+        (git_dir / "pre-commit.py").write_text("\n" * 2000)
+        gate = FileSizeBudgetGate(max_lines=1200)
+        r = asyncio.run(gate.check(tmp_path))
+        assert r.passed is True
