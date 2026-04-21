@@ -2,9 +2,40 @@ name: Docs
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
-  disabled:
-    runs-on: [self-hosted, d-sorg-fleet-4core]
+  build:
+    runs-on: ubuntu-latest
     steps:
-      - run: echo "Docs deployment temporarily disabled — re-enable after 2026-05-01"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install ".[docs]"
+      - run: mkdocs build --strict --site-dir site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
