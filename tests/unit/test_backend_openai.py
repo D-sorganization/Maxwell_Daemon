@@ -12,8 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from maxwell_daemon.backends.base import BackendUnavailableError
-from maxwell_daemon.backends.base import Message, MessageRole
+from maxwell_daemon.backends.base import BackendUnavailableError, Message, MessageRole
 from maxwell_daemon.backends.openai import OpenAIBackend
 from maxwell_daemon.backends.registry import registry
 

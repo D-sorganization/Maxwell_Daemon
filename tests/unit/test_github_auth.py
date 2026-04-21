@@ -119,9 +119,8 @@ class TestAppAuth:
         auth = self._make_auth()
         fake_jwt = MagicMock()
         fake_jwt.encode.return_value = "jwt"
-        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}):
-            with pytest.raises(ImportError, match="httpx"):
-                auth._fetch_installation_token()
+        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}), pytest.raises(ImportError, match="httpx"):
+            auth._fetch_installation_token()
 
     def test_fetch_installation_token_success(self) -> None:
         auth = self._make_auth()
@@ -219,7 +218,7 @@ class TestAsyncGetToken:
             return mock_response
 
         class _FakeClient:
-            async def __aenter__(self) -> "_FakeClient":
+            async def __aenter__(self) -> _FakeClient:
                 return self
 
             async def __aexit__(self, *args: object) -> None:
@@ -240,17 +239,15 @@ class TestAsyncGetToken:
 
     async def test_async_fetch_no_jwt_raises(self) -> None:
         auth = self._make_auth()
-        with patch.dict("sys.modules", {"jwt": None}):
-            with pytest.raises(ImportError, match="PyJWT"):
-                await auth._async_fetch_installation_token()
+        with patch.dict("sys.modules", {"jwt": None}), pytest.raises(ImportError, match="PyJWT"):
+            await auth._async_fetch_installation_token()
 
     async def test_async_fetch_no_httpx_raises(self) -> None:
         auth = self._make_auth()
         fake_jwt = MagicMock()
         fake_jwt.encode.return_value = "jwt"
-        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}):
-            with pytest.raises(ImportError, match="httpx"):
-                await auth._async_fetch_installation_token()
+        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}), pytest.raises(ImportError, match="httpx"):
+            await auth._async_fetch_installation_token()
 
     async def test_async_installation_token_caches_result(self) -> None:
         """_async_installation_token updates the cache after a fresh fetch."""
