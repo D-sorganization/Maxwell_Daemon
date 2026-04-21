@@ -132,6 +132,7 @@ class GitHubAuth:
         except ImportError as exc:
             raise ImportError("httpx is required for GitHub App auth.") from exc
 
+        assert self._private_key_pem is not None, "private_key_pem must be set for App auth"
         now = int(time.time())
         payload = {"iat": now - 60, "exp": now + 600, "iss": str(self._app_id)}
         jwt_token = _jwt.encode(payload, self._private_key_pem, algorithm="RS256")

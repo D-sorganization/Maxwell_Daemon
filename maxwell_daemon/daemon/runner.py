@@ -630,41 +630,43 @@ class Daemon:
         machines_by_name = {m.name: m for m in machines}
 
         for assignment in plan.assignments:
-            task = tasks_by_id.get(assignment.task_id)
+            assigned_task = tasks_by_id.get(assignment.task_id)
             machine = machines_by_name.get(assignment.machine_name)
-            if task is None or machine is None:
+            if assigned_task is None or machine is None:
                 continue
 
             task_payload: dict[str, Any] = {
-                "task_id": task.id,
-                "prompt": task.prompt,
-                "kind": task.kind.value,
-                "repo": task.repo,
-                "backend": task.backend,
-                "model": task.model,
-                "issue_repo": task.issue_repo,
-                "issue_number": task.issue_number,
-                "issue_mode": task.issue_mode,
-                "priority": task.priority,
+                "task_id": assigned_task.id,
+                "prompt": assigned_task.prompt,
+                "kind": assigned_task.kind.value,
+                "repo": assigned_task.repo,
+                "backend": assigned_task.backend,
+                "model": assigned_task.model,
+                "issue_repo": assigned_task.issue_repo,
+                "issue_number": assigned_task.issue_number,
+                "issue_mode": assigned_task.issue_mode,
+                "priority": assigned_task.priority,
             }
 
             try:
                 result = await client.submit_task(machine, task_payload=task_payload)
             except RemoteDaemonError:
-                log.exception("failed to dispatch task %s to machine %s", task.id, machine.name)
+                log.exception(
+                    "failed to dispatch task %s to machine %s", assigned_task.id, machine.name
+                )
                 continue
 
             if result.status == "submitted":
-                task.status = TaskStatus.DISPATCHED
-                task.dispatched_to = machine.name
-                log.info("dispatched task %s to machine %s", task.id, machine.name)
+                assigned_task.status = TaskStatus.DISPATCHED
+                assigned_task.dispatched_to = machine.name
+                log.info("dispatched task %s to machine %s", assigned_task.id, machine.name)
                 with contextlib.suppress(Exception):
-                    self._task_store.save(task)
+                    self._task_store.save(assigned_task)
             else:
                 log.warning(
                     "machine %s rejected task %s: %s",
                     machine.name,
-                    task.id,
+                    assigned_task.id,
                     result.detail,
                 )
 
