@@ -365,8 +365,14 @@ class Daemon:
     def state(self) -> DaemonState:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
+        try:
+            from importlib.metadata import version as _pkg_version
+
+            _version = _pkg_version("maxwell-daemon")
+        except Exception:
+            _version = "unknown"
         return DaemonState(
-            version="0.1.0",
+            version=_version,
             config_path=None,
             tasks=tasks_snapshot,
             started_at=self._started_at,

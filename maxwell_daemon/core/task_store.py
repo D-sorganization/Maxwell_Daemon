@@ -19,7 +19,7 @@ import sqlite3
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -165,7 +165,7 @@ class TaskStore:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
     ) -> None:
-        now = datetime.now().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._lock, self._connect() as conn:
             cursor = conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
             if cursor.fetchone() is None:
@@ -210,7 +210,7 @@ class TaskStore:
         """Mark stale RUNNING tasks as FAILED; return anything still QUEUED."""
         from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
 
-        now = datetime.now().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
