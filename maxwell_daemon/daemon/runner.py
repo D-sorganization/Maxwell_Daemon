@@ -16,10 +16,10 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
+from maxwell_daemon import __version__
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
 from maxwell_daemon.core import (
@@ -35,20 +35,6 @@ from maxwell_daemon.events import Event, EventBus, EventKind
 from maxwell_daemon.metrics import record_request
 
 log = logging.getLogger("maxwell_daemon.daemon")
-
-
-def _package_version() -> str:
-    """Return the installed package version, falling back to the __version__ attribute."""
-    try:
-        return version("maxwell-daemon")
-    except PackageNotFoundError:
-        pass
-    try:
-        from maxwell_daemon import __version__
-
-        return __version__
-    except Exception:
-        return "unknown"
 
 
 class TaskStatus(str, Enum):
@@ -426,7 +412,7 @@ class Daemon:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
         return DaemonState(
-            version=_package_version(),
+            version=__version__,
             config_path=None,
             tasks=tasks_snapshot,
             started_at=self._started_at,

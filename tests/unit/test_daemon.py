@@ -162,6 +162,29 @@ class TestState:
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
 
+    def test_state_version_from_package_metadata(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """state().version should come from importlib.metadata, not be hardcoded."""
+        from importlib.metadata import PackageNotFoundError
+        from importlib.metadata import version as pkg_version
+
+        import maxwell_daemon
+
+        try:
+            expected = pkg_version("maxwell-daemon")
+        except PackageNotFoundError:
+            expected = "unknown"
+
+        # The module-level __version__ must match what importlib.metadata reports.
+        assert maxwell_daemon.__version__ == expected
+
+        async def body(d: Daemon) -> None:
+            assert d.state().version == expected
+            assert d.state().version == maxwell_daemon.__version__
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
     def test_from_config_path_roundtrip(
         self,
         tmp_path: Path,
