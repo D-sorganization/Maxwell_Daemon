@@ -1,33 +1,26 @@
-## Summary
+## What does this PR do?
 
-- 
+<!-- One paragraph explaining the change and why. Focus on the *why*, not the *what* — the diff shows what changed. -->
 
-## Related Issue
-
-Closes #
-
-## Type of Change
+## Type of change
 
 - [ ] Bug fix
-- [ ] Feature
+- [ ] New feature
+- [ ] Refactor / cleanup
 - [ ] Documentation
-- [ ] Refactor or maintenance
-- [ ] CI, release, or infrastructure
+- [ ] Tests only
+- [ ] Other:
 
-## Verification
+## Checklist
 
-- [ ] `pytest`
-- [ ] `ruff check .`
-- [ ] `ruff format --check .`
-- [ ] `mypy maxwell_daemon`
-- [ ] Documentation updated, if user-facing behavior changed
+- [ ] `pytest` passes locally
+- [ ] `ruff check .` and `ruff format --check .` both pass
+- [ ] `mypy maxwell_daemon` passes
+- [ ] New code has tests (coverage floor must not drop)
+- [ ] Public APIs have type hints
+- [ ] No new TODO/FIXME without a linked GitHub issue
+- [ ] PR description explains the *why*, not just the *what*
 
-## Risk
+## Related issues
 
-- [ ] Migration or config changes documented
-- [ ] Secrets, credentials, and tokens are not logged or committed
-- [ ] Backward compatibility impact is described
-
-## Notes for Reviewers
-
- 
+Closes #

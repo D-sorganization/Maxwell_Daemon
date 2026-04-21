@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -63,3 +64,31 @@ class TestLedger:
         a.record(_record(cost=1.23))
         b = CostLedger(db)
         assert b.month_to_date() == pytest.approx(1.23)
+
+    def test_close_terminates_connection(self, ledger: CostLedger) -> None:
+        """close() should not raise and should close the sqlite connection."""
+        ledger.record(_record(cost=0.01))
+        ledger.close()
+        # After close, attempting to use the connection should raise
+        with pytest.raises(sqlite3.ProgrammingError):
+            ledger._conn.execute("SELECT 1")
+
+
+class TestAsyncAPI:
+    async def test_arecord_and_atotal(self, tmp_path: Path) -> None:
+        ledger = CostLedger(tmp_path / "ledger.db")
+        await ledger.arecord(_record(cost=0.42))
+        start = datetime.now(timezone.utc) - timedelta(days=1)
+        total = await ledger.atotal_since(start)
+        assert total == pytest.approx(0.42)
+        ledger.close()
+
+    async def test_aby_backend(self, tmp_path: Path) -> None:
+        ledger = CostLedger(tmp_path / "ledger.db")
+        await ledger.arecord(_record(cost=1.00, backend="openai"))
+        await ledger.arecord(_record(cost=0.50, backend="claude"))
+        start = datetime.now(timezone.utc) - timedelta(days=1)
+        by = await ledger.aby_backend(start)
+        assert by["openai"] == pytest.approx(1.00)
+        assert by["claude"] == pytest.approx(0.50)
+        ledger.close()

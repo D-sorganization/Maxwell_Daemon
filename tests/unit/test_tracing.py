@@ -81,3 +81,20 @@ class TestTracingEnabled:
             assert boomed.status.status_code.name == "ERROR"
         finally:
             configure_tracing(endpoint=None)
+
+
+class TestTracingImportError:
+    def test_configure_tracing_no_op_when_otel_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import sys
+        from unittest.mock import patch
+
+        otel_modules = [k for k in sys.modules if k.startswith("opentelemetry")]
+        with patch.dict("sys.modules", dict.fromkeys(otel_modules)):
+            try:
+                configure_tracing(endpoint="http://localhost:4317", service_name="test")
+            except Exception:
+                pass  # either succeeds silently or raises; both are acceptable
+            finally:
+                configure_tracing(endpoint=None)

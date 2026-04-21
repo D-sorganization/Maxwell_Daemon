@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import time
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -119,9 +119,11 @@ class TestAppAuth:
         auth = self._make_auth()
         fake_jwt = MagicMock()
         fake_jwt.encode.return_value = "jwt"
-        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}):
-            with pytest.raises(ImportError, match="httpx"):
-                auth._fetch_installation_token()
+        with (
+            patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}),
+            pytest.raises(ImportError, match="httpx"),
+        ):
+            auth._fetch_installation_token()
 
     def test_fetch_installation_token_success(self) -> None:
         auth = self._make_auth()
@@ -144,6 +146,147 @@ class TestAppAuth:
         assert expires_at > time.monotonic()
         response.raise_for_status.assert_called_once()
         fake_httpx.post.assert_called_once()
+
+
+class TestAsyncGetToken:
+    """Tests for the async get_token() / _async_fetch_installation_token() path."""
+
+    def _make_auth(self) -> GitHubAuth:
+        return GitHubAuth.from_app(
+            app_id=12345,
+            installation_id=99999,
+            private_key_pem="fake-pem",
+        )
+
+    async def test_get_token_token_mode(self) -> None:
+        auth = GitHubAuth.from_token("ghp_async_test")
+        result = await auth.get_token()
+        assert result == "ghp_async_test"
+
+    async def test_get_token_uses_cache_when_fresh(self) -> None:
+        auth = self._make_auth()
+        auth._cache = _AppTokenCache(
+            token="cached_async_token",
+            expires_at=time.monotonic() + 3600,
+        )
+        result = await auth.get_token()
+        assert result == "cached_async_token"
+
+    async def test_get_token_fetches_when_cache_expired(self) -> None:
+        auth = self._make_auth()
+        auth._cache = _AppTokenCache(
+            token="old_token",
+            expires_at=time.monotonic() - 1,
+        )
+
+        expected_expires = time.monotonic() + 3600
+
+        async def _fake_fetch() -> tuple[str, float]:
+            return "new_async_token", expected_expires
+
+        with patch.object(auth, "_async_fetch_installation_token", side_effect=_fake_fetch):
+            result = await auth.get_token()
+
+        assert result == "new_async_token"
+        assert auth._cache is not None
+        assert auth._cache.token == "new_async_token"
+
+    async def test_get_token_fetches_when_no_cache(self) -> None:
+        auth = self._make_auth()
+        assert auth._cache is None
+
+        async def _fake_fetch() -> tuple[str, float]:
+            return "fresh_token", time.monotonic() + 3600
+
+        with patch.object(auth, "_async_fetch_installation_token", side_effect=_fake_fetch):
+            result = await auth.get_token()
+
+        assert result == "fresh_token"
+
+    async def test_async_fetch_installation_token_success(self) -> None:
+        auth = self._make_auth()
+
+        fake_jwt = MagicMock()
+        fake_jwt.encode.return_value = "jwt-token"
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "token": "async_inst_token",
+            "expires_at": "2099-01-01T00:00:00Z",
+        }
+
+        # Build a context-manager-based async client mock
+        async def _fake_post(*args: object, **kwargs: object) -> MagicMock:
+            return mock_response
+
+        class _FakeClient:
+            async def __aenter__(self) -> _FakeClient:
+                return self
+
+            async def __aexit__(self, *args: object) -> None:
+                pass
+
+            async def post(self, *args: object, **kwargs: object) -> MagicMock:
+                return mock_response
+
+        fake_httpx = MagicMock()
+        fake_httpx.AsyncClient.return_value = _FakeClient()
+
+        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": fake_httpx}):
+            token, expires_at = await auth._async_fetch_installation_token()
+
+        assert token == "async_inst_token"
+        assert expires_at > time.monotonic()
+        mock_response.raise_for_status.assert_called_once()
+
+    async def test_async_fetch_no_jwt_raises(self) -> None:
+        auth = self._make_auth()
+        with patch.dict("sys.modules", {"jwt": None}), pytest.raises(ImportError, match="PyJWT"):
+            await auth._async_fetch_installation_token()
+
+    async def test_async_fetch_no_httpx_raises(self) -> None:
+        auth = self._make_auth()
+        fake_jwt = MagicMock()
+        fake_jwt.encode.return_value = "jwt"
+        with (
+            patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}),
+            pytest.raises(ImportError, match="httpx"),
+        ):
+            await auth._async_fetch_installation_token()
+
+    async def test_async_installation_token_caches_result(self) -> None:
+        """_async_installation_token updates the cache after a fresh fetch."""
+        auth = self._make_auth()
+        expected_expires = time.monotonic() + 7200
+
+        async def _fake_fetch() -> tuple[str, float]:
+            return "cached_after_fetch", expected_expires
+
+        with patch.object(auth, "_async_fetch_installation_token", side_effect=_fake_fetch):
+            result = await auth._async_installation_token()
+
+        assert result == "cached_after_fetch"
+        assert auth._cache is not None
+        assert auth._cache.token == "cached_after_fetch"
+
+    async def test_async_installation_token_returns_cached(self) -> None:
+        """_async_installation_token returns from cache without a fetch when fresh."""
+        auth = self._make_auth()
+        auth._cache = _AppTokenCache(token="still_good", expires_at=time.monotonic() + 3600)
+
+        fetch_called = False
+
+        async def _fake_fetch() -> tuple[str, float]:
+            nonlocal fetch_called
+            fetch_called = True
+            return "should_not_be_called", time.monotonic() + 3600
+
+        with patch.object(auth, "_async_fetch_installation_token", side_effect=_fake_fetch):
+            result = await auth._async_installation_token()
+
+        assert result == "still_good"
+        assert not fetch_called
 
 
 class TestAppConfig:
