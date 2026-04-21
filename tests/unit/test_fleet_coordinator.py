@@ -21,10 +21,7 @@ from typing import Any
 import pytest
 
 from maxwell_daemon.config import MaxwellDaemonConfig
-from maxwell_daemon.config.models import FleetConfig, MachineConfig
 from maxwell_daemon.daemon.runner import Daemon, Task, TaskKind, TaskStatus
-from maxwell_daemon.fleet.dispatcher import MachineState
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -106,7 +103,7 @@ class TestRoleConfig:
         assert cfg.role == "worker"
 
     def test_invalid_role_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises((Exception, ValueError)):
             MaxwellDaemonConfig.model_validate(
                 {
                     "role": "bogus",
@@ -302,7 +299,7 @@ class _FakeHTTPClient:
 class TestDispatchToFleet:
     def _daemon_with_machines(
         self, tmp_path: Path, machines: list[dict]
-    ) -> "tuple[Daemon, _FakeHTTPClient]":
+    ) -> tuple[Daemon, _FakeHTTPClient]:
         cfg = _make_config(role="coordinator", machines=machines)
         daemon = Daemon(
             cfg,
@@ -311,7 +308,6 @@ class TestDispatchToFleet:
         )
         fake_http = _FakeHTTPClient()
         # Patch RemoteDaemonClient to use our fake HTTP transport.
-        from maxwell_daemon.fleet.client import RemoteDaemonClient
         daemon._fake_http = fake_http  # store ref for assertions
         # We'll monkeypatch at the module level for the duration of the test.
         return daemon, fake_http
