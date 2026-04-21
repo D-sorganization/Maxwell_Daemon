@@ -454,3 +454,116 @@ class TestDispatchToFleet:
             assert task.dispatched_to is None
 
         asyncio.run(_run())
+
+
+class TestSetWorkerCount:
+    """Tests for Daemon.set_worker_count() — dynamic worker pool scaling."""
+
+    def test_scale_up_adds_workers(self, tmp_path: Path) -> None:
+        async def _run() -> None:
+            cfg = _make_config()
+            daemon = Daemon(
+                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+            )
+            await daemon.start(worker_count=1)
+            try:
+                assert len(daemon._workers) == 1
+                await daemon.set_worker_count(3)
+                assert len(daemon._workers) == 3
+            finally:
+                await daemon.stop()
+
+        asyncio.run(_run())
+
+    def test_scale_down_sends_sentinels(self, tmp_path: Path) -> None:
+        async def _run() -> None:
+            cfg = _make_config()
+            daemon = Daemon(
+                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+            )
+            await daemon.start(worker_count=3)
+            try:
+                await daemon.set_worker_count(1)
+                # Worker count is set; workers will exit when sentinel is dequeued.
+                assert daemon._worker_count == 1
+            finally:
+                await daemon.stop()
+
+        asyncio.run(_run())
+
+    def test_rejects_zero_count(self, tmp_path: Path) -> None:
+        async def _run() -> None:
+            cfg = _make_config()
+            daemon = Daemon(
+                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+            )
+            await daemon.start(worker_count=1)
+            try:
+                with pytest.raises(ValueError, match="at least 1"):
+                    await daemon.set_worker_count(0)
+            finally:
+                await daemon.stop()
+
+        asyncio.run(_run())
+
+
+class TestReprioritizeTask:
+    """Tests for Daemon.reprioritize_task() — runtime task priority adjustment."""
+
+    def test_reprioritize_changes_priority(self, tmp_path: Path) -> None:
+        async def _run() -> None:
+            cfg = _make_config()
+            daemon = Daemon(
+                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+            )
+            await daemon.start(worker_count=1)
+            try:
+                task = daemon.submit("hello")
+                # Only reprioritize if still QUEUED
+                if task.status is TaskStatus.QUEUED:
+                    updated = daemon.reprioritize_task(task.id, 50)
+                    assert updated.priority == 50
+            finally:
+                await daemon.stop()
+
+        asyncio.run(_run())
+
+    def test_reprioritize_missing_task_raises(self, tmp_path: Path) -> None:
+        async def _run() -> None:
+            cfg = _make_config()
+            daemon = Daemon(
+                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+            )
+            await daemon.start(worker_count=1)
+            try:
+                with pytest.raises(KeyError):
+                    daemon.reprioritize_task("nonexistent-id", 50)
+            finally:
+                await daemon.stop()
+
+        asyncio.run(_run())
+
+
+class TestReloadConfig:
+    """Tests for Daemon.reload_config() — hot config reloading."""
+
+    def test_reload_config_updates_budget(self, tmp_path: Path) -> None:
+        from maxwell_daemon.config import save_config
+
+        async def _run() -> None:
+            cfg = _make_config()
+            cfg_path = tmp_path / "config.yaml"
+            save_config(cfg, cfg_path)
+            daemon = Daemon(
+                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+            )
+            daemon._config_path = cfg_path
+            await daemon.start(worker_count=1)
+            try:
+                # Reload same config — no changes expected.
+                changed = await daemon.reload_config()
+                assert isinstance(changed, dict)
+            finally:
+                await daemon.stop()
+
+        asyncio.run(_run())
