@@ -207,8 +207,8 @@ class SSHSessionPool:
                 try:
                     priv, _ = self._key_store.get_or_generate(host)
                     connect_kwargs["client_keys"] = [priv]
-                except Exception:
-                    pass  # Fall through to agent/default key resolution
+                except Exception:  # nosec B110
+                    pass  # fall through to agent/default key resolution
 
             conn = await asyncssh.connect(**connect_kwargs)
             session = SSHSession(conn, time.monotonic())
