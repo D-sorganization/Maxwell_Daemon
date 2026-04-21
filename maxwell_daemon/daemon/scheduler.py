@@ -22,9 +22,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import random
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from maxwell_daemon.contracts import require
@@ -58,12 +60,15 @@ class DiscoveryTick:
     repos: tuple[str, ...]
 
 
+_DEFAULT_DEDUP_PATH = Path.home() / ".local/share/maxwell-daemon/discovery_dedup.json"
+
+
 class DiscoveryScheduler:
     """Runs :func:`discover_issues` across every repo on an interval.
 
-    Deduplication persists *in-memory* across ticks within one scheduler
-    lifetime. Restart loses the set; the daemon's durable task store is
-    the second line of defence (already-active tasks won't re-enqueue).
+    Deduplication is persisted to a JSON file (``dedup_path``) so it
+    survives daemon restarts — preventing duplicate task dispatch for
+    issues already queued in a prior run (#149).
 
     The ``start()``/``stop()`` pair wraps the background task. Exceptions
     from any one tick are logged and swallowed so a transient outage
@@ -78,6 +83,7 @@ class DiscoveryScheduler:
         repos: list[DiscoveryRepoSpec],
         interval_seconds: float = 300.0,
         jitter: bool = True,
+        dedup_path: Path | None = None,
     ) -> None:
         require(
             interval_seconds > 0,
@@ -88,10 +94,40 @@ class DiscoveryScheduler:
         self._repos = list(repos)
         self._interval = float(interval_seconds)
         self._jitter = jitter
+        self._dedup_path: Path | None = (
+            dedup_path if dedup_path is not None else _DEFAULT_DEDUP_PATH
+        )
         # Per-repo set of issue numbers we've seen in any prior tick.
-        self._dispatched: dict[str, set[int]] = {}
+        # Loaded from disk on construction so restarts don't re-dispatch.
+        self._dispatched: dict[str, set[int]] = self._load_dedup()
         self._task: asyncio.Task[None] | None = None
         self._stop_event: asyncio.Event | None = None
+
+    # ------------------------------------------------------------------ #
+    # Dedup persistence
+    # ------------------------------------------------------------------ #
+
+    def _load_dedup(self) -> dict[str, set[int]]:
+        """Load the persisted dedup map from disk, returning an empty dict on any error."""
+        if self._dedup_path is None or not self._dedup_path.exists():
+            return {}
+        try:
+            raw = json.loads(self._dedup_path.read_text())
+            return {repo: set(nums) for repo, nums in raw.items() if isinstance(nums, list)}
+        except Exception:
+            log.warning("discovery dedup file unreadable; starting fresh", exc_info=True)
+            return {}
+
+    def _save_dedup(self) -> None:
+        """Persist the current dedup map to disk.  Failures are logged, not raised."""
+        if self._dedup_path is None:
+            return
+        try:
+            self._dedup_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {repo: sorted(nums) for repo, nums in self._dispatched.items()}
+            self._dedup_path.write_text(json.dumps(payload))
+        except Exception:
+            log.warning("failed to persist discovery dedup", exc_info=True)
 
     async def run_once(self) -> DiscoveryTick:
         """Poll every configured repo exactly once and submit new issues."""
@@ -127,6 +163,10 @@ class DiscoveryScheduler:
             total_scanned += result.scanned
             total_dispatched += result.dispatched
             total_skipped += result.skipped
+
+        # Persist dedup state so a restart doesn't re-dispatch already-seen issues.
+        if total_dispatched:
+            self._save_dedup()
 
         return DiscoveryTick(
             scanned=total_scanned,

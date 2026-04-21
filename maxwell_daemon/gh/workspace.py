@@ -107,13 +107,35 @@ class Workspace:
         await self._run_git("clone", "--depth", str(depth), url, str(target))
         return target
 
+    async def _branch_exists_on_remote(self, branch: str, *, cwd: Path) -> bool:
+        """Return True if *branch* already exists on the remote.
+
+        Uses ``git ls-remote --heads origin <branch>`` which exits 0 regardless
+        of whether the branch exists; the output is empty when it does not.
+        """
+        rc, out, _ = await self._run("git", "ls-remote", "--heads", "origin", branch, cwd=str(cwd))
+        return rc == 0 and bool(out.strip())
+
     async def create_branch(
         self, repo: str, branch: str, *, base: str = "main", task_id: str
     ) -> None:
+        """Check out *base* and create *branch*.
+
+        If *branch* already exists on the remote the existing branch is checked
+        out and updated rather than attempting ``checkout -b``, which would fail
+        with a "branch already exists" error when the same issue is processed
+        twice (e.g. before persistent dedup takes effect, or under a race).
+        """
         target = self.path_for(repo, task_id=task_id)
         await self._run_git("checkout", base, cwd=target)
         await self._run_git("pull", "--ff-only", "origin", base, cwd=target)
-        await self._run_git("checkout", "-B", branch, cwd=target)
+
+        if await self._branch_exists_on_remote(branch, cwd=target):
+            # Branch already exists: switch to it and fast-forward.
+            await self._run_git("checkout", branch, cwd=target)
+            await self._run_git("pull", "--ff-only", "origin", branch, cwd=target)
+        else:
+            await self._run_git("checkout", "-B", branch, cwd=target)
 
     async def apply_diff(self, repo: str, diff: str, *, task_id: str) -> None:
         target = self.path_for(repo, task_id=task_id)
