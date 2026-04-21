@@ -225,6 +225,51 @@ class TestRunOnce:
 
 
 class TestLifecycle:
+    async def test_startup_jitter_elapsed_runs_first_tick(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            interval_seconds=60.0,
+            jitter=True,
+            dedup_path=tmp_path / "dedup.json",
+        )
+        monkeypatch.setattr(
+            "maxwell_daemon.daemon.scheduler.secrets.randbelow",
+            lambda _: 0,
+        )
+        await sched.start()
+        await asyncio.sleep(0.05)
+        await sched.stop()
+        assert daemon.submitted
+        assert daemon.submitted[0]["issue_number"] == 1
+
+    async def test_stop_during_startup_jitter_exits_without_tick(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            interval_seconds=60.0,
+            jitter=True,
+            dedup_path=tmp_path / "dedup.json",
+        )
+        monkeypatch.setattr(
+            "maxwell_daemon.daemon.scheduler.secrets.randbelow",
+            lambda _: 900_000,
+        )
+        await sched.start()
+        await asyncio.sleep(0)
+        await sched.stop()
+        assert daemon.submitted == []
+
     async def test_start_schedules_periodic_ticks(self, tmp_path: Path) -> None:
         """Start the scheduler, wait long enough for 1-2 ticks, stop, verify calls."""
         gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
@@ -260,6 +305,7 @@ class TestLifecycle:
             daemon=_FakeDaemon(),
             repos=[],
             interval_seconds=0.01,
+            jitter=False,
             dedup_path=tmp_path / "dedup.json",
         )
         await sched.start()

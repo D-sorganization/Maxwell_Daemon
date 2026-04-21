@@ -319,8 +319,6 @@ class TestRateLimitHandling:
             [
                 # First call: rate-limited
                 (1, b"", b"API rate limit exceeded for installation"),
-                # rate_limit API probe (returns no reset info → backoff)
-                (1, b"", b""),
                 # Retry of the original command: success
                 (0, issues_payload, b""),
             ]
@@ -335,13 +333,9 @@ class TestRateLimitHandling:
         runner = self._make_runner(
             [
                 (1, b"", b"API rate limit exceeded"),
-                (1, b"", b""),  # rate_limit probe fails
                 (1, b"", b"API rate limit exceeded"),
-                (1, b"", b""),  # rate_limit probe fails
                 (1, b"", b"API rate limit exceeded"),
-                (1, b"", b""),  # rate_limit probe fails
                 (1, b"", b"API rate limit exceeded"),
-                (1, b"", b""),  # rate_limit probe fails
             ]
         )
         client = GitHubClient(runner=runner)
@@ -361,27 +355,19 @@ class TestRateLimitHandling:
         # Only one call made — no retries for non-rate-limit errors.
         assert len(runner.calls) == 1  # type: ignore[attr-defined]
 
-    def test_rate_limit_reset_respected_when_available(self) -> None:
-        """When the rate_limit API returns a reset time, the client waits for it."""
+    def test_rate_limit_retry_succeeds_on_second_attempt(self) -> None:
+        """Client retries after a rate-limit error and succeeds on the second attempt."""
         import json as _json
-        import time
 
         issues_payload = _json.dumps(
             [{"number": 2, "title": "x", "body": "", "state": "OPEN", "labels": [], "url": "u"}]
-        ).encode()
-        # Reset is 1 second in the future — well within the ceiling.
-        reset_ts = int(time.time()) + 1
-        rate_limit_payload = _json.dumps(
-            {"resources": {"core": {"remaining": 0, "reset": reset_ts}}}
         ).encode()
 
         runner = self._make_runner(
             [
                 # First call: rate-limited
                 (1, b"", b"rate limit exceeded"),
-                # rate_limit probe: returns reset timestamp
-                (0, rate_limit_payload, b""),
-                # Retry after sleeping: success
+                # Retry: success
                 (0, issues_payload, b""),
             ]
         )
@@ -389,23 +375,14 @@ class TestRateLimitHandling:
         issues = asyncio.run(client.list_issues("owner/repo"))
         assert len(issues) == 1
 
-    def test_rate_limit_raises_when_reset_exceeds_ceiling(self) -> None:
-        """GitHubRateLimitError raised when reset time exceeds the ceiling."""
-        import json as _json
-        import time
-
-        # Reset is far in the future — exceeds _MAX_RATE_LIMIT_WAIT_SECONDS (120).
-        reset_ts = int(time.time()) + 9999
-        rate_limit_payload = _json.dumps(
-            {"resources": {"core": {"remaining": 0, "reset": reset_ts}}}
-        ).encode()
-
+    def test_rate_limit_raises_after_max_retries_exhausted(self) -> None:
+        """GitHubRateLimitError raised when all retry attempts are rate-limited."""
         runner = self._make_runner(
             [
-                # First call: rate-limited
                 (1, b"", b"rate limit exceeded"),
-                # rate_limit probe: returns a far-future reset timestamp
-                (0, rate_limit_payload, b""),
+                (1, b"", b"rate limit exceeded"),
+                (1, b"", b"rate limit exceeded"),
+                (1, b"", b"rate limit exceeded"),
             ]
         )
         client = GitHubClient(runner=runner)

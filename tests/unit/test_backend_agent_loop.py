@@ -417,6 +417,126 @@ class TestToolRegistryIntegration:
         assert "payload-from-registry" in tool_result["content"]
 
 
+class TestMonthlyBudgetEnforcerPerTurn:
+    """Verify that a BudgetEnforcer is consulted after every turn (not just at submission)."""
+
+    async def test_budget_enforcer_called_after_each_turn(self, tmp_path: Path) -> None:
+        """require_under_budget() must be called once per turn."""
+        from maxwell_daemon.config import BudgetConfig
+
+        enforcer = MagicMock()
+        enforcer.require_under_budget = MagicMock()
+        enforcer._config = BudgetConfig()  # per_task_limit_usd=None → no per-task cap
+
+        (tmp_path / "f").write_text("x")
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path), budget_enforcer=enforcer)
+        _install_mock_client(
+            backend,
+            [
+                _response(
+                    stop_reason="tool_use",
+                    text=None,
+                    tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "f"}}],
+                ),
+                _response(text="done"),
+            ],
+        )
+        await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        # Two turns → two calls to require_under_budget.
+        assert enforcer.require_under_budget.call_count == 2
+
+    async def test_budget_enforcer_raises_aborts_loop(self, tmp_path: Path) -> None:
+        """If require_under_budget() raises, the loop must abort immediately."""
+        from maxwell_daemon.config import BudgetConfig
+        from maxwell_daemon.core.budget import BudgetExceededError as CoreBudgetExceededError
+
+        enforcer = MagicMock()
+        enforcer.require_under_budget = MagicMock(
+            side_effect=CoreBudgetExceededError("monthly limit hit")
+        )
+        enforcer._config = BudgetConfig()  # per_task_limit_usd=None
+
+        (tmp_path / "f").write_text("x")
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path), budget_enforcer=enforcer)
+        # Even if the API would return a clean end_turn on the second call, the enforcer
+        # fires after the first turn and the loop must not proceed to the second call.
+        turn_1 = _response(
+            stop_reason="tool_use",
+            text=None,
+            tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "f"}}],
+        )
+        turn_2 = _response(text="done")
+        mock_create = _install_mock_client(backend, [turn_1, turn_2])
+        with pytest.raises(CoreBudgetExceededError, match="monthly limit hit"):
+            await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        # Loop must have aborted: only the first API call should have been made.
+        assert mock_create.call_count == 1
+
+    async def test_no_budget_enforcer_does_not_raise(self, tmp_path: Path) -> None:
+        """When budget_enforcer is None, the loop runs normally."""
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path), budget_enforcer=None)
+        _install_mock_client(backend, [_response(text="ok")])
+        out = await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        assert out.content == "ok"
+
+
+class TestPerTaskLimitUsd:
+    """Verify that per_task_limit_usd from BudgetConfig enforces a per-task cap."""
+
+    async def test_per_task_limit_aborts_when_exceeded(self, tmp_path: Path) -> None:
+        """cumulative_cost > per_task_limit_usd must raise BudgetExceededError."""
+        from maxwell_daemon.config import BudgetConfig
+
+        config = BudgetConfig(per_task_limit_usd=0.001)
+        enforcer = MagicMock()
+        enforcer.require_under_budget = MagicMock()  # monthly limit — no-op
+        enforcer._config = config
+
+        (tmp_path / "f").write_text("x")
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path), budget_enforcer=enforcer)
+        # Expensive turn: 1M input tokens → $3.00 >> $0.001 limit.
+        expensive = _response(
+            stop_reason="tool_use",
+            text=None,
+            tool_calls=[{"id": "t1", "name": "read_file", "input": {"path": "f"}}],
+            input_tokens=1_000_000,
+            output_tokens=0,
+        )
+        _install_mock_client(backend, [expensive, _response(text="done")])
+        with pytest.raises(BudgetExceededError, match=r"per-task"):
+            await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+
+    async def test_per_task_limit_none_does_not_raise(self, tmp_path: Path) -> None:
+        """When per_task_limit_usd is None, no per-task cap is applied."""
+        from maxwell_daemon.config import BudgetConfig
+
+        config = BudgetConfig(per_task_limit_usd=None)
+        enforcer = MagicMock()
+        enforcer.require_under_budget = MagicMock()
+        enforcer._config = config
+
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path), budget_enforcer=enforcer)
+        pricey = _response(input_tokens=5_000_000, output_tokens=5_000_000)
+        _install_mock_client(backend, [pricey])
+        out = await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        assert out.finish_reason == "end_turn"
+
+    async def test_per_task_limit_not_exceeded_completes(self, tmp_path: Path) -> None:
+        """When cost is within the per-task limit, the loop completes normally."""
+        from maxwell_daemon.config import BudgetConfig
+
+        config = BudgetConfig(per_task_limit_usd=100.0)
+        enforcer = MagicMock()
+        enforcer.require_under_budget = MagicMock()
+        enforcer._config = config
+
+        backend = AgentLoopBackend(workspace_dir=str(tmp_path), budget_enforcer=enforcer)
+        cheap = _response(input_tokens=10, output_tokens=5)
+        _install_mock_client(backend, [cheap])
+        out = await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+        assert out.finish_reason == "end_turn"
+
+
 class TestAsyncClient:
     def test_client_is_async(self, tmp_path: Path) -> None:
         """The underlying Anthropic client must be AsyncAnthropic, not Anthropic.

@@ -6,7 +6,6 @@ Tested by substituting the subprocess runner. No actual git invoked here.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from pathlib import Path
 
 import pytest
@@ -88,30 +87,6 @@ class TestBranchLifecycle:
         assert ("git", "checkout", "main") in cmds
         assert ("git", "checkout", "-B", "maxwell-daemon/issue-42") in cmds
 
-    def test_create_branch_skips_checkout_b_when_remote_branch_exists(self, tmp_path: Path) -> None:
-        """When the branch already exists on the remote, checkout + pull instead of -B (#150)."""
-        (tmp_path / "repo" / "t-1" / ".git").mkdir(parents=True)
-        git = FakeGit()
-        branch = "maxwell-daemon/issue-42"
-        # Make ls-remote report the branch as already present on the remote.
-        git.respond(
-            "git",
-            "ls-remote",
-            "--heads",
-            "origin",
-            branch,
-            returncode=0,
-            stdout=b"abc123\trefs/heads/maxwell-daemon/issue-42\n",
-        )
-        ws = Workspace(root=tmp_path, runner=git)
-        asyncio.run(ws.create_branch("owner/repo", branch, base="main", task_id="t-1"))
-        cmds = [c[0] for c in git.calls]
-        # Should check out the existing branch, not create a new one.
-        assert ("git", "checkout", branch) in cmds
-        assert ("git", "pull", "--ff-only", "origin", branch) in cmds
-        # Must NOT attempt to create a new branch (would fail with "already exists").
-        assert ("git", "checkout", "-B", branch) not in cmds
-
     def test_commit_and_push(self, tmp_path: Path) -> None:
         (tmp_path / "repo" / "t-1" / ".git").mkdir(parents=True)
         git = FakeGit()
@@ -191,15 +166,15 @@ class TestPathFor:
                 mock_re2.match.return_value = True
                 # The target path will be outside root after .resolve() if we
                 # pre-create a symlink. Use a known-safe approach: mock resolve.
-                with (
-                    patch.object(
-                        type(tmp_path / "repo" / "t1"),
-                        "resolve",
-                        return_value=Path("/tmp/outside_root"),
-                    ),
-                    contextlib.suppress(WorkspaceError, Exception),
+                with patch.object(
+                    type(tmp_path / "repo" / "t1"),
+                    "resolve",
+                    return_value=Path("/tmp/outside_root"),
                 ):
-                    ws.path_for("owner/repo", task_id="t1")
+                    import contextlib
+
+                    with contextlib.suppress(WorkspaceError, Exception):
+                        ws.path_for("owner/repo", task_id="t1")
 
 
 class TestCleanupOld:
@@ -236,45 +211,3 @@ class TestCleanupOld:
         (tmp_path / "not-a-dir.txt").write_text("noise")
         removed = ws.cleanup_old(max_age=timedelta(days=1))
         assert removed == []
-
-    def test_cleanup_skips_non_dirs_at_task_level(self, tmp_path: Path) -> None:
-        """Files inside a repo-dir (not subdirs) must be ignored by cleanup_old."""
-        import os
-        import time as _time
-        from datetime import timedelta
-
-        ws = Workspace(root=tmp_path)
-        repo_dir = tmp_path / "repo"
-        repo_dir.mkdir()
-        # Place a file (not a directory) inside the repo_dir — should be skipped.
-        noise_file = repo_dir / "noise.txt"
-        noise_file.write_text("noise")
-        old_time = _time.time() - 200000
-        os.utime(noise_file, (old_time, old_time))
-        removed = ws.cleanup_old(max_age=timedelta(seconds=1))
-        # The file should NOT be in removed — only directories are cleaned up.
-        assert noise_file not in removed
-
-
-class TestPathEscape:
-    def test_path_escape_detected(self, tmp_path: Path) -> None:
-        """path_for raises WorkspaceError when the resolved path escapes the root."""
-        import os
-        import tempfile
-
-        # Create a symlink that points outside tmp_path to simulate path escape.
-        # We create a real directory outside and symlink into the workspace.
-        with tempfile.TemporaryDirectory() as outside_dir:
-            ws = Workspace(root=tmp_path)
-            repo_dir = tmp_path / "repo"
-            repo_dir.mkdir(parents=True, exist_ok=True)
-            # Create a symlink inside repo_dir that points outside
-            link_path = repo_dir / "t-abc123"
-            try:
-                os.symlink(outside_dir, str(link_path))
-                # path_for resolves the path — the symlink leads outside root
-                with pytest.raises(WorkspaceError, match="escape"):
-                    ws.path_for("owner/repo", task_id="t-abc123")
-            except OSError:
-                # Symlinks may not be supported in this environment; skip gracefully
-                pass

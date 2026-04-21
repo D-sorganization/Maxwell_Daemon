@@ -31,6 +31,28 @@ class BackendConfig(BaseModel):
         description="Maps ModelTier names (simple/moderate/complex) → model id. "
         "When set, the router picks by tier; otherwise `model` is used.",
     )
+    fallback_backend: str | None = Field(
+        None,
+        description="Name of a cheaper backend to use when monthly spend exceeds "
+        "fallback_threshold_percent of the budget limit.",
+    )
+    fallback_threshold_percent: float = Field(
+        80.0,
+        ge=0.0,
+        le=100.0,
+        description="Switch to fallback_backend when monthly spend reaches this "
+        "percentage of the budget limit.",
+    )
+    cost_per_million_input_tokens: float | None = Field(
+        None,
+        description="USD per 1M input tokens for cost tracking (e.g. 3.0 for $3/1M). "
+        "When set, overrides the built-in pricing table for this backend.",
+    )
+    cost_per_million_output_tokens: float | None = Field(
+        None,
+        description="USD per 1M output tokens for cost tracking (e.g. 15.0 for $15/1M). "
+        "When set, overrides the built-in pricing table for this backend.",
+    )
 
     def api_key_value(self) -> str | None:
         """Unwrap the SecretStr for passing to adapter constructors."""
@@ -48,6 +70,12 @@ class BudgetConfig(BaseModel):
     )
     alert_warn_multiplier: float = Field(1.1, gt=1.0)
     alert_debounce_hours: int = Field(6, ge=0)
+    per_task_limit_usd: float | None = Field(
+        None,
+        ge=0,
+        description="Hard cap on cumulative cost for a single task/agent-loop invocation. "
+        "None disables the per-task limit.",
+    )
 
 
 class AgentConfig(BaseModel):
@@ -76,13 +104,22 @@ class RepoConfig(BaseModel):
     context_max_chars: int | None = Field(None, ge=0)
     max_test_retries: int | None = Field(None, ge=0)
     max_diff_retries: int | None = Field(None, ge=0)
+    system_prompt_prefix: str | None = Field(
+        None,
+        description="Prepended to the default system prompt for this repo's agents.",
+    )
+    system_prompt_file: Path | None = Field(
+        None,
+        description="Path to a markdown file whose content is prepended to the system prompt.",
+    )
 
     @field_validator("path", mode="before")
     @classmethod
     def _expand_path(cls, v: Any) -> Path:
         if isinstance(v, str):
             return Path(v).expanduser()
-        assert isinstance(v, Path)
+        if not isinstance(v, Path):
+            raise ValueError(f"expected str or Path for 'path', got {type(v).__name__!r}")
         return v
 
 
@@ -93,6 +130,12 @@ class MachineConfig(BaseModel):
     capacity: int = Field(2, ge=1)
     tags: list[str] = Field(default_factory=list)
     ssh_key: Path | None = None
+    tls: bool = Field(
+        True, description="Use HTTPS (set False for HTTP-only local/test deployments)"
+    )
+    tls_verify: bool = Field(
+        True, description="Verify TLS certificate (set False for self-signed certs)"
+    )
 
 
 class FleetConfig(BaseModel):
@@ -155,13 +198,35 @@ class MaxwellDaemonConfig(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _validate_default_backend(self) -> MaxwellDaemonConfig:
-        name = self.agent.default_backend
-        if self.backends and name not in self.backends:
+    def _validate_backend_references(self) -> MaxwellDaemonConfig:
+        known = set(self.backends)
+
+        # Validate agent.default_backend
+        default = self.agent.default_backend
+        if default and default not in known:
             raise ValueError(
-                f"agent.default_backend '{name}' is not defined in backends: "
-                f"{sorted(self.backends)}"
+                f"agent.default_backend '{default}' not found in backends: {sorted(known)}"
             )
+
+        # Validate per-repo backend overrides
+        for repo in self.repos:
+            if repo.backend is not None and repo.backend not in known:
+                raise ValueError(
+                    f"repos['{repo.name}'].backend '{repo.backend}' not found in "
+                    f"backends: {sorted(known)}"
+                )
+
+        # Validate fallback_backend references within each BackendConfig
+        for backend_name, backend_cfg in self.backends.items():
+            if (
+                backend_cfg.fallback_backend is not None
+                and backend_cfg.fallback_backend not in known
+            ):
+                raise ValueError(
+                    f"backends['{backend_name}'].fallback_backend "
+                    f"'{backend_cfg.fallback_backend}' not found in backends: {sorted(known)}"
+                )
+
         return self
 
     def default_backend_config(self) -> BackendConfig:

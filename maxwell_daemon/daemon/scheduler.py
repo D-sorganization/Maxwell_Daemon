@@ -24,7 +24,7 @@ import asyncio
 import contextlib
 import json
 import logging
-import random
+import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -197,11 +197,12 @@ class DiscoveryScheduler:
         self._stop_event = None
 
     async def _loop(self) -> None:
-        assert self._stop_event is not None
+        if self._stop_event is None:
+            raise RuntimeError("_loop() called before start(); _stop_event is None")
         # Startup jitter: spread first-tick firing across the interval to
         # prevent thundering herd when multiple daemons start together.
         if self._jitter:
-            jitter_delay = random.uniform(0, self._interval)
+            jitter_delay = (secrets.randbelow(1_000_000) / 1_000_000) * self._interval
             log.debug("discovery scheduler startup jitter=%.2fs", jitter_delay)
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=jitter_delay)

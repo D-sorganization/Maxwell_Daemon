@@ -19,6 +19,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from maxwell_daemon import __version__
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
 from maxwell_daemon.core import (
@@ -411,7 +412,7 @@ class Daemon:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
         return DaemonState(
-            version="0.1.0",
+            version=__version__,
             config_path=None,
             tasks=tasks_snapshot,
             started_at=self._started_at,
@@ -427,20 +428,34 @@ class Daemon:
                 task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
             except asyncio.TimeoutError:
                 continue
-            # Tasks cancelled while queued shouldn't be executed.
+            # Tasks cancelled while queued should not be executed.
             if task.status is TaskStatus.CANCELLED:
                 continue
             with bind_context(task_id=task.id, worker_id=worker_id):
+                # Attempt to mark the task RUNNING in the durable store before
+                # executing.  If that write fails (disk full, lock contention),
+                # re-queue the task so it is retried rather than silently lost.
+                # Double-execution is still possible if the DB write succeeds but
+                # the worker crashes before execution completes; preventing that
+                # fully requires a lease/heartbeat mechanism (future work).
+                task.started_at = datetime.now(timezone.utc)
+                try:
+                    self._task_store.update_status(
+                        task.id, TaskStatus.RUNNING, started_at=task.started_at
+                    )
+                except Exception as exc:
+                    log.error(
+                        "failed to mark task %s RUNNING: %s; re-queuing",
+                        task.id,
+                        exc,
+                    )
+                    task.started_at = None
+                    await self._queue.put(task)
+                    continue
                 await self._execute(task)
 
     async def _execute(self, task: Task) -> None:
         task.status = TaskStatus.RUNNING
-        task.started_at = datetime.now(timezone.utc)
-        try:
-            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
-        except Exception:
-            log.exception("task store write failed for task=%s", task.id)
-            raise
         await self._events.publish(
             Event(
                 kind=EventKind.TASK_STARTED,
@@ -486,7 +501,11 @@ class Daemon:
                 status="success",
                 tokens=resp.usage.total_tokens,
                 cost_usd=task.cost_usd,
-                duration_seconds=(datetime.now(timezone.utc) - task.started_at).total_seconds(),
+                duration_seconds=(
+                    (datetime.now(timezone.utc) - task.started_at).total_seconds()
+                    if task.started_at is not None
+                    else 0.0
+                ),
             )
             await self._events.publish(
                 Event(
@@ -546,8 +565,10 @@ class Daemon:
         from maxwell_daemon.gh.executor import IssueExecutor
         from maxwell_daemon.gh.workspace import Workspace
 
-        assert task.issue_repo is not None
-        assert task.issue_number is not None
+        if task.issue_repo is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_repo set")
+        if task.issue_number is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_number set")
 
         github = self._github_client or GitHubClient()
         workspace = self._workspace or Workspace(root=self._workspace_root)

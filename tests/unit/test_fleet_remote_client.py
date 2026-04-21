@@ -102,7 +102,7 @@ class TestSubmitTaskRequestShape:
             task_payload={"task_id": "t1"},
         )
         assert len(http.posts) == 1
-        assert http.posts[0].url == "http://runner-a:50099/api/v1/tasks"
+        assert http.posts[0].url == "https://runner-a:50099/api/v1/tasks"
 
     async def test_sends_json_body(self) -> None:
         http = FakeHTTPClient()
@@ -127,7 +127,7 @@ class TestSubmitTaskRequestShape:
 class TestSubmitTaskResponse:
     @pytest.mark.parametrize("status", [200, 201, 202])
     async def test_success_statuses_return_submitted(self, status: int) -> None:
-        url = "http://host.example:50051/api/v1/tasks"
+        url = "https://host.example:50051/api/v1/tasks"
         http = FakeHTTPClient(
             post_responses={url: FakeResponse(status_code=status, _body={"accepted": True})}
         )
@@ -140,7 +140,7 @@ class TestSubmitTaskResponse:
 
     @pytest.mark.parametrize("status", [400, 403, 404, 500, 503])
     async def test_error_statuses_return_error_with_detail(self, status: int) -> None:
-        url = "http://host.example:50051/api/v1/tasks"
+        url = "https://host.example:50051/api/v1/tasks"
         http = FakeHTTPClient(
             post_responses={
                 url: FakeResponse(status_code=status, _body={"error": "nope"}, _text="nope"),
@@ -166,7 +166,7 @@ class TestSubmitTaskResponse:
 
 class TestSubmitTaskTransport:
     async def test_transport_failure_raises_remote_daemon_error(self) -> None:
-        url = "http://host.example:50051/api/v1/tasks"
+        url = "https://host.example:50051/api/v1/tasks"
         http = FakeHTTPClient(
             post_exceptions={url: ConnectionRefusedError("nope")},
         )
@@ -175,7 +175,7 @@ class TestSubmitTaskTransport:
             await client.submit_task(_machine(), task_payload={"task_id": "t1"})
 
     async def test_timeout_raises_remote_daemon_error(self) -> None:
-        url = "http://host.example:50051/api/v1/tasks"
+        url = "https://host.example:50051/api/v1/tasks"
         http = FakeHTTPClient(
             post_exceptions={url: TimeoutError("slow")},
         )
@@ -186,20 +186,20 @@ class TestSubmitTaskTransport:
 
 class TestHealthCheck:
     async def test_returns_true_on_200(self) -> None:
-        url = "http://host.example:50051/api/v1/health"
+        url = "https://host.example:50051/api/v1/health"
         http = FakeHTTPClient(get_responses={url: FakeResponse(status_code=200)})
         client = RemoteDaemonClient(http_client=http)
         assert await client.health_check(_machine()) is True
 
     @pytest.mark.parametrize("status", [201, 301, 400, 500, 503])
     async def test_returns_false_on_non_200(self, status: int) -> None:
-        url = "http://host.example:50051/api/v1/health"
+        url = "https://host.example:50051/api/v1/health"
         http = FakeHTTPClient(get_responses={url: FakeResponse(status_code=status)})
         client = RemoteDaemonClient(http_client=http)
         assert await client.health_check(_machine()) is False
 
     async def test_returns_false_on_transport_exception(self) -> None:
-        url = "http://host.example:50051/api/v1/health"
+        url = "https://host.example:50051/api/v1/health"
         http = FakeHTTPClient(get_exceptions={url: ConnectionRefusedError("nope")})
         client = RemoteDaemonClient(http_client=http)
         assert await client.health_check(_machine()) is False
@@ -226,8 +226,8 @@ class TestRefreshAll:
     async def test_updates_healthy_flag(self) -> None:
         http = FakeHTTPClient(
             get_responses={
-                "http://ha:50051/api/v1/health": FakeResponse(status_code=200),
-                "http://hb:50051/api/v1/health": FakeResponse(status_code=500),
+                "https://ha:50051/api/v1/health": FakeResponse(status_code=200),
+                "https://hb:50051/api/v1/health": FakeResponse(status_code=500),
             }
         )
         client = RemoteDaemonClient(http_client=http)
@@ -261,11 +261,11 @@ class TestRefreshAll:
     async def test_one_failing_machine_does_not_affect_others(self) -> None:
         http = FakeHTTPClient(
             get_responses={
-                "http://ha:50051/api/v1/health": FakeResponse(status_code=200),
-                "http://hc:50051/api/v1/health": FakeResponse(status_code=200),
+                "https://ha:50051/api/v1/health": FakeResponse(status_code=200),
+                "https://hc:50051/api/v1/health": FakeResponse(status_code=200),
             },
             get_exceptions={
-                "http://hb:50051/api/v1/health": ConnectionRefusedError("nope"),
+                "https://hb:50051/api/v1/health": ConnectionRefusedError("nope"),
             },
         )
         client = RemoteDaemonClient(http_client=http)
