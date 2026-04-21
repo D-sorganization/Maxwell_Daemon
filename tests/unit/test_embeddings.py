@@ -358,9 +358,7 @@ class TestEmbeddingCache:
     # Config-fingerprint isolation (regression for issue #246)
     # ------------------------------------------------------------------
 
-    def test_stub_different_dimensions_are_cache_isolated(
-        self, cache: EmbeddingCache
-    ) -> None:
+    def test_stub_different_dimensions_are_cache_isolated(self, cache: EmbeddingCache) -> None:
         """Changing stub dimensions must produce a cache miss, not a hit.
 
         If only the bare provider name ``"stub"`` were used as the key,
@@ -386,9 +384,7 @@ class TestEmbeddingCache:
         assert got32 is not None and len(got32) == 32
         assert got64 is not None and len(got64) == 64
 
-    def test_openai_different_models_are_cache_isolated(
-        self, cache: EmbeddingCache
-    ) -> None:
+    def test_openai_different_models_are_cache_isolated(self, cache: EmbeddingCache) -> None:
         """Changing the OpenAI model must produce a cache miss.
 
         Both providers share the static name ``"openai"``.  The
@@ -400,12 +396,8 @@ class TestEmbeddingCache:
 
         client_small = _FakeClient([vec_small])
         client_large = _FakeClient([vec_large])
-        p_small = OpenAIEmbeddingProvider(
-            http_client=client_small, model="text-embedding-3-small"
-        )
-        p_large = OpenAIEmbeddingProvider(
-            http_client=client_large, model="text-embedding-3-large"
-        )
+        p_small = OpenAIEmbeddingProvider(http_client=client_small, model="text-embedding-3-small")
+        p_large = OpenAIEmbeddingProvider(http_client=client_large, model="text-embedding-3-large")
         text = "same text different models"
         (r_small,) = _run(p_small.embed_batch((text,)))
         (r_large,) = _run(p_large.embed_batch((text,)))
