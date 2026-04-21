@@ -153,6 +153,7 @@ class RemoteDaemonClient:
         close = getattr(self._http, "aclose", None)
         if close is not None:
             import contextlib
+
             with contextlib.suppress(Exception):
                 await close()
 
