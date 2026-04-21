@@ -210,8 +210,6 @@ class TestFindRelevantFilesFailure:
         builder = ContextBuilder(git_runner=fake_git)
         # Patch Path.read_bytes to raise OSError for any path
         with patch("pathlib.Path.read_bytes", side_effect=OSError("permission denied")):
-            result = asyncio.run(
-                builder._find_relevant_files(tmp_path, "fix the parser", top_n=5)
-            )
+            result = asyncio.run(builder._find_relevant_files(tmp_path, "fix the parser", top_n=5))
         # Should return empty dict without raising
         assert result == {}
