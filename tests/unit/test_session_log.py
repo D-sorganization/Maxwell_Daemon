@@ -235,3 +235,50 @@ class TestDiscovery:
         from maxwell_daemon.session import list_sessions
 
         assert list_sessions(tmp_path) == ()
+
+    def test_list_sessions_nonexistent_dir(self, tmp_path: Path) -> None:
+        from maxwell_daemon.session.log import list_sessions
+
+        assert list_sessions(tmp_path / "does_not_exist") == ()
+
+
+class TestSessionLogResume:
+    def test_resumes_seq_from_existing_file(self, tmp_path: Path) -> None:
+        log = SessionLog(session_id="s", directory=tmp_path)
+        log.append(UserMessage(session_id="s", seq=0, content="first"))
+        log.append(UserMessage(session_id="s", seq=1, content="second"))
+        log2 = SessionLog(session_id="s", directory=tmp_path)
+        log2.append(UserMessage(session_id="s", seq=2, content="third"))
+        events = tuple(load_events(tmp_path / "s.jsonl"))
+        assert len(events) == 3
+
+    def test_path_property_returns_path(self, tmp_path: Path) -> None:
+        log = SessionLog(session_id="myid", directory=tmp_path)
+        assert log.path == tmp_path / "myid.jsonl"
+
+    def test_session_id_property(self, tmp_path: Path) -> None:
+        log = SessionLog(session_id="myid", directory=tmp_path)
+        assert log.session_id == "myid"
+
+
+class TestLoadEventsEdgeCases:
+    def test_empty_lines_skipped(self, tmp_path: Path) -> None:
+        path = tmp_path / "s.jsonl"
+        path.write_text(
+            '{"kind": "user_message", "session_id": "s", "seq": 0, "content": "ok"}\n'
+            "\n"
+            "   \n"
+            '{"kind": "user_message", "session_id": "s", "seq": 1, "content": "ok2"}\n'
+        )
+        events = tuple(load_events(path))
+        assert len(events) == 2
+
+    def test_type_error_in_event_construction_skipped(self, tmp_path: Path) -> None:
+        path = tmp_path / "s.jsonl"
+        path.write_text(
+            '{"kind": "user_message", "session_id": "s", "seq": 0, "content": "ok"}\n'
+            '{"kind": "user_message", "extra_unknown_kwarg": "bad", "session_id": "s", "seq": 1}\n'
+        )
+        events = tuple(load_events(path))
+        assert len(events) == 1
+        assert events[0].content == "ok"  # type: ignore[attr-defined]
