@@ -194,7 +194,13 @@ class ToolRegistry:
         spec = self.get(name)  # raises ToolRegistryError on unknown — caller bug, not model bug
 
         if self._hook_runner is not None:
-            pre = await self._hook_runner.run_pre_tool(name, arguments)
+            try:
+                pre = await self._hook_runner.run_pre_tool(name, arguments)
+            except Exception as exc:
+                return ToolResult(
+                    content=f"pre_tool hook runner error: {type(exc).__name__}: {exc}",
+                    is_error=True,
+                )
             if pre.blocked:
                 return ToolResult(
                     content=(
@@ -212,7 +218,15 @@ class ToolRegistry:
             return ToolResult(content=f"{type(exc).__name__}: {exc}", is_error=True)
 
         if self._hook_runner is not None:
-            post = await self._hook_runner.run_post_tool(name, arguments, tool_output=content)
+            try:
+                post = await self._hook_runner.run_post_tool(name, arguments, tool_output=content)
+            except Exception as exc:
+                return ToolResult(
+                    content=(
+                        f"{content}\n\npost_tool hook runner error: {type(exc).__name__}: {exc}"
+                    ),
+                    is_error=True,
+                )
             if post.errored:
                 return ToolResult(
                     content=(

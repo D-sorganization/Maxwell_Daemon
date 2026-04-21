@@ -300,9 +300,7 @@ class AgentLoopBackend(ILLMBackend):
         ``budget_per_story_usd`` / ``wall_clock_timeout_seconds``.
         """
         effective_model = model or self._default_model
-        workspace_raw = workspace_dir or self._default_workspace
-        if not workspace_raw:
-            raise ValueError("No workspace specified")
+        workspace_raw = workspace_dir or self._default_workspace or os.getcwd()
         effective_workspace = Path(workspace_raw).resolve()
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
@@ -474,9 +472,7 @@ class AgentLoopBackend(ILLMBackend):
         user-visible text so the latency difference is unnoticeable.
         """
         effective_model = model or self._default_model
-        workspace_raw = workspace_dir or self._default_workspace
-        if not workspace_raw:
-            raise ValueError("No workspace specified")
+        workspace_raw = workspace_dir or self._default_workspace or os.getcwd()
         effective_workspace = Path(workspace_raw).resolve()
         effective_max_turns = kwargs.pop("max_turns", None)
         if effective_max_turns is None:

@@ -102,8 +102,17 @@ def _parse_rule(path: Path) -> Rule:
     if not isinstance(raw_globs, list):
         raise RuleLoadError(f"{path}: globs must be a list")
     globs = tuple(str(g) for g in raw_globs)
-    always_apply = bool(parsed.get("always_apply", False))
-    priority = int(parsed.get("priority", 0))
+    raw_always_apply = parsed.get("always_apply", False)
+    if not isinstance(raw_always_apply, bool):
+        raise RuleLoadError(
+            f"{path}: always_apply must be a boolean, got {type(raw_always_apply).__name__!r}"
+        )
+    always_apply = raw_always_apply
+    raw_priority = parsed.get("priority", 0)
+    try:
+        priority = int(raw_priority)
+    except (TypeError, ValueError) as exc:
+        raise RuleLoadError(f"{path}: priority must be an integer, got {raw_priority!r}") from exc
 
     body = match.group("body").strip()
     return Rule(

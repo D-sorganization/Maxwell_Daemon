@@ -142,7 +142,7 @@ class StubEmbeddingProvider:
             text_hash=hash_text(text),
             vector=tuple(components),
             dimensions=self._dim,
-            provider_name=self.name,
+            provider_name=f"{self.name}:{self._dim}",
         )
 
 
@@ -211,7 +211,7 @@ class OpenAIEmbeddingProvider:
                     text_hash=hash_text(text),
                     vector=vector,
                     dimensions=len(vector),
-                    provider_name=self.name,
+                    provider_name=f"{self.name}:{self._model}:{len(vector)}",
                 )
             )
         return tuple(results)
