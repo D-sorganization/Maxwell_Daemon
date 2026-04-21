@@ -135,6 +135,9 @@ class Daemon:
         self._bg_tasks: set[asyncio.Task[None]] = set()
         self._started_at = datetime.now(timezone.utc)
         self._running = False
+        # Captured in :meth:`start`; used by :meth:`submit_threadsafe` to
+        # schedule cross-thread queue puts via the running event loop.
+        self._loop: asyncio.AbstractEventLoop | None = None
         # Lazily-built collaborators — injected by tests, built on demand in prod.
         self._github_client: Any = None
         self._workspace: Any = None
@@ -154,6 +157,7 @@ class Daemon:
         if recover:
             self.recover()
         self._running = True
+        self._loop = asyncio.get_running_loop()
         for i in range(worker_count):
             self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
         log.info("daemon started with %d workers", worker_count)
@@ -210,6 +214,12 @@ class Daemon:
         backend: str | None = None,
         model: str | None = None,
     ) -> Task:
+        """Enqueue a prompt task. **Event-loop thread only.**
+
+        Must be called from the same thread that runs the daemon's event loop.
+        If you need to submit from a background thread or sync context, use
+        :meth:`submit_threadsafe` instead.
+        """
         task = Task(
             id=uuid.uuid4().hex[:12],
             prompt=prompt,
@@ -234,6 +244,43 @@ class Daemon:
             )
             self._bg_tasks.add(bg)
             bg.add_done_callback(self._bg_tasks.discard)
+        return task
+
+    def submit_threadsafe(
+        self,
+        prompt: str,
+        *,
+        repo: str | None = None,
+        backend: str | None = None,
+        model: str | None = None,
+    ) -> Task:
+        """Enqueue a prompt task from any thread. **Cross-thread safe.**
+
+        Unlike :meth:`submit`, this method is safe to call from threads that
+        are *not* running the daemon's event loop (e.g. WSGI middleware,
+        background threads, sync test clients).  It uses
+        ``asyncio.run_coroutine_threadsafe`` to schedule the queue put on the
+        running event loop so the sleeping worker is reliably woken.
+
+        :raises RuntimeError: if the daemon has not been started yet
+            (``self._loop`` is ``None``).
+        """
+        if self._loop is None:
+            raise RuntimeError("daemon must be started before submit_threadsafe()")
+        task = Task(
+            id=uuid.uuid4().hex[:12],
+            prompt=prompt,
+            kind=TaskKind.PROMPT,
+            repo=repo,
+            backend=backend,
+            model=model,
+        )
+        with self._tasks_lock:
+            self._tasks[task.id] = task
+        self._task_store.save(task)
+        asyncio.run_coroutine_threadsafe(
+            self._queue.put(task), self._loop
+        ).result(timeout=5.0)
         return task
 
     def submit_issue(
