@@ -145,7 +145,10 @@ class OpenAIBackend(ILLMBackend):
             return False
 
     def capabilities(self, model: str) -> BackendCapabilities:
-        price_in, price_out = get_rates("openai", model)
+        # Look up pricing under ``self.name`` so subclasses (e.g. AzureOpenAIBackend)
+        # hit their own provider entry in the pricing table rather than always
+        # routing through the ``openai`` entry.
+        price_in, price_out = get_rates(self.name, model)
         return BackendCapabilities(
             supports_streaming=True,
             supports_tool_use=True,

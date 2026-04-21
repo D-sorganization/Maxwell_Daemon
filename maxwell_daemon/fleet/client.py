@@ -146,6 +146,17 @@ class RemoteDaemonClient:
             return False
         return response.status_code == 200
 
+    async def aclose(self) -> None:
+        """Release the underlying HTTP connection pool.
+
+        If the injected ``http_client`` exposes an ``aclose()`` coroutine (as
+        the default :func:`_make_default_http` adapter does) it is awaited.
+        Injected test doubles that omit ``aclose`` are silently ignored.
+        """
+        close = getattr(self._http, "aclose", None)
+        if close is not None:
+            await close()
+
     async def refresh_all(self, machines: tuple[MachineState, ...]) -> tuple[MachineState, ...]:
         """Probe every machine in parallel, return snapshots with ``healthy`` updated.
 
@@ -199,6 +210,10 @@ def _make_default_http(timeout_seconds: float) -> HTTPClientProtocol:
 
     Imported lazily so unit tests can run without httpx being functional in the
     test environment (they always inject a fake).
+
+    The adapter holds a single long-lived ``AsyncClient`` and exposes an
+    ``aclose()`` method so callers (e.g. ``RemoteDaemonClient``) can release the
+    underlying connection pool when they are done.
     """
     import httpx
 
@@ -213,5 +228,8 @@ def _make_default_http(timeout_seconds: float) -> HTTPClientProtocol:
 
         async def get(self, url: str, *, headers: dict[str, str]) -> HTTPResponseProtocol:
             return await self._client.get(url, headers=headers)
+
+        async def aclose(self) -> None:
+            await self._client.aclose()
 
     return _HttpxAdapter(timeout_seconds)

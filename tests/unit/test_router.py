@@ -224,7 +224,7 @@ def config_with_fallback() -> MaxwellDaemonConfig:
                     "type": "fake_a",
                     "model": "model-a",
                     "fallback_backend": "local",
-                    "fallback_threshold": 0.8,
+                    "fallback_threshold_percent": 80.0,
                 },
                 "local": {"type": "fake_b", "model": "model-b"},
             },
@@ -238,26 +238,23 @@ class TestBudgetAwareFallback:
     def test_fallback_triggers_when_over_threshold(
         self, config_with_fallback: MaxwellDaemonConfig
     ) -> None:
-        budget = _make_budget_mock(utilisation=0.85)
-        router = BackendRouter(config_with_fallback, budget=budget)
-        decision = router.route()
+        router = BackendRouter(config_with_fallback)
+        decision = router.route(budget_percent=85.0)
         assert decision.backend_name == "local"
         assert "fallback" in decision.reason
 
     def test_fallback_triggers_at_exact_threshold(
         self, config_with_fallback: MaxwellDaemonConfig
     ) -> None:
-        budget = _make_budget_mock(utilisation=0.8)
-        router = BackendRouter(config_with_fallback, budget=budget)
-        decision = router.route()
+        router = BackendRouter(config_with_fallback)
+        decision = router.route(budget_percent=80.0)
         assert decision.backend_name == "local"
 
     def test_fallback_does_not_trigger_below_threshold(
         self, config_with_fallback: MaxwellDaemonConfig
     ) -> None:
-        budget = _make_budget_mock(utilisation=0.79)
-        router = BackendRouter(config_with_fallback, budget=budget)
-        decision = router.route()
+        router = BackendRouter(config_with_fallback)
+        decision = router.route(budget_percent=79.0)
         assert decision.backend_name == "primary"
 
     def test_no_fallback_without_budget_enforcer(
@@ -267,25 +264,24 @@ class TestBudgetAwareFallback:
         decision = router.route()
         assert decision.backend_name == "primary"
 
-    def test_missing_fallback_backend_name_is_ignored(self) -> None:
-        cfg = MaxwellDaemonConfig.model_validate(
-            {
-                "backends": {
-                    "primary": {
-                        "type": "fake_a",
-                        "model": "model-a",
-                        "fallback_backend": "does-not-exist",
-                        "fallback_threshold": 0.5,
+    def test_missing_fallback_backend_name_raises_at_config_time(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="fallback_backend"):
+            MaxwellDaemonConfig.model_validate(
+                {
+                    "backends": {
+                        "primary": {
+                            "type": "fake_a",
+                            "model": "model-a",
+                            "fallback_backend": "does-not-exist",
+                            "fallback_threshold_percent": 50.0,
+                        },
                     },
-                },
-                "agent": {"default_backend": "primary"},
-                "repos": [],
-            }
-        )
-        budget = _make_budget_mock(utilisation=0.9)
-        router = BackendRouter(cfg, budget=budget)
-        decision = router.route()
-        assert decision.backend_name == "primary"
+                    "agent": {"default_backend": "primary"},
+                    "repos": [],
+                }
+            )
 
     def test_fallback_applies_to_repo_override(self) -> None:
         cfg = MaxwellDaemonConfig.model_validate(
@@ -295,7 +291,7 @@ class TestBudgetAwareFallback:
                         "type": "fake_a",
                         "model": "model-a",
                         "fallback_backend": "local",
-                        "fallback_threshold": 0.8,
+                        "fallback_threshold_percent": 80.0,
                     },
                     "local": {"type": "fake_b", "model": "model-b"},
                 },
@@ -305,7 +301,6 @@ class TestBudgetAwareFallback:
                 ],
             }
         )
-        budget = _make_budget_mock(utilisation=0.95)
-        router = BackendRouter(cfg, budget=budget)
-        decision = router.route(repo="my-repo")
+        router = BackendRouter(cfg)
+        decision = router.route(repo="my-repo", budget_percent=95.0)
         assert decision.backend_name == "local"

@@ -19,6 +19,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from maxwell_daemon import __version__
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
 from maxwell_daemon.core import (
@@ -411,7 +412,7 @@ class Daemon:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
         return DaemonState(
-            version="0.1.0",
+            version=__version__,
             config_path=None,
             tasks=tasks_snapshot,
             started_at=self._started_at,
@@ -564,8 +565,10 @@ class Daemon:
         from maxwell_daemon.gh.executor import IssueExecutor
         from maxwell_daemon.gh.workspace import Workspace
 
-        assert task.issue_repo is not None
-        assert task.issue_number is not None
+        if task.issue_repo is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_repo set")
+        if task.issue_number is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_number set")
 
         github = self._github_client or GitHubClient()
         workspace = self._workspace or Workspace(root=self._workspace_root)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -69,9 +70,7 @@ class TestLedger:
         ledger.record(_record(cost=0.01))
         ledger.close()
         # After close, attempting to use the connection should raise
-        import sqlite3 as _sqlite3
-
-        with pytest.raises(_sqlite3.ProgrammingError):
+        with pytest.raises(sqlite3.ProgrammingError):
             ledger._conn.execute("SELECT 1")
 
 

@@ -35,7 +35,7 @@ import sqlite3
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -90,8 +90,19 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+def _parse_iso_required(value: str) -> datetime:
+    # Legacy DBs may contain naive ISO strings written before this module
+    # became timezone-aware. Treat those as UTC so comparisons with
+    # ``datetime.now(timezone.utc)`` elsewhere in the codebase don't raise
+    # ``TypeError: can't compare offset-naive and offset-aware datetimes``.
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 def _parse_iso(value: str | None) -> datetime | None:
-    return datetime.fromisoformat(value) if value else None
+    return _parse_iso_required(value) if value else None
 
 
 class TaskStore:
@@ -125,7 +136,11 @@ class TaskStore:
     # ── Sync internals ────────────────────────────────────────────────────────
 
     def _save_sync(self, task: Task) -> None:
-        now = datetime.now(task.created_at.tzinfo).isoformat()
+        # Prefer the task's own tzinfo so the updated_at stays in the same
+        # zone as created_at, but fall back to UTC if the task happens to be
+        # naive (e.g. loaded from a legacy DB row).
+        tz = task.created_at.tzinfo or timezone.utc
+        now = datetime.now(tz).isoformat()
         row = (
             task.id,
             task.created_at.isoformat(),
@@ -184,7 +199,7 @@ class TaskStore:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
     ) -> None:
-        now = datetime.now().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._lock, self._connect() as conn:
             cursor = conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
             if cursor.fetchone() is None:
@@ -228,7 +243,7 @@ class TaskStore:
     def _recover_sync(self) -> list[Task]:
         from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
 
-        now = datetime.now().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
@@ -369,7 +384,7 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         error=row["error"],
         pr_url=row["pr_url"],
         cost_usd=row["cost_usd"],
-        created_at=datetime.fromisoformat(row["created_at"]),
+        created_at=_parse_iso_required(row["created_at"]),
         started_at=_parse_iso(row["started_at"]),
         finished_at=_parse_iso(row["finished_at"]),
     )

@@ -31,7 +31,11 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 # USD per 1,000,000 tokens (input, output).
-# Prices as of 2026-04; update here when providers change their rates.
+# Last updated: 2026-04 — published public list prices for each provider.
+# Prices drift; re-check provider pricing pages periodically and bump here.
+# If a model you route to is missing, add it rather than letting ``get_rates``
+# fall through to the ``(0.0, 0.0)`` warning path — silent $0 charging in the
+# ledger defeats the point of cost tracking.
 _PROVIDER_PRICING: dict[str, dict[str, tuple[float, float]]] = {
     # ── Anthropic ──────────────────────────────────────────────────────────
     "claude": {
