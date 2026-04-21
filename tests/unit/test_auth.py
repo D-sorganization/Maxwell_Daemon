@@ -133,3 +133,15 @@ class TestRequireRole:
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(dep(authorization=None))
         assert exc_info.value.status_code == 401
+
+    def test_invalid_jwt_raises_401(self, cfg: JWTConfig) -> None:
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from maxwell_daemon.auth import require_role
+
+        dep = require_role(Role.viewer, cfg)
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(dep(authorization="Bearer not.a.valid.jwt"))
+        assert exc_info.value.status_code == 401
