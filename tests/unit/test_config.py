@@ -83,14 +83,16 @@ class TestConfigLoad:
         assert "sk-test-123" not in repr(cfg.backends["claude"])
 
     def test_default_backend_must_exist(self) -> None:
-        cfg = MaxwellDaemonConfig.model_validate(
-            {
-                "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
-                "agent": {"default_backend": "nonexistent"},
-            }
-        )
-        with pytest.raises(ValueError, match="not found in backends"):
-            cfg.default_backend_config()
+        from pydantic import ValidationError
+
+        # Validation now happens eagerly at model construction (not lazily).
+        with pytest.raises(ValidationError, match="not defined in backends"):
+            MaxwellDaemonConfig.model_validate(
+                {
+                    "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
+                    "agent": {"default_backend": "nonexistent"},
+                }
+            )
 
     def test_rejects_unknown_top_level_keys(self) -> None:
         from pydantic import ValidationError
@@ -102,3 +104,26 @@ class TestConfigLoad:
                     "bogus_key": True,
                 }
             )
+
+
+class TestDefaultConfigPath:
+    def test_maxwell_config_env_overrides_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from maxwell_daemon.config.loader import default_config_path
+
+        custom = tmp_path / "custom.yaml"
+        monkeypatch.setenv("MAXWELL_CONFIG", str(custom))
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+        assert default_config_path() == custom
+
+    def test_xdg_config_home_respected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from maxwell_daemon.config.loader import default_config_path
+
+        monkeypatch.delenv("MAXWELL_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        result = default_config_path()
+        assert str(tmp_path) in str(result)
+        assert "maxwell-daemon" in str(result)

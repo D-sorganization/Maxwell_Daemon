@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -42,6 +43,14 @@ class TestTokenAuth:
         cfg.github = None
         with pytest.raises(ValueError, match="GitHub token not configured"):
             GitHubAuth.from_config(cfg)
+
+    def test_from_config_reads_github_token_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.setenv("GITHUB_TOKEN", "ghp_from_github_env")
+        cfg = MagicMock()
+        cfg.github = None
+        auth = GitHubAuth.from_config(cfg)
+        assert auth.token == "ghp_from_github_env"
 
 
 class TestAppAuth:
@@ -105,3 +114,62 @@ class TestAppAuth:
 
         with patch.dict("sys.modules", {"jwt": None}), pytest.raises(ImportError, match="PyJWT"):
             auth._fetch_installation_token()
+
+    def test_no_httpx_import_raises_helpful_error(self) -> None:
+        auth = self._make_auth()
+        fake_jwt = MagicMock()
+        fake_jwt.encode.return_value = "jwt"
+        with (
+            patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": None}),
+            pytest.raises(ImportError, match="httpx"),
+        ):
+            auth._fetch_installation_token()
+
+    def test_fetch_installation_token_success(self) -> None:
+        auth = self._make_auth()
+
+        fake_jwt = MagicMock()
+        fake_jwt.encode.return_value = "jwt-token"
+
+        response = MagicMock()
+        response.json.return_value = {
+            "token": "inst_token",
+            "expires_at": "2099-01-01T00:00:00Z",
+        }
+        fake_httpx = MagicMock()
+        fake_httpx.post.return_value = response
+
+        with patch.dict("sys.modules", {"jwt": fake_jwt, "httpx": fake_httpx}):
+            token, expires_at = auth._fetch_installation_token()
+
+        assert token == "inst_token"
+        assert expires_at > time.monotonic()
+        response.raise_for_status.assert_called_once()
+        fake_httpx.post.assert_called_once()
+
+
+class TestAppConfig:
+    def test_from_config_app_mode_reads_pem(self, tmp_path: Path) -> None:
+        pem = tmp_path / "key.pem"
+        pem.write_text("PEM", encoding="utf-8")
+
+        cfg = MagicMock()
+        cfg.github.auth_method = "app"
+        cfg.github.private_key_path = str(pem)
+        cfg.github.app_id = "101"
+        cfg.github.installation_id = "202"
+
+        auth = GitHubAuth.from_config(cfg)
+        assert auth._mode == "app"
+        assert auth._app_id == 101
+        assert auth._installation_id == 202
+
+    def test_from_config_app_mode_missing_pem(self, tmp_path: Path) -> None:
+        cfg = MagicMock()
+        cfg.github.auth_method = "app"
+        cfg.github.private_key_path = str(tmp_path / "missing.pem")
+        cfg.github.app_id = "101"
+        cfg.github.installation_id = "202"
+
+        with pytest.raises(FileNotFoundError):
+            GitHubAuth.from_config(cfg)
