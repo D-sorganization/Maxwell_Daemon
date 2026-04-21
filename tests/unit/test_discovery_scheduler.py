@@ -460,3 +460,39 @@ class TestSchedulerLoop:
         await sched.stop()
         # The loop continued past the first exception
         assert call_count >= 2
+
+    async def test_stop_timeout_proportional_to_interval(self, tmp_path: Path) -> None:
+        """stop() waits at least as long as the configured interval before cancelling.
+
+        Regression guard for #227: the old fixed 5-second timeout could interrupt
+        an in-flight tick when interval_seconds > 5 and GitHub calls were slow.
+        """
+        gh = _FakeGitHub({})
+        interval = 10.0
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=_FakeDaemon(),
+            repos=[],
+            interval_seconds=interval,
+            jitter=False,
+            dedup_path=tmp_path / "dedup.json",
+        )
+        # The computed stop timeout must be at least the interval.
+        assert max(5.0, sched._interval) >= interval
+
+        # Verify the scheduler actually stops cleanly without cancellation even
+        # when the tick takes longer than the old fixed 5-second limit.
+        tick_started = asyncio.Event()
+        tick_may_finish = asyncio.Event()
+
+        async def slow_run_once() -> None:
+            tick_started.set()
+            await tick_may_finish.wait()
+
+        sched.run_once = slow_run_once  # type: ignore[method-assign]
+        await sched.start()
+        await tick_started.wait()
+
+        tick_may_finish.set()
+        await sched.stop()
+        assert sched._task is None

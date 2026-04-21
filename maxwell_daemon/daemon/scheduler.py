@@ -187,8 +187,13 @@ class DiscoveryScheduler:
         if self._stop_event is not None:
             self._stop_event.set()
         if self._task is not None:
+            # Allow up to one full interval for an in-flight tick to finish so
+            # that slow GitHub calls or large repo lists don't trigger spurious
+            # cancellation.  Floor at 5 s so short-interval test schedulers
+            # still get a reasonable grace period.
+            stop_timeout = max(5.0, self._interval)
             try:
-                await asyncio.wait_for(self._task, timeout=5.0)
+                await asyncio.wait_for(self._task, timeout=stop_timeout)
             except (TimeoutError, asyncio.TimeoutError):
                 self._task.cancel()
                 with contextlib.suppress(asyncio.CancelledError, Exception):
