@@ -388,3 +388,65 @@ class TestRateLimitHandling:
         client = GitHubClient(runner=runner)
         issues = asyncio.run(client.list_issues("owner/repo"))
         assert len(issues) == 1
+
+    def test_rate_limit_raises_when_reset_exceeds_ceiling(self) -> None:
+        """GitHubRateLimitError raised when reset time exceeds the ceiling."""
+        import json as _json
+        import time
+
+        # Reset is far in the future — exceeds _MAX_RATE_LIMIT_WAIT_SECONDS (120).
+        reset_ts = int(time.time()) + 9999
+        rate_limit_payload = _json.dumps(
+            {"resources": {"core": {"remaining": 0, "reset": reset_ts}}}
+        ).encode()
+
+        runner = self._make_runner(
+            [
+                # First call: rate-limited
+                (1, b"", b"rate limit exceeded"),
+                # rate_limit probe: returns a far-future reset timestamp
+                (0, rate_limit_payload, b""),
+            ]
+        )
+        client = GitHubClient(runner=runner)
+        with pytest.raises(GitHubRateLimitError):
+            asyncio.run(client.list_issues("owner/repo"))
+
+    def test_fetch_rate_limit_reset_returns_none_on_failure(self) -> None:
+        """_fetch_rate_limit_reset returns None when the API call fails."""
+        runner = self._make_runner([(1, b"", b"auth required")])
+        client = GitHubClient(runner=runner)
+        result = asyncio.run(client._fetch_rate_limit_reset())
+        assert result is None
+
+    def test_fetch_rate_limit_reset_returns_none_on_bad_json(self) -> None:
+        """_fetch_rate_limit_reset returns None when output is not valid JSON."""
+        runner = self._make_runner([(0, b"not json", b"")])
+        client = GitHubClient(runner=runner)
+        result = asyncio.run(client._fetch_rate_limit_reset())
+        assert result is None
+
+
+class TestPullRequestFromUrl:
+    def test_from_url_raises_on_invalid_url(self) -> None:
+        with pytest.raises(ValueError, match="Unrecognised PR URL"):
+            PullRequest.from_url("https://github.com/owner/repo/issues/42")
+
+    def test_from_url_extracts_number(self) -> None:
+        pr = PullRequest.from_url("https://github.com/owner/repo/pull/99")
+        assert pr.number == 99
+        assert pr.url == "https://github.com/owner/repo/pull/99"
+
+
+class TestListIssuesInvalidState:
+    def test_invalid_state_raises(self, fake_runner: FakeRunner) -> None:
+        client = GitHubClient(runner=fake_runner)
+        with pytest.raises(ValueError, match="state"):
+            asyncio.run(client.list_issues("owner/repo", state="invalid"))
+
+
+class TestCreateIssueValidation:
+    def test_empty_title_raises(self, fake_runner: FakeRunner) -> None:
+        client = GitHubClient(runner=fake_runner)
+        with pytest.raises(ValueError, match="title"):
+            asyncio.run(client.create_issue("owner/repo", title="  ", body="body"))

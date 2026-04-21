@@ -94,6 +94,15 @@ class TestConfigLoad:
                 }
             )
 
+    def test_default_backend_config_returns_selected_backend(self) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
+                "agent": {"default_backend": "claude"},
+            }
+        )
+        assert cfg.default_backend_config().model == "claude-sonnet-4-6"
+
     def test_rejects_unknown_top_level_keys(self) -> None:
         from pydantic import ValidationError
 
