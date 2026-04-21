@@ -38,7 +38,7 @@ def client(daemon: Daemon) -> Iterator[TestClient]:
 
 @pytest.fixture
 def auth_client(daemon: Daemon) -> Iterator[TestClient]:
-    with TestClient(create_app(daemon, auth_token="secret-abc")) as c:
+    with TestClient(create_app(daemon, auth_token="secret-abc")) as c:  # nosec B106 — intentional test fixture, not a real credential
         yield c
 
 
@@ -156,7 +156,7 @@ class TestJwtAuthEndpoint:
     def test_whoami_returns_static_token_identity(self, auth_client: TestClient) -> None:
         r = auth_client.get(
             "/api/v1/auth/me",
-            headers={"Authorization": "Bearer secret-abc"},
+            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
         )
 
         assert r.status_code == 200
@@ -359,6 +359,6 @@ class TestAuth:
     def test_accepts_correct_token(self, auth_client: TestClient) -> None:
         r = auth_client.get(
             "/api/v1/backends",
-            headers={"Authorization": "Bearer secret-abc"},
+            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
         )
         assert r.status_code == 200
