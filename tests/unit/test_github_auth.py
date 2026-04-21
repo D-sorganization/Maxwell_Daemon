@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -43,6 +43,20 @@ class TestTokenAuth:
         with pytest.raises(ValueError, match="GitHub token not configured"):
             GitHubAuth.from_config(cfg)
 
+    @pytest.mark.asyncio
+    async def test_async_token_returns_token_for_pat(self) -> None:
+        auth = GitHubAuth.from_token("ghp_async_test")
+        result = await auth.async_token()
+        assert result == "ghp_async_test"
+
+    @pytest.mark.asyncio
+    async def test_async_headers_for_pat(self) -> None:
+        auth = GitHubAuth.from_token("ghp_hdr_test")
+        hdrs = await auth.async_headers()
+        assert hdrs["Authorization"] == "Bearer ghp_hdr_test"
+        assert "Accept" in hdrs
+        assert "X-GitHub-Api-Version" in hdrs
+
 
 class TestAppAuth:
     def _make_auth(self) -> GitHubAuth:
@@ -58,15 +72,24 @@ class TestAppAuth:
         assert auth._app_id == 12345
         assert auth._installation_id == 99999
 
-    def test_token_uses_cache_when_fresh(self) -> None:
+    def test_sync_token_raises_for_app_mode(self) -> None:
+        """Synchronous .token must not block the event loop in app mode."""
+        auth = self._make_auth()
+        with pytest.raises(RuntimeError, match=r"app.*mode"):
+            _ = auth.token
+
+    @pytest.mark.asyncio
+    async def test_async_token_uses_cache_when_fresh(self) -> None:
         auth = self._make_auth()
         auth._cache = _AppTokenCache(
             token="cached_token",
             expires_at=time.monotonic() + 3600,
         )
-        assert auth.token == "cached_token"
+        result = await auth.async_token()
+        assert result == "cached_token"
 
-    def test_token_refreshes_when_cache_expired(self) -> None:
+    @pytest.mark.asyncio
+    async def test_async_token_refreshes_when_cache_expired(self) -> None:
         auth = self._make_auth()
         auth._cache = _AppTokenCache(
             token="old_token",
@@ -77,15 +100,18 @@ class TestAppAuth:
         fresh_expires = time.monotonic() + 3600
 
         with patch.object(
-            auth, "_fetch_installation_token", return_value=(fresh_token, fresh_expires)
+            auth,
+            "_fetch_installation_token",
+            new=AsyncMock(return_value=(fresh_token, fresh_expires)),
         ):
-            result = auth.token
+            result = await auth.async_token()
 
         assert result == fresh_token
         assert auth._cache is not None
         assert auth._cache.token == fresh_token
 
-    def test_token_refreshes_when_near_expiry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_async_token_refreshes_when_near_expiry(self) -> None:
         auth = self._make_auth()
         # Only 2 minutes left — below the 5-minute threshold
         auth._cache = _AppTokenCache(
@@ -94,14 +120,17 @@ class TestAppAuth:
         )
 
         with patch.object(
-            auth, "_fetch_installation_token", return_value=("refreshed", time.monotonic() + 3600)
+            auth,
+            "_fetch_installation_token",
+            new=AsyncMock(return_value=("refreshed", time.monotonic() + 3600)),
         ):
-            result = auth.token
+            result = await auth.async_token()
 
         assert result == "refreshed"
 
-    def test_no_jwt_import_raises_helpful_error(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_jwt_import_raises_helpful_error(self) -> None:
         auth = self._make_auth()
 
         with patch.dict("sys.modules", {"jwt": None}), pytest.raises(ImportError, match="PyJWT"):
-            auth._fetch_installation_token()
+            await auth._fetch_installation_token()

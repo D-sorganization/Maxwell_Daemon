@@ -7,14 +7,23 @@ real concurrency that pattern raises
 
 The test below fires dozens of submit() + state() calls across a thread pool
 and asserts the dict never tears.
+
+A second test verifies that tasks submitted from a foreign thread via
+``_queue_task_threadsafe`` are reliably received by async workers (issue #164).
+``asyncio.Queue.put_nowait`` is not thread-safe; the fix uses
+``loop.call_soon_threadsafe`` so sleeping workers are woken correctly.
 """
 
 from __future__ import annotations
 
+import asyncio
 import concurrent.futures
+import threading
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
+
+import pytest
 
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon
@@ -102,3 +111,52 @@ class TestTasksDictThreadSafety:
                 fut.result()
 
         assert not errors, f"torn dict under contention: {errors[:3]}"
+
+
+class TestCrossThreadQueueSubmit:
+    """Issue #164 — submit() from a non-event-loop thread must reliably wake workers.
+
+    ``asyncio.Queue.put_nowait`` does not wake sleeping ``await queue.get()``
+    calls when invoked from a foreign OS thread.  The fix routes the put
+    through ``loop.call_soon_threadsafe`` so the event loop's internal
+    selector/condition is notified correctly.
+    """
+
+    @pytest.mark.asyncio
+    async def test_tasks_submitted_from_thread_are_received_by_async_worker(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """Tasks pushed into the queue from a foreign thread must be dequeued."""
+        d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
+        stub: Any = MagicMock()
+        d._task_store = stub
+
+        received: list[str] = []
+        loop = asyncio.get_running_loop()
+
+        async def _drain(n: int) -> None:
+            """Read exactly n items out of the queue."""
+            for _ in range(n):
+                task = await asyncio.wait_for(d._queue.get(), timeout=5.0)
+                received.append(task.id)
+
+        from maxwell_daemon.daemon.runner import Task
+
+        task_count = 20
+        drain_task = loop.create_task(_drain(task_count))
+
+        # Submit all tasks from a thread that is NOT the event-loop thread.
+        # Before the fix, put_nowait() from a foreign thread would not reliably
+        # wake sleeping ``await queue.get()`` calls; the drain_task would stall.
+        def _push_tasks() -> None:
+            for i in range(task_count):
+                task = Task(id=f"t{i:04d}", prompt="cross-thread")
+                d._queue_task_threadsafe(task)
+
+        t = threading.Thread(target=_push_tasks)
+        t.start()
+        t.join(timeout=5.0)
+        assert not t.is_alive(), "submitter thread hung"
+
+        await drain_task  # will raise TimeoutError if workers weren't woken
+        assert len(received) == task_count, f"expected {task_count} tasks, got {len(received)}"

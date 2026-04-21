@@ -11,8 +11,12 @@ Usage::
     from maxwell_daemon.github_auth import GitHubAuth
 
     auth = GitHubAuth.from_config(config)
-    token = auth.token          # always fresh
-    headers = auth.headers      # ready for httpx / requests
+    token = await auth.async_token()   # always fresh; awaitable for app mode
+    headers = await auth.async_headers()  # ready for httpx / requests
+
+For plain PAT mode the synchronous ``auth.token`` property still works and
+returns immediately.  App mode **must** use the async variants so the event
+loop is not blocked by the network call to the GitHub App tokens endpoint.
 """
 
 from __future__ import annotations
@@ -92,15 +96,44 @@ class GitHubAuth:
 
     @property
     def token(self) -> str:
+        """Return a token synchronously.
+
+        Only valid for ``token`` mode (plain PAT).  Raises ``RuntimeError``
+        for ``app`` mode — callers must use :meth:`async_token` instead so
+        the event loop is not blocked by the HTTP round-trip to GitHub.
+        """
         if self._mode == "token":
             assert self._static_token is not None
             return self._static_token
-        return self._installation_token()
+        raise RuntimeError(
+            "GitHubAuth is in 'app' mode — use 'await auth.async_token()' "
+            "to avoid blocking the event loop."
+        )
+
+    async def async_token(self) -> str:
+        """Return a valid token, refreshing asynchronously when needed.
+
+        Works for both ``token`` and ``app`` modes.  Always safe to ``await``
+        from async code regardless of auth mode.
+        """
+        if self._mode == "token":
+            assert self._static_token is not None
+            return self._static_token
+        return await self._installation_token()
 
     @property
     def headers(self) -> dict[str, str]:
+        """Synchronous headers — only valid for plain-token mode."""
         return {
             "Authorization": f"Bearer {self.token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+    async def async_headers(self) -> dict[str, str]:
+        """Async headers — works for both token and app modes."""
+        return {
+            "Authorization": f"Bearer {await self.async_token()}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
@@ -109,17 +142,21 @@ class GitHubAuth:
     # Internal: App token lifecycle
     # ------------------------------------------------------------------ #
 
-    def _installation_token(self) -> str:
+    async def _installation_token(self) -> str:
         """Return a valid installation token, refreshing if <5 min remain."""
         if self._cache is not None and self._cache.expires_at - time.monotonic() > 300:
             return self._cache.token
 
-        token, expires_at = self._fetch_installation_token()
+        token, expires_at = await self._fetch_installation_token()
         self._cache = _AppTokenCache(token=token, expires_at=expires_at)
         return token
 
-    def _fetch_installation_token(self) -> tuple[str, float]:
-        """Call GitHub to get a fresh installation token."""
+    async def _fetch_installation_token(self) -> tuple[str, float]:
+        """Call GitHub asynchronously to get a fresh installation token.
+
+        Uses ``httpx.AsyncClient`` so the event loop is never blocked while
+        waiting for the GitHub API response (fixes issue #141).
+        """
         try:
             import jwt as _jwt
         except ImportError as exc:
@@ -136,15 +173,16 @@ class GitHubAuth:
         payload = {"iat": now - 60, "exp": now + 600, "iss": str(self._app_id)}
         jwt_token = _jwt.encode(payload, self._private_key_pem, algorithm="RS256")
 
-        resp = _httpx.post(
-            f"https://api.github.com/app/installations/{self._installation_id}/access_tokens",
-            headers={
-                "Authorization": f"Bearer {jwt_token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-            timeout=15,
-        )
+        async with _httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"https://api.github.com/app/installations/{self._installation_id}/access_tokens",
+                headers={
+                    "Authorization": f"Bearer {jwt_token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                timeout=15,
+            )
         resp.raise_for_status()
         data = resp.json()
         token: str = data["token"]

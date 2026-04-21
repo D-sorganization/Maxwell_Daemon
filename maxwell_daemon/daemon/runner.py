@@ -202,6 +202,30 @@ class Daemon:
 
         log.info("daemon stopped")
 
+    def _queue_task_threadsafe(self, task: Task) -> None:
+        """Enqueue a task in a way that is safe when called from any thread.
+
+        ``asyncio.Queue`` is not thread-safe: calling ``put_nowait()`` from a
+        thread that is *not* the event-loop thread does not reliably wake
+        sleeping ``await queue.get()`` calls in worker coroutines (the internal
+        condition variable is never notified from the foreign thread).
+
+        ``loop.call_soon_threadsafe`` schedules the ``put_nowait`` to run in
+        the event loop's own thread, which guarantees the sleeping workers are
+        woken up correctly (fixes issue #164).
+
+        If no event loop is running yet (e.g. pre-start sync tests), we fall
+        back to a direct ``put_nowait``; those callers are single-threaded and
+        the workers haven't started yet so there is nothing to wake.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_soon_threadsafe(self._queue.put_nowait, task)
+        except RuntimeError:
+            # No running event loop — caller is synchronous (e.g. unit tests
+            # that invoke submit() before start()).  Direct put is safe here.
+            self._queue.put_nowait(task)
+
     def submit(
         self,
         prompt: str,
@@ -222,7 +246,7 @@ class Daemon:
         with self._tasks_lock:
             self._tasks[task.id] = task
         self._task_store.save(task)
-        self._queue.put_nowait(task)
+        self._queue_task_threadsafe(task)
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
         # submits before start()), skip the event — the queued state is
         # observable via get_task().
@@ -263,7 +287,7 @@ class Daemon:
         with self._tasks_lock:
             self._tasks[task.id] = task
         self._task_store.save(task)
-        self._queue.put_nowait(task)
+        self._queue_task_threadsafe(task)
         with contextlib.suppress(RuntimeError):
             loop = asyncio.get_running_loop()
             bg = loop.create_task(
