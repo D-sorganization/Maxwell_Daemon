@@ -12,6 +12,7 @@ import json
 import pytest
 
 from maxwell_daemon.gh import GhCliError, GitHubClient, Issue, PullRequest
+from maxwell_daemon.gh.client import GitHubRateLimitError
 
 
 @pytest.fixture
@@ -272,3 +273,118 @@ class TestModels:
             "url": "u",
         }
         assert Issue.from_gh(payload).is_open is False
+
+
+class TestRateLimitHandling:
+    """GitHubClient retries on rate-limit responses and backs off (#152)."""
+
+    def _make_runner(self, responses: list[tuple[int, bytes, bytes]]) -> object:
+        """Return a runner that yields responses in sequence."""
+
+        class _SeqRunner:
+            def __init__(self, seq: list[tuple[int, bytes, bytes]]) -> None:
+                self._seq = list(seq)
+                self._idx = 0
+                self.calls: list[tuple[str, ...]] = []
+
+            async def __call__(
+                self, *argv: str, cwd: str | None = None
+            ) -> tuple[int, bytes, bytes]:
+                self.calls.append(argv)
+                if self._idx < len(self._seq):
+                    result = self._seq[self._idx]
+                    self._idx += 1
+                    return result
+                return (0, b"[]", b"")
+
+        return _SeqRunner(responses)
+
+    def test_rate_limit_marker_detected(self) -> None:
+        """_is_rate_limit_error returns True for recognisable rate-limit messages."""
+        assert GitHubClient._is_rate_limit_error(1, b"API rate limit exceeded") is True
+        assert GitHubClient._is_rate_limit_error(1, b"secondary rate limit") is True
+        assert GitHubClient._is_rate_limit_error(1, b"429 Too Many Requests") is True
+        assert GitHubClient._is_rate_limit_error(0, b"rate limit") is False  # rc=0 means success
+        assert GitHubClient._is_rate_limit_error(1, b"Repository not found") is False
+
+    def test_retries_once_on_rate_limit_with_backoff(self) -> None:
+        """Client retries after a rate-limit error and succeeds on the second attempt."""
+        import json as _json
+
+        issues_payload = _json.dumps(
+            [{"number": 1, "title": "t", "body": "", "state": "OPEN", "labels": [], "url": "u"}]
+        ).encode()
+
+        runner = self._make_runner(
+            [
+                # First call: rate-limited
+                (1, b"", b"API rate limit exceeded for installation"),
+                # rate_limit API probe (returns no reset info → backoff)
+                (1, b"", b""),
+                # Retry of the original command: success
+                (0, issues_payload, b""),
+            ]
+        )
+        client = GitHubClient(runner=runner)
+        issues = asyncio.run(client.list_issues("owner/repo"))
+        assert len(issues) == 1
+        assert issues[0].number == 1
+
+    def test_raises_rate_limit_error_after_all_retries_exhausted(self) -> None:
+        """GitHubRateLimitError is raised when every retry attempt is rate-limited."""
+        runner = self._make_runner(
+            [
+                (1, b"", b"API rate limit exceeded"),
+                (1, b"", b""),  # rate_limit probe fails
+                (1, b"", b"API rate limit exceeded"),
+                (1, b"", b""),  # rate_limit probe fails
+                (1, b"", b"API rate limit exceeded"),
+                (1, b"", b""),  # rate_limit probe fails
+                (1, b"", b"API rate limit exceeded"),
+                (1, b"", b""),  # rate_limit probe fails
+            ]
+        )
+        client = GitHubClient(runner=runner)
+        with pytest.raises(GitHubRateLimitError):
+            asyncio.run(client.list_issues("owner/repo"))
+
+    def test_non_rate_limit_error_raises_immediately(self) -> None:
+        """Errors that are not rate-limit related raise GhCliError without retrying."""
+        runner = self._make_runner(
+            [
+                (1, b"", b"Repository not found"),
+            ]
+        )
+        client = GitHubClient(runner=runner)
+        with pytest.raises(GhCliError, match="Repository not found"):
+            asyncio.run(client.list_issues("owner/repo"))
+        # Only one call made — no retries for non-rate-limit errors.
+        assert len(runner.calls) == 1  # type: ignore[attr-defined]
+
+    def test_rate_limit_reset_respected_when_available(self) -> None:
+        """When the rate_limit API returns a reset time, the client waits for it."""
+        import json as _json
+        import time
+
+        issues_payload = _json.dumps(
+            [{"number": 2, "title": "x", "body": "", "state": "OPEN", "labels": [], "url": "u"}]
+        ).encode()
+        # Reset is 1 second in the future — well within the ceiling.
+        reset_ts = int(time.time()) + 1
+        rate_limit_payload = _json.dumps(
+            {"resources": {"core": {"remaining": 0, "reset": reset_ts}}}
+        ).encode()
+
+        runner = self._make_runner(
+            [
+                # First call: rate-limited
+                (1, b"", b"rate limit exceeded"),
+                # rate_limit probe: returns reset timestamp
+                (0, rate_limit_payload, b""),
+                # Retry after sleeping: success
+                (0, issues_payload, b""),
+            ]
+        )
+        client = GitHubClient(runner=runner)
+        issues = asyncio.run(client.list_issues("owner/repo"))
+        assert len(issues) == 1

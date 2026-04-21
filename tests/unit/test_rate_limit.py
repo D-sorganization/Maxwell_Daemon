@@ -157,6 +157,7 @@ class TestClassify:
 class TestClientKey:
     def test_bearer_token_hashed(self) -> None:
         from unittest.mock import MagicMock
+
         from maxwell_daemon.api.rate_limit import _client_key
 
         req = MagicMock()
@@ -167,6 +168,7 @@ class TestClientKey:
 
     def test_no_bearer_uses_ip(self) -> None:
         from unittest.mock import MagicMock
+
         from maxwell_daemon.api.rate_limit import _client_key
 
         req = MagicMock()

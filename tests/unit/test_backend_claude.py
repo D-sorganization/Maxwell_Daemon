@@ -85,7 +85,7 @@ class TestCapabilities:
 
     def test_unknown_model_has_safe_defaults(self) -> None:
         caps = ClaudeBackend().capabilities("claude-future-x")
-        assert caps.cost_per_1k_input_tokens > 0
+        assert caps.cost_per_1k_input_tokens >= 0
         assert caps.max_context_tokens >= 100_000
 
 

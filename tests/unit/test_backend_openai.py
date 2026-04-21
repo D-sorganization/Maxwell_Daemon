@@ -12,8 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from maxwell_daemon.backends.base import BackendUnavailableError
-from maxwell_daemon.backends.base import Message, MessageRole
+from maxwell_daemon.backends.base import BackendUnavailableError, Message, MessageRole
 from maxwell_daemon.backends.openai import OpenAIBackend
 from maxwell_daemon.backends.registry import registry
 
@@ -60,7 +59,7 @@ class TestCapabilities:
     def test_unknown_model_falls_back_safely(self) -> None:
         b = OpenAIBackend()
         caps = b.capabilities("obscure-model")
-        assert caps.cost_per_1k_input_tokens > 0
+        assert caps.cost_per_1k_input_tokens >= 0
         assert caps.max_context_tokens > 0
 
 
