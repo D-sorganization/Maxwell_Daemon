@@ -11,8 +11,9 @@ Usage::
     from maxwell_daemon.github_auth import GitHubAuth
 
     auth = GitHubAuth.from_config(config)
-    token = auth.token          # always fresh
-    headers = auth.headers      # ready for httpx / requests
+    token = await auth.get_token()   # async (preferred in async contexts)
+    token = auth.token               # sync (legacy, blocks event loop for App tokens)
+    headers = auth.headers           # ready for httpx / requests
 """
 
 from __future__ import annotations
@@ -92,6 +93,13 @@ class GitHubAuth:
 
     @property
     def token(self) -> str:
+        """Return a usable token synchronously.
+
+        .. deprecated::
+            In async contexts prefer ``await auth.get_token()`` to avoid
+            blocking the event loop when refreshing GitHub App installation
+            tokens (each refresh is an HTTP round-trip).
+        """
         if self._mode == "token":
             if self._static_token is None:
                 raise ValueError("GitHubAuth is in 'token' mode but no static token was provided")
@@ -107,14 +115,19 @@ class GitHubAuth:
         }
 
     async def get_token(self) -> str:
-        """Return a usable token without blocking async callers on App auth refresh."""
+        """Return a usable token, using async I/O for App token refreshes.
+
+        Preferred over the synchronous ``.token`` property in async contexts
+        because it does not block the event loop during the GitHub API call.
+        """
         if self._mode == "token":
-            assert self._static_token is not None
+            if self._static_token is None:
+                raise RuntimeError("static token must not be None in token mode")
             return self._static_token
         return await self._async_installation_token()
 
     # ------------------------------------------------------------------ #
-    # Internal: App token lifecycle
+    # Internal: App token lifecycle (synchronous — legacy)
     # ------------------------------------------------------------------ #
 
     def _installation_token(self) -> str:
