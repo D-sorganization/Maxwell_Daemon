@@ -69,7 +69,8 @@ class TestLedger:
         ledger.record(_record(cost=0.01))
         ledger.close()
         # After close, attempting to use the connection should raise
-        with pytest.raises(Exception):
+        import sqlite3 as _sqlite3
+        with pytest.raises(_sqlite3.ProgrammingError):
             ledger._conn.execute("SELECT 1")
 
 
