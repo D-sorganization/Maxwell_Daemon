@@ -261,3 +261,124 @@ class TestSubmitThreadsafe:
             await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+
+    def test_state_version_is_string(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        async def body(d: Daemon) -> None:
+            state = d.state()
+            assert isinstance(state.version, str)
+            assert len(state.version) > 0
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+    def test_state_version_matches_package_version(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        from maxwell_daemon import __version__
+
+        async def body(d: Daemon) -> None:
+            state = d.state()
+            assert state.version == __version__
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+
+class TestPackageVersion:
+    def test_version_is_string(self) -> None:
+        from maxwell_daemon import __version__
+
+        assert isinstance(__version__, str)
+        assert len(__version__) > 0
+
+    def test_version_not_hardcoded_none(self) -> None:
+        from maxwell_daemon import __version__
+
+        # Should never be None, regardless of whether pkg is installed
+        assert __version__ is not None
+
+class TestWorkerRescaling:
+    def test_set_worker_count_up(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """set_worker_count(4) when at 2 spawns 2 more tasks in self._workers."""
+
+        async def body(d: Daemon) -> None:
+            assert len(d._workers) == 2
+            await d.set_worker_count(4)
+            assert len(d._workers) == 4
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=2, body=body))
+
+    def test_set_worker_count_down(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """set_worker_count(1) when at 3 cancels 2 workers."""
+
+        async def body(d: Daemon) -> None:
+            assert len(d._workers) == 3
+            await d.set_worker_count(1)
+            assert len(d._workers) == 1
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=3, body=body))
+
+    def test_set_worker_count_same(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """set_worker_count(N) when already at N is a no-op."""
+
+        async def body(d: Daemon) -> None:
+            assert len(d._workers) == 2
+            await d.set_worker_count(2)
+            assert len(d._workers) == 2
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=2, body=body))
+
+    def test_set_worker_count_zero_raises(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """set_worker_count(0) raises PreconditionError."""
+        from maxwell_daemon.contracts import PreconditionError
+
+        async def body(d: Daemon) -> None:
+            import pytest
+
+            with pytest.raises(PreconditionError):
+                await d.set_worker_count(0)
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=2, body=body))
+
+    def test_state_queue_depth_reflects_qsize(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """state().queue_depth reflects qsize() of the internal queue."""
+
+        async def body(d: Daemon) -> None:
+            assert d.state().queue_depth == 0
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+    def test_state_worker_count_reflects_workers(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """state().worker_count reflects the number of active worker tasks."""
+
+        async def body(d: Daemon) -> None:
+            assert d.state().worker_count == 3
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=3, body=body))
+
+    def test_state_worker_count_after_rescale(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """state().worker_count updates after set_worker_count."""
+
+        async def body(d: Daemon) -> None:
+            assert d.state().worker_count == 2
+            await d.set_worker_count(5)
+            assert d.state().worker_count == 5
+            await d.set_worker_count(1)
+            assert d.state().worker_count == 1
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=2, body=body))

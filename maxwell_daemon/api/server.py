@@ -640,7 +640,7 @@ def create_app(
         }
 
     @app.get("/api/v1/workers", dependencies=[Depends(_require_viewer())])
-    async def workers_status() -> dict:
+    async def workers_status() -> dict[str, Any]:
         """Return current worker count and queue depth."""
         state = daemon.state()
         return {
@@ -649,7 +649,7 @@ def create_app(
         }
 
     @app.put("/api/v1/workers", dependencies=[Depends(_require_viewer())])
-    async def set_workers(count: int) -> dict:
+    async def set_workers(count: int) -> dict[str, Any]:
         """Rescale the worker pool to *count* workers."""
         from maxwell_daemon.contracts import PreconditionError
 
