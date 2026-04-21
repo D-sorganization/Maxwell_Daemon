@@ -165,6 +165,8 @@ class Daemon:
         self._github_client: Any = None
         self._workspace: Any = None
         self._issue_executor_factory: Any = None
+        # Prune scheduler — started in start(), stopped in stop().
+        self._prune_scheduler: Any = None
         # Fleet coordination: track last-seen time per worker machine for heartbeat.
         # Keys are machine names; values are the UTC datetime of last contact.
         self._worker_last_seen: dict[str, datetime] = {}
@@ -242,6 +244,17 @@ class Daemon:
         except (AttributeError, NotImplementedError, OSError):
             # Windows or unsupported platform — skip signal handler.
             pass
+
+        # Start daily prune scheduler for tasks and ledger.
+        from maxwell_daemon.daemon.scheduler import PruneScheduler
+
+        self._prune_scheduler = PruneScheduler(
+            task_store=self._task_store,
+            ledger=self._ledger,
+            retention_days=self._config.agent.task_retention_days,
+        )
+        await self._prune_scheduler.start()
+
         log.info("daemon started with %d workers", self._worker_count)
 
     def recover(self) -> list[Task]:
@@ -280,6 +293,11 @@ class Daemon:
         self._workers.clear()
         if hasattr(self._router, "aclose_all"):
             await self._router.aclose_all()
+
+        # Stop daily prune scheduler if it was started.
+        if self._prune_scheduler is not None:
+            with contextlib.suppress(Exception):
+                await self._prune_scheduler.stop()
 
         # Flush fire-and-forget background tasks (like event publishing)
         if self._bg_tasks:

@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     pr_url TEXT,
     cost_usd REAL NOT NULL DEFAULT 0,
     started_at TEXT,
-    finished_at TEXT
+    finished_at TEXT,
+    completed_at REAL
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
@@ -75,6 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
 # Indexes that depend on migrated-in columns — created after migrations run.
 _SCHEMA_POST_MIGRATION = """
 CREATE INDEX IF NOT EXISTS idx_tasks_ab_group ON tasks(ab_group);
+CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks(completed_at);
 """
 
 
@@ -83,6 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_ab_group ON tasks(ab_group);
 # add what's missing.
 _MIGRATIONS = [
     ("ab_group", "ALTER TABLE tasks ADD COLUMN ab_group TEXT"),
+    ("completed_at", "ALTER TABLE tasks ADD COLUMN completed_at REAL"),
 ]
 
 
@@ -136,11 +139,17 @@ class TaskStore:
     # ── Sync internals ────────────────────────────────────────────────────────
 
     def _save_sync(self, task: Task) -> None:
+        from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
+
         # Prefer the task's own tzinfo so the updated_at stays in the same
         # zone as created_at, but fall back to UTC if the task happens to be
         # naive (e.g. loaded from a legacy DB row).
         tz = task.created_at.tzinfo or timezone.utc
         now = datetime.now(tz).isoformat()
+        _terminal = (_TaskStatus.COMPLETED, _TaskStatus.FAILED, _TaskStatus.CANCELLED)
+        completed_at: float | None = (
+            datetime.now(timezone.utc).timestamp() if task.status in _terminal else None
+        )
         row = (
             task.id,
             task.created_at.isoformat(),
@@ -161,6 +170,7 @@ class TaskStore:
             task.cost_usd,
             _iso(task.started_at),
             _iso(task.finished_at),
+            completed_at,
         )
         with self._lock, self._connect() as conn:
             conn.execute(
@@ -169,8 +179,9 @@ class TaskStore:
                     id, created_at, updated_at, kind, status, prompt,
                     repo, backend, model,
                     issue_repo, issue_number, issue_mode, ab_group,
-                    result, error, pr_url, cost_usd, started_at, finished_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    result, error, pr_url, cost_usd, started_at, finished_at,
+                    completed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     updated_at=excluded.updated_at,
                     status=excluded.status,
@@ -182,7 +193,8 @@ class TaskStore:
                     ab_group=excluded.ab_group,
                     result=excluded.result, error=excluded.error, pr_url=excluded.pr_url,
                     cost_usd=excluded.cost_usd,
-                    started_at=excluded.started_at, finished_at=excluded.finished_at
+                    started_at=excluded.started_at, finished_at=excluded.finished_at,
+                    completed_at=COALESCE(excluded.completed_at, tasks.completed_at)
                 """,
                 row,
             )
@@ -199,13 +211,21 @@ class TaskStore:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
     ) -> None:
+        from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
+
         now = datetime.now(timezone.utc).isoformat()
+        now_ts = datetime.now(timezone.utc).timestamp()
         with self._lock, self._connect() as conn:
             cursor = conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
             if cursor.fetchone() is None:
                 raise KeyError(task_id)
             sets = ["status = ?", "updated_at = ?"]
             args: list[object] = [status.value, now]
+            # Record epoch timestamp when a task reaches a terminal state so
+            # prune() can cheaply compare against a float cutoff.
+            if status in (_TaskStatus.COMPLETED, _TaskStatus.FAILED, _TaskStatus.CANCELLED):
+                sets.append("completed_at = ?")
+                args.append(now_ts)
             for field, value in (
                 ("result", result),
                 ("error", error),
@@ -228,17 +248,42 @@ class TaskStore:
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _row_to_task(row) if row else None
 
-    def _list_sync(self, *, limit: int = 100, status: TaskStatus | None = None) -> list[Task]:
+    def _list_sync(
+        self,
+        *,
+        limit: int = 100,
+        status: TaskStatus | None = None,
+        completed_before: datetime | None = None,
+    ) -> list[Task]:
         query = "SELECT * FROM tasks"
         args: list[object] = []
+        conditions: list[str] = []
         if status is not None:
-            query += " WHERE status = ?"
+            conditions.append("status = ?")
             args.append(status.value)
+        if completed_before is not None:
+            conditions.append("completed_at < ?")
+            args.append(completed_before.timestamp())
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY created_at DESC LIMIT ?"
         args.append(limit)
         with self._connect() as conn:
             rows = conn.execute(query, args).fetchall()
         return [_row_to_task(r) for r in rows]
+
+    def _prune_sync(self, older_than_days: int) -> int:
+        """Delete COMPLETED/FAILED/CANCELLED tasks older than *older_than_days*.
+
+        Returns the number of rows deleted.
+        """
+        cutoff = datetime.now(timezone.utc).timestamp() - older_than_days * 86400
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM tasks WHERE completed_at IS NOT NULL AND completed_at < ?",
+                (cutoff,),
+            )
+            return cursor.rowcount
 
     def _recover_sync(self) -> list[Task]:
         from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
@@ -297,8 +342,21 @@ class TaskStore:
     def get(self, task_id: str) -> Task | None:
         return self._get_sync(task_id)
 
-    def list_tasks(self, *, limit: int = 100, status: TaskStatus | None = None) -> list[Task]:
-        return self._list_sync(limit=limit, status=status)
+    def list_tasks(
+        self,
+        *,
+        limit: int = 100,
+        status: TaskStatus | None = None,
+        completed_before: datetime | None = None,
+    ) -> list[Task]:
+        return self._list_sync(limit=limit, status=status, completed_before=completed_before)
+
+    def prune(self, older_than_days: int) -> int:
+        """Delete completed/failed/cancelled tasks older than *older_than_days*.
+
+        Returns the number of rows deleted.
+        """
+        return self._prune_sync(older_than_days)
 
     def recover_pending(self) -> list[Task]:
         """Mark stale RUNNING tasks as FAILED; return anything still QUEUED."""
@@ -346,11 +404,23 @@ class TaskStore:
         return await loop.run_in_executor(None, self._get_sync, task_id)
 
     async def alist_tasks(
-        self, *, limit: int = 100, status: TaskStatus | None = None
+        self,
+        *,
+        limit: int = 100,
+        status: TaskStatus | None = None,
+        completed_before: datetime | None = None,
     ) -> list[Task]:
         """Non-blocking version of :meth:`list_tasks` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: self._list_sync(limit=limit, status=status))
+        return await loop.run_in_executor(
+            None,
+            lambda: self._list_sync(limit=limit, status=status, completed_before=completed_before),
+        )
+
+    async def aprune(self, older_than_days: int) -> int:
+        """Non-blocking version of :meth:`prune` for use in async code."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._prune_sync, older_than_days)
 
     def close(self) -> None:
         """Compatibility hook for stores that do not keep an open connection."""

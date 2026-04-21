@@ -396,6 +396,7 @@ def create_app(
         kind: Annotated[str | None, Query()] = None,
         repo: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+        completed_before: Annotated[datetime | None, Query()] = None,
     ) -> list[TaskView]:
         tasks = list(daemon.state().tasks.values())
         if status:
@@ -404,6 +405,14 @@ def create_app(
             tasks = [t for t in tasks if t.kind.value == kind]
         if repo:
             tasks = [t for t in tasks if t.repo == repo or t.issue_repo == repo]
+        if completed_before is not None:
+            # Normalise to UTC-aware for comparison.
+            cb = (
+                completed_before.replace(tzinfo=timezone.utc)
+                if completed_before.tzinfo is None
+                else completed_before
+            )
+            tasks = [t for t in tasks if t.finished_at is not None and t.finished_at < cb]
         tasks.sort(key=lambda t: t.created_at, reverse=True)
         return [TaskView.from_task(t) for t in tasks[:limit]]
 
@@ -742,6 +751,33 @@ def create_app(
             "status": "reloaded",
             "config_path": str(path),
             "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @app.post(
+        "/api/v1/admin/prune",
+        dependencies=[Depends(_require_operator())],
+    )
+    async def admin_prune(
+        retention_days: Annotated[int | None, Query(ge=1)] = None,
+    ) -> dict[str, Any]:
+        """Delete completed/failed tasks and old ledger entries on demand.
+
+        Uses ``agent.task_retention_days`` from config when *retention_days* is
+        not supplied. Requires operator role.
+        """
+        days = (
+            retention_days
+            if retention_days is not None
+            else daemon._config.agent.task_retention_days
+        )
+        pruned_tasks = await daemon._task_store.aprune(days)
+        pruned_ledger = await daemon._ledger.aprune(days)
+        if _audit is not None:
+            _audit.rotate()
+        return {
+            "pruned_tasks": pruned_tasks,
+            "pruned_ledger_entries": pruned_ledger,
+            "retention_days": days,
         }
 
     @app.get("/api/v1/workers", dependencies=[Depends(_require_viewer())])

@@ -148,6 +148,29 @@ class CostLedger:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._by_backend_sync, since)
 
+    # ── Pruning ───────────────────────────────────────────────────────────────
+
+    def _prune_sync(self, older_than_days: int) -> int:
+        """Delete cost records older than *older_than_days*. Returns rows deleted."""
+        from datetime import timedelta
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        with self._lock:
+            cursor = self._conn.execute(
+                "DELETE FROM cost_records WHERE ts < ?",
+                (cutoff.isoformat(),),
+            )
+            return cursor.rowcount
+
+    def prune(self, older_than_days: int) -> int:
+        """Delete cost records older than *older_than_days*. Returns rows deleted."""
+        return self._prune_sync(older_than_days)
+
+    async def aprune(self, older_than_days: int) -> int:
+        """Non-blocking version of :meth:`prune` for use in async code."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._prune_sync, older_than_days)
+
     # ── Derived helpers ───────────────────────────────────────────────────────
 
     def month_to_date(self, *, now: datetime | None = None) -> float:

@@ -85,6 +85,11 @@ class AgentConfig(BaseModel):
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
     temperature: float = Field(1.0, ge=0.0, le=2.0)
     default_backend: str = "claude"
+    task_retention_days: int = Field(
+        90,
+        ge=1,
+        description="Completed/failed tasks older than this many days are pruned automatically.",
+    )
 
 
 class ToolConfig(BaseModel):

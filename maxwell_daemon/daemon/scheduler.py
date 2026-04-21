@@ -36,6 +36,7 @@ __all__ = [
     "DiscoveryRepoSpec",
     "DiscoveryScheduler",
     "DiscoveryTick",
+    "PruneScheduler",
 ]
 
 log = logging.getLogger(__name__)
@@ -201,6 +202,7 @@ class DiscoveryScheduler:
             raise RuntimeError("_loop() called before start(); _stop_event is None")
         # Startup jitter: spread first-tick firing across the interval to
         # prevent thundering herd when multiple daemons start together.
+
         if self._jitter:
             jitter_delay = (secrets.randbelow(1_000_000) / 1_000_000) * self._interval
             log.debug("discovery scheduler startup jitter=%.2fs", jitter_delay)
@@ -219,6 +221,112 @@ class DiscoveryScheduler:
                 return  # stop signalled during the wait
             except (TimeoutError, asyncio.TimeoutError):
                 continue  # interval elapsed; next tick
+
+
+class PruneScheduler:
+    """Run :meth:`TaskStore.prune`, :meth:`CostLedger.prune`, and
+    :meth:`AuditLogger.rotate` once per day at approximately 03:00 UTC.
+
+    Start/stop are idempotent — calling :meth:`start` twice or
+    :meth:`stop` before :meth:`start` is a no-op.
+
+    DbC:
+      * ``retention_days`` must be >= 1.
+      * ``task_store`` must expose an ``aprune(days)`` coroutine.
+      * ``ledger`` must expose an ``aprune(days)`` coroutine.
+    """
+
+    # How far into the day (in seconds from midnight UTC) to fire the prune.
+    _FIRE_HOUR_UTC: int = 3  # 03:00 UTC
+
+    def __init__(
+        self,
+        *,
+        task_store: Any,
+        ledger: Any,
+        retention_days: int = 90,
+        audit_logger: Any = None,
+    ) -> None:
+        require(
+            retention_days >= 1,
+            f"PruneScheduler: retention_days must be >= 1 (got {retention_days})",
+        )
+        self._task_store = task_store
+        self._ledger = ledger
+        self._retention_days = retention_days
+        self._audit_logger = audit_logger
+        self._task: asyncio.Task[None] | None = None
+        self._stop_event: asyncio.Event | None = None
+
+    async def run_once(self) -> dict[str, int]:
+        """Run one prune pass. Returns a dict of counts."""
+        pruned_tasks: int = await self._task_store.aprune(self._retention_days)
+        pruned_ledger: int = await self._ledger.aprune(self._retention_days)
+        pruned_audit: int = 0
+        if self._audit_logger is not None:
+            try:
+                pruned_audit = self._audit_logger.rotate()
+            except Exception:
+                log.warning("audit log rotation failed", exc_info=True)
+        log.info(
+            "prune complete: tasks=%d ledger=%d audit=%d retention_days=%d",
+            pruned_tasks,
+            pruned_ledger,
+            pruned_audit,
+            self._retention_days,
+        )
+        return {
+            "pruned_tasks": pruned_tasks,
+            "pruned_ledger": pruned_ledger,
+            "pruned_audit": pruned_audit,
+        }
+
+    async def start(self) -> None:
+        """Begin the daily prune loop in a background task. Idempotent."""
+        if self._task is not None and not self._task.done():
+            return
+        self._stop_event = asyncio.Event()
+        self._task = asyncio.create_task(self._loop(), name="prune-scheduler")
+
+    async def stop(self) -> None:
+        """Signal the loop to exit and wait for it. Idempotent."""
+        if self._stop_event is not None:
+            self._stop_event.set()
+        if self._task is not None:
+            try:
+                await asyncio.wait_for(self._task, timeout=5.0)
+            except (TimeoutError, asyncio.TimeoutError):
+                self._task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await self._task
+            self._task = None
+        self._stop_event = None
+
+    def _seconds_until_next_fire(self) -> float:
+        """Compute seconds until the next 03:00 UTC."""
+        import datetime as _dt
+
+        now = _dt.datetime.now(_dt.timezone.utc)
+        target = now.replace(hour=self._FIRE_HOUR_UTC, minute=0, second=0, microsecond=0)
+        if now >= target:
+            target += _dt.timedelta(days=1)
+        return (target - now).total_seconds()
+
+    async def _loop(self) -> None:
+        if self._stop_event is None:
+            raise RuntimeError("_loop() called before start(); _stop_event is None")
+        while not self._stop_event.is_set():
+            wait_seconds = self._seconds_until_next_fire()
+            log.debug("prune scheduler: next run in %.0fs", wait_seconds)
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=wait_seconds)
+                return  # stop signalled during wait
+            except (TimeoutError, asyncio.TimeoutError):
+                pass  # time to prune
+            try:
+                await self.run_once()
+            except Exception:
+                log.warning("prune tick raised; continuing", exc_info=True)
 
 
 class _SnapshotLister:
