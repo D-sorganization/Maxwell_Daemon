@@ -7,12 +7,12 @@ a hot-path dependency.
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
-import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from maxwell_daemon.backends.base import TokenUsage
@@ -51,7 +51,9 @@ class CostLedger:
     def __init__(self, db_path: Path | str) -> None:
         self._path = Path(db_path).expanduser()
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        # asyncio.Lock serialises async callers (e.g. concurrent agent workers).
+        # SQLite WAL mode + busy_timeout handle DB-level contention.
+        self._lock = asyncio.Lock()
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
 
@@ -64,8 +66,8 @@ class CostLedger:
         finally:
             conn.close()
 
-    def record(self, rec: CostRecord) -> None:
-        with self._lock, self._connect() as conn:
+    def _record_sync(self, rec: CostRecord) -> None:
+        with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO cost_records
@@ -85,6 +87,31 @@ class CostLedger:
                     rec.cost_usd,
                 ),
             )
+
+    def record(self, rec: CostRecord) -> None:
+        """Sync record — safe from sync callers (single-threaded daemon startup,
+        tests).  The asyncio.Lock is not acquired here; SQLite WAL handles any
+        rare contention at the DB level."""
+        self._record_sync(rec)
+
+    async def async_record(self, rec: CostRecord) -> None:
+        """Async variant — acquires asyncio.Lock so concurrent agent workers
+        don't interleave INSERT operations."""
+        async with self._lock:
+            self._record_sync(rec)
+
+    def prune(self, older_than_days: int) -> int:
+        """Delete cost records older than *older_than_days*.
+
+        Returns the number of rows deleted.
+        """
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).isoformat()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM cost_records WHERE ts < ?",
+                (cutoff,),
+            )
+        return cursor.rowcount
 
     def total_since(self, since: datetime) -> float:
         with self._connect() as conn:

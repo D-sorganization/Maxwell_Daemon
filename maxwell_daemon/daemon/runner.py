@@ -392,7 +392,9 @@ class Daemon:
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now(timezone.utc)
         try:
-            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
+            await self._task_store.async_update_status(
+                task.id, TaskStatus.RUNNING, started_at=task.started_at
+            )
         except Exception:
             log.exception("task store write failed for task=%s", task.id)
             raise
@@ -484,7 +486,7 @@ class Daemon:
             # daemon saw. Save rather than update_status because status may
             # have flipped more than once through the try/except chain.
             try:
-                self._task_store.save(task)
+                await self._task_store.async_save(task)
             except Exception:
                 log.exception("task store write failed for task=%s", task.id)
             if (

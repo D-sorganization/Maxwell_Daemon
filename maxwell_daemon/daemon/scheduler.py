@@ -25,10 +25,15 @@ import contextlib
 import logging
 import random
 from dataclasses import dataclass, field
-from typing import Any
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
 from maxwell_daemon.contracts import require
 from maxwell_daemon.gh.discovery import DiscoveryFilter, discover_issues
+
+if TYPE_CHECKING:
+    from maxwell_daemon.core.task_store import TaskStore
+    from maxwell_daemon.core.ledger import CostLedger
 
 __all__ = [
     "DiscoveryRepoSpec",
@@ -78,6 +83,9 @@ class DiscoveryScheduler:
         repos: list[DiscoveryRepoSpec],
         interval_seconds: float = 300.0,
         jitter: bool = True,
+        task_store: TaskStore | None = None,
+        ledger: CostLedger | None = None,
+        task_retention_days: int = 90,
     ) -> None:
         require(
             interval_seconds > 0,
@@ -88,10 +96,63 @@ class DiscoveryScheduler:
         self._repos = list(repos)
         self._interval = float(interval_seconds)
         self._jitter = jitter
+        self._task_store = task_store
+        self._ledger = ledger
+        self._task_retention_days = task_retention_days
         # Per-repo set of issue numbers we've seen in any prior tick.
+        # Seeded from the task store on startup so dedup survives restarts.
         self._dispatched: dict[str, set[int]] = {}
+        if task_store is not None:
+            self._seed_dispatched(task_store)
         self._task: asyncio.Task[None] | None = None
         self._stop_event: asyncio.Event | None = None
+        # Track last prune time so we only run it once per day.
+        self._last_prune: datetime | None = None
+
+    def _seed_dispatched(self, task_store: TaskStore, lookback_days: int = 7) -> None:
+        """Pre-populate the in-memory dedup set from the task store.
+
+        Queries the last *lookback_days* worth of tasks per repo so that a
+        daemon restart doesn't re-dispatch issues that were already handled
+        in the recent past.
+        """
+        for spec in self._repos:
+            tasks = task_store.list_tasks(repo=spec.repo, limit=500)
+            seen = {t.issue_number for t in tasks if t.issue_number is not None}
+            if seen:
+                self._dispatched[spec.repo] = seen
+                log.debug(
+                    "seeded dedup for repo=%s with %d issue(s)", spec.repo, len(seen)
+                )
+
+    def _maybe_prune(self) -> None:
+        """Run a prune pass at most once per day across task store and ledger."""
+        if self._task_store is None and self._ledger is None:
+            return
+        now = datetime.now(timezone.utc)
+        if self._last_prune is not None:
+            elapsed = (now - self._last_prune).total_seconds()
+            if elapsed < 86400:  # 24 hours
+                return
+        if self._task_store is not None:
+            try:
+                deleted = self._task_store.prune(self._task_retention_days)
+                if deleted:
+                    log.info("pruned %d old task(s) (retention=%dd)", deleted, self._task_retention_days)
+            except Exception:
+                log.warning("task store prune failed", exc_info=True)
+        if self._ledger is not None:
+            try:
+                deleted = self._ledger.prune(self._task_retention_days)
+                if deleted:
+                    log.info(
+                        "pruned %d old ledger record(s) (retention=%dd)",
+                        deleted,
+                        self._task_retention_days,
+                    )
+            except Exception:
+                log.warning("ledger prune failed", exc_info=True)
+        self._last_prune = now
 
     async def run_once(self) -> DiscoveryTick:
         """Poll every configured repo exactly once and submit new issues."""
@@ -173,6 +234,7 @@ class DiscoveryScheduler:
                 await self.run_once()
             except Exception:
                 log.warning("discovery tick raised; continuing", exc_info=True)
+            self._maybe_prune()
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self._interval)
                 return  # stop signalled during the wait

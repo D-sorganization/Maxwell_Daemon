@@ -15,11 +15,11 @@ re-dispatch it if needed.
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
-import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -82,7 +82,11 @@ class TaskStore:
     def __init__(self, db_path: Path) -> None:
         self._path = Path(db_path).expanduser()
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        # asyncio.Lock serialises callers within the async event loop.
+        # SQLite operations are synchronous but fast (microseconds for small
+        # DBs), so we accept the brief blocking rather than doing a full
+        # aiosqlite migration. The lock prevents concurrent writes racing.
+        self._lock = asyncio.Lock()
         with self._connect() as conn:
             conn.executescript(_SCHEMA_BASE)
             existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
@@ -104,7 +108,11 @@ class TaskStore:
         finally:
             conn.close()
 
-    def save(self, task: Task) -> None:
+    def _save_sync(self, task: Task) -> None:
+        """Internal synchronous save — called by the public async save() and
+        by sync callers (submit, submit_issue_ab) that run before any concurrent
+        async workers exist.  SQLite WAL + busy_timeout handle any rare
+        contention at the DB level."""
         require(bool(task.id), "TaskStore.save: task.id must be non-empty")
         now = datetime.now(task.created_at.tzinfo).isoformat()
         row = (
@@ -128,7 +136,7 @@ class TaskStore:
             _iso(task.started_at),
             _iso(task.finished_at),
         )
-        with self._lock, self._connect() as conn:
+        with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO tasks (
@@ -153,7 +161,18 @@ class TaskStore:
                 row,
             )
 
-    def update_status(
+    def save(self, task: Task) -> None:
+        """Persist *task* (upsert).  Safe to call from sync code; async callers
+        should prefer :meth:`async_save` so the asyncio.Lock is honoured."""
+        self._save_sync(task)
+
+    async def async_save(self, task: Task) -> None:
+        """Async variant of save() — acquires asyncio.Lock to serialise
+        concurrent workers writing the same task id."""
+        async with self._lock:
+            self._save_sync(task)
+
+    def _update_status_sync(
         self,
         task_id: str,
         status: TaskStatus,
@@ -166,7 +185,7 @@ class TaskStore:
         finished_at: datetime | None = None,
     ) -> None:
         now = datetime.now().isoformat()
-        with self._lock, self._connect() as conn:
+        with self._connect() as conn:
             cursor = conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
             if cursor.fetchone() is None:
                 raise KeyError(task_id)
@@ -189,29 +208,110 @@ class TaskStore:
                 args,
             )
 
+    def update_status(
+        self,
+        task_id: str,
+        status: TaskStatus,
+        *,
+        result: str | None = None,
+        error: str | None = None,
+        pr_url: str | None = None,
+        cost_usd: float | None = None,
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
+    ) -> None:
+        """Sync variant — safe for callers that aren't inside an async worker."""
+        self._update_status_sync(
+            task_id,
+            status,
+            result=result,
+            error=error,
+            pr_url=pr_url,
+            cost_usd=cost_usd,
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+
+    async def async_update_status(
+        self,
+        task_id: str,
+        status: TaskStatus,
+        *,
+        result: str | None = None,
+        error: str | None = None,
+        pr_url: str | None = None,
+        cost_usd: float | None = None,
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
+    ) -> None:
+        """Async variant — acquires asyncio.Lock to prevent concurrent workers
+        racing on the same row. Callers inside the event loop should use this."""
+        async with self._lock:
+            self._update_status_sync(
+                task_id,
+                status,
+                result=result,
+                error=error,
+                pr_url=pr_url,
+                cost_usd=cost_usd,
+                started_at=started_at,
+                finished_at=finished_at,
+            )
+
     def get(self, task_id: str) -> Task | None:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _row_to_task(row) if row else None
 
-    def list_tasks(self, *, limit: int = 100, status: TaskStatus | None = None) -> list[Task]:
+    def list_tasks(
+        self,
+        *,
+        limit: int = 100,
+        status: TaskStatus | None = None,
+        repo: str | None = None,
+    ) -> list[Task]:
         query = "SELECT * FROM tasks"
         args: list[object] = []
+        conditions: list[str] = []
         if status is not None:
-            query += " WHERE status = ?"
+            conditions.append("status = ?")
             args.append(status.value)
+        if repo is not None:
+            conditions.append("(repo = ? OR issue_repo = ?)")
+            args.extend([repo, repo])
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY created_at DESC LIMIT ?"
         args.append(limit)
         with self._connect() as conn:
             rows = conn.execute(query, args).fetchall()
         return [_row_to_task(r) for r in rows]
 
+    def prune(self, older_than_days: int) -> int:
+        """Delete COMPLETED and FAILED tasks older than *older_than_days*.
+
+        Returns the number of rows deleted.  Only terminal states are pruned so
+        QUEUED/RUNNING tasks (which may still be needed for recovery) are never
+        removed.
+        """
+        from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
+
+        cutoff = (datetime.now() - timedelta(days=older_than_days)).isoformat()
+        terminal = (_TaskStatus.COMPLETED.value, _TaskStatus.FAILED.value, _TaskStatus.CANCELLED.value)
+        placeholders = ",".join("?" * len(terminal))
+        with self._connect() as conn:
+            cursor = conn.execute(
+                f"DELETE FROM tasks WHERE status IN ({placeholders}) AND finished_at < ?",  # nosec B608
+                (*terminal, cutoff),
+            )
+        return cursor.rowcount
+
     def recover_pending(self) -> list[Task]:
         """Mark stale RUNNING tasks as FAILED; return anything still QUEUED."""
         from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
 
         now = datetime.now().isoformat()
-        with self._lock, self._connect() as conn:
+        with self._connect() as conn:
             conn.execute(
                 """
                 UPDATE tasks
