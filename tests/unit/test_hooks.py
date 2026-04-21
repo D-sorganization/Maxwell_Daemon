@@ -310,7 +310,9 @@ class TestHookOutcome:
 
 class TestDefaultRunner:
     @pytest.mark.asyncio
-    async def test_timeout_kills_process(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    async def test_timeout_kills_process(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         class _Proc:
             def __init__(self) -> None:
                 self.returncode = 0
@@ -340,9 +342,7 @@ class TestDefaultRunner:
         monkeypatch.setattr("maxwell_daemon.hooks.asyncio.create_subprocess_shell", _fake_create)
         monkeypatch.setattr("maxwell_daemon.hooks.asyncio.wait_for", _fake_wait_for)
 
-        rc, output = await _default_runner(
-            "echo hi", cwd=str(tmp_path), env={}, timeout=0.01
-        )
+        rc, output = await _default_runner("echo hi", cwd=str(tmp_path), env={}, timeout=0.01)
         assert rc == 124
         assert "timeout after" in output
         assert proc.killed is True

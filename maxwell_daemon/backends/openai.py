@@ -26,21 +26,16 @@ from maxwell_daemon.backends.base import (
     Message,
     TokenUsage,
 )
+from maxwell_daemon.backends.pricing import get_rates
 from maxwell_daemon.backends.registry import registry
 
-_MODEL_PRICING: dict[str, tuple[float, float]] = {
-    "gpt-4o": (2.5, 10.0),
-    "gpt-4o-mini": (0.15, 0.60),
-    "gpt-4-turbo": (10.0, 30.0),
-    "o1": (15.0, 60.0),
-    "o1-mini": (3.0, 12.0),
-    "o3-mini": (1.10, 4.40),
-}
-
+# Per-model context-window sizes (tokens).  Pricing lives in the central table
+# at :mod:`maxwell_daemon.backends.pricing`.
 _MODEL_CONTEXT: dict[str, int] = {
     "gpt-4o": 128_000,
     "gpt-4o-mini": 128_000,
     "gpt-4-turbo": 128_000,
+    "gpt-3.5-turbo": 16_385,
     "o1": 200_000,
     "o1-mini": 128_000,
     "o3-mini": 200_000,
@@ -150,7 +145,7 @@ class OpenAIBackend(ILLMBackend):
             return False
 
     def capabilities(self, model: str) -> BackendCapabilities:
-        price_in, price_out = _MODEL_PRICING.get(model, (1.0, 3.0))
+        price_in, price_out = get_rates("openai", model)
         return BackendCapabilities(
             supports_streaming=True,
             supports_tool_use=True,
