@@ -48,7 +48,7 @@ class SSHKeyStore:
         self,
         root: Path | None = None,
         *,
-        key_type: str = "ed25519",
+        key_type: str = "ssh-ed25519",
         key_bits: int = 4096,
     ) -> None:
         self._root = (root or Path.home() / ".maxwell-daemon" / "ssh-keys").expanduser()
@@ -75,18 +75,18 @@ class SSHKeyStore:
             if pub_path.is_file():
                 pub_str = pub_path.read_text(encoding="utf-8").strip()
             else:
-                pub_str = priv.get_ssh_public_key().decode()
+                pub_str = priv.export_public_key().decode().strip()
             return priv, pub_str
 
         self._ensure_dir()
         priv = asyncssh.generate_private_key(
             self._key_type,
             comment=f"maxwell-daemon/{name}",
-            **({"key_size": self._key_bits} if self._key_type == "rsa" else {}),
+            **({"key_size": self._key_bits} if self._key_type in ("rsa", "ssh-rsa") else {}),
         )
         priv_path.write_bytes(priv.export_private_key())
         priv_path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600
-        pub_str = priv.get_ssh_public_key().decode()
+        pub_str = priv.export_public_key().decode().strip()
         self._pub_path(name).write_text(pub_str + "\n", encoding="utf-8")
         return priv, pub_str
 

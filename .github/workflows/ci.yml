@@ -57,7 +57,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m venv .venv
-      - run: .venv/bin/python -m pip install -e ".[dev]"
+      - run: .venv/bin/python -m pip install -e ".[ssh,dev]"
       - name: Run tests
         run: .venv/bin/python -m pytest -p no:xvfb --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
       - name: Upload coverage artifact
