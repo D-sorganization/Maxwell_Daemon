@@ -297,7 +297,15 @@ def create_app(
         response.headers["x-request-id"] = request_id
         if _audit is not None and not request.url.path.startswith("/ui"):
             auth_header = request.headers.get("authorization", "")
-            user = auth_header.removeprefix("Bearer ").strip() if auth_header else None
+            # Extract only the auth scheme prefix (e.g. "Bearer") — never
+            # persist the actual token value in the audit log (#234).
+            if auth_header.lower().startswith("bearer "):
+                user = "Bearer ***"
+            elif auth_header:
+                scheme = auth_header.split(" ", 1)[0]
+                user = f"{scheme} ***"
+            else:
+                user = None
             _audit.log_api_call(
                 method=request.method,
                 path=request.url.path,
