@@ -142,7 +142,7 @@ class StubEmbeddingProvider:
             text_hash=hash_text(text),
             vector=tuple(components),
             dimensions=self._dim,
-            provider_name=self.name,
+            provider_name=f"{self.name}:{self._dim}",
         )
 
 
@@ -181,9 +181,17 @@ class OpenAIEmbeddingProvider:
         self._client = http_client
         self._model = model
         self._dimensions_override = dimensions_override
-        # Default dimension for text-embedding-3-small; overridable via
-        # `dimensions_override` (OpenAI supports truncation on this model).
-        self._dim = dimensions_override if dimensions_override is not None else 1536
+        # Derive default dimensions from the selected model so callers that
+        # rely on provider.dimensions get the right value without needing to
+        # set dimensions_override. Falls back to 1536 for unknown models.
+        _model_dims: dict[str, int] = {
+            "text-embedding-3-small": 1536,
+            "text-embedding-3-large": 3072,
+            "text-embedding-ada-002": 1536,
+        }
+        self._dim = (
+            dimensions_override if dimensions_override is not None else _model_dims.get(model, 1536)
+        )
 
     @property
     def dimensions(self) -> int:
@@ -211,7 +219,7 @@ class OpenAIEmbeddingProvider:
                     text_hash=hash_text(text),
                     vector=vector,
                     dimensions=len(vector),
-                    provider_name=self.name,
+                    provider_name=f"{self.name}:{self._model}:{len(vector)}",
                 )
             )
         return tuple(results)
@@ -316,6 +324,20 @@ CREATE INDEX IF NOT EXISTS idx_embedding_cache_created_at
 
 class EmbeddingCache:
     """SQLite-backed cache keyed by ``(provider_name, text_hash)``.
+
+    ``provider_name`` must be the **full configuration fingerprint** from
+    :attr:`EmbeddingResult.provider_name`, not the bare static
+    :attr:`EmbeddingProvider.name`.  Both built-in providers already encode
+    their config into the result's ``provider_name``:
+
+    * :class:`StubEmbeddingProvider` → ``"stub:<dimensions>"``
+      (e.g. ``"stub:64"``)
+    * :class:`OpenAIEmbeddingProvider` → ``"openai:<model>:<dimensions>"``
+      (e.g. ``"openai:text-embedding-3-small:1536"``)
+
+    This guarantees that switching model or dimensionality after deploying
+    with an existing SQLite file does *not* silently reuse stale vectors —
+    the old rows are simply missed and fresh ones are written.
 
     Same connection-per-call pattern as :class:`CostLedger` — callers need
     only one ``EmbeddingCache`` per process, and the lock serialises writes

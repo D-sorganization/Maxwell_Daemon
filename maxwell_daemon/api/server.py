@@ -159,6 +159,21 @@ class CostSummary(BaseModel):
     by_backend: dict[str, float]
 
 
+class SSHConnectRequest(BaseModel):
+    host: str
+    port: int = 22
+    user: str
+    password: str | None = None
+
+
+class SSHRunRequest(BaseModel):
+    host: str
+    port: int = 22
+    user: str
+    command: str
+    timeout_seconds: float = 30.0
+
+
 def _auth_dep(token: str | None) -> Any:
     async def _check(authorization: Annotated[str | None, Header()] = None) -> None:
         if token is None:
@@ -263,7 +278,11 @@ def create_app(
             return _make_rbac_dep(Role.admin, auth_token, jwt_config)
         return auth
 
-    _audit: AuditLogger | None = AuditLogger(audit_log_path) if audit_log_path is not None else None
+    _audit: AuditLogger | None = (
+        AuditLogger(audit_log_path, retention_days=daemon._config.agent.task_retention_days)
+        if audit_log_path is not None
+        else None
+    )
 
     # Rate-limit middleware — installs only when config declares a default group.
     api_cfg = daemon._config.api
@@ -293,7 +312,15 @@ def create_app(
         response.headers["x-request-id"] = request_id
         if _audit is not None and not request.url.path.startswith("/ui"):
             auth_header = request.headers.get("authorization", "")
-            user = auth_header.removeprefix("Bearer ").strip() if auth_header else None
+            # Extract only the auth scheme prefix (e.g. "Bearer") — never
+            # persist the actual token value in the audit log (#234).
+            if auth_header.lower().startswith("bearer "):
+                user = "Bearer ***"
+            elif auth_header:
+                scheme = auth_header.split(" ", 1)[0]
+                user = f"{scheme} ***"
+            else:
+                user = None
             _audit.log_api_call(
                 method=request.method,
                 path=request.url.path,
@@ -395,6 +422,7 @@ def create_app(
         status: Annotated[str | None, Query()] = None,
         kind: Annotated[str | None, Query()] = None,
         repo: Annotated[str | None, Query()] = None,
+        completed_before: Annotated[datetime | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
         completed_before: Annotated[datetime | None, Query()] = None,
     ) -> list[TaskView]:
@@ -623,7 +651,7 @@ def create_app(
 
         # In coordinator mode, include per-machine health summary from the fleet config.
         machines_summary: list[dict[str, Any]] = []
-        if daemon._config.role == "coordinator" and daemon._config.fleet.machines:
+        if daemon._config.role == "coordinator" and daemon._config.fleet_machines:
             from maxwell_daemon.fleet.client import RemoteDaemonClient
             from maxwell_daemon.fleet.dispatcher import MachineState
 
@@ -635,9 +663,9 @@ def create_app(
                     capacity=m.capacity,
                     tags=tuple(m.tags),
                 )
-                for m in daemon._config.fleet.machines
+                for m in daemon._config.fleet_machines
             )
-            fleet_client = RemoteDaemonClient(auth_token=daemon._config.api.auth_token)
+            fleet_client = RemoteDaemonClient(auth_token=daemon._config.api_auth_token)
             try:
                 probed = await fleet_client.refresh_all(initial)
             except Exception:
@@ -798,6 +826,23 @@ def create_app(
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
         return {"worker_count": count}
 
+    @app.get("/api/v1/admin/prune", dependencies=[Depends(_require_admin())])
+    async def prune_history(
+        older_than_days: Annotated[int | None, Query(ge=0)] = None,
+    ) -> dict[str, Any]:
+        """Run retention pruning on demand."""
+        days = (
+            daemon._config.agent.task_retention_days if older_than_days is None else older_than_days
+        )
+        result = daemon.prune_retained_history(days)
+        audit_removed = _audit.rotate() if _audit is not None else 0
+        return {
+            "older_than_days": days,
+            "tasks_pruned": result["tasks"],
+            "ledger_records_pruned": result["ledger_records"],
+            "audit_entries_pruned": audit_removed,
+        }
+
     @app.get("/api/v1/cost", dependencies=[Depends(_require_viewer())])
     async def cost_summary() -> CostSummary:
         now = datetime.now(timezone.utc)
@@ -829,11 +874,7 @@ def create_app(
         signature = request.headers.get("x-hub-signature-256", "")
         event_type = request.headers.get("x-github-event", "")
 
-        config_secret = (
-            daemon._config.github.webhook_secret.get_secret_value()
-            if daemon._config.github.webhook_secret is not None
-            else None
-        )
+        config_secret = daemon._config.github_webhook_secret_value()
         if config_secret is None:
             return JSONResponse(
                 {"detail": "webhooks disabled", "disabled": True},
@@ -861,12 +902,12 @@ def create_app(
                 label=r.label,
                 trigger=r.trigger,
             )
-            for r in daemon._config.github.routes
+            for r in daemon._config.github_routes
         ]
         router = WebhookRouter(
             WebhookConfig(
                 secret=config_secret,
-                allowed_repos=daemon._config.github.allowed_repos,
+                allowed_repos=daemon._config.github_allowed_repos,
                 routes=routes,
             ),
             daemon=daemon,
@@ -886,11 +927,13 @@ def create_app(
     def _ssh_pool() -> Any:
         if "pool" not in _ssh_pool_ref:
             try:
+                import asyncssh as _asyncssh  # noqa: F401 — presence check only
+
                 from maxwell_daemon.ssh.session import SSHSessionPool
 
                 _ssh_pool_ref["pool"] = SSHSessionPool()
             except ImportError:
-                return None
+                _ssh_pool_ref["pool"] = None
         return _ssh_pool_ref.get("pool")
 
     def _ssh_unavailable() -> Any:
@@ -940,12 +983,6 @@ def create_app(
         SSHKeyStore().remove(machine)
         return {"machine": machine, "deleted": True}
 
-    class SSHConnectRequest(BaseModel):
-        host: str
-        port: int = 22
-        user: str
-        password: str | None = None
-
     @app.post("/api/v1/ssh/connect", dependencies=[Depends(auth), Depends(_require_admin())])
     async def ssh_connect(payload: SSHConnectRequest) -> Any:
         """Open (or reuse) an SSH session and return its summary."""
@@ -964,13 +1001,6 @@ def create_app(
             "user": payload.user,
             "age_seconds": round(session.age_seconds, 1),
         }
-
-    class SSHRunRequest(BaseModel):
-        host: str
-        port: int = 22
-        user: str
-        command: str
-        timeout_seconds: float = 30.0
 
     @app.post("/api/v1/ssh/run", dependencies=[Depends(auth), Depends(_require_admin())])
     async def ssh_run(payload: SSHRunRequest) -> Any:

@@ -7,6 +7,21 @@
 # Usage:
 #   ansible-playbook -i inventory/fleet.yml upgrade-conductor.yml \
 #     -e conductor_version=0.2.0
+#
+# Variables (may be set in inventory or on the command line):
+#   conductor_venv     (default: /opt/maxwell-daemon/venv)
+#   conductor_version  (default: latest)
+#   conductor_port     (default: 8080)
+
+- name: Set standalone upgrade defaults
+  hosts: conductor_agents:conductor_primary
+  gather_facts: false
+  tasks:
+    - name: Set default variables for standalone playbook runs
+      ansible.builtin.set_fact:
+        conductor_venv: "{{ conductor_venv | default('/opt/maxwell-daemon/venv') }}"
+        conductor_version: "{{ conductor_version | default('latest') }}"
+        conductor_port: "{{ conductor_port | default(8080) }}"
 
 - name: Rolling upgrade — agent nodes
   hosts: conductor_agents

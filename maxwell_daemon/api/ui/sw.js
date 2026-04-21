@@ -83,7 +83,12 @@ async function networkFirstApi(request) {
 }
 
 async function cacheFirstShell(request) {
-  const cached = await caches.match(request);
+  // Try exact match first, then strip query string for shell routes so that
+  // navigations like /ui/?view=fleet hit the precached /ui/ entry.
+  const shellRequest = new URL(request.url).pathname.startsWith('/ui/')
+    ? new Request(new URL('/ui/', request.url).origin + '/ui/')
+    : request;
+  const cached = await caches.match(shellRequest) || await caches.match(request);
   const fetchPromise = fetch(request).then((response) => {
     if (response.ok) {
       caches.open(SHELL_CACHE).then((cache) => cache.put(request, response.clone()));

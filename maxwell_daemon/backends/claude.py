@@ -90,14 +90,18 @@ class ClaudeBackend(ILLMBackend):
         text_parts = [
             getattr(b, "text", "") for b in resp.content if getattr(b, "type", None) == "text"
         ]
+        # Extract usage fields once to avoid repeating the resp.usage chain.
+        usage = resp.usage
+        input_tokens = usage.input_tokens
+        output_tokens = usage.output_tokens
         return BackendResponse(
             content="".join(text_parts),
             finish_reason=resp.stop_reason or "stop",
             usage=TokenUsage(
-                prompt_tokens=resp.usage.input_tokens,
-                completion_tokens=resp.usage.output_tokens,
-                total_tokens=resp.usage.input_tokens + resp.usage.output_tokens,
-                cached_tokens=getattr(resp.usage, "cache_read_input_tokens", 0) or 0,
+                prompt_tokens=input_tokens,
+                completion_tokens=output_tokens,
+                total_tokens=input_tokens + output_tokens,
+                cached_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
             ),
             model=resp.model,
             backend=self.name,

@@ -26,7 +26,7 @@ import asyncio
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from maxwell_daemon.backends.base import TokenUsage
@@ -120,6 +120,17 @@ class CostLedger:
             ).fetchall()
         return {backend: float(cost) for backend, cost in rows}
 
+    def _prune_sync(self, older_than_days: int, *, now: datetime | None = None) -> int:
+        if older_than_days < 0:
+            raise ValueError(f"older_than_days must be >= 0, got {older_than_days}")
+        cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=older_than_days)
+        with self._lock:
+            cursor = self._conn.execute(
+                "DELETE FROM cost_records WHERE ts < ?",
+                (cutoff.isoformat(),),
+            )
+        return int(cursor.rowcount)
+
     # ── Sync public API (used by non-async callers such as the dashboard) ─────
 
     def record(self, rec: CostRecord) -> None:
@@ -130,6 +141,10 @@ class CostLedger:
 
     def by_backend(self, since: datetime) -> dict[str, float]:
         return self._by_backend_sync(since)
+
+    def prune(self, older_than_days: int, *, now: datetime | None = None) -> int:
+        """Delete ledger records older than the retention cutoff."""
+        return self._prune_sync(older_than_days, now=now)
 
     # ── Async public API (used by the agent loop and request handlers) ────────
 
@@ -148,28 +163,10 @@ class CostLedger:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._by_backend_sync, since)
 
-    # ── Pruning ───────────────────────────────────────────────────────────────
-
-    def _prune_sync(self, older_than_days: int) -> int:
-        """Delete cost records older than *older_than_days*. Returns rows deleted."""
-        from datetime import timedelta
-
-        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
-        with self._lock:
-            cursor = self._conn.execute(
-                "DELETE FROM cost_records WHERE ts < ?",
-                (cutoff.isoformat(),),
-            )
-            return cursor.rowcount
-
-    def prune(self, older_than_days: int) -> int:
-        """Delete cost records older than *older_than_days*. Returns rows deleted."""
-        return self._prune_sync(older_than_days)
-
-    async def aprune(self, older_than_days: int) -> int:
+    async def aprune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Non-blocking version of :meth:`prune` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._prune_sync, older_than_days)
+        return await loop.run_in_executor(None, lambda: self._prune_sync(older_than_days, now=now))
 
     # ── Derived helpers ───────────────────────────────────────────────────────
 

@@ -79,6 +79,12 @@ class Decomposition:
         _check_unique_ids("epic", tuple(e.id for e in self.epics))
         _check_unique_ids("story", tuple(s.id for s in self.stories))
         _check_unique_ids("task", tuple(t.id for t in self.tasks))
+        all_ids = (
+            tuple(e.id for e in self.epics)
+            + tuple(s.id for s in self.stories)
+            + tuple(t.id for t in self.tasks)
+        )
+        _check_unique_ids("global", all_ids)
 
         epic_ids = {e.id for e in self.epics}
         for s in self.stories:

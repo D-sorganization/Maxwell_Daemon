@@ -35,7 +35,7 @@ import sqlite3
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -66,8 +66,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     pr_url TEXT,
     cost_usd REAL NOT NULL DEFAULT 0,
     started_at TEXT,
-    finished_at TEXT,
-    completed_at REAL
+    finished_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
@@ -85,8 +84,10 @@ CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks(completed_at);
 # add what's missing.
 _MIGRATIONS = [
     ("ab_group", "ALTER TABLE tasks ADD COLUMN ab_group TEXT"),
-    ("completed_at", "ALTER TABLE tasks ADD COLUMN completed_at REAL"),
+    ("completed_at", "ALTER TABLE tasks ADD COLUMN completed_at TEXT"),
 ]
+
+_TERMINAL_STATUS_VALUES = ("completed", "failed", "cancelled")
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -106,6 +107,12 @@ def _parse_iso_required(value: str) -> datetime:
 
 def _parse_iso(value: str | None) -> datetime | None:
     return _parse_iso_required(value) if value else None
+
+
+def _completed_at(task: Task) -> str | None:
+    if task.status.value not in _TERMINAL_STATUS_VALUES:
+        return None
+    return _iso(task.finished_at)
 
 
 class TaskStore:
@@ -139,17 +146,11 @@ class TaskStore:
     # ── Sync internals ────────────────────────────────────────────────────────
 
     def _save_sync(self, task: Task) -> None:
-        from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
-
         # Prefer the task's own tzinfo so the updated_at stays in the same
         # zone as created_at, but fall back to UTC if the task happens to be
         # naive (e.g. loaded from a legacy DB row).
         tz = task.created_at.tzinfo or timezone.utc
         now = datetime.now(tz).isoformat()
-        _terminal = (_TaskStatus.COMPLETED, _TaskStatus.FAILED, _TaskStatus.CANCELLED)
-        completed_at: float | None = (
-            datetime.now(timezone.utc).timestamp() if task.status in _terminal else None
-        )
         row = (
             task.id,
             task.created_at.isoformat(),
@@ -170,7 +171,7 @@ class TaskStore:
             task.cost_usd,
             _iso(task.started_at),
             _iso(task.finished_at),
-            completed_at,
+            _completed_at(task),
         )
         with self._lock, self._connect() as conn:
             conn.execute(
@@ -194,7 +195,7 @@ class TaskStore:
                     result=excluded.result, error=excluded.error, pr_url=excluded.pr_url,
                     cost_usd=excluded.cost_usd,
                     started_at=excluded.started_at, finished_at=excluded.finished_at,
-                    completed_at=COALESCE(excluded.completed_at, tasks.completed_at)
+                    completed_at=excluded.completed_at
                 """,
                 row,
             )
@@ -211,21 +212,16 @@ class TaskStore:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
     ) -> None:
-        from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
-
         now = datetime.now(timezone.utc).isoformat()
-        now_ts = datetime.now(timezone.utc).timestamp()
         with self._lock, self._connect() as conn:
             cursor = conn.execute("SELECT id FROM tasks WHERE id = ?", (task_id,))
             if cursor.fetchone() is None:
                 raise KeyError(task_id)
             sets = ["status = ?", "updated_at = ?"]
             args: list[object] = [status.value, now]
-            # Record epoch timestamp when a task reaches a terminal state so
-            # prune() can cheaply compare against a float cutoff.
-            if status in (_TaskStatus.COMPLETED, _TaskStatus.FAILED, _TaskStatus.CANCELLED):
-                sets.append("completed_at = ?")
-                args.append(now_ts)
+            if status.value in _TERMINAL_STATUS_VALUES and finished_at is None:
+                finished_at = datetime.now(timezone.utc)
+            completed_at = _iso(finished_at) if status.value in _TERMINAL_STATUS_VALUES else None
             for field, value in (
                 ("result", result),
                 ("error", error),
@@ -233,6 +229,7 @@ class TaskStore:
                 ("cost_usd", cost_usd),
                 ("started_at", _iso(started_at)),
                 ("finished_at", _iso(finished_at)),
+                ("completed_at", completed_at),
             ):
                 if value is not None:
                     sets.append(f"{field} = ?")
@@ -257,33 +254,20 @@ class TaskStore:
     ) -> list[Task]:
         query = "SELECT * FROM tasks"
         args: list[object] = []
-        conditions: list[str] = []
+        clauses: list[str] = []
         if status is not None:
-            conditions.append("status = ?")
+            clauses.append("status = ?")
             args.append(status.value)
         if completed_before is not None:
-            conditions.append("completed_at < ?")
-            args.append(completed_before.timestamp())
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
+            clauses.append("completed_at IS NOT NULL AND completed_at < ?")
+            args.append(completed_before.isoformat())
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
         query += " ORDER BY created_at DESC LIMIT ?"
         args.append(limit)
         with self._connect() as conn:
             rows = conn.execute(query, args).fetchall()
         return [_row_to_task(r) for r in rows]
-
-    def _prune_sync(self, older_than_days: int) -> int:
-        """Delete COMPLETED/FAILED/CANCELLED tasks older than *older_than_days*.
-
-        Returns the number of rows deleted.
-        """
-        cutoff = datetime.now(timezone.utc).timestamp() - older_than_days * 86400
-        with self._lock, self._connect() as conn:
-            cursor = conn.execute(
-                "DELETE FROM tasks WHERE completed_at IS NOT NULL AND completed_at < ?",
-                (cutoff,),
-            )
-            return cursor.rowcount
 
     def _recover_sync(self) -> list[Task]:
         from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
@@ -309,6 +293,24 @@ class TaskStore:
                 (_TaskStatus.QUEUED.value,),
             ).fetchall()
         return [_row_to_task(r) for r in rows]
+
+    def _prune_sync(self, older_than_days: int, *, now: datetime | None = None) -> int:
+        require(
+            older_than_days >= 0,
+            f"TaskStore.prune: older_than_days must be >= 0 (got {older_than_days})",
+        )
+        cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=older_than_days)
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM tasks
+                WHERE status IN (?, ?, ?)
+                  AND completed_at IS NOT NULL
+                  AND completed_at < ?
+                """,
+                (*_TERMINAL_STATUS_VALUES, cutoff.isoformat()),
+            )
+        return int(cursor.rowcount)
 
     # ── Sync public API ────────────────────────────────────────────────────────
 
@@ -351,16 +353,13 @@ class TaskStore:
     ) -> list[Task]:
         return self._list_sync(limit=limit, status=status, completed_before=completed_before)
 
-    def prune(self, older_than_days: int) -> int:
-        """Delete completed/failed/cancelled tasks older than *older_than_days*.
-
-        Returns the number of rows deleted.
-        """
-        return self._prune_sync(older_than_days)
-
     def recover_pending(self) -> list[Task]:
         """Mark stale RUNNING tasks as FAILED; return anything still QUEUED."""
         return self._recover_sync()
+
+    def prune(self, older_than_days: int, *, now: datetime | None = None) -> int:
+        """Delete terminal tasks completed before the retention cutoff."""
+        return self._prune_sync(older_than_days, now=now)
 
     # ── Async public API ───────────────────────────────────────────────────────
 
@@ -417,10 +416,10 @@ class TaskStore:
             lambda: self._list_sync(limit=limit, status=status, completed_before=completed_before),
         )
 
-    async def aprune(self, older_than_days: int) -> int:
+    async def aprune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Non-blocking version of :meth:`prune` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._prune_sync, older_than_days)
+        return await loop.run_in_executor(None, lambda: self._prune_sync(older_than_days, now=now))
 
     def close(self) -> None:
         """Compatibility hook for stores that do not keep an open connection."""

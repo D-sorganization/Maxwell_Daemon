@@ -36,6 +36,27 @@ __all__ = [
 
 _GENESIS_HASH = "0" * 64  # prev_hash sentinel for the first entry
 
+# Keys whose values must never appear verbatim in the audit log (#234).
+_SENSITIVE_KEYS = frozenset({"authorization", "x-api-key", "api_key", "token", "password"})
+
+
+def _redact_details(details: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of *details* with sensitive values replaced by '***'.
+
+    Only the top-level keys are checked; nested objects are left intact
+    (they are not present in any current audit call-sites).
+    """
+    redacted = {}
+    for k, v in details.items():
+        if k.lower() in _SENSITIVE_KEYS:
+            redacted[k] = "***"
+        elif isinstance(v, str) and v.lower().startswith("bearer "):
+            # Catch inadvertent bearer token values regardless of key name.
+            redacted[k] = "Bearer ***"
+        else:
+            redacted[k] = v
+    return redacted
+
 
 def _rechain(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Rebuild ``entry_hash`` and ``prev_hash`` for every entry after rotation.
@@ -294,7 +315,7 @@ class AuditLogger:
             status=status,
             user=user,
             request_id=request_id,
-            details=details,
+            details=_redact_details(details),
             prev_hash=prev,
         )
         d = entry.as_dict()
@@ -362,7 +383,7 @@ def verify_chain(path: Path) -> list[dict[str, Any]]:
             expected_hash = hashlib.sha256(payload.encode()).hexdigest()
             if stored_hash != expected_hash:
                 violations.append({"line": lineno, "error": "entry_hash mismatch", "entry": obj})
-            if stored_prev != prev_hash and lineno > 1:
+            if stored_prev != prev_hash:
                 violations.append(
                     {
                         "line": lineno,

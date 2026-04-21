@@ -18,7 +18,7 @@ from maxwell_daemon.backends.registry import registry
 
 @pytest.fixture(autouse=True)
 def _key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")  # nosec B105 — intentional test fixture; env var is monkeypatched, not a real key
 
 
 class TestConfiguration:
@@ -28,7 +28,7 @@ class TestConfiguration:
             ClaudeBackend()
 
     def test_accepts_explicit_key(self) -> None:
-        backend = ClaudeBackend(api_key="sk-test-explicit")
+        backend = ClaudeBackend(api_key="sk-test-explicit")  # nosec B106 — intentional test fixture, not a real API key
         assert backend is not None
 
 
@@ -150,7 +150,7 @@ class TestRequestPaths:
             lambda **_: fake_client,
         )
 
-        backend = ClaudeBackend(api_key="x")
+        backend = ClaudeBackend(api_key="x")  # nosec B106 — intentional test fixture; real client is monkeypatched
         out = await backend.complete(
             [
                 Message(role=MessageRole.SYSTEM, content="policy"),
@@ -182,7 +182,7 @@ class TestRequestPaths:
             "maxwell_daemon.backends.claude.anthropic.AsyncAnthropic",
             lambda **_: fake_client,
         )
-        backend = ClaudeBackend(api_key="x")
+        backend = ClaudeBackend(api_key="x")  # nosec B106 — intentional test fixture; real client is monkeypatched
 
         parts = [p async for p in backend.stream([], model="claude-haiku-4-5")]
         assert parts == ["part-1", "part-2"]

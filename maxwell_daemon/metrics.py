@@ -77,25 +77,28 @@ def record_request(
     model: str,
     status: RequestStatus,
     tokens: int = 0,
-    cost_usd: float = 0.0,
+    cost_usd: float | None = None,
     duration_seconds: float = 0.0,
 ) -> None:
     """Emit all per-request metrics in one call.
 
     Token and cost metrics are only incremented when status == "success" so that
-    failed/rejected requests don't pollute spend dashboards. Zero-cost
-    successes (free-tier Ollama, cached hits) are counted separately via
-    ``MAXWELL_FREE_REQUESTS_TOTAL`` so dashboards can distinguish "never ran"
-    from "ran many free requests".
+    failed/rejected requests don't pollute spend dashboards. ``cost_usd=None``
+    (the default) means cost is unknown — callers that don't have cost data
+    (e.g. issue-executor paths) should omit the argument.  Explicitly passing
+    ``cost_usd=0.0`` signals a genuinely free call (free-tier Ollama, cached
+    hit) and is counted separately via ``MAXWELL_FREE_REQUESTS_TOTAL`` so
+    dashboards can distinguish "unknown cost" from "verified free".
     """
     MAXWELL_REQUESTS_TOTAL.labels(backend=backend, model=model, status=status).inc()
     if status == "success":
         if tokens > 0:
             MAXWELL_TOKENS_TOTAL.labels(backend=backend, model=model).inc(tokens)
-        if cost_usd > 0:
-            MAXWELL_REQUEST_COST.labels(backend=backend, model=model).inc(cost_usd)
-        else:
-            MAXWELL_FREE_REQUESTS_TOTAL.labels(backend=backend, model=model).inc()
+        if cost_usd is not None:
+            if cost_usd > 0:
+                MAXWELL_REQUEST_COST.labels(backend=backend, model=model).inc(cost_usd)
+            else:
+                MAXWELL_FREE_REQUESTS_TOTAL.labels(backend=backend, model=model).inc()
         if duration_seconds > 0:
             MAXWELL_REQUEST_DURATION.labels(backend=backend, model=model).observe(duration_seconds)
 

@@ -58,6 +58,16 @@ class TestLedger:
         ledger.record(_record(cost=0.5))
         assert ledger.month_to_date() == pytest.approx(0.5)
 
+    def test_prune_deletes_old_records(self, ledger: CostLedger) -> None:
+        old = datetime.now(timezone.utc) - timedelta(days=60)
+        ledger.record(_record(cost=99.0, ts=old))
+        ledger.record(_record(cost=0.5))
+
+        removed = ledger.prune(older_than_days=30)
+
+        assert removed == 1
+        assert ledger.total_since(old - timedelta(days=1)) == pytest.approx(0.5)
+
     def test_persistence_across_instances(self, tmp_path: Path) -> None:
         db = tmp_path / "l.db"
         a = CostLedger(db)

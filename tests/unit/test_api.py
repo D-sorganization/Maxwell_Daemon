@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -38,7 +39,7 @@ def client(daemon: Daemon) -> Iterator[TestClient]:
 
 @pytest.fixture
 def auth_client(daemon: Daemon) -> Iterator[TestClient]:
-    with TestClient(create_app(daemon, auth_token="secret-abc")) as c:
+    with TestClient(create_app(daemon, auth_token="secret-abc")) as c:  # nosec B106 — intentional test fixture, not a real credential
         yield c
 
 
@@ -131,6 +132,29 @@ class TestTaskSubmission:
         body = r.json()
         assert [task["id"] for task in body] == ["match"]
 
+    def test_list_filters_by_completed_before(self, client: TestClient, daemon: Daemon) -> None:
+        old_done = Task(
+            id="old-done",
+            prompt="old",
+            status=TaskStatus.COMPLETED,
+            finished_at=datetime.now(timezone.utc) - timedelta(days=10),
+        )
+        recent_done = Task(
+            id="recent-done",
+            prompt="recent",
+            status=TaskStatus.COMPLETED,
+            finished_at=datetime.now(timezone.utc),
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[old_done.id] = old_done
+            daemon._tasks[recent_done.id] = recent_done
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        r = client.get("/api/v1/tasks", params={"completed_before": cutoff})
+
+        assert r.status_code == 200
+        assert [task["id"] for task in r.json()] == ["old-done"]
+
     def test_get_task_by_id(self, client: TestClient) -> None:
         submitted = client.post("/api/v1/tasks", json={"prompt": "x"}).json()
         r = client.get(f"/api/v1/tasks/{submitted['id']}")
@@ -152,11 +176,30 @@ class TestCostEndpoint:
         assert body["month_to_date_usd"] >= 0.0
 
 
+class TestAdminPruneEndpoint:
+    def test_prune_endpoint_runs_retention(self, client: TestClient, daemon: Daemon) -> None:
+        old_done = Task(
+            id="old-prune",
+            prompt="old",
+            status=TaskStatus.COMPLETED,
+            finished_at=datetime.now(timezone.utc) - timedelta(days=40),
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[old_done.id] = old_done
+        daemon._task_store.save(old_done)
+
+        r = client.get("/api/v1/admin/prune?older_than_days=30")
+
+        assert r.status_code == 200
+        assert r.json()["tasks_pruned"] == 1
+        assert daemon.get_task(old_done.id) is None
+
+
 class TestJwtAuthEndpoint:
     def test_whoami_returns_static_token_identity(self, auth_client: TestClient) -> None:
         r = auth_client.get(
             "/api/v1/auth/me",
-            headers={"Authorization": "Bearer secret-abc"},
+            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
         )
 
         assert r.status_code == 200
@@ -359,6 +402,37 @@ class TestAuth:
     def test_accepts_correct_token(self, auth_client: TestClient) -> None:
         r = auth_client.get(
             "/api/v1/backends",
-            headers={"Authorization": "Bearer secret-abc"},
+            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
         )
         assert r.status_code == 200
+
+
+class TestSSHEndpointsWithoutAsyncSSH:
+    """Issue #231 — SSH endpoints must return 503 when asyncssh is absent.
+
+    The old guard only caught ImportError from importing SSHSessionPool, but
+    maxwell_daemon.ssh.session imports successfully regardless of asyncssh.
+    The fix adds an explicit ``import asyncssh`` check inside _ssh_pool() so
+    the None sentinel is set correctly and the 503 guard fires.
+    """
+
+    def test_ssh_sessions_returns_503_when_asyncssh_absent(self, daemon: Daemon) -> None:
+        import sys
+        from unittest.mock import patch
+
+        # Simulate asyncssh being absent by making it unimportable.
+        with patch.dict(sys.modules, {"asyncssh": None}), TestClient(create_app(daemon)) as c:
+            r = c.get("/api/v1/ssh/sessions")
+        assert r.status_code == 503
+        assert "SSH support not installed" in r.json()["detail"]
+
+    def test_ssh_connect_returns_503_when_asyncssh_absent(self, daemon: Daemon) -> None:
+        import sys
+        from unittest.mock import patch
+
+        with patch.dict(sys.modules, {"asyncssh": None}), TestClient(create_app(daemon)) as c:
+            r = c.post(
+                "/api/v1/ssh/connect",
+                json={"host": "srv", "user": "ubuntu"},
+            )
+        assert r.status_code == 503

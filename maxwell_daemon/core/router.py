@@ -67,7 +67,7 @@ class BackendRouter:
         budget_percent: float | None = None,
     ) -> RouteDecision:
         chosen, reason = self._choose_name(repo, backend_override, budget_percent)
-        cfg = self._config.backends[chosen]
+        cfg = self._all_backend_configs()[chosen]
         if not cfg.enabled:
             raise RuntimeError(f"Backend '{chosen}' is disabled in config")
 
@@ -91,7 +91,7 @@ class BackendRouter:
         budget_percent: float | None = None,
     ) -> tuple[str, str]:
         if override:
-            if override not in self._config.backends:
+            if override not in self._all_backend_configs():
                 raise ValueError(f"Unknown backend override: {override}")
             return override, f"explicit override: {override}"
 
@@ -103,7 +103,7 @@ class BackendRouter:
                     candidate, f"repo override for {repo}", budget_percent
                 )
 
-        candidate = self._config.agent.default_backend
+        candidate = self._default_backend_name()
         return self._apply_budget_fallback(candidate, "global default", budget_percent)
 
     def _apply_budget_fallback(
@@ -116,7 +116,7 @@ class BackendRouter:
         if budget_percent is None:
             return candidate, reason
 
-        cfg = self._config.backends.get(candidate)
+        cfg = self._backend_config(candidate)
         if cfg is None:
             return candidate, reason
 
@@ -131,7 +131,23 @@ class BackendRouter:
         return candidate, reason
 
     def available_backends(self) -> list[str]:
-        return [name for name, cfg in self._config.backends.items() if cfg.enabled]
+        return [name for name, cfg in self._all_backend_configs().items() if cfg.enabled]
+
+    # ── Config boundary accessors ─────────────────────────────────────────────
+    # These methods prevent callers from traversing the config object graph
+    # directly (Law of Demeter).  All config-graph traversal is centralised here.
+
+    def _default_backend_name(self) -> str:
+        """Return the configured default backend name."""
+        return self._config.agent.default_backend
+
+    def _backend_config(self, name: str) -> BackendConfig | None:
+        """Return the BackendConfig for *name*, or None if unknown."""
+        return self._config.backends.get(name)
+
+    def _all_backend_configs(self) -> dict[str, BackendConfig]:
+        """Return all backend configs keyed by name."""
+        return self._config.backends
 
     async def aclose_all(self) -> None:
         """Close all instantiated backends."""

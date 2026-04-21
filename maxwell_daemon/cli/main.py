@@ -125,7 +125,7 @@ def status(
             rt.add_row(r.name, str(r.path), str(r.slots), r.backend or "(default)")
         console.print(rt)
 
-    console.print(f"\nDefault backend: [bold]{cfg.agent.default_backend}[/bold]")
+    console.print(f"\nDefault backend: [bold]{cfg.default_backend_name}[/bold]")
     console.print(f"Available adapters: {', '.join(registry.available())}")
 
 
@@ -319,7 +319,7 @@ def serve(
     asyncio.run(_boot())
 
     try:
-        fastapi_app = create_app(daemon, auth_token=cfg.api.auth_token)
+        fastapi_app = create_app(daemon, auth_token=cfg.api_auth_token)
         console.print(f"[green]✓[/green] Maxwell-Daemon serving on http://{host}:{port}")
         uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
     finally:

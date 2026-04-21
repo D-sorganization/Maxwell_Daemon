@@ -18,6 +18,10 @@ from maxwell_daemon.tools.mcp import (
     mcp_tool,
 )
 
+# ---------------------------------------------------------------------------
+# Shared fixture
+# ---------------------------------------------------------------------------
+
 
 def _echo_handler(message: str) -> str:
     return f"echo: {message}"
@@ -164,6 +168,53 @@ class TestToolRegistryInvoke:
         reg = ToolRegistry()
         with pytest.raises(ToolRegistryError, match="unknown tool"):
             await reg.invoke("nope", {})
+
+
+class TestApprovalTierEnforcement:
+    """Issue #237: approval tiers must be enforced before running tool handlers."""
+
+    async def test_suggest_tier_blocks_execution(self) -> None:
+        """'suggest' tier must return an error result without running the handler."""
+        ran: list[bool] = []
+
+        def _side_effect(**_: object) -> str:
+            ran.append(True)
+            return "should not run"
+
+        reg = ToolRegistry(approval_tier="suggest")
+        reg.register(ToolSpec(name="t", description="d", params=[], handler=_side_effect))
+        result = await reg.invoke("t", {})
+        assert result.is_error is True
+        assert "approval" in result.content.lower()
+        assert ran == [], "handler must not execute under 'suggest' tier"
+
+    async def test_full_auto_tier_allows_execution(self) -> None:
+        reg = ToolRegistry(approval_tier="full-auto")
+        reg.register(_echo_spec())
+        result = await reg.invoke("echo", {"message": "hi"})
+        assert result.is_error is False
+        assert result.content == "echo: hi"
+
+    async def test_auto_edit_tier_allows_execution(self) -> None:
+        """'auto-edit' is a supervised-edit tier but still permits execution."""
+        reg = ToolRegistry(approval_tier="auto-edit")
+        reg.register(_echo_spec())
+        result = await reg.invoke("echo", {"message": "hi"})
+        assert result.is_error is False
+        assert result.content == "echo: hi"
+
+    async def test_default_tier_is_full_auto(self) -> None:
+        """Default ToolRegistry construction must not block any tool invocation."""
+        reg = ToolRegistry()
+        reg.register(_echo_spec())
+        result = await reg.invoke("echo", {"message": "default"})
+        assert result.is_error is False
+
+    async def test_suggest_tier_error_message_names_tool(self) -> None:
+        reg = ToolRegistry(approval_tier="suggest")
+        reg.register(_echo_spec())
+        result = await reg.invoke("echo", {"message": "x"})
+        assert "echo" in result.content
 
 
 class TestMcpToolDecorator:

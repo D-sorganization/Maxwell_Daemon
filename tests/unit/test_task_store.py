@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -99,6 +99,21 @@ class TestList:
         assert len(completed) == 1
         assert completed[0].id == a.id
 
+    def test_filter_by_completed_before(self, store: TaskStore) -> None:
+        old = _fresh_task(finished_at=datetime.now(timezone.utc) - timedelta(days=8))
+        recent = _fresh_task(finished_at=datetime.now(timezone.utc))
+        store.save(old)
+        store.save(recent)
+        store.update_status(old.id, TaskStatus.COMPLETED, finished_at=old.finished_at)
+        store.update_status(recent.id, TaskStatus.COMPLETED, finished_at=recent.finished_at)
+
+        listed = store.list_tasks(
+            limit=10,
+            completed_before=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+
+        assert [task.id for task in listed] == [old.id]
+
 
 class TestRecoverPending:
     def test_recovers_queued(self, store: TaskStore) -> None:
@@ -123,6 +138,29 @@ class TestRecoverPending:
         assert loaded.status is TaskStatus.FAILED
         assert loaded.error is not None
         assert "crashed" in loaded.error.lower()
+
+
+class TestPrune:
+    def test_deletes_terminal_tasks_older_than_threshold(self, store: TaskStore) -> None:
+        old_done = _fresh_task(finished_at=datetime.now(timezone.utc) - timedelta(days=45))
+        recent_done = _fresh_task(finished_at=datetime.now(timezone.utc) - timedelta(days=1))
+        queued = _fresh_task(finished_at=datetime.now(timezone.utc) - timedelta(days=45))
+        store.save(old_done)
+        store.save(recent_done)
+        store.save(queued)
+        store.update_status(old_done.id, TaskStatus.COMPLETED, finished_at=old_done.finished_at)
+        store.update_status(
+            recent_done.id,
+            TaskStatus.COMPLETED,
+            finished_at=recent_done.finished_at,
+        )
+
+        removed = store.prune(older_than_days=30)
+
+        assert removed == 1
+        assert store.get(old_done.id) is None
+        assert store.get(recent_done.id) is not None
+        assert store.get(queued.id) is not None
 
 
 class TestIssueFields:

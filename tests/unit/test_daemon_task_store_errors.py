@@ -1,8 +1,9 @@
-"""Silent ``task_store`` failures used to be swallowed by ``suppress(Exception)``.
+"""task_store and event-bus failures in the task execution path.
 
-The daemon should *log* an exception (so operators see DB corruption in
-Loki/Grafana) rather than silently drop the write. The task itself still
-completes from the worker's point of view.
+The daemon should *log* task_store exceptions rather than silently drop
+writes.  A failing TASK_STARTED event publish must route through the existing
+failure-handling path so the task is finalised (finished_at, FAILED status)
+and the worker coroutine stays alive.
 """
 
 from __future__ import annotations
@@ -100,3 +101,51 @@ class TestTaskStoreErrorLogging:
         )
         # The failure is an *exception* log (with traceback), not a plain error.
         assert matched[0].exc_info is not None
+
+
+class TestEventPublishFailure:
+    """Issue #238 — a failing TASK_STARTED publish must not leave the task in RUNNING.
+
+    Before the fix, ``await self._events.publish(TASK_STARTED)`` lived outside
+    the ``try/except/finally`` block in ``_execute()``.  A transient failure
+    there would propagate uncaught through ``_worker_loop``, crashing that
+    worker coroutine and leaving the task stuck in RUNNING with no
+    ``finished_at``.  After the fix the publish is inside the try block so
+    the except/finally handlers always run.
+    """
+
+    def test_event_publish_failure_finalises_task_as_failed(
+        self,
+        minimal_config: MaxwellDaemonConfig,
+        isolated_ledger_path: Path,
+    ) -> None:
+        async def body() -> None:
+            d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
+            await d.start(worker_count=1)
+            try:
+                # Patch the event bus publish to raise on TASK_STARTED.
+                # Submit after patching so the TASK_QUEUED publish is also caught,
+                # but we only fail the first call (TASK_STARTED during _execute).
+                original_publish = d._events.publish
+                call_count = 0
+
+                async def _failing_publish(event: Any) -> None:
+                    nonlocal call_count
+                    call_count += 1
+                    if event.kind.name == "TASK_STARTED":
+                        raise RuntimeError("simulated event bus failure")
+                    await original_publish(event)
+
+                d._events.publish = _failing_publish  # type: ignore[method-assign]
+                task = d.submit("test-prompt")
+                await _wait_for_status(d, task.id, TaskStatus.FAILED, timeout=10.0)
+                t = d.get_task(task.id)
+                assert t is not None
+                assert t.status is TaskStatus.FAILED
+                assert t.finished_at is not None, (
+                    "task must have finished_at set even on publish failure"
+                )
+            finally:
+                await d.stop()
+
+        _run(body())

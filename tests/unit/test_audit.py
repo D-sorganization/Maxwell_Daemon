@@ -173,6 +173,43 @@ class TestAuditLogger:
         assert second["prev_hash"] == e.entry_hash
 
 
+class TestBearerTokenRedaction:
+    """Issue #234: bearer tokens must never be persisted in audit entries."""
+
+    def test_bearer_token_in_details_is_redacted(self, logger: AuditLogger, log_path: Path) -> None:
+        logger.log_api_call(
+            method="POST",
+            path="/api/v1/tasks",
+            status=202,
+            details={"authorization": "Bearer super-secret-token"},
+        )
+        obj = json.loads(log_path.read_text())
+        assert obj["details"]["authorization"] == "***"
+
+    def test_bearer_value_in_arbitrary_key_is_redacted(
+        self, logger: AuditLogger, log_path: Path
+    ) -> None:
+        logger.log_api_call(
+            method="POST",
+            path="/api/v1/tasks",
+            status=202,
+            details={"auth": "Bearer should-be-gone"},
+        )
+        obj = json.loads(log_path.read_text())
+        assert obj["details"]["auth"] == "Bearer ***"
+
+    def test_non_sensitive_details_pass_through(self, logger: AuditLogger, log_path: Path) -> None:
+        logger.log_api_call(
+            method="GET",
+            path="/health",
+            status=200,
+            details={"foo": "bar", "count": 3},
+        )
+        obj = json.loads(log_path.read_text())
+        assert obj["details"]["foo"] == "bar"
+        assert obj["details"]["count"] == 3
+
+
 class TestVerifyChain:
     def test_clean_chain(self, logger: AuditLogger, log_path: Path) -> None:
         for i in range(5):
@@ -203,6 +240,19 @@ class TestVerifyChain:
         log_path.write_text("\n".join(lines) + "\n")
         violations = verify_chain(log_path)
         assert any("chain broken" in v["error"] for v in violations)
+
+    def test_tampered_first_entry_prev_hash_detected(
+        self, logger: AuditLogger, log_path: Path
+    ) -> None:
+        """Issue #233: verify_chain must flag a non-genesis prev_hash on line 1."""
+        logger.log_api_call(method="GET", path="/a", status=200)
+        lines = log_path.read_text().splitlines()
+        obj = json.loads(lines[0])
+        obj["prev_hash"] = "a" * 64  # tamper: replace genesis sentinel
+        lines[0] = json.dumps(obj)
+        log_path.write_text("\n".join(lines) + "\n")
+        violations = verify_chain(log_path)
+        assert any(v["line"] == 1 and "chain broken" in v["error"] for v in violations)
 
 
 class TestAuditApiEndpoints:

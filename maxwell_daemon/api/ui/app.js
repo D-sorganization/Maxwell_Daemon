@@ -7,7 +7,8 @@ const authToken = new URLSearchParams(location.search).get("token")
 const headers = () => authToken ? { authorization: `Bearer ${authToken}` } : {};
 
 const state = {
-  tasks: new Map(),           // id -> task object
+  tasks: new Map(),           // id -> task object (filtered by Tasks tab status filter)
+  allTasks: new Map(),        // id -> task object (always unfiltered, used for cost analytics)
   selected: null,             // currently-shown task id
   testOutput: new Map(),      // task id -> accumulated text
   monitorLines: [],           // raw event lines (capped at 500)
@@ -72,6 +73,22 @@ async function fetchTasks() {
   const list = await r.json();
   state.tasks.clear();
   for (const t of list) state.tasks.set(t.id, t);
+
+  // Always fetch an unfiltered snapshot for cost analytics so that the cost
+  // dashboard is not affected by the Tasks tab's status filter (#235).
+  if (status) {
+    const allParams = new URLSearchParams({ limit: "500" });
+    const allR = await fetch(`/api/v1/tasks?${allParams}`, { headers: headers() });
+    if (allR.ok) {
+      const allList = await allR.json();
+      state.allTasks.clear();
+      for (const t of allList) state.allTasks.set(t.id, t);
+    }
+  } else {
+    // No filter active — filtered set is already the full set.
+    state.allTasks = new Map(state.tasks);
+  }
+
   renderTasks();
   if (state.currentView === "history") renderHistory();
   if (state.currentView === "cost") renderCostTasks();
@@ -106,9 +123,9 @@ async function fetchCostDetail() {
   const detailEl = document.getElementById("cost-summary-detail");
   const byBackend = body.by_backend || {};
   const total = body.month_to_date_usd || 0;
-  const taskCount = [...state.tasks.values()].length;
+  const taskCount = [...state.allTasks.values()].length;
   const avgCost = taskCount > 0
-    ? [...state.tasks.values()].reduce((s, t) => s + (t.cost_usd || 0), 0) / taskCount
+    ? [...state.allTasks.values()].reduce((s, t) => s + (t.cost_usd || 0), 0) / taskCount
     : 0;
 
   detailEl.innerHTML = `
@@ -145,7 +162,7 @@ function renderCostTasks() {
   const tbody = document.getElementById("cost-task-body");
   if (!tbody) return;
   tbody.innerHTML = "";
-  const sorted = [...state.tasks.values()]
+  const sorted = [...state.allTasks.values()]
     .filter((t) => (t.cost_usd || 0) > 0)
     .sort((a, b) => (b.cost_usd || 0) - (a.cost_usd || 0))
     .slice(0, 20);

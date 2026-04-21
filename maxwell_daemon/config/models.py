@@ -82,6 +82,16 @@ class AgentConfig(BaseModel):
     max_turns: int = Field(200, ge=1)
     discovery_interval_seconds: int = Field(300, ge=10)
     delivery_interval_seconds: int = Field(60, ge=10)
+    task_retention_days: int = Field(
+        30,
+        ge=0,
+        description="Delete terminal tasks and cost records older than this many days. 0 disables pruning.",
+    )
+    task_prune_interval_seconds: int = Field(
+        86_400,
+        ge=60,
+        description="How often the daemon runs retention pruning while started.",
+    )
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
     temperature: float = Field(1.0, ge=0.0, le=2.0)
     default_backend: str = "claude"
@@ -243,3 +253,48 @@ class MaxwellDaemonConfig(BaseModel):
                 f"default_backend '{name}' not found in backends: {sorted(self.backends)}"
             )
         return self.backends[name]
+
+    # ── Config boundary accessors (Law of Demeter) ────────────────────────────
+    # Callers should prefer these over traversing sub-objects directly so that
+    # internal config layout changes don't ripple through all consumers.
+
+    @property
+    def default_backend_name(self) -> str:
+        """Shortcut for ``agent.default_backend``."""
+        return self.agent.default_backend
+
+    @property
+    def api_auth_token(self) -> str | None:
+        """Shortcut for ``api.auth_token``."""
+        return self.api.auth_token
+
+    @property
+    def fleet_coordinator_poll_seconds(self) -> int:
+        """Shortcut for ``fleet.coordinator_poll_seconds``."""
+        return self.fleet.coordinator_poll_seconds
+
+    @property
+    def fleet_heartbeat_seconds(self) -> int:
+        """Shortcut for ``fleet.heartbeat_seconds``."""
+        return self.fleet.heartbeat_seconds
+
+    @property
+    def fleet_machines(self) -> list[MachineConfig]:
+        """Shortcut for ``fleet.machines``."""
+        return self.fleet.machines
+
+    @property
+    def github_routes(self) -> list[WebhookRouteConfig]:
+        """Shortcut for ``github.routes``."""
+        return self.github.routes
+
+    @property
+    def github_allowed_repos(self) -> list[str]:
+        """Shortcut for ``github.allowed_repos``."""
+        return self.github.allowed_repos
+
+    def github_webhook_secret_value(self) -> str | None:
+        """Return the raw webhook secret string, or None if unset."""
+        if self.github.webhook_secret is None:
+            return None
+        return self.github.webhook_secret.get_secret_value()
