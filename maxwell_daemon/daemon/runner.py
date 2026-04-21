@@ -38,6 +38,7 @@ log = logging.getLogger("maxwell_daemon.daemon")
 
 class TaskStatus(str, Enum):
     QUEUED = "queued"
+    DISPATCHED = "dispatched"  # assigned to a remote worker, awaiting execution
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -63,6 +64,8 @@ class Task:
     issue_mode: str | None = None  # "plan" | "implement"
     # A/B grouping: sibling tasks share an ab_group so the UI pairs them.
     ab_group: str | None = None
+    # Priority: lower number = higher priority. 0=emergency, 50=high, 100=normal, 200=batch.
+    priority: int = 100
     status: TaskStatus = TaskStatus.QUEUED
     result: str | None = None
     error: str | None = None
@@ -71,6 +74,14 @@ class Task:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    # Fleet dispatch tracking: set when a coordinator sends this task to a remote worker.
+    dispatched_to: str | None = None  # machine name of the worker that received this task
+
+    def __lt__(self, other: object) -> bool:
+        """Support PriorityQueue ordering — compare by (priority, created_at)."""
+        if not isinstance(other, Task):
+            return NotImplemented
+        return (self.priority, self.created_at) < (other.priority, other.created_at)
 
 
 @dataclass
@@ -80,6 +91,8 @@ class DaemonState:
     tasks: dict[str, Task]
     started_at: datetime
     backends_available: list[str]
+    worker_count: int = 0
+    queue_depth: int = 0
 
 
 class Daemon:
@@ -130,15 +143,22 @@ class Daemon:
         # are a mix of sync and async — acquisition is uncontended under
         # normal load and a lock-free async path doesn't win us anything.
         self._tasks_lock = threading.Lock()
-        self._queue: asyncio.Queue[Task] = asyncio.Queue()
+        # PriorityQueue: workers dequeue (priority, task) tuples. Lower priority
+        # number = higher urgency (0=emergency, 50=high, 100=normal, 200=batch).
+        self._queue: asyncio.PriorityQueue[tuple[int, Task | None]] = asyncio.PriorityQueue()
         self._workers: list[asyncio.Task[None]] = []
+        self._worker_count: int = 0
         self._bg_tasks: set[asyncio.Task[None]] = set()
         self._started_at = datetime.now(timezone.utc)
         self._running = False
+        self._config_path: Path | None = None
         # Lazily-built collaborators — injected by tests, built on demand in prod.
         self._github_client: Any = None
         self._workspace: Any = None
         self._issue_executor_factory: Any = None
+        # Fleet coordination: track last-seen time per worker machine for heartbeat.
+        # Keys are machine names; values are the UTC datetime of last contact.
+        self._worker_last_seen: dict[str, datetime] = {}
 
     @property
     def events(self) -> EventBus:
@@ -146,7 +166,10 @@ class Daemon:
 
     @classmethod
     def from_config_path(cls, path: Path | str | None = None) -> Daemon:
-        return cls(load_config(path))
+        daemon = cls(load_config(path))
+        if path is not None:
+            daemon._config_path = Path(path).expanduser()
+        return daemon
 
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
@@ -154,9 +177,41 @@ class Daemon:
         if recover:
             self.recover()
         self._running = True
-        for i in range(worker_count):
-            self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
-        log.info("daemon started with %d workers", worker_count)
+        role = self._config.role
+
+        if role == "coordinator":
+            # Coordinator: runs discovery and dispatches to remote workers — no local execution.
+            self._worker_count = 0
+            log.info("daemon started as coordinator (no local workers)")
+            # Start coordinator dispatch loop as a background task.
+            coord_task = asyncio.create_task(self._coordinator_loop(), name="coordinator-loop")
+            self._bg_tasks.add(coord_task)
+            coord_task.add_done_callback(self._bg_tasks.discard)
+        elif role == "worker":
+            # Worker: accepts tasks via REST API and executes locally — no discovery.
+            self._worker_count = worker_count
+            for i in range(worker_count):
+                self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
+            log.info("daemon started as worker with %d workers", worker_count)
+            # TODO: register with coordinator on startup (future work)
+        else:
+            # Standalone (default): run both discovery and local execution.
+            self._worker_count = worker_count
+            for i in range(worker_count):
+                self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
+            log.info("daemon started (standalone) with %d workers", worker_count)
+
+        # Install SIGUSR1 handler for config hot-reload (Unix only).
+        try:
+            loop = asyncio.get_running_loop()
+            loop.add_signal_handler(
+                signal.SIGUSR1,
+                lambda: asyncio.create_task(self._reload_config_signal()),
+            )
+        except (AttributeError, NotImplementedError, OSError):
+            # Windows or unsupported platform — skip signal handler.
+            pass
+        log.info("daemon started with %d workers", self._worker_count)
 
     def recover(self) -> list[Task]:
         """Re-queue tasks from a prior daemon run. Called automatically from start()."""
@@ -164,7 +219,7 @@ class Daemon:
         with self._tasks_lock:
             for task in recovered:
                 self._tasks[task.id] = task
-                self._queue.put_nowait(task)
+                self._queue.put_nowait((task.priority, task))
         if recovered:
             log.info("recovered %d pending task(s) from previous run", len(recovered))
         return recovered
@@ -209,6 +264,7 @@ class Daemon:
         repo: str | None = None,
         backend: str | None = None,
         model: str | None = None,
+        priority: int = 100,
     ) -> Task:
         task = Task(
             id=uuid.uuid4().hex[:12],
@@ -217,12 +273,13 @@ class Daemon:
             repo=repo,
             backend=backend,
             model=model,
+            priority=priority,
         )
         # Write to self._tasks under lock to prevent iteration errors
         with self._tasks_lock:
             self._tasks[task.id] = task
         self._task_store.save(task)
-        self._queue.put_nowait(task)
+        self._queue.put_nowait((task.priority, task))
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
         # submits before start()), skip the event — the queued state is
         # observable via get_task().
@@ -244,6 +301,7 @@ class Daemon:
         mode: str = "plan",
         backend: str | None = None,
         model: str | None = None,
+        priority: int = 100,
     ) -> Task:
         """Queue a task that reads a GitHub issue and opens a draft PR for it."""
         if mode not in {"plan", "implement"}:
@@ -258,12 +316,13 @@ class Daemon:
             issue_repo=repo,
             issue_number=issue_number,
             issue_mode=mode,
+            priority=priority,
         )
         # Write to self._tasks under lock to prevent iteration errors
         with self._tasks_lock:
             self._tasks[task.id] = task
         self._task_store.save(task)
-        self._queue.put_nowait(task)
+        self._queue.put_nowait((task.priority, task))
         with contextlib.suppress(RuntimeError):
             loop = asyncio.get_running_loop()
             bg = loop.create_task(
@@ -325,6 +384,10 @@ class Daemon:
         self._workspace = workspace
         self._issue_executor_factory = executor_factory
 
+    def record_worker_heartbeat(self, machine_name: str) -> None:
+        """Update last-seen timestamp for a worker machine (called by heartbeat endpoint)."""
+        self._worker_last_seen[machine_name] = datetime.now(timezone.utc)
+
     def get_task(self, task_id: str) -> Task | None:
         # dict.get is GIL-atomic; no lock needed on hot-path reads.
         return self._tasks.get(task_id)
@@ -362,15 +425,284 @@ class Daemon:
             bg.add_done_callback(self._bg_tasks.discard)
         return task
 
+    async def set_worker_count(self, n: int) -> None:
+        """Scale workers up or down to *n* without restarting the daemon.
+
+        Safe to call while the daemon is running. Workers scaling down will
+        finish their current task before exiting.
+        """
+        if n < 1:
+            raise ValueError(f"worker count must be at least 1, got {n}")
+        if n > 64:
+            raise ValueError(f"worker count must be at most 64, got {n}")
+        current = len(self._workers)
+        if n > current:
+            for i in range(n - current):
+                worker_id = current + i
+                task = asyncio.create_task(
+                    self._worker_loop(worker_id), name=f"worker-{worker_id}"
+                )
+                self._workers.append(task)
+                log.info("scaled up: added worker %d (total=%d)", worker_id, len(self._workers))
+        elif n < current:
+            # Send sentinel (priority=-1, task=None) to excess workers so they
+            # exit cleanly after finishing their current task.
+            for _ in range(current - n):
+                await self._queue.put((-1, None))
+            # Prune completed/cancelled worker tasks from the list.
+            self._workers = [w for w in self._workers if not w.done()]
+            log.info("scaled down: sent %d stop sentinel(s) (target=%d)", current - n, n)
+        self._worker_count = n
+
+    def reprioritize_task(self, task_id: str, new_priority: int) -> Task:
+        """Change the priority of a queued task.
+
+        Note: the PriorityQueue cannot be mutated in-place; the new priority is
+        stored on the Task object and will be respected when the entry is
+        dequeued (the worker re-checks task.priority). Any already-dequeued
+        entry with the old priority is harmless — the task object is the source
+        of truth.
+        """
+        with self._tasks_lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise KeyError(task_id)
+            if task.status is not TaskStatus.QUEUED:
+                raise ValueError(
+                    f"task {task_id} is {task.status.value}; only queued tasks can be reprioritized"
+                )
+            old_priority = task.priority
+            task.priority = new_priority
+        # Enqueue a fresh entry with the new priority; the stale entry will be
+        # skipped when dequeued because the task will no longer be QUEUED by then
+        # (or the worker will simply execute it at the corrected priority).
+        self._queue.put_nowait((new_priority, task))
+        self._task_store.save(task)
+        log.info(
+            "reprioritized task=%s old=%d new=%d", task_id, old_priority, new_priority
+        )
+        return task
+
+    async def reload_config(self, path: Path | None = None) -> dict[str, object]:
+        """Re-read and apply hot-reloadable config settings without restarting.
+
+        Hot-reloadable: worker_count, discovery_interval, budget_limits.
+        NOT hot-reloadable (require restart): database path, API host/port.
+
+        Returns a dict of {field: (old_value, new_value)} for changed fields.
+        """
+        config_path = path or self._config_path
+        if config_path is None:
+            from maxwell_daemon.config.loader import default_config_path
+
+            config_path = default_config_path()
+        new_config = load_config(config_path)
+        changed: dict[str, object] = {}
+
+        # Worker count
+        old_worker_count = self._worker_count
+        new_worker_count = getattr(new_config.agent, "worker_count", old_worker_count)
+        # worker_count is not in the config model today — skip if absent.
+        if hasattr(new_config.agent, "worker_count") and new_worker_count != old_worker_count:
+            await self.set_worker_count(new_worker_count)
+            changed["worker_count"] = (old_worker_count, new_worker_count)
+
+        # Discovery interval
+        old_interval = self._config.agent.discovery_interval_seconds
+        new_interval = new_config.agent.discovery_interval_seconds
+        if new_interval != old_interval:
+            changed["discovery_interval_seconds"] = (old_interval, new_interval)
+
+        # Budget limits
+        old_budget = self._config.budget.monthly_limit_usd
+        new_budget = new_config.budget.monthly_limit_usd
+        if new_budget != old_budget:
+            changed["budget.monthly_limit_usd"] = (old_budget, new_budget)
+
+        # Repo list (names only, for logging)
+        old_repos = sorted(r.name for r in self._config.repos)
+        new_repos = sorted(r.name for r in new_config.repos)
+        if new_repos != old_repos:
+            changed["repos"] = (old_repos, new_repos)
+
+        self._config = new_config
+        self._budget = BudgetEnforcer(new_config.budget, self._ledger)
+        self._config_path = config_path
+        log.info("config reloaded from %s; changed=%s", config_path, list(changed.keys()))
+        return changed
+
+    # -- coordinator loop ----------------------------------------------------
+
+    async def _coordinator_loop(self) -> None:
+        """Periodically flush QUEUED tasks to remote workers via FleetDispatcher."""
+        poll_seconds = self._config.fleet.coordinator_poll_seconds
+        while self._running:
+            try:
+                await self._dispatch_to_fleet()
+            except Exception:
+                log.exception("coordinator dispatch error")
+            await asyncio.sleep(poll_seconds)
+
+    async def _dispatch_to_fleet(self) -> None:
+        """One coordinator dispatch tick: probe machines, plan, submit, requeue stale tasks."""
+        from maxwell_daemon.fleet.client import RemoteDaemonClient, RemoteDaemonError
+        from maxwell_daemon.fleet.dispatcher import FleetDispatcher, MachineState, TaskRequirement
+
+        fleet_cfg = self._config.fleet
+        if not fleet_cfg.machines:
+            return
+
+        # Build initial MachineState snapshots from config.
+        initial_machines = tuple(
+            MachineState(
+                name=m.name,
+                host=m.host,
+                port=m.port,
+                capacity=m.capacity,
+                tags=tuple(m.tags),
+            )
+            for m in fleet_cfg.machines
+        )
+
+        client = RemoteDaemonClient(
+            auth_token=self._config.api.auth_token,
+        )
+
+        # Probe all machines in parallel to get live health.
+        machines = await client.refresh_all(initial_machines)
+
+        # Requeue tasks dispatched to machines that have gone offline.
+        now = datetime.now(timezone.utc)
+        stale_threshold = fleet_cfg.heartbeat_seconds * 3
+        with self._tasks_lock:
+            tasks_snapshot = dict(self._tasks)
+
+        for task in tasks_snapshot.values():
+            if task.status is not TaskStatus.DISPATCHED or task.dispatched_to is None:
+                continue
+            machine_name = task.dispatched_to
+            machine_healthy = any(m.name == machine_name and m.healthy for m in machines)
+            if not machine_healthy:
+                last_seen = self._worker_last_seen.get(machine_name)
+                stale = True
+                if last_seen is not None:
+                    elapsed = (now - last_seen).total_seconds()
+                    stale = elapsed > stale_threshold
+                if stale:
+                    log.warning(
+                        "worker %s appears offline; requeueing task %s",
+                        machine_name,
+                        task.id,
+                    )
+                    task.status = TaskStatus.QUEUED
+                    task.dispatched_to = None
+                    self._queue.put_nowait((task.priority, task))
+
+        # Collect tasks still QUEUED after potential requeuing above.
+        with self._tasks_lock:
+            tasks_snapshot = dict(self._tasks)
+
+        queued_tasks = [t for t in tasks_snapshot.values() if t.status is TaskStatus.QUEUED]
+        if not queued_tasks:
+            return
+
+        task_requirements = tuple(
+            TaskRequirement(task_id=t.id)
+            for t in queued_tasks
+        )
+
+        # Tally active_tasks on each machine from known DISPATCHED tasks.
+        dispatched_counts: dict[str, int] = {}
+        for t in tasks_snapshot.values():
+            if t.status is TaskStatus.DISPATCHED and t.dispatched_to:
+                dispatched_counts[t.dispatched_to] = dispatched_counts.get(t.dispatched_to, 0) + 1
+
+        machines_with_load = tuple(
+            MachineState(
+                name=m.name,
+                host=m.host,
+                port=m.port,
+                capacity=m.capacity,
+                tags=m.tags,
+                active_tasks=dispatched_counts.get(m.name, 0),
+                healthy=m.healthy,
+            )
+            for m in machines
+        )
+
+        dispatcher = FleetDispatcher()
+        plan = dispatcher.plan(machines_with_load, task_requirements)
+
+        # Build lookup maps for fast resolution.
+        tasks_by_id = {t.id: t for t in queued_tasks}
+        machines_by_name = {m.name: m for m in machines}
+
+        for assignment in plan.assignments:
+            task = tasks_by_id.get(assignment.task_id)
+            machine = machines_by_name.get(assignment.machine_name)
+            if task is None or machine is None:
+                continue
+
+            task_payload: dict[str, Any] = {
+                "task_id": task.id,
+                "prompt": task.prompt,
+                "kind": task.kind.value,
+                "repo": task.repo,
+                "backend": task.backend,
+                "model": task.model,
+                "issue_repo": task.issue_repo,
+                "issue_number": task.issue_number,
+                "issue_mode": task.issue_mode,
+                "priority": task.priority,
+            }
+
+            try:
+                result = await client.submit_task(machine, task_payload=task_payload)
+            except RemoteDaemonError:
+                log.exception(
+                    "failed to dispatch task %s to machine %s", task.id, machine.name
+                )
+                continue
+
+            if result.status == "submitted":
+                task.status = TaskStatus.DISPATCHED
+                task.dispatched_to = machine.name
+                log.info("dispatched task %s to machine %s", task.id, machine.name)
+                with contextlib.suppress(Exception):
+                    self._task_store.save(task)
+            else:
+                log.warning(
+                    "machine %s rejected task %s: %s",
+                    machine.name,
+                    task.id,
+                    result.detail,
+                )
+
+        if plan.unassigned:
+            log.debug(
+                "coordinator: %d task(s) could not be placed this tick: %s",
+                len(plan.unassigned),
+                plan.unassigned,
+            )
+
+    async def _reload_config_signal(self) -> None:
+        """Signal handler wrapper — logs errors rather than crashing the event loop."""
+        try:
+            await self.reload_config()
+        except Exception:
+            log.exception("config reload via SIGUSR1 failed")
+
     def state(self) -> DaemonState:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
         return DaemonState(
             version="0.1.0",
-            config_path=None,
+            config_path=self._config_path,
             tasks=tasks_snapshot,
             started_at=self._started_at,
             backends_available=self._router.available_backends(),
+            worker_count=self._worker_count,
+            queue_depth=self._queue.qsize(),
         )
 
     async def _worker_loop(self, worker_id: int) -> None:
@@ -379,9 +711,14 @@ class Daemon:
         log.info("worker %d ready", worker_id)
         while self._running or not self._queue.empty():
             try:
-                task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
+                _priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
             except asyncio.TimeoutError:
                 continue
+            # Sentinel value (None task) signals this worker to exit — used by
+            # set_worker_count() when scaling down.
+            if task is None:
+                log.info("worker %d received stop sentinel; exiting", worker_id)
+                break
             # Tasks cancelled while queued shouldn't be executed.
             if task.status is TaskStatus.CANCELLED:
                 continue

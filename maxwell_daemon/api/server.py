@@ -69,6 +69,7 @@ class TaskSubmit(BaseModel):
     repo: str | None = None
     backend: str | None = None
     model: str | None = None
+    priority: int = Field(default=100, ge=0, le=200)
 
 
 class IssueCreate(BaseModel):
@@ -86,6 +87,7 @@ class IssueDispatch(BaseModel):
     mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
     backend: str | None = None
     model: str | None = None
+    priority: int = Field(default=100, ge=0, le=200)
 
 
 class IssueBatchDispatch(BaseModel):
@@ -117,6 +119,7 @@ class TaskView(BaseModel):
     issue_number: int | None = None
     issue_mode: str | None = None
     ab_group: str | None = None
+    priority: int = 100
     pr_url: str | None = None
     status: str
     result: str | None
@@ -139,6 +142,7 @@ class TaskView(BaseModel):
             issue_number=t.issue_number,
             issue_mode=t.issue_mode,
             ab_group=t.ab_group,
+            priority=getattr(t, "priority", 100),
             pr_url=t.pr_url,
             status=t.status.value,
             result=t.result,
@@ -478,9 +482,29 @@ def create_app(
             for i in issues
         ]
 
+    @app.post("/api/v1/heartbeat", dependencies=[Depends(auth)])
+    async def worker_heartbeat(request: Request) -> dict[str, Any]:
+        """Workers POST here every heartbeat_seconds to stay registered as alive.
+
+        Body: {"machine_name": "<name>"}
+        Coordinators use last-seen timestamps to detect dead workers and requeue
+        their DISPATCHED tasks.
+        """
+        body = await request.json()
+        machine_name = str(body.get("machine_name") or "")
+        if not machine_name:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "machine_name required")
+        daemon.record_worker_heartbeat(machine_name)
+        return {"machine_name": machine_name, "recorded_at": datetime.now(timezone.utc).isoformat()}
+
     @app.get("/api/v1/fleet", dependencies=[Depends(auth)])
     async def fleet_overview() -> dict[str, Any]:
-        """Return fleet manifest data merged with live task counts per repo."""
+        """Return fleet manifest data merged with live task counts per repo.
+
+        When role == "coordinator", also aggregates per-machine health summaries
+        from remote workers via RemoteDaemonClient health checks.
+        When role == "worker" or "standalone", shows local tasks only.
+        """
         import os
 
         import yaml
@@ -514,9 +538,54 @@ def create_app(
             repo_name = (t.issue_repo or "").split("/")[-1] or t.repo or ""
             if not repo_name:
                 continue
-            if t.status.value in ("queued", "running"):
+            if t.status.value in ("queued", "running", "dispatched"):
                 active_by_repo[repo_name] = active_by_repo.get(repo_name, 0) + 1
             cost_by_repo[repo_name] = cost_by_repo.get(repo_name, 0.0) + t.cost_usd
+
+        # In coordinator mode, include per-machine health summary from the fleet config.
+        machines_summary: list[dict[str, Any]] = []
+        if daemon._config.role == "coordinator" and daemon._config.fleet.machines:
+            from maxwell_daemon.fleet.client import RemoteDaemonClient
+            from maxwell_daemon.fleet.dispatcher import MachineState
+
+            initial = tuple(
+                MachineState(
+                    name=m.name,
+                    host=m.host,
+                    port=m.port,
+                    capacity=m.capacity,
+                    tags=tuple(m.tags),
+                )
+                for m in daemon._config.fleet.machines
+            )
+            fleet_client = RemoteDaemonClient(auth_token=daemon._config.api.auth_token)
+            try:
+                probed = await fleet_client.refresh_all(initial)
+            except Exception:
+                probed = initial  # fall back to config data on probe failure
+
+            # Count tasks dispatched to each machine.
+            dispatched_per_machine: dict[str, int] = {}
+            for t in tasks:
+                from maxwell_daemon.daemon.runner import TaskStatus
+                if t.status is TaskStatus.DISPATCHED and t.dispatched_to:
+                    dispatched_per_machine[t.dispatched_to] = (
+                        dispatched_per_machine.get(t.dispatched_to, 0) + 1
+                    )
+
+            for m in probed:
+                last_seen = daemon._worker_last_seen.get(m.name)
+                machines_summary.append(
+                    {
+                        "name": m.name,
+                        "host": m.host,
+                        "port": m.port,
+                        "capacity": m.capacity,
+                        "healthy": m.healthy,
+                        "dispatched_tasks": dispatched_per_machine.get(m.name, 0),
+                        "last_seen": last_seen.isoformat() if last_seen else None,
+                    }
+                )
 
         repos: list[dict[str, Any]] = []
         for r in repos_raw:
@@ -536,7 +605,8 @@ def create_app(
                 }
             )
 
-        return {
+        result: dict[str, Any] = {
+            "role": daemon._config.role,
             "fleet": {
                 "name": fleet_section.get("name", ""),
                 "auto_promote_staging": fleet_section.get("auto_promote_staging", False),
@@ -544,6 +614,9 @@ def create_app(
             },
             "repos": repos,
         }
+        if machines_summary:
+            result["machines"] = machines_summary
+        return result
 
     @app.get("/api/v1/audit", dependencies=[Depends(auth)])
     async def audit_log(
