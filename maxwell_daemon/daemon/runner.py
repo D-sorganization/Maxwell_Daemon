@@ -193,7 +193,6 @@ class Daemon:
             for i in range(worker_count):
                 self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
             log.info("daemon started as worker with %d workers", worker_count)
-            # TODO: register with coordinator on startup (future work)
         else:
             # Standalone (default): run both discovery and local execution.
             self._worker_count = worker_count
@@ -439,9 +438,7 @@ class Daemon:
         if n > current:
             for i in range(n - current):
                 worker_id = current + i
-                task = asyncio.create_task(
-                    self._worker_loop(worker_id), name=f"worker-{worker_id}"
-                )
+                task = asyncio.create_task(self._worker_loop(worker_id), name=f"worker-{worker_id}")
                 self._workers.append(task)
                 log.info("scaled up: added worker %d (total=%d)", worker_id, len(self._workers))
         elif n < current:
@@ -478,9 +475,7 @@ class Daemon:
         # (or the worker will simply execute it at the corrected priority).
         self._queue.put_nowait((new_priority, task))
         self._task_store.save(task)
-        log.info(
-            "reprioritized task=%s old=%d new=%d", task_id, old_priority, new_priority
-        )
+        log.info("reprioritized task=%s old=%d new=%d", task_id, old_priority, new_priority)
         return task
 
     async def reload_config(self, path: Path | None = None) -> dict[str, object]:
@@ -577,10 +572,10 @@ class Daemon:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
 
-        for task in tasks_snapshot.values():
-            if task.status is not TaskStatus.DISPATCHED or task.dispatched_to is None:
+        for t in tasks_snapshot.values():
+            if t.status is not TaskStatus.DISPATCHED or t.dispatched_to is None:
                 continue
-            machine_name = task.dispatched_to
+            machine_name = t.dispatched_to
             machine_healthy = any(m.name == machine_name and m.healthy for m in machines)
             if not machine_healthy:
                 last_seen = self._worker_last_seen.get(machine_name)
@@ -592,11 +587,11 @@ class Daemon:
                     log.warning(
                         "worker %s appears offline; requeueing task %s",
                         machine_name,
-                        task.id,
+                        t.id,
                     )
-                    task.status = TaskStatus.QUEUED
-                    task.dispatched_to = None
-                    self._queue.put_nowait((task.priority, task))
+                    t.status = TaskStatus.QUEUED
+                    t.dispatched_to = None
+                    self._queue.put_nowait((t.priority, t))
 
         # Collect tasks still QUEUED after potential requeuing above.
         with self._tasks_lock:
@@ -606,10 +601,7 @@ class Daemon:
         if not queued_tasks:
             return
 
-        task_requirements = tuple(
-            TaskRequirement(task_id=t.id)
-            for t in queued_tasks
-        )
+        task_requirements = tuple(TaskRequirement(task_id=t.id) for t in queued_tasks)
 
         # Tally active_tasks on each machine from known DISPATCHED tasks.
         dispatched_counts: dict[str, int] = {}
@@ -659,9 +651,7 @@ class Daemon:
             try:
                 result = await client.submit_task(machine, task_payload=task_payload)
             except RemoteDaemonError:
-                log.exception(
-                    "failed to dispatch task %s to machine %s", task.id, machine.name
-                )
+                log.exception("failed to dispatch task %s to machine %s", task.id, machine.name)
                 continue
 
             if result.status == "submitted":

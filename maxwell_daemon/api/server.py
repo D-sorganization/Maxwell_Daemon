@@ -583,6 +583,7 @@ def create_app(
             dispatched_per_machine: dict[str, int] = {}
             for t in tasks:
                 from maxwell_daemon.daemon.runner import TaskStatus
+
                 if t.status is TaskStatus.DISPATCHED and t.dispatched_to:
                     dispatched_per_machine[t.dispatched_to] = (
                         dispatched_per_machine.get(t.dispatched_to, 0) + 1

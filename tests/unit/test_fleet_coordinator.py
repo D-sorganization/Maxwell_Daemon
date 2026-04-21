@@ -314,6 +314,7 @@ class TestDispatchToFleet:
 
     def test_queued_task_gets_dispatched(self, tmp_path: Path) -> None:
         """A QUEUED task is assigned to a healthy machine and marked DISPATCHED."""
+
         async def _run() -> None:
             cfg = _make_config(
                 role="coordinator",
@@ -332,6 +333,7 @@ class TestDispatchToFleet:
 
             # Patch the RemoteDaemonClient constructor to inject fake http.
             import maxwell_daemon.fleet.client as fleet_client_mod
+
             original_cls = fleet_client_mod.RemoteDaemonClient
 
             class _PatchedClient(original_cls):
@@ -353,6 +355,7 @@ class TestDispatchToFleet:
 
     def test_no_machines_configured_is_noop(self, tmp_path: Path) -> None:
         """When fleet has no machines, _dispatch_to_fleet returns without error."""
+
         async def _run() -> None:
             cfg = _make_config(role="coordinator")  # no machines
             daemon = Daemon(
@@ -371,6 +374,7 @@ class TestDispatchToFleet:
 
     def test_unhealthy_machine_skips_dispatch(self, tmp_path: Path) -> None:
         """Tasks are not dispatched to unhealthy machines."""
+
         async def _run() -> None:
             cfg = _make_config(
                 role="coordinator",
@@ -387,6 +391,7 @@ class TestDispatchToFleet:
             fake_http = _FakeHTTPClient(health_ok=False)
 
             import maxwell_daemon.fleet.client as fleet_client_mod
+
             original_cls = fleet_client_mod.RemoteDaemonClient
 
             class _PatchedClient(original_cls):
@@ -407,6 +412,7 @@ class TestDispatchToFleet:
 
     def test_stale_dispatched_task_requeued(self, tmp_path: Path) -> None:
         """DISPATCHED tasks whose worker has been offline too long are requeued."""
+
         async def _run() -> None:
             cfg = _make_config(
                 role="coordinator",
@@ -430,6 +436,7 @@ class TestDispatchToFleet:
             fake_http = _FakeHTTPClient(health_ok=False)
 
             import maxwell_daemon.fleet.client as fleet_client_mod
+
             original_cls = fleet_client_mod.RemoteDaemonClient
 
             class _PatchedClient(original_cls):
