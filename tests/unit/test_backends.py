@@ -21,6 +21,7 @@ from maxwell_daemon.backends import (
     MessageRole,
     TokenUsage,
 )
+from maxwell_daemon.backends.pricing import cost_for, get_rates, is_free_provider
 
 
 class FakeBackend(ILLMBackend):
@@ -115,6 +116,19 @@ class TestCostEstimation:
         usage = TokenUsage(prompt_tokens=1000, completion_tokens=500, total_tokens=1500)
         # 1000 tokens * $0.001/1k + 500 tokens * $0.002/1k = $0.001 + $0.001 = $0.002
         assert backend.estimate_cost(usage, "any-model") == pytest.approx(0.002)
+
+    def test_pricing_free_provider_short_circuits(self) -> None:
+        assert is_free_provider("ollama")
+        assert get_rates("ollama", "any-local-model") == (0.0, 0.0)
+
+    def test_unknown_pricing_falls_back_to_zero(self, caplog: pytest.LogCaptureFixture) -> None:
+        usage = TokenUsage(prompt_tokens=1000, completion_tokens=500, total_tokens=1500)
+
+        assert get_rates("unknown-provider", "mystery") == (0.0, 0.0)
+        assert get_rates("openai", "mystery") == (0.0, 0.0)
+        assert cost_for("unknown-provider", "mystery", usage) == 0.0
+        assert "Unknown provider" in caplog.text
+        assert "Unknown model" in caplog.text
 
 
 class TestBackendInterface:
