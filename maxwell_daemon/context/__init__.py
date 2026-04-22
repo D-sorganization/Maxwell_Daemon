@@ -7,6 +7,15 @@ us a small set of named sources the system-prompt assembler can request
 by name with a token budget.
 """
 
+from maxwell_daemon.context.packs import (
+    ContextPack,
+    ContextPackFileEntry,
+    ContextPackMetadata,
+    ContextPackPolicy,
+    ContextPackSection,
+    build_context_pack,
+    default_context_pack_registry,
+)
 from maxwell_daemon.context.providers import (
     ContextProvider,
     ContextProviderRegistry,
@@ -17,10 +26,17 @@ from maxwell_daemon.context.providers import (
 )
 
 __all__ = [
+    "ContextPack",
+    "ContextPackFileEntry",
+    "ContextPackMetadata",
+    "ContextPackPolicy",
+    "ContextPackSection",
     "ContextProvider",
     "ContextProviderRegistry",
     "ContextProviderResult",
     "DocsProvider",
     "InlineTextProvider",
     "assemble_context",
+    "build_context_pack",
+    "default_context_pack_registry",
 ]
