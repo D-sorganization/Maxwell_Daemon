@@ -158,7 +158,10 @@ def make_write_file(
                 action_service.skip(action.id, reason=decision.reason)
                 return f"action {action.id} skipped: {decision.reason}"
             if decision.requires_approval:
-                return f"action {action.id} pending approval: {action.summary}"
+                return (
+                    f"action {action.id} pending approval: {action.summary} "
+                    "(approval records the proposal only)"
+                )
             action_service.approve(action.id, actor="policy")
             action_service.mark_running(action.id)
         resolved.parent.mkdir(parents=True, exist_ok=True)
@@ -235,7 +238,10 @@ def make_edit_file(
                 action_service.skip(action.id, reason=decision.reason)
                 return f"action {action.id} skipped: {decision.reason}"
             if decision.requires_approval:
-                return f"action {action.id} pending approval: {action.summary}"
+                return (
+                    f"action {action.id} pending approval: {action.summary} "
+                    "(approval records the proposal only)"
+                )
             action_service.approve(action.id, actor="policy")
             action_service.mark_running(action.id)
         import os
@@ -355,7 +361,10 @@ def make_run_bash(
                 action_service.skip(action.id, reason=decision.reason)
                 return f"action {action.id} skipped: {decision.reason}"
             if decision.requires_approval:
-                return f"action {action.id} pending approval: {action.summary}"
+                return (
+                    f"action {action.id} pending approval: {action.summary} "
+                    "(approval records the proposal only)"
+                )
             action_service.approve(action.id, actor="policy")
             action_service.mark_running(action.id)
         # ``-c`` (no ``-l``) so login-profile files don't run and leak state.
