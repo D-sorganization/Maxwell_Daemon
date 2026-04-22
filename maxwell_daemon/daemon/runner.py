@@ -650,7 +650,9 @@ class Daemon:
         return self._tasks.get(task_id)
 
     def _reject_duplicate_task_id(self, task_id: str) -> None:
-        if task_id in self._tasks or self._task_store.get(task_id) is not None:
+        get_persisted_task = getattr(self._task_store, "get", None)
+        persisted_task = get_persisted_task(task_id) if callable(get_persisted_task) else None
+        if task_id in self._tasks or persisted_task is not None:
             raise DuplicateTaskIdError(f"task id {task_id!r} already exists")
 
     def create_work_item(self, item: WorkItem) -> WorkItem:
