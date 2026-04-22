@@ -127,7 +127,7 @@ def status(
             rt.add_row(r.name, str(r.path), str(r.slots), r.backend or "(default)")
         console.print(rt)
 
-    console.print(f"\nDefault backend: [bold]{cfg.agent.default_backend}[/bold]")
+    console.print(f"\nDefault backend: [bold]{cfg.default_backend_name}[/bold]")
     console.print(f"Available adapters: {', '.join(registry.available())}")
 
 

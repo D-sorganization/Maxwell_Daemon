@@ -1,0 +1,63 @@
+---
+# configure-conductor.yml — Push updated config (LLM backends, TLS, auth) to fleet.
+#
+# Usage:
+#   ansible-playbook -i inventory/fleet.yml configure-conductor.yml \
+#     -e conductor_backend=anthropic \
+#     -e conductor_anthropic_api_key=$ANTHROPIC_API_KEY
+#
+# Secrets should be kept in an Ansible Vault file, not on the command line.
+
+- name: Configure maxwell-daemon backends and TLS
+  hosts: conductor_primary
+  become: true
+  gather_facts: false
+
+  vars_prompt:
+    - name: confirm
+      prompt: "This will restart the daemon on {{ ansible_play_hosts | join(', ') }}. Continue? [yes/no]"
+      private: false
+
+  pre_tasks:
+    - name: Abort if not confirmed
+      ansible.builtin.fail:
+        msg: "Aborted by operator."
+      when: confirm != "yes"
+
+  tasks:
+    - name: Deploy updated configuration
+      ansible.builtin.template:
+        src: roles/maxwell_daemon/templates/config.toml.j2
+        dest: "{{ conductor_config_dir }}/config.toml"
+        owner: "{{ conductor_user }}"
+        group: "{{ conductor_group }}"
+        mode: "0640"
+      notify: Restart maxwell-daemon
+      no_log: true
+
+    - name: Copy TLS certificate
+      ansible.builtin.copy:
+        content: "{{ conductor_tls_cert_content }}"
+        dest: "{{ conductor_config_dir }}/tls.crt"
+        owner: "{{ conductor_user }}"
+        group: "{{ conductor_group }}"
+        mode: "0640"
+      when: conductor_tls_cert_content is defined
+      notify: Restart maxwell-daemon
+
+    - name: Copy TLS private key
+      ansible.builtin.copy:
+        content: "{{ conductor_tls_key_content }}"
+        dest: "{{ conductor_config_dir }}/tls.key"
+        owner: "{{ conductor_user }}"
+        group: "{{ conductor_group }}"
+        mode: "0600"
+      when: conductor_tls_key_content is defined
+      notify: Restart maxwell-daemon
+      no_log: true
+
+  handlers:
+    - name: Restart maxwell-daemon
+      ansible.builtin.systemd:
+        name: maxwell-daemon
+        state: restarted

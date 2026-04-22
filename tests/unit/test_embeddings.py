@@ -79,7 +79,7 @@ class TestStubProvider:
     def test_provider_name_stamped(self) -> None:
         provider = StubEmbeddingProvider(dimensions=32)
         out = _run(provider.embed_batch(("x",)))
-        assert out[0].provider_name == "stub"
+        assert out[0].provider_name == "stub:32"
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ class TestOpenAIProvider:
         assert isinstance(result, EmbeddingResult)
         assert result.vector == (0.5, 0.5, 0.5)
         assert result.dimensions == 3
-        assert result.provider_name == "openai"
+        assert result.provider_name == "openai:text-embedding-3-small:3"
         assert result.text_hash == hash_text("only")
 
     def test_dimensions_override_forwarded(self) -> None:
@@ -355,3 +355,63 @@ class TestEmbeddingCache:
         cache.put(self._result())
         cutoff = datetime.now(timezone.utc) - timedelta(days=30)
         assert cache.prune_older_than(cutoff) == 0
+
+    # ------------------------------------------------------------------
+    # Config-fingerprint isolation (regression for issue #246)
+    # ------------------------------------------------------------------
+
+    def test_stub_different_dimensions_are_cache_isolated(self, cache: EmbeddingCache) -> None:
+        """Changing stub dimensions must produce a cache miss, not a hit.
+
+        If only the bare provider name ``"stub"`` were used as the key,
+        both entries would collide and one vector (with the wrong
+        dimensionality) would silently overwrite the other.
+        """
+        p32 = StubEmbeddingProvider(dimensions=32)
+        p64 = StubEmbeddingProvider(dimensions=64)
+        text = "same text different dims"
+        (r32,) = _run(p32.embed_batch((text,)))
+        (r64,) = _run(p64.embed_batch((text,)))
+
+        # Keys must differ because provider_name encodes dimensions.
+        assert r32.provider_name != r64.provider_name
+
+        cache.put(r32)
+        # A lookup with the 64-dim key must miss — not return the 32-dim vector.
+        assert cache.get(provider=r64.provider_name, text_hash=r64.text_hash) is None
+        # And vice-versa after storing the 64-dim result.
+        cache.put(r64)
+        got32 = cache.get(provider=r32.provider_name, text_hash=r32.text_hash)
+        got64 = cache.get(provider=r64.provider_name, text_hash=r64.text_hash)
+        assert got32 is not None and len(got32) == 32
+        assert got64 is not None and len(got64) == 64
+
+    def test_openai_different_models_are_cache_isolated(self, cache: EmbeddingCache) -> None:
+        """Changing the OpenAI model must produce a cache miss.
+
+        Both providers share the static name ``"openai"``.  The
+        ``provider_name`` on the result encodes ``model:dimensions`` so
+        the cache key differs even if the text is identical.
+        """
+        vec_small = [0.1] * 3
+        vec_large = [0.9] * 5
+
+        client_small = _FakeClient([vec_small])
+        client_large = _FakeClient([vec_large])
+        p_small = OpenAIEmbeddingProvider(http_client=client_small, model="text-embedding-3-small")
+        p_large = OpenAIEmbeddingProvider(http_client=client_large, model="text-embedding-3-large")
+        text = "same text different models"
+        (r_small,) = _run(p_small.embed_batch((text,)))
+        (r_large,) = _run(p_large.embed_batch((text,)))
+
+        assert r_small.provider_name != r_large.provider_name
+
+        cache.put(r_small)
+        assert cache.get(provider=r_large.provider_name, text_hash=r_large.text_hash) is None
+        cache.put(r_large)
+        assert cache.get(provider=r_small.provider_name, text_hash=r_small.text_hash) == tuple(
+            vec_small
+        )
+        assert cache.get(provider=r_large.provider_name, text_hash=r_large.text_hash) == tuple(
+            vec_large
+        )

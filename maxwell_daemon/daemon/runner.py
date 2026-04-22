@@ -14,13 +14,15 @@ import signal
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from maxwell_daemon import __version__
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
+from maxwell_daemon.config.loader import default_config_path
 from maxwell_daemon.core import (
     BackendRouter,
     BudgetEnforcer,
@@ -37,6 +39,7 @@ log = logging.getLogger("maxwell_daemon.daemon")
 
 class TaskStatus(str, Enum):
     QUEUED = "queued"
+    DISPATCHED = "dispatched"  # assigned to a remote worker, awaiting execution
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -62,6 +65,8 @@ class Task:
     issue_mode: str | None = None  # "plan" | "implement"
     # A/B grouping: sibling tasks share an ab_group so the UI pairs them.
     ab_group: str | None = None
+    # Priority: lower number = higher priority. 0=emergency, 50=high, 100=normal, 200=batch.
+    priority: int = 100
     status: TaskStatus = TaskStatus.QUEUED
     result: str | None = None
     error: str | None = None
@@ -70,6 +75,14 @@ class Task:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    # Fleet dispatch tracking: set when a coordinator sends this task to a remote worker.
+    dispatched_to: str | None = None  # machine name of the worker that received this task
+
+    def __lt__(self, other: object) -> bool:
+        """Support PriorityQueue ordering — compare by (priority, created_at)."""
+        if not isinstance(other, Task):
+            return NotImplemented
+        return (self.priority, self.created_at) < (other.priority, other.created_at)
 
 
 @dataclass
@@ -79,6 +92,8 @@ class DaemonState:
     tasks: dict[str, Task]
     started_at: datetime
     backends_available: list[str]
+    worker_count: int = 0
+    queue_depth: int = 0
 
 
 class Daemon:
@@ -86,11 +101,16 @@ class Daemon:
         self,
         config: MaxwellDaemonConfig,
         *,
+        config_path: Path | None = None,
         ledger_path: Path | None = None,
         workspace_root: Path | None = None,
         task_store_path: Path | None = None,
     ) -> None:
         self._config = config
+        # Path used for hot-reload; populated by from_config_path.
+        self._config_path: Path | None = config_path
+        # Protects atomic swap of _config and _router during reload.
+        self._config_lock = threading.Lock()
         self._router = BackendRouter(config)
         self._ledger = CostLedger(
             ledger_path or Path.home() / ".local/share/maxwell-daemon/ledger.db"
@@ -129,15 +149,24 @@ class Daemon:
         # are a mix of sync and async — acquisition is uncontended under
         # normal load and a lock-free async path doesn't win us anything.
         self._tasks_lock = threading.Lock()
-        self._queue: asyncio.Queue[Task] = asyncio.Queue()
+        # PriorityQueue: workers dequeue (priority, task) tuples. Lower priority
+        # number = higher urgency (0=emergency, 50=high, 100=normal, 200=batch).
+        self._queue: asyncio.PriorityQueue[tuple[int, Task | None]] = asyncio.PriorityQueue()
         self._workers: list[asyncio.Task[None]] = []
+        self._worker_count: int = 0
         self._bg_tasks: set[asyncio.Task[None]] = set()
         self._started_at = datetime.now(timezone.utc)
         self._running = False
+        # Captured in :meth:`start`; used by :meth:`submit_threadsafe` to
+        # schedule cross-thread queue puts via the running event loop.
+        self._loop: asyncio.AbstractEventLoop | None = None
         # Lazily-built collaborators — injected by tests, built on demand in prod.
         self._github_client: Any = None
         self._workspace: Any = None
         self._issue_executor_factory: Any = None
+        # Fleet coordination: track last-seen time per worker machine for heartbeat.
+        # Keys are machine names; values are the UTC datetime of last contact.
+        self._worker_last_seen: dict[str, datetime] = {}
 
     @property
     def events(self) -> EventBus:
@@ -145,7 +174,32 @@ class Daemon:
 
     @classmethod
     def from_config_path(cls, path: Path | str | None = None) -> Daemon:
-        return cls(load_config(path))
+        resolved = Path(path).expanduser() if path else default_config_path()
+        return cls(load_config(resolved), config_path=resolved)
+
+    def reload_config(self) -> Path:
+        """Reload configuration from disk and swap atomically.
+
+        Thread-safe: acquires ``_config_lock`` before updating ``_config`` and
+        ``_router`` so in-flight workers always see a consistent pair. Running
+        workers are *not* interrupted — they complete with the old config and
+        new tasks pick up the new config automatically.
+
+        Returns the path that was reloaded.
+
+        Raises ``FileNotFoundError`` if the config file cannot be found and
+        ``pydantic.ValidationError`` if the new config is invalid — the existing
+        config is left untouched in both cases.
+        """
+        path = self._config_path or default_config_path()
+        # Validate first (outside the lock) so we never swap in a bad config.
+        new_config = load_config(path)
+        new_router = BackendRouter(new_config)
+        with self._config_lock:
+            self._config = new_config
+            self._router = new_router
+        log.info("config reloaded from %s", path)
+        return path
 
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
@@ -165,7 +219,7 @@ class Daemon:
         with self._tasks_lock:
             for task in recovered:
                 self._tasks[task.id] = task
-                self._queue.put_nowait(task)
+                self._queue.put_nowait((task.priority, task))
         if recovered:
             log.info("recovered %d pending task(s) from previous run", len(recovered))
         return recovered
@@ -195,7 +249,54 @@ class Daemon:
         self._workers.clear()
         if hasattr(self._router, "aclose_all"):
             await self._router.aclose_all()
+
+        # Stop background loops and flush fire-and-forget tasks.
+        if self._bg_tasks:
+            for task in self._bg_tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*self._bg_tasks, return_exceptions=True)
+            self._bg_tasks.clear()
+
         log.info("daemon stopped")
+
+    def prune_retained_history(self, older_than_days: int | None = None) -> dict[str, int]:
+        """Prune terminal tasks and ledger rows older than the retention window."""
+        days = (
+            self._config.agent.task_retention_days if older_than_days is None else older_than_days
+        )
+        if days <= 0:
+            return {"tasks": 0, "ledger_records": 0}
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        terminal = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}
+        with self._tasks_lock:
+            stale_ids = [
+                task_id
+                for task_id, task in self._tasks.items()
+                if task.status in terminal
+                and task.finished_at is not None
+                and task.finished_at < cutoff
+            ]
+            for task_id in stale_ids:
+                self._tasks.pop(task_id, None)
+
+        pruned_tasks = self._task_store.prune(days)
+        pruned_ledger = self._ledger.prune(days)
+        return {"tasks": pruned_tasks, "ledger_records": pruned_ledger}
+
+    async def _retention_loop(self) -> None:
+        interval = self._config.agent.task_prune_interval_seconds
+        while self._running:
+            try:
+                result = self.prune_retained_history()
+                if result["tasks"] or result["ledger_records"]:
+                    log.info("retention prune completed: %s", result)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.warning("retention prune failed", exc_info=True)
+            await asyncio.sleep(interval)
 
     def submit(
         self,
@@ -204,6 +305,7 @@ class Daemon:
         repo: str | None = None,
         backend: str | None = None,
         model: str | None = None,
+        priority: int = 100,
     ) -> Task:
         task = Task(
             id=uuid.uuid4().hex[:12],
@@ -212,12 +314,17 @@ class Daemon:
             repo=repo,
             backend=backend,
             model=model,
+            priority=priority,
         )
-        # Write to self._tasks under lock to prevent iteration errors
+        # Write to self._tasks and enqueue under lock. asyncio.PriorityQueue
+        # is not thread-safe — concurrent put_nowait() from multiple threads
+        # can corrupt the underlying heap list ("list changed size during
+        # iteration"). Serializing via _tasks_lock makes the submit path safe
+        # for sync callers; the async path uses submit_threadsafe() instead.
         with self._tasks_lock:
             self._tasks[task.id] = task
+            self._queue.put_nowait((task.priority, task))
         self._task_store.save(task)
-        self._queue.put_nowait(task)
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
         # submits before start()), skip the event — the queued state is
         # observable via get_task().
@@ -233,6 +340,43 @@ class Daemon:
             bg.add_done_callback(self._bg_tasks.discard)
         return task
 
+    def submit_threadsafe(
+        self,
+        prompt: str,
+        *,
+        repo: str | None = None,
+        backend: str | None = None,
+        model: str | None = None,
+    ) -> Task:
+        """Enqueue a prompt task from any thread. **Cross-thread safe.**
+
+        Unlike :meth:`submit`, this method is safe to call from threads that
+        are *not* running the daemon's event loop (e.g. WSGI middleware,
+        background threads, sync test clients).  It uses
+        ``asyncio.run_coroutine_threadsafe`` to schedule the queue put on the
+        running event loop so the sleeping worker is reliably woken.
+
+        :raises RuntimeError: if the daemon has not been started yet
+            (``self._loop`` is ``None``).
+        """
+        if self._loop is None:
+            raise RuntimeError("daemon must be started before submit_threadsafe()")
+        task = Task(
+            id=uuid.uuid4().hex[:12],
+            prompt=prompt,
+            kind=TaskKind.PROMPT,
+            repo=repo,
+            backend=backend,
+            model=model,
+        )
+        with self._tasks_lock:
+            self._tasks[task.id] = task
+        self._task_store.save(task)
+        asyncio.run_coroutine_threadsafe(self._queue.put((task.priority, task)), self._loop).result(
+            timeout=5.0
+        )
+        return task
+
     def submit_issue(
         self,
         *,
@@ -241,6 +385,7 @@ class Daemon:
         mode: str = "plan",
         backend: str | None = None,
         model: str | None = None,
+        priority: int = 100,
     ) -> Task:
         """Queue a task that reads a GitHub issue and opens a draft PR for it."""
         if mode not in {"plan", "implement"}:
@@ -255,12 +400,14 @@ class Daemon:
             issue_repo=repo,
             issue_number=issue_number,
             issue_mode=mode,
+            priority=priority,
         )
-        # Write to self._tasks under lock to prevent iteration errors
+        # See note in submit(): queue put is serialized under _tasks_lock
+        # because asyncio.PriorityQueue.put_nowait is not thread-safe.
         with self._tasks_lock:
             self._tasks[task.id] = task
+            self._queue.put_nowait((task.priority, task))
         self._task_store.save(task)
-        self._queue.put_nowait(task)
         with contextlib.suppress(RuntimeError):
             loop = asyncio.get_running_loop()
             bg = loop.create_task(
@@ -322,6 +469,10 @@ class Daemon:
         self._workspace = workspace
         self._issue_executor_factory = executor_factory
 
+    def record_worker_heartbeat(self, machine_name: str) -> None:
+        """Update last-seen timestamp for a worker machine (called by heartbeat endpoint)."""
+        self._worker_last_seen[machine_name] = datetime.now(timezone.utc)
+
     def get_task(self, task_id: str) -> Task | None:
         # dict.get is GIL-atomic; no lock needed on hot-path reads.
         return self._tasks.get(task_id)
@@ -361,28 +512,284 @@ class Daemon:
             bg.add_done_callback(self._bg_tasks.discard)
         return task
 
+    async def set_worker_count(self, n: int) -> None:
+        """Scale workers up or down to *n* without restarting the daemon.
+
+        Safe to call while the daemon is running. Workers scaling down will
+        finish their current task before exiting.
+        """
+        if n < 1:
+            raise ValueError(f"worker count must be at least 1, got {n}")
+        if n > 64:
+            raise ValueError(f"worker count must be at most 64, got {n}")
+        current = len(self._workers)
+        if n > current:
+            for i in range(n - current):
+                worker_id = current + i
+                task = asyncio.create_task(self._worker_loop(worker_id), name=f"worker-{worker_id}")
+                self._workers.append(task)
+                log.info(
+                    "scaled up: added worker %d (total=%d)",
+                    worker_id,
+                    len(self._workers),
+                )
+        elif n < current:
+            # Send sentinel (priority=-1, task=None) to excess workers so they
+            # exit cleanly after finishing their current task.
+            for _ in range(current - n):
+                await self._queue.put((-1, None))
+            # Remove excess workers from tracking immediately; sentinels will
+            # signal them to exit after finishing their current task.
+            self._workers = self._workers[:n]
+            log.info("scaled down: sent %d stop sentinel(s) (target=%d)", current - n, n)
+        self._worker_count = n
+
+    def reprioritize_task(self, task_id: str, new_priority: int) -> Task:
+        """Change the priority of a queued task.
+
+        Note: the PriorityQueue cannot be mutated in-place; the new priority is
+        stored on the Task object and will be respected when the entry is
+        dequeued (the worker re-checks task.priority). Any already-dequeued
+        entry with the old priority is harmless — the task object is the source
+        of truth.
+        """
+        with self._tasks_lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise KeyError(task_id)
+            if task.status is not TaskStatus.QUEUED:
+                raise ValueError(
+                    f"task {task_id} is {task.status.value}; only queued tasks can be reprioritized"
+                )
+            old_priority = task.priority
+            task.priority = new_priority
+            # Enqueue a fresh entry with the new priority; the stale entry will
+            # be skipped when dequeued because the task will no longer be
+            # QUEUED by then (or the worker will simply execute it at the
+            # corrected priority). asyncio.PriorityQueue is not thread-safe, so
+            # the put_nowait stays inside _tasks_lock alongside the submit()
+            # path.
+            self._queue.put_nowait((new_priority, task))
+        self._task_store.save(task)
+        log.info("reprioritized task=%s old=%d new=%d", task_id, old_priority, new_priority)
+        return task
+
+    # -- coordinator loop ----------------------------------------------------
+
+    async def _coordinator_loop(self) -> None:
+        """Periodically flush QUEUED tasks to remote workers via FleetDispatcher."""
+        poll_seconds = self._config.fleet_coordinator_poll_seconds
+        while self._running:
+            try:
+                await self._dispatch_to_fleet()
+            except Exception:
+                log.exception("coordinator dispatch error")
+            await asyncio.sleep(poll_seconds)
+
+    async def _dispatch_to_fleet(self) -> None:
+        """One coordinator dispatch tick: probe machines, plan, submit, requeue stale tasks."""
+        from maxwell_daemon.fleet.client import RemoteDaemonClient, RemoteDaemonError
+        from maxwell_daemon.fleet.dispatcher import (
+            FleetDispatcher,
+            MachineState,
+            TaskRequirement,
+        )
+
+        fleet_machines = self._config.fleet_machines
+        if not fleet_machines:
+            return
+
+        # Build initial MachineState snapshots from config.
+        initial_machines = tuple(
+            MachineState(
+                name=m.name,
+                host=m.host,
+                port=m.port,
+                capacity=m.capacity,
+                tags=tuple(m.tags),
+            )
+            for m in fleet_machines
+        )
+
+        client = RemoteDaemonClient(
+            auth_token=self._config.api_auth_token,
+        )
+
+        # Probe all machines in parallel to get live health.
+        machines = await client.refresh_all(initial_machines)
+
+        # Requeue tasks dispatched to machines that have gone offline.
+        now = datetime.now(timezone.utc)
+        stale_threshold = self._config.fleet_heartbeat_seconds * 3
+        with self._tasks_lock:
+            tasks_snapshot = dict(self._tasks)
+
+        for t in tasks_snapshot.values():
+            if t.status is not TaskStatus.DISPATCHED or t.dispatched_to is None:
+                continue
+            machine_name = t.dispatched_to
+            machine_healthy = any(m.name == machine_name and m.healthy for m in machines)
+            if not machine_healthy:
+                last_seen = self._worker_last_seen.get(machine_name)
+                stale = True
+                if last_seen is not None:
+                    elapsed = (now - last_seen).total_seconds()
+                    stale = elapsed > stale_threshold
+                if stale:
+                    log.warning(
+                        "worker %s appears offline; requeueing task %s",
+                        machine_name,
+                        t.id,
+                    )
+                    t.status = TaskStatus.QUEUED
+                    t.dispatched_to = None
+                    self._queue.put_nowait((t.priority, t))
+
+        # Collect tasks still QUEUED after potential requeuing above.
+        with self._tasks_lock:
+            tasks_snapshot = dict(self._tasks)
+
+        queued_tasks = [t for t in tasks_snapshot.values() if t.status is TaskStatus.QUEUED]
+        if not queued_tasks:
+            return
+
+        task_requirements = tuple(TaskRequirement(task_id=t.id) for t in queued_tasks)
+
+        # Tally active_tasks on each machine from known DISPATCHED tasks.
+        dispatched_counts: dict[str, int] = {}
+        for t in tasks_snapshot.values():
+            if t.status is TaskStatus.DISPATCHED and t.dispatched_to:
+                dispatched_counts[t.dispatched_to] = dispatched_counts.get(t.dispatched_to, 0) + 1
+
+        machines_with_load = tuple(
+            MachineState(
+                name=m.name,
+                host=m.host,
+                port=m.port,
+                capacity=m.capacity,
+                tags=m.tags,
+                active_tasks=dispatched_counts.get(m.name, 0),
+                healthy=m.healthy,
+            )
+            for m in machines
+        )
+
+        dispatcher = FleetDispatcher()
+        plan = dispatcher.plan(machines_with_load, task_requirements)
+
+        # Build lookup maps for fast resolution.
+        tasks_by_id = {t.id: t for t in queued_tasks}
+        machines_by_name = {m.name: m for m in machines}
+
+        for assignment in plan.assignments:
+            assigned_task = tasks_by_id.get(assignment.task_id)
+            machine = machines_by_name.get(assignment.machine_name)
+            if assigned_task is None or machine is None:
+                continue
+
+            task_payload: dict[str, Any] = {
+                "task_id": assigned_task.id,
+                "prompt": assigned_task.prompt,
+                "kind": assigned_task.kind.value,
+                "repo": assigned_task.repo,
+                "backend": assigned_task.backend,
+                "model": assigned_task.model,
+                "issue_repo": assigned_task.issue_repo,
+                "issue_number": assigned_task.issue_number,
+                "issue_mode": assigned_task.issue_mode,
+                "priority": assigned_task.priority,
+            }
+
+            try:
+                result = await client.submit_task(machine, task_payload=task_payload)
+            except RemoteDaemonError:
+                log.exception(
+                    "failed to dispatch task %s to machine %s",
+                    assigned_task.id,
+                    machine.name,
+                )
+                continue
+
+            if result.status == "submitted":
+                assigned_task.status = TaskStatus.DISPATCHED
+                assigned_task.dispatched_to = machine.name
+                log.info("dispatched task %s to machine %s", assigned_task.id, machine.name)
+                with contextlib.suppress(Exception):
+                    self._task_store.save(assigned_task)
+            else:
+                log.warning(
+                    "machine %s rejected task %s: %s",
+                    machine.name,
+                    assigned_task.id,
+                    result.detail,
+                )
+
+        if plan.unassigned:
+            log.debug(
+                "coordinator: %d task(s) could not be placed this tick: %s",
+                len(plan.unassigned),
+                plan.unassigned,
+            )
+
+    async def _reload_config_signal(self) -> None:
+        """Signal handler wrapper — logs errors rather than crashing the event loop."""
+        try:
+            self.reload_config()
+        except Exception:
+            log.exception("config reload via SIGUSR1 failed")
+
     def state(self) -> DaemonState:
         with self._tasks_lock:
             tasks_snapshot = dict(self._tasks)
         return DaemonState(
-            version="0.1.0",
-            config_path=None,
+            version=__version__,
+            config_path=self._config_path,
             tasks=tasks_snapshot,
             started_at=self._started_at,
             backends_available=self._router.available_backends(),
+            worker_count=self._worker_count,
+            queue_depth=self._queue.qsize(),
         )
 
     async def _worker_loop(self, worker_id: int) -> None:
+        from maxwell_daemon.logging import bind_context
+
         log.info("worker %d ready", worker_id)
         while self._running or not self._queue.empty():
             try:
-                task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
+                _priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
             except asyncio.TimeoutError:
                 continue
-            # Tasks cancelled while queued shouldn't be executed.
+            # Sentinel value (None task) signals this worker to exit — used by
+            # set_worker_count() when scaling down.
+            if task is None:
+                log.info("worker %d received stop sentinel; exiting", worker_id)
+                break
+            # Tasks cancelled while queued should not be executed.
             if task.status is TaskStatus.CANCELLED:
                 continue
-            await self._execute(task)
+            with bind_context(task_id=task.id, worker_id=worker_id):
+                # Attempt to mark the task RUNNING in the durable store before
+                # executing.  If that write fails (disk full, lock contention),
+                # re-queue the task so it is retried rather than silently lost.
+                # Double-execution is still possible if the DB write succeeds but
+                # the worker crashes before execution completes; preventing that
+                # fully requires a lease/heartbeat mechanism (future work).
+                task.started_at = datetime.now(timezone.utc)
+                try:
+                    self._task_store.update_status(
+                        task.id, TaskStatus.RUNNING, started_at=task.started_at
+                    )
+                except Exception as exc:
+                    log.error(
+                        "failed to mark task %s RUNNING: %s; re-queuing",
+                        task.id,
+                        exc,
+                    )
+                    task.started_at = None
+                    await self._queue.put((task.priority, task))
+                    continue
+                await self._execute(task)
 
     async def _execute(self, task: Task) -> None:
         task.status = TaskStatus.RUNNING
@@ -402,6 +809,12 @@ class Daemon:
         )
         decision_backend = decision_model = "unknown"
         try:
+            await self._events.publish(
+                Event(
+                    kind=EventKind.TASK_STARTED,
+                    payload={"id": task.id, "prompt": task.prompt},
+                )
+            )
             self._budget.require_under_budget()
             decision = self._router.route(
                 repo=task.repo,
@@ -420,7 +833,8 @@ class Daemon:
                 model=decision.model,
             )
             task.result = resp.content
-            task.cost_usd = decision.backend.estimate_cost(resp.usage, decision.model)
+            estimated_cost = decision.backend.estimate_cost(resp.usage, decision.model)
+            task.cost_usd = estimated_cost if estimated_cost is not None else 0.0
             task.status = TaskStatus.COMPLETED
             self._ledger.record(
                 CostRecord(
@@ -505,8 +919,10 @@ class Daemon:
         from maxwell_daemon.core.roles import Job, Role, RoleOrchestrator
         from maxwell_daemon.gh import GitHubClient
 
-        assert task.issue_repo is not None
-        assert task.issue_number is not None
+        if task.issue_repo is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_repo set")
+        if task.issue_number is None:
+            raise ValueError(f"_execute_issue called for task {task.id!r} with no issue_number set")
 
         github = self._github_client or GitHubClient()
         issue = await github.get_issue(task.issue_repo, task.issue_number)
@@ -573,6 +989,15 @@ def main() -> None:
         loop = asyncio.get_event_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, stop.set)
+
+        def _sighup_handler() -> None:
+            """Reload config in-place on SIGHUP without stopping workers."""
+            try:
+                daemon.reload_config()
+            except Exception:
+                log.exception("config reload failed; keeping existing config")
+
+        loop.add_signal_handler(signal.SIGHUP, _sighup_handler)
         await stop.wait()
         await daemon.stop()
 

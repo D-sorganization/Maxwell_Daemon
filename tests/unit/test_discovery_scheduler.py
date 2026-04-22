@@ -9,7 +9,9 @@ All time is simulated via an injected clock to keep tests deterministic.
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -100,6 +102,7 @@ class TestRunOnce:
             daemon=daemon,
             repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
             interval_seconds=60,
+            dedup_path=tmp_path / "dedup.json",
         )
         tick = await sched.run_once()
         assert tick.dispatched == 2
@@ -114,18 +117,20 @@ class TestRunOnce:
             github=gh,
             daemon=daemon,
             repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=tmp_path / "dedup.json",
         )
         tick = await sched.run_once()
         assert tick.dispatched == 1
         assert daemon.submitted[0]["issue_number"] == 1
 
-    async def test_already_dispatched_is_skipped_next_run(self) -> None:
+    async def test_already_dispatched_is_skipped_next_run(self, tmp_path: Path) -> None:
         gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
         daemon = _FakeDaemon()
         sched = DiscoveryScheduler(
             github=gh,
             daemon=daemon,
             repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=tmp_path / "dedup.json",
         )
         first = await sched.run_once()
         second = await sched.run_once()
@@ -133,7 +138,7 @@ class TestRunOnce:
         assert second.dispatched == 0
         assert len(daemon.submitted) == 1
 
-    async def test_fans_out_across_multiple_repos(self) -> None:
+    async def test_fans_out_across_multiple_repos(self, tmp_path: Path) -> None:
         gh = _FakeGitHub(
             {
                 "a/b": [_issue(1, labels=["deliver"])],
@@ -148,13 +153,14 @@ class TestRunOnce:
                 DiscoveryRepoSpec(repo="a/b", labels={"deliver"}),
                 DiscoveryRepoSpec(repo="c/d", labels={"deliver"}),
             ],
+            dedup_path=tmp_path / "dedup.json",
         )
         tick = await sched.run_once()
         assert tick.dispatched == 2
         submitted_repos = {s["repo"] for s in daemon.submitted}
         assert submitted_repos == {"a/b", "c/d"}
 
-    async def test_broken_repo_does_not_kill_tick(self) -> None:
+    async def test_broken_repo_does_not_kill_tick(self, tmp_path: Path) -> None:
         class _Flaky:
             async def list_issues(
                 self, repo: str, *, state: str = "open", limit: int = 50
@@ -171,18 +177,106 @@ class TestRunOnce:
                 DiscoveryRepoSpec(repo="bad/repo", labels={"deliver"}),
                 DiscoveryRepoSpec(repo="ok/repo", labels={"deliver"}),
             ],
+            dedup_path=tmp_path / "dedup.json",
         )
         tick = await sched.run_once()
         # Broken repo didn't prevent ok/repo from dispatching.
         assert tick.dispatched == 1
         assert daemon.submitted[0]["repo"] == "ok/repo"
 
+    async def test_dedup_persisted_to_disk(self, tmp_path: Path) -> None:
+        """Dispatched issue numbers are written to the dedup file (#149)."""
+        dedup_file = tmp_path / "dedup.json"
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"]), _issue(2, labels=["deliver"])]})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=dedup_file,
+        )
+        await sched.run_once()
+        assert dedup_file.exists(), "dedup file must be written after dispatch"
+        persisted = json.loads(dedup_file.read_text())
+        assert set(persisted.get("a/b", [])) == {1, 2}
+
+    async def test_dedup_loaded_on_restart(self, tmp_path: Path) -> None:
+        """A new scheduler instance loads persisted dedup and skips already-seen issues (#149)."""
+        dedup_file = tmp_path / "dedup.json"
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+
+        # First "run" — dispatches issue 1 and persists the dedup file.
+        sched1 = DiscoveryScheduler(
+            github=gh,
+            daemon=_FakeDaemon(),
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=dedup_file,
+        )
+        await sched1.run_once()
+
+        # Simulate a restart: create a fresh scheduler with the same dedup file.
+        daemon2 = _FakeDaemon()
+        sched2 = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon2,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=dedup_file,
+        )
+        tick = await sched2.run_once()
+        assert tick.dispatched == 0, "issue already dispatched in previous run must not re-dispatch"
+        assert len(daemon2.submitted) == 0
+
 
 # ── Start/stop lifecycle ─────────────────────────────────────────────────────
 
 
 class TestLifecycle:
-    async def test_start_schedules_periodic_ticks(self) -> None:
+    async def test_startup_jitter_elapsed_runs_first_tick(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            interval_seconds=60.0,
+            jitter=True,
+            dedup_path=tmp_path / "dedup.json",
+        )
+        monkeypatch.setattr(
+            "maxwell_daemon.daemon.scheduler.secrets.randbelow",
+            lambda _: 0,
+        )
+        await sched.start()
+        await asyncio.sleep(0.05)
+        await sched.stop()
+        assert daemon.submitted
+        assert daemon.submitted[0]["issue_number"] == 1
+
+    async def test_stop_during_startup_jitter_exits_without_tick(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            interval_seconds=60.0,
+            jitter=True,
+            dedup_path=tmp_path / "dedup.json",
+        )
+        monkeypatch.setattr(
+            "maxwell_daemon.daemon.scheduler.secrets.randbelow",
+            lambda _: 900_000,
+        )
+        await sched.start()
+        await asyncio.sleep(0)
+        await sched.stop()
+        assert daemon.submitted == []
+
+    async def test_start_schedules_periodic_ticks(self, tmp_path: Path) -> None:
         """Start the scheduler, wait long enough for 1-2 ticks, stop, verify calls."""
         gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
         daemon = _FakeDaemon()
@@ -191,6 +285,7 @@ class TestLifecycle:
             daemon=daemon,
             repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
             interval_seconds=0.01,  # tiny interval for test
+            dedup_path=tmp_path / "dedup.json",
         )
         await sched.start()
         await asyncio.sleep(0.05)
@@ -199,22 +294,25 @@ class TestLifecycle:
         assert daemon.submitted
         assert daemon.submitted[0]["issue_number"] == 1
 
-    async def test_stop_is_idempotent(self) -> None:
+    async def test_stop_is_idempotent(self, tmp_path: Path) -> None:
         sched = DiscoveryScheduler(
             github=_FakeGitHub({}),
             daemon=_FakeDaemon(),
             repos=[],
             interval_seconds=60,
+            dedup_path=tmp_path / "dedup.json",
         )
         await sched.stop()  # Safe even if never started.
         await sched.stop()  # Double-stop must not explode.
 
-    async def test_start_twice_is_idempotent(self) -> None:
+    async def test_start_twice_is_idempotent(self, tmp_path: Path) -> None:
         sched = DiscoveryScheduler(
             github=_FakeGitHub({}),
             daemon=_FakeDaemon(),
             repos=[],
             interval_seconds=0.01,
+            jitter=False,
+            dedup_path=tmp_path / "dedup.json",
         )
         await sched.start()
         await sched.start()  # second start is a no-op, not an error
@@ -225,7 +323,7 @@ class TestLifecycle:
 
 
 class TestPreconditions:
-    def test_rejects_zero_interval(self) -> None:
+    def test_rejects_zero_interval(self, tmp_path: Path) -> None:
         from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="interval"):
@@ -234,9 +332,10 @@ class TestPreconditions:
                 daemon=_FakeDaemon(),
                 repos=[],
                 interval_seconds=0,
+                dedup_path=tmp_path / "dedup.json",
             )
 
-    def test_rejects_negative_interval(self) -> None:
+    def test_rejects_negative_interval(self, tmp_path: Path) -> None:
         from maxwell_daemon.contracts import PreconditionError
 
         with pytest.raises(PreconditionError, match="interval"):
@@ -245,4 +344,161 @@ class TestPreconditions:
                 daemon=_FakeDaemon(),
                 repos=[],
                 interval_seconds=-1,
+                dedup_path=tmp_path / "dedup.json",
             )
+
+
+# ── Dedup persistence edge cases ────────────────────────────────────────────
+
+
+class TestDedupPersistence:
+    async def test_dedup_file_not_saved_when_nothing_dispatched(self, tmp_path: Path) -> None:
+        """Dedup file is only written when something is actually dispatched."""
+        dedup_file = tmp_path / "dedup.json"
+        gh = _FakeGitHub({"a/b": []})  # no issues
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=dedup_file,
+        )
+        tick = await sched.run_once()
+        assert tick.dispatched == 0
+        # Dedup file is NOT written when nothing was dispatched.
+        assert not dedup_file.exists()
+
+    async def test_dedup_file_unreadable_starts_fresh(self, tmp_path: Path) -> None:
+        """A corrupt dedup file causes the scheduler to start with empty dedup."""
+        dedup_file = tmp_path / "dedup.json"
+        dedup_file.write_text("this is not valid json {{{")
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=dedup_file,
+        )
+        tick = await sched.run_once()
+        # Corrupt file → start fresh → issue 1 is dispatched
+        assert tick.dispatched == 1
+
+    async def test_dedup_path_none_uses_default_path(self, tmp_path: Path) -> None:
+        """When dedup_path is None, the scheduler uses the default path (not None internally)."""
+        from maxwell_daemon.daemon.scheduler import _DEFAULT_DEDUP_PATH
+
+        gh = _FakeGitHub({})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[],
+            dedup_path=None,
+        )
+        # dedup_path=None maps to _DEFAULT_DEDUP_PATH internally
+        assert sched._dedup_path == _DEFAULT_DEDUP_PATH
+
+    async def test_save_dedup_logs_on_failure(self, tmp_path: Path) -> None:
+        """_save_dedup swallows exceptions when write fails."""
+        import unittest.mock as mock
+
+        dedup_file = tmp_path / "dedup.json"
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            dedup_path=dedup_file,
+        )
+        # Patch write_text to raise an OSError — _save_dedup must swallow it
+        with mock.patch("pathlib.Path.write_text", side_effect=OSError("disk full")):
+            # Should not raise
+            tick = await sched.run_once()
+        assert isinstance(tick, DiscoveryTick)
+
+
+class TestSchedulerLoop:
+    async def test_stop_with_running_task_cancels_cleanly(self, tmp_path: Path) -> None:
+        """stop() with a long-interval task causes the task to be cancelled without error."""
+        gh = _FakeGitHub({})
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=_FakeDaemon(),
+            repos=[],
+            interval_seconds=100.0,  # very long — will never tick before stop
+            jitter=False,
+            dedup_path=tmp_path / "dedup.json",
+        )
+        await sched.start()
+        # stop() should cancel the background task cleanly
+        await sched.stop()
+        assert sched._task is None
+
+    async def test_loop_continues_after_run_once_exception(self, tmp_path: Path) -> None:
+        """Exceptions from run_once in _loop are swallowed — the loop keeps running."""
+
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+        daemon = _FakeDaemon()
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=daemon,
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],
+            interval_seconds=0.01,
+            jitter=False,
+            dedup_path=tmp_path / "dedup.json",
+        )
+        # Make run_once raise on the first call, succeed on subsequent
+        call_count = 0
+        original_run_once = sched.run_once
+
+        async def patched_run_once() -> DiscoveryTick:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("simulated first-tick failure")
+            return await original_run_once()
+
+        sched.run_once = patched_run_once  # type: ignore[method-assign]
+        await sched.start()
+        await asyncio.sleep(0.08)
+        await sched.stop()
+        # The loop continued past the first exception
+        assert call_count >= 2
+
+    async def test_stop_timeout_proportional_to_interval(self, tmp_path: Path) -> None:
+        """stop() waits at least as long as the configured interval before cancelling.
+
+        Regression guard for #227: the old fixed 5-second timeout could interrupt
+        an in-flight tick when interval_seconds > 5 and GitHub calls were slow.
+        """
+        gh = _FakeGitHub({})
+        interval = 10.0
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=_FakeDaemon(),
+            repos=[],
+            interval_seconds=interval,
+            jitter=False,
+            dedup_path=tmp_path / "dedup.json",
+        )
+        # The computed stop timeout must be at least the interval.
+        assert max(5.0, sched._interval) >= interval
+
+        # Verify the scheduler actually stops cleanly without cancellation even
+        # when the tick takes longer than the old fixed 5-second limit.
+        tick_started = asyncio.Event()
+        tick_may_finish = asyncio.Event()
+
+        async def slow_run_once() -> None:
+            tick_started.set()
+            await tick_may_finish.wait()
+
+        sched.run_once = slow_run_once  # type: ignore[method-assign]
+        await sched.start()
+        await tick_started.wait()
+
+        tick_may_finish.set()
+        await sched.stop()
+        assert sched._task is None

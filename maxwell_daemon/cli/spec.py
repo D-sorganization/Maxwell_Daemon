@@ -54,7 +54,12 @@ def show_spec(
     """Parse one spec and print its scenarios + steps."""
     try:
         spec = load_feature(feature)
-    except GherkinParseError as e:
+    except (
+        GherkinParseError,
+        FileNotFoundError,
+        IsADirectoryError,
+        PermissionError,
+    ) as e:
         console.print(f"[red]✗[/red] {e}")
         raise typer.Exit(1) from None
     console.print(f"[bold]Feature:[/bold] {spec.feature}")
@@ -90,7 +95,12 @@ def generate_scaffold(
     """Render a pytest-bdd scaffold for ``feature`` and write it to disk."""
     try:
         spec = load_feature(feature)
-    except GherkinParseError as e:
+    except (
+        GherkinParseError,
+        FileNotFoundError,
+        IsADirectoryError,
+        PermissionError,
+    ) as e:
         console.print(f"[red]✗[/red] {e}")
         raise typer.Exit(1) from None
 

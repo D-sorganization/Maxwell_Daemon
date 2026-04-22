@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +14,7 @@ from fastapi.testclient import TestClient
 from maxwell_daemon.api import create_app
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
 
 
 @pytest.fixture
@@ -37,7 +41,7 @@ def client(daemon: Daemon) -> Iterator[TestClient]:
 
 @pytest.fixture
 def auth_client(daemon: Daemon) -> Iterator[TestClient]:
-    with TestClient(create_app(daemon, auth_token="secret-abc")) as c:
+    with TestClient(create_app(daemon, auth_token="secret-abc")) as c:  # nosec B106 — intentional test fixture, not a real credential
         yield c
 
 
@@ -53,6 +57,25 @@ class TestHealth:
     def test_health_does_not_require_auth(self, auth_client: TestClient) -> None:
         r = auth_client.get("/health")
         assert r.status_code == 200
+
+    def test_readyz_reports_ready_when_backend_available(self, client: TestClient) -> None:
+        r = client.get("/readyz")
+
+        assert r.status_code == 200
+        assert r.json() == {"status": "ready"}
+
+    def test_readyz_reports_unavailable_without_backends(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(daemon, "state", lambda: SimpleNamespace(backends_available=[]))
+
+        r = client.get("/readyz")
+
+        assert r.status_code == 503
+        assert r.json()["detail"] == "no backends available"
 
 
 class TestBackends:
@@ -82,6 +105,58 @@ class TestTaskSubmission:
         assert r.status_code == 200
         assert len(r.json()) >= 3
 
+    def test_list_filters_by_status_kind_and_repo(self, client: TestClient, daemon: Daemon) -> None:
+        matching = Task(
+            id="match",
+            prompt="owner/repo#7",
+            kind=TaskKind.ISSUE,
+            repo="owner/repo",
+            issue_repo="owner/repo",
+            issue_number=7,
+            status=TaskStatus.RUNNING,
+        )
+        other = Task(
+            id="other",
+            prompt="other/repo#9",
+            kind=TaskKind.ISSUE,
+            repo="other/repo",
+            issue_repo="other/repo",
+            issue_number=9,
+            status=TaskStatus.QUEUED,
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[matching.id] = matching
+            daemon._tasks[other.id] = other
+
+        r = client.get("/api/v1/tasks?status=running&kind=issue&repo=owner/repo&limit=10")
+
+        assert r.status_code == 200
+        body = r.json()
+        assert [task["id"] for task in body] == ["match"]
+
+    def test_list_filters_by_completed_before(self, client: TestClient, daemon: Daemon) -> None:
+        old_done = Task(
+            id="old-done",
+            prompt="old",
+            status=TaskStatus.COMPLETED,
+            finished_at=datetime.now(timezone.utc) - timedelta(days=10),
+        )
+        recent_done = Task(
+            id="recent-done",
+            prompt="recent",
+            status=TaskStatus.COMPLETED,
+            finished_at=datetime.now(timezone.utc),
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[old_done.id] = old_done
+            daemon._tasks[recent_done.id] = recent_done
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        r = client.get("/api/v1/tasks", params={"completed_before": cutoff})
+
+        assert r.status_code == 200
+        assert [task["id"] for task in r.json()] == ["old-done"]
+
     def test_get_task_by_id(self, client: TestClient) -> None:
         submitted = client.post("/api/v1/tasks", json={"prompt": "x"}).json()
         r = client.get(f"/api/v1/tasks/{submitted['id']}")
@@ -101,6 +176,210 @@ class TestCostEndpoint:
         assert "month_to_date_usd" in body
         assert "by_backend" in body
         assert body["month_to_date_usd"] >= 0.0
+
+
+class TestAdminPruneEndpoint:
+    def test_prune_endpoint_runs_retention(self, client: TestClient, daemon: Daemon) -> None:
+        old_done = Task(
+            id="old-prune",
+            prompt="old",
+            status=TaskStatus.COMPLETED,
+            finished_at=datetime.now(timezone.utc) - timedelta(days=40),
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[old_done.id] = old_done
+        daemon._task_store.save(old_done)
+
+        r = client.get("/api/v1/admin/prune?older_than_days=30")
+
+        assert r.status_code == 200
+        assert r.json()["tasks_pruned"] == 1
+        assert daemon.get_task(old_done.id) is None
+
+
+class TestJwtAuthEndpoint:
+    def test_whoami_returns_static_token_identity(self, auth_client: TestClient) -> None:
+        r = auth_client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
+        )
+
+        assert r.status_code == 200
+        assert r.json() == {"sub": "static-token", "role": "admin", "exp": None}
+
+    def test_whoami_returns_anonymous_without_auth(self, auth_client: TestClient) -> None:
+        r = auth_client.get("/api/v1/auth/me")
+
+        assert r.status_code == 200
+        assert r.json() == {"sub": "anonymous", "role": None, "exp": None}
+
+    def test_whoami_rejects_wrong_static_token_identity(self, auth_client: TestClient) -> None:
+        r = auth_client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": "Bearer wrong"},
+        )
+
+        assert r.status_code == 200
+        assert r.json() == {"sub": "anonymous", "role": None, "exp": None}
+
+
+class TestBatchDispatchEndpoint:
+    def test_batch_dispatch_queues_each_issue(self, client: TestClient) -> None:
+        r = client.post(
+            "/api/v1/issues/batch-dispatch",
+            json={
+                "items": [
+                    {"repo": "owner/repo", "number": 1, "mode": "plan"},
+                    {
+                        "repo": "owner/repo",
+                        "number": 2,
+                        "mode": "implement",
+                        "backend": "primary",
+                        "model": "test-model",
+                    },
+                ]
+            },
+        )
+
+        assert r.status_code == 202
+        body = r.json()
+        assert body["dispatched"] == 2
+        assert body["failed"] == 0
+        assert [task["issue_number"] for task in body["tasks"]] == [1, 2]
+        assert body["failures"] == []
+
+    def test_batch_dispatch_records_item_failures(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        original_submit_issue = daemon.submit_issue
+
+        def flaky_submit_issue(**kwargs):
+            if kwargs["issue_number"] == 2:
+                raise ValueError("backend unavailable")
+            return original_submit_issue(**kwargs)
+
+        monkeypatch.setattr(daemon, "submit_issue", flaky_submit_issue)
+
+        r = client.post(
+            "/api/v1/issues/batch-dispatch",
+            json={
+                "items": [
+                    {"repo": "owner/repo", "number": 1},
+                    {"repo": "owner/repo", "number": 2},
+                ]
+            },
+        )
+
+        assert r.status_code == 202
+        body = r.json()
+        assert body["dispatched"] == 1
+        assert body["failed"] == 1
+        assert body["failures"] == [
+            {"repo": "owner/repo", "number": 2, "error": "backend unavailable"}
+        ]
+
+
+class TestFleetEndpoint:
+    def test_merges_manifest_defaults_with_live_task_counts(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fleet_config = tmp_path / "fleet.yaml"
+        fleet_config.write_text(
+            """
+fleet:
+  name: desktop-fleet
+  default_slots: 4
+  default_budget_per_story: 1.25
+  default_pr_target_branch: main
+  default_watch_labels: [deliver, maxwell]
+  auto_promote_staging: true
+  discovery_interval_seconds: 120
+repos:
+  - org: D-sorganization
+    name: Maxwell-Daemon
+  - org: D-sorganization
+    name: Other
+    slots: 1
+    budget_per_story: 0.25
+    pr_target_branch: release
+    watch_labels: [custom]
+""",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAXWELL_FLEET_CONFIG", str(fleet_config))
+        issue_task = Task(
+            id="issue-1",
+            prompt="D-sorganization/Maxwell-Daemon#168",
+            kind=TaskKind.ISSUE,
+            issue_repo="D-sorganization/Maxwell-Daemon",
+            issue_number=168,
+            status=TaskStatus.QUEUED,
+            cost_usd=0.1234567,
+        )
+        repo_task = Task(
+            id="repo-1",
+            prompt="maintenance",
+            repo="Other",
+            status=TaskStatus.COMPLETED,
+            cost_usd=0.5,
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[issue_task.id] = issue_task
+            daemon._tasks[repo_task.id] = repo_task
+
+        r = client.get("/api/v1/fleet")
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body["fleet"] == {
+            "name": "desktop-fleet",
+            "auto_promote_staging": True,
+            "discovery_interval_seconds": 120,
+        }
+        maxwell, other = body["repos"]
+        assert maxwell["github_url"] == "https://github.com/D-sorganization/Maxwell-Daemon"
+        assert maxwell["slots"] == 4
+        assert maxwell["budget_per_story"] == 1.25
+        assert maxwell["pr_target_branch"] == "main"
+        assert maxwell["watch_labels"] == ["deliver", "maxwell"]
+        assert maxwell["active_tasks"] == 1
+        assert maxwell["total_cost_usd"] == 0.123457
+        assert other["slots"] == 1
+        assert other["active_tasks"] == 0
+        assert other["total_cost_usd"] == 0.5
+
+
+class TestAuditEndpoint:
+    def test_audit_log_reports_disabled_when_not_configured(self, client: TestClient) -> None:
+        r = client.get("/api/v1/audit")
+
+        assert r.status_code == 200
+        assert r.json() == {"entries": [], "audit_enabled": False}
+
+    def test_audit_verify_reports_clean_when_not_configured(self, client: TestClient) -> None:
+        r = client.get("/api/v1/audit/verify")
+
+        assert r.status_code == 200
+        assert r.json() == {"clean": True, "violations": [], "audit_enabled": False}
+
+
+class TestWebhookEndpoint:
+    def test_github_webhook_reports_disabled_without_secret(self, client: TestClient) -> None:
+        r = client.post(
+            "/api/v1/webhooks/github",
+            content=b"{}",
+            headers={"x-github-event": "ping"},
+        )
+
+        assert r.status_code == 503
+        assert r.json() == {"detail": "webhooks disabled", "disabled": True}
 
 
 class TestAuth:
@@ -127,6 +406,43 @@ class TestAuth:
     def test_accepts_correct_token(self, auth_client: TestClient) -> None:
         r = auth_client.get(
             "/api/v1/backends",
-            headers={"Authorization": "Bearer secret-abc"},
+            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
         )
         assert r.status_code == 200
+
+
+class TestSSHEndpointsWithoutAsyncSSH:
+    """Issue #231 — SSH endpoints must return 503 when asyncssh is absent.
+
+    The old guard only caught ImportError from importing SSHSessionPool, but
+    maxwell_daemon.ssh.session imports successfully regardless of asyncssh.
+    The fix adds an explicit ``import asyncssh`` check inside _ssh_pool() so
+    the None sentinel is set correctly and the 503 guard fires.
+    """
+
+    def test_ssh_sessions_returns_503_when_asyncssh_absent(self, daemon: Daemon) -> None:
+        import sys
+        from unittest.mock import patch
+
+        # Simulate asyncssh being absent by making it unimportable.
+        with (
+            patch.dict(sys.modules, {"asyncssh": None}),
+            TestClient(create_app(daemon)) as c,
+        ):
+            r = c.get("/api/v1/ssh/sessions")
+        assert r.status_code == 503
+        assert "SSH support not installed" in r.json()["detail"]
+
+    def test_ssh_connect_returns_503_when_asyncssh_absent(self, daemon: Daemon) -> None:
+        import sys
+        from unittest.mock import patch
+
+        with (
+            patch.dict(sys.modules, {"asyncssh": None}),
+            TestClient(create_app(daemon)) as c,
+        ):
+            r = c.post(
+                "/api/v1/ssh/connect",
+                json={"host": "srv", "user": "ubuntu"},
+            )
+        assert r.status_code == 503

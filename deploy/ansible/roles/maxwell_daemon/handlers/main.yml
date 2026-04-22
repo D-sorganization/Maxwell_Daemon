@@ -1,0 +1,11 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  listen: Reload systemd
+
+- name: Restart maxwell-daemon
+  ansible.builtin.systemd:
+    name: maxwell-daemon
+    state: restarted
+  listen: Restart maxwell-daemon

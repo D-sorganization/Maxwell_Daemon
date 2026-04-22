@@ -83,6 +83,17 @@ class TestConfigLoad:
         assert "sk-test-123" not in repr(cfg.backends["claude"])
 
     def test_default_backend_must_exist(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="not found in backends"):
+            MaxwellDaemonConfig.model_validate(
+                {
+                    "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
+                    "agent": {"default_backend": "nonexistent"},
+                }
+            )
+
+    def test_default_backend_config_returns_selected_backend(self) -> None:
         cfg = MaxwellDaemonConfig.model_validate(
             {
                 "backends": {
@@ -91,8 +102,7 @@ class TestConfigLoad:
                 "agent": {"default_backend": "nonexistent"},
             }
         )
-        with pytest.raises(ValueError, match="not found in backends"):
-            cfg.default_backend_config()
+        assert cfg.default_backend_config().model == "claude-sonnet-4-6"
 
     def test_rejects_unknown_top_level_keys(self) -> None:
         from pydantic import ValidationError
@@ -104,3 +114,64 @@ class TestConfigLoad:
                     "bogus_key": True,
                 }
             )
+
+
+class TestDefaultConfigPath:
+    def test_maxwell_config_env_overrides_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from maxwell_daemon.config.loader import default_config_path
+
+        custom = tmp_path / "custom.yaml"
+        monkeypatch.setenv("MAXWELL_CONFIG", str(custom))
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+        assert default_config_path() == custom
+
+    def test_xdg_config_home_respected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from maxwell_daemon.config.loader import default_config_path
+
+        monkeypatch.delenv("MAXWELL_CONFIG", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        result = default_config_path()
+        assert str(tmp_path) in str(result)
+        assert "maxwell-daemon" in str(result)
+
+
+class TestAPIConfigJWT:
+    """Issue #230 — jwt_secret must be wired from config into JWTConfig."""
+
+    def _base_cfg(self) -> dict:
+        return {"backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}}}
+
+    def test_jwt_secret_defaults_to_none(self) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(self._base_cfg())
+        assert cfg.api.jwt_secret is None
+        assert cfg.api.jwt_secret_value() is None
+
+    def test_jwt_secret_value_unwraps_secret_str(self) -> None:
+        raw = self._base_cfg()
+        raw["api"] = {"jwt_secret": "mysecret"}
+        cfg = MaxwellDaemonConfig.model_validate(raw)
+        assert cfg.api.jwt_secret_value() == "mysecret"
+        # Must not leak in repr
+        assert "mysecret" not in repr(cfg.api)
+
+    def test_jwt_expiry_seconds_configurable(self) -> None:
+        raw = self._base_cfg()
+        raw["api"] = {"jwt_secret": "s", "jwt_expiry_seconds": 7200}
+        cfg = MaxwellDaemonConfig.model_validate(raw)
+        assert cfg.api.jwt_expiry_seconds == 7200
+
+    def test_jwt_config_constructed_when_secret_set(self) -> None:
+        """JWTConfig can be built from the config values without error."""
+        from maxwell_daemon.auth import JWTConfig
+
+        raw = self._base_cfg()
+        raw["api"] = {"jwt_secret": "testsecret123", "jwt_expiry_seconds": 1800}
+        cfg = MaxwellDaemonConfig.model_validate(raw)
+        secret = cfg.api.jwt_secret_value()
+        assert secret is not None
+        jwt_cfg = JWTConfig(secret, expiry_seconds=cfg.api.jwt_expiry_seconds)
+        assert jwt_cfg.expiry_seconds == 1800

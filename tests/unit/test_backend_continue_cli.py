@@ -9,7 +9,7 @@ import pytest
 
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.backends.base import BackendUnavailableError
-from maxwell_daemon.backends.continue_cli import ContinueCLIBackend
+from maxwell_daemon.backends.continue_cli import ContinueCLIBackend, _default_runner
 
 
 class _Runner:
@@ -31,6 +31,36 @@ class _Runner:
     ) -> tuple[int, bytes, bytes]:
         self.calls.append(argv)
         return self._rc, self._stdout, self._stderr
+
+
+class _FakeProcess:
+    returncode = 0
+
+    async def communicate(self) -> tuple[bytes, bytes]:
+        return b"stdout", b"stderr"
+
+
+class TestDefaultRunner:
+    def test_default_runner_invokes_subprocess(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, Any] = {}
+
+        async def fake_exec(*argv: str, **kwargs: Any) -> _FakeProcess:
+            captured["argv"] = argv
+            captured["kwargs"] = kwargs
+            return _FakeProcess()
+
+        monkeypatch.setattr(
+            "maxwell_daemon.backends.continue_cli.asyncio.create_subprocess_exec",
+            fake_exec,
+        )
+
+        rc, stdout, stderr = asyncio.run(_default_runner("cn", "ask", "hi", cwd="repo"))
+
+        assert rc == 0
+        assert stdout == b"stdout"
+        assert stderr == b"stderr"
+        assert captured["argv"] == ("cn", "ask", "hi")
+        assert captured["kwargs"]["cwd"] == "repo"
 
 
 class TestDefaults:
@@ -187,14 +217,16 @@ class TestHealthCheck:
 
 
 class TestCapabilities:
-    def test_no_tool_use_and_zero_cost(self) -> None:
+    def test_no_tool_use_and_unknown_cost(self) -> None:
         backend = ContinueCLIBackend(runner=_Runner())
         caps = backend.capabilities("auto")
         assert caps.supports_tool_use is False
         assert caps.supports_streaming is False
         assert caps.supports_system_prompt is True
-        assert caps.cost_per_1k_input_tokens == 0.0
-        assert caps.cost_per_1k_output_tokens == 0.0
+        # Continue.dev CLI uses the user's own subscription — cost is unknown
+        # to the daemon, represented as None rather than a misleading 0.0.
+        assert caps.cost_per_1k_input_tokens is None
+        assert caps.cost_per_1k_output_tokens is None
         assert caps.max_context_tokens == 128_000
         assert caps.is_local is False
 

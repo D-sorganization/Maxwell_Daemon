@@ -1,0 +1,41 @@
+---
+# health-check.yml — Verify health of all conductor and agent nodes.
+#
+# Usage:
+#   ansible-playbook -i inventory/fleet.yml health-check.yml
+#
+# Exit code is non-zero if any host fails health checks.
+
+- name: Health-check all fleet nodes
+  hosts: all
+  become: false
+  gather_facts: false
+
+  tasks:
+    - name: Check systemd service is active
+      ansible.builtin.command: systemctl is-active maxwell-daemon
+      register: svc_status
+      changed_when: false
+      failed_when: svc_status.stdout != "active"
+      become: true
+
+    - name: Hit the health endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ conductor_port }}/api/v1/health"
+        status_code: 200
+        timeout: 5
+      register: health_resp
+
+    - name: Report per-host status
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} — service: {{ svc_status.stdout }}, api: HTTP {{ health_resp.status }}"
+
+- name: Summarise fleet health
+  hosts: localhost
+  gather_facts: false
+  run_once: true
+
+  tasks:
+    - name: Print summary
+      ansible.builtin.debug:
+        msg: "All {{ groups['all'] | length }} nodes passed health checks."

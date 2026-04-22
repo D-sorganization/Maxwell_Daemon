@@ -13,6 +13,15 @@ pytest
 ruff check .
 ```
 
+Run the full local gate before opening a pull request:
+
+```bash
+ruff check .
+ruff format --check .
+mypy maxwell_daemon
+pytest
+```
+
 ## What we're looking for
 
 The [open issues](https://github.com/D-sorganization/Maxwell-Daemon/issues) are the authoritative list. Good first issues are labelled `good-first-issue`. If you want to tackle something bigger (a new backend, the GUI, the gRPC API), comment on the tracking issue first so we can align on design.
@@ -42,10 +51,21 @@ The `ClaudeBackend` and `OllamaBackend` adapters are good reference implementati
 - Line length 100. Ruff handles formatting.
 - No comments explaining *what* the code does — only *why* when it's non-obvious.
 - Fail fast on misconfiguration; never silently fall back to insecure defaults.
+- Keep public CLI, API, and config changes documented in `docs/`.
 
 ## Reporting bugs
 
 Use the bug-report issue template. Include: Maxwell-Daemon version, Python version, OS, config (redact secrets), and a minimal reproduction.
+
+## Community and governance
+
+Roadmap and decision-making expectations are documented in
+[`docs/community/roadmap-governance.md`](docs/community/roadmap-governance.md).
+The short version: open an issue for substantial design changes, keep discussion
+on the related issue or pull request, and use reactions/comments to signal
+priority with concrete user impact.
+
+All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 

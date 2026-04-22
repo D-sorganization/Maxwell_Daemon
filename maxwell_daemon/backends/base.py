@@ -56,8 +56,8 @@ class BackendCapabilities:
     supports_system_prompt: bool = True
     max_context_tokens: int = 8_192
     is_local: bool = False
-    cost_per_1k_input_tokens: float = 0.0
-    cost_per_1k_output_tokens: float = 0.0
+    cost_per_1k_input_tokens: float | None = None
+    cost_per_1k_output_tokens: float | None = None
 
 
 @dataclass(slots=True)
@@ -127,8 +127,10 @@ class ILLMBackend(ABC):
     def capabilities(self, model: str) -> BackendCapabilities:
         """Describe what `model` can do. Used for routing decisions."""
 
-    def estimate_cost(self, usage: TokenUsage, model: str) -> float:
+    def estimate_cost(self, usage: TokenUsage, model: str) -> float | None:
         caps = self.capabilities(model)
+        if caps.cost_per_1k_input_tokens is None or caps.cost_per_1k_output_tokens is None:
+            return 0.0 if caps.is_local else None
         return (
             usage.prompt_tokens * caps.cost_per_1k_input_tokens / 1000
             + usage.completion_tokens * caps.cost_per_1k_output_tokens / 1000

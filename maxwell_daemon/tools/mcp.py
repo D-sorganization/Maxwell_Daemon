@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, TypeVar
 
 __all__ = [
+    "ApprovalTierError",
     "HookRunnerProtocol",
     "ToolHandler",
     "ToolParam",
@@ -70,6 +71,10 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 class ToolRegistryError(Exception):
     """Raised when the registry is asked to do something inconsistent."""
+
+
+class ApprovalTierError(Exception):
+    """Raised when a tool invocation is blocked by the configured approval tier."""
 
 
 @dataclass(slots=True, frozen=True)
@@ -147,11 +152,30 @@ class ToolRegistry:
     ``pre_tool`` (which can block the call) and ``post_tool`` (which can
     turn a successful tool call into an agent-visible error). Default
     ``hook_runner=None`` preserves byte-for-byte pre-existing behaviour.
+
+    Parameters
+    ----------
+    approval_tier:
+        Controls whether tool handlers may execute automatically (#237).
+        ``"full-auto"`` (default) runs handlers without restriction.
+        ``"auto-edit"`` runs handlers but is intended for supervised edit
+        workflows.
+        ``"suggest"`` blocks *all* automatic execution — every invocation
+        returns an error result requesting human approval instead.
     """
 
-    def __init__(self, *, hook_runner: HookRunnerProtocol | None = None) -> None:
+    #: Tiers that permit automatic handler execution (lowest to highest).
+    _AUTO_EXECUTE_TIERS: frozenset[str] = frozenset({"auto-edit", "full-auto"})
+
+    def __init__(
+        self,
+        *,
+        hook_runner: HookRunnerProtocol | None = None,
+        approval_tier: str = "full-auto",
+    ) -> None:
         self._specs: dict[str, ToolSpec] = {}
         self._hook_runner = hook_runner
+        self._approval_tier = approval_tier
 
     def register(self, spec: ToolSpec) -> None:
         if spec.name in self._specs:
@@ -181,8 +205,20 @@ class ToolRegistry:
     def to_openai(self) -> list[dict[str, Any]]:
         return [s.to_openai() for s in self._specs.values()]
 
-    async def invoke(self, name: str, arguments: dict[str, Any]) -> ToolResult:
+    async def invoke(
+        self, name: str, arguments: dict[str, Any], approval_tier: str | None = None
+    ) -> ToolResult:
         """Call the handler for ``name`` with ``arguments``.
+
+        Approval tier enforcement (#237):
+          The registry's ``approval_tier`` (set at construction) is checked
+          *before* any hook or handler runs. When the tier is ``"suggest"``,
+          every invocation is blocked and a ``ToolResult(is_error=True)`` is
+          returned so the agent can surface the request for human review.
+
+          The optional *approval_tier* parameter accepted here is kept for
+          call-site compatibility but the registry-level tier takes precedence;
+          pass a new ``ToolRegistry`` instance with the desired tier instead.
 
         Hook phases (only when ``hook_runner`` was passed at construction):
 
@@ -197,8 +233,25 @@ class ToolRegistry:
             name
         )  # raises ToolRegistryError on unknown — caller bug, not model bug
 
+        # Enforce approval tier before running any hooks or the handler (#237).
+        if self._approval_tier not in self._AUTO_EXECUTE_TIERS:
+            return ToolResult(
+                content=(
+                    f"Tool '{name}' requires human approval "
+                    f"(approval_tier={self._approval_tier!r}). "
+                    "The request has been surfaced for review and will not execute automatically."
+                ),
+                is_error=True,
+            )
+
         if self._hook_runner is not None:
-            pre = await self._hook_runner.run_pre_tool(name, arguments)
+            try:
+                pre = await self._hook_runner.run_pre_tool(name, arguments)
+            except Exception as exc:
+                return ToolResult(
+                    content=f"pre_tool hook runner error: {type(exc).__name__}: {exc}",
+                    is_error=True,
+                )
             if pre.blocked:
                 return ToolResult(
                     content=(

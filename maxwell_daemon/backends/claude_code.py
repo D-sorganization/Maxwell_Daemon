@@ -161,8 +161,8 @@ class ClaudeCodeCLIBackend(ILLMBackend):
             is_local=False,
             # No authoritative pricing for the CLI — rely on the user's
             # subscription / API key cost accounting.
-            cost_per_1k_input_tokens=0.0,
-            cost_per_1k_output_tokens=0.0,
+            cost_per_1k_input_tokens=None,
+            cost_per_1k_output_tokens=None,
         )
 
 

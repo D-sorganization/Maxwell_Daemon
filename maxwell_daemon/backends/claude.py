@@ -23,18 +23,11 @@ from maxwell_daemon.backends.base import (
     MessageRole,
     TokenUsage,
 )
+from maxwell_daemon.backends.pricing import get_rates
 from maxwell_daemon.backends.registry import registry
 
-# Anthropic public pricing (USD per 1M tokens) as of 2026-04. Keep a single source
-# of truth here so cost estimation and budget alerts stay consistent.
-_MODEL_PRICING: dict[str, tuple[float, float]] = {
-    "claude-opus-4-7": (15.0, 75.0),
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-4-5": (0.80, 4.0),
-    "claude-3-5-sonnet-latest": (3.0, 15.0),
-    "claude-3-5-haiku-latest": (0.80, 4.0),
-}
-
+# Per-model context-window sizes (tokens).  Pricing lives in the central table
+# at :mod:`maxwell_daemon.backends.pricing`.
 _MODEL_CONTEXT: dict[str, int] = {
     "claude-opus-4-7": 1_000_000,
     "claude-sonnet-4-6": 200_000,
@@ -107,14 +100,18 @@ class ClaudeBackend(ILLMBackend):
             for b in resp.content
             if getattr(b, "type", None) == "text"
         ]
+        # Extract usage fields once to avoid repeating the resp.usage chain.
+        usage = resp.usage
+        input_tokens = usage.input_tokens
+        output_tokens = usage.output_tokens
         return BackendResponse(
             content="".join(text_parts),
             finish_reason=resp.stop_reason or "stop",
             usage=TokenUsage(
-                prompt_tokens=resp.usage.input_tokens,
-                completion_tokens=resp.usage.output_tokens,
-                total_tokens=resp.usage.input_tokens + resp.usage.output_tokens,
-                cached_tokens=getattr(resp.usage, "cache_read_input_tokens", 0) or 0,
+                prompt_tokens=input_tokens,
+                completion_tokens=output_tokens,
+                total_tokens=input_tokens + output_tokens,
+                cached_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
             ),
             model=resp.model,
             backend=self.name,
@@ -156,7 +153,7 @@ class ClaudeBackend(ILLMBackend):
             return False
 
     def capabilities(self, model: str) -> BackendCapabilities:
-        price_in, price_out = _MODEL_PRICING.get(model, (3.0, 15.0))
+        price_in, price_out = get_rates("claude", model)
         return BackendCapabilities(
             supports_streaming=True,
             supports_tool_use=True,

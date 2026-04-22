@@ -17,6 +17,10 @@ Existing autonomous-agent tools lock you to one vendor and one machine. Maxwell-
 
 - [Quick start](getting-started/quickstart.md) — install, init, ask
 - [Configuration](getting-started/configuration.md) — `maxwell-daemon.yaml` reference
+- [Examples](getting-started/examples.md) — common local, GitHub, and fleet workflows
+- [Troubleshooting](getting-started/troubleshooting.md) — diagnose config, backend, API, and task failures
 - [Architecture overview](architecture/overview.md) — how the pieces fit together
 - [Backend interface](architecture/backends.md) — add a new LLM in under an hour
 - [Design by Contract](architecture/contracts.md) — how Maxwell-Daemon stays correct at the boundaries
+- [Deployment guide](operations/deployment.md) — local, Ansible, Terraform, and container deployment paths
+- [Configuration reference](reference/configuration.md) — complete config keys and routing precedence

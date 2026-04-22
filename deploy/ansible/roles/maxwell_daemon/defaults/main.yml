@@ -1,0 +1,27 @@
+---
+conductor_version: "latest"
+conductor_user: maxwell
+conductor_group: maxwell
+conductor_port: 8765
+conductor_config_dir: /etc/maxwell-daemon
+conductor_data_dir: /var/lib/maxwell-daemon
+conductor_log_dir: /var/log/maxwell-daemon
+conductor_venv: /opt/maxwell-daemon/venv
+
+# LLM backend — override per host or group_vars
+conductor_backend: anthropic
+conductor_anthropic_api_key: ""
+conductor_openai_api_key: ""
+
+# TLS (leave empty to use plain HTTP on localhost only)
+conductor_tls_cert: ""
+conductor_tls_key: ""
+
+# JWT secret (generated on first deploy if empty)
+conductor_jwt_secret: ""
+
+# Backup retention in days
+conductor_backup_retention_days: 30
+
+# Extra pip packages to install alongside maxwell-daemon
+conductor_extra_packages: []

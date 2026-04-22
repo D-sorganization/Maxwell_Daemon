@@ -221,7 +221,7 @@ async def _default_runner(
     cmd: list[str], cwd: str, timeout: float
 ) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
-        *cmd,
+        *sandboxed_cmd,
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

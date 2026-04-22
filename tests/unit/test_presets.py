@@ -66,6 +66,12 @@ class TestPresetStore:
             with pytest.raises(ValueError):
                 store.save(FilterPreset(name=bad))
 
+    def test_corrupted_json_returns_empty(self, tmp_path: Path) -> None:
+        path = tmp_path / "p.json"
+        path.write_text("not json {{{{")
+        store = PresetStore(path)
+        assert store.list() == []
+
 
 class TestPresetCLI:
     def _runner(self):  # type: ignore[no-untyped-def]

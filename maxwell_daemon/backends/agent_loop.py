@@ -43,6 +43,7 @@ from maxwell_daemon.backends.base import (
     TokenUsage,
 )
 from maxwell_daemon.backends.condensation import Condenser
+from maxwell_daemon.backends.pricing import cost_for, get_rates
 from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.gh.ci_patterns import detect_ci_profile
 from maxwell_daemon.gh.repo_schematic import build_repo_schematic
@@ -60,17 +61,8 @@ log = logging.getLogger(__name__)
 # ── Module-level config ───────────────────────────────────────────────────────
 
 
-# Anthropic public pricing (USD per 1M tokens) as of 2026-04. Single source of
-# truth shared with ``maxwell_daemon.backends.claude`` — kept here rather than
-# imported so the agent loop can work offline from that adapter.
-_MODEL_PRICING: dict[str, tuple[float, float]] = {
-    "claude-opus-4-7": (15.0, 75.0),
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-4-5": (0.80, 4.0),
-    "claude-3-5-sonnet-latest": (3.0, 15.0),
-    "claude-3-5-haiku-latest": (0.80, 4.0),
-}
-
+# Per-model context-window sizes (tokens).  Pricing lives in the central table
+# at :mod:`maxwell_daemon.backends.pricing` — imported above.
 _MODEL_CONTEXT: dict[str, int] = {
     "claude-opus-4-7": 1_000_000,
     "claude-sonnet-4-6": 200_000,
@@ -129,6 +121,10 @@ class AgentLoopBackend(ILLMBackend):
     registry_factory:
         Injection seam — callable ``(Path) -> ToolRegistry`` for test doubles.
         Defaults to :func:`maxwell_daemon.tools.build_default_registry`.
+    budget_enforcer:
+        Optional :class:`~maxwell_daemon.core.budget.BudgetEnforcer` — when set,
+        ``require_under_budget()`` is called after every turn so a long agent loop
+        cannot silently overspend the monthly hard-stop limit.
     """
 
     name = "agent-loop"
@@ -148,6 +144,7 @@ class AgentLoopBackend(ILLMBackend):
         enable_prompt_caching: bool = True,
         registry_factory: Callable[[Path], ToolRegistry] | None = None,
         condenser: Condenser | None = None,
+        budget_enforcer: Any | None = None,
     ) -> None:
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
@@ -167,6 +164,7 @@ class AgentLoopBackend(ILLMBackend):
         self._enable_cache = enable_prompt_caching
         self._registry_factory = registry_factory or build_default_registry
         self._condenser = condenser
+        self._budget_enforcer = budget_enforcer
 
     # ── System prompt assembly ───────────────────────────────────────────────
 
@@ -246,12 +244,8 @@ class AgentLoopBackend(ILLMBackend):
 
     @staticmethod
     def _cost_for(usage: TokenUsage, model: str) -> float:
-        """Compute USD cost for a turn's usage. Uses shared pricing table."""
-        price_in, price_out = _MODEL_PRICING.get(model, (3.0, 15.0))
-        return (
-            usage.prompt_tokens * price_in / 1_000_000
-            + usage.completion_tokens * price_out / 1_000_000
-        )
+        """Compute USD cost for a turn's usage. Delegates to central pricing table."""
+        return cost_for("agent-loop", model, usage)
 
     def _record_cost(
         self,
@@ -308,9 +302,7 @@ class AgentLoopBackend(ILLMBackend):
         ``budget_per_story_usd`` / ``wall_clock_timeout_seconds``.
         """
         effective_model = model or self._default_model
-        workspace_raw = workspace_dir or self._default_workspace
-        if not workspace_raw:
-            raise ValueError("No workspace specified")
+        workspace_raw = workspace_dir or self._default_workspace or os.getcwd()
         effective_workspace = Path(workspace_raw).resolve()
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
@@ -363,8 +355,9 @@ class AgentLoopBackend(ILLMBackend):
             )
 
             # Usage + cost.
+            cached_tokens = getattr(response.usage, "cache_read_input_tokens", 0) or 0
             turn_usage = TokenUsage(
-                prompt_tokens=response.usage.input_tokens,
+                prompt_tokens=response.usage.input_tokens - cached_tokens,
                 completion_tokens=response.usage.output_tokens,
                 total_tokens=response.usage.input_tokens + response.usage.output_tokens,
                 cached_tokens=getattr(response.usage, "cache_read_input_tokens", 0)
@@ -383,6 +376,11 @@ class AgentLoopBackend(ILLMBackend):
                 agent_id=agent_id,
             )
 
+            # Per-turn monthly-budget enforcement — the ledger is now updated so
+            # BudgetEnforcer.require_under_budget() will see the latest spend.
+            if self._budget_enforcer is not None:
+                self._budget_enforcer.require_under_budget()
+
             if (
                 self._budget_per_story_usd is not None
                 and cumulative_cost > self._budget_per_story_usd
@@ -392,6 +390,16 @@ class AgentLoopBackend(ILLMBackend):
                     f"${self._budget_per_story_usd:.4f} at turn {turn + 1} "
                     f"(cumulative ${cumulative_cost:.4f})"
                 )
+
+            # Per-task limit from BudgetConfig (injected via budget_enforcer).
+            if self._budget_enforcer is not None:
+                per_task_limit = getattr(self._budget_enforcer._config, "per_task_limit_usd", None)
+                if per_task_limit is not None and cumulative_cost > per_task_limit:
+                    raise BudgetExceededError(
+                        f"agent loop exceeded per-task budget limit "
+                        f"${per_task_limit:.4f} at turn {turn + 1} "
+                        f"(cumulative ${cumulative_cost:.4f})"
+                    )
 
             text_parts = [
                 getattr(b, "text", "")
@@ -457,22 +465,154 @@ class AgentLoopBackend(ILLMBackend):
         temperature: float = 1.0,
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
+        workspace_dir: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
-        """Run the loop and yield the final text as a single chunk.
+        """Stream text tokens from the final agent turn as they arrive.
 
-        True token-stream passthrough for a multi-turn agent is tricky (we'd
-        have to surface tool-call deltas) and isn't needed yet. This simple
-        adapter keeps the ILLMBackend contract honest.
+        The multi-turn tool-use loop runs synchronously (tool execution is
+        inherently sequential) but the *last* turn — where the model writes
+        its final answer — is streamed token-by-token via the Anthropic
+        streaming API so the caller sees output incrementally rather than
+        waiting for the full response to buffer.
+
+        Tool-call turns are still awaited in full (we need the complete tool
+        spec before we can execute the call), but those turns produce no
+        user-visible text so the latency difference is unnoticeable.
         """
-        resp = await self.complete(
-            messages,
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs,
+        effective_model = model or self._default_model
+        workspace_raw = workspace_dir or self._default_workspace or os.getcwd()
+        effective_workspace = Path(workspace_raw).resolve()
+        effective_max_turns = kwargs.pop("max_turns", None)
+        if effective_max_turns is None:
+            effective_max_turns = self._max_turns
+
+        tool_registry = self._registry_factory(effective_workspace)
+        tool_defs = tool_registry.to_anthropic()
+
+        repo = kwargs.pop("repo", None)
+        agent_id = kwargs.pop("agent_id", None)
+        issue_title = kwargs.pop("issue_title", "")
+        issue_body = kwargs.pop("issue_body", "")
+
+        system_prompt = self._build_system_blocks(
+            system_texts=[m.content for m in messages if m.role is MessageRole.SYSTEM],
+            workspace=effective_workspace,
+            repo=repo,
+            issue_title=issue_title,
+            issue_body=issue_body,
+            agent_id=agent_id,
         )
-        yield resp.content
+        sdk_messages: list[dict[str, Any]] = [
+            {"role": m.role.value, "content": m.content}
+            for m in messages
+            if m.role is not MessageRole.SYSTEM
+        ]
+
+        total_usage = TokenUsage()
+        cumulative_cost = 0.0
+
+        deadline: float | None = None
+        if self._wall_clock_timeout is not None:
+            deadline = time.monotonic() + self._wall_clock_timeout
+
+        for turn in range(effective_max_turns):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise WallClockTimeoutError(
+                    f"agent loop exceeded wall-clock timeout of "
+                    f"{self._wall_clock_timeout}s at turn {turn + 1}"
+                )
+
+            if self._condenser is not None and self._condenser.should_condense(
+                total_usage.prompt_tokens
+            ):
+                sdk_messages = await self._condenser.condense(sdk_messages)
+
+            # For the final turn (end_turn), stream tokens to the caller as
+            # they arrive.  For tool-call turns we need the full response
+            # before we can dispatch tools, so we accumulate then loop.
+            # We detect which case we're in by peeking at the stop_reason
+            # after streaming completes — both paths go through the same
+            # ``async with`` block so the HTTP connection is always closed.
+            collected_text_chunks: list[str] = []
+            async with self._client.messages.stream(
+                model=effective_model,
+                max_tokens=max_tokens or 8096,
+                system=system_prompt,  # type: ignore[arg-type]
+                tools=tool_defs,  # type: ignore[arg-type]
+                messages=sdk_messages,  # type: ignore[arg-type]
+            ) as stream:
+                # Collect text chunks as they arrive so we can yield them
+                # immediately to the caller on the final turn.
+                async for text_chunk in stream.text_stream:
+                    collected_text_chunks.append(text_chunk)
+
+                # Collect accumulated message for tool dispatch / usage.
+                response = await stream.get_final_message()
+
+            # Track usage and cost for this turn.
+            cached_tokens = getattr(response.usage, "cache_read_input_tokens", 0) or 0
+            turn_usage = TokenUsage(
+                prompt_tokens=response.usage.input_tokens - cached_tokens,
+                completion_tokens=response.usage.output_tokens,
+                total_tokens=response.usage.input_tokens + response.usage.output_tokens,
+                cached_tokens=cached_tokens,
+            )
+            total_usage = total_usage + turn_usage
+            turn_cost = self._cost_for(turn_usage, effective_model)
+            cumulative_cost += turn_cost
+
+            self._record_cost(
+                usage=turn_usage,
+                cost_usd=turn_cost,
+                model=effective_model,
+                repo=repo,
+                agent_id=agent_id,
+            )
+
+            if (
+                self._budget_per_story_usd is not None
+                and cumulative_cost > self._budget_per_story_usd
+            ):
+                raise BudgetExceededError(
+                    f"agent loop exceeded per-story budget "
+                    f"${self._budget_per_story_usd:.4f} at turn {turn + 1} "
+                    f"(cumulative ${cumulative_cost:.4f})"
+                )
+
+            if response.stop_reason == "end_turn":
+                # Final turn — yield the streamed chunks we collected above.
+                for text_chunk in collected_text_chunks:
+                    yield text_chunk
+                return
+
+            if response.stop_reason == "tool_use":
+                # Tool turn — dispatch and loop.  No text to yield here.
+                sdk_messages.append({"role": "assistant", "content": response.content})
+                tool_results: list[dict[str, Any]] = []
+                for block in response.content:
+                    if getattr(block, "type", None) != "tool_use":
+                        continue
+                    tool_use: Any = block
+                    result = await tool_registry.invoke(tool_use.name, tool_use.input)
+                    content = f"ERROR: {result.content}" if result.is_error else result.content
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use.id,
+                            "content": content,
+                            **({"is_error": True} if result.is_error else {}),
+                        }
+                    )
+                sdk_messages.append({"role": "user", "content": tool_results})
+                continue
+
+            # Any other stop reason — yield what we collected and stop.
+            for text_chunk in collected_text_chunks:
+                yield text_chunk
+            return
+
+        raise RuntimeError(f"agent loop exceeded max_turns={effective_max_turns} without end_turn")
 
     async def health_check(self) -> bool:
         try:
@@ -486,9 +626,9 @@ class AgentLoopBackend(ILLMBackend):
             return False
 
     def capabilities(self, model: str) -> BackendCapabilities:
-        price_in, price_out = _MODEL_PRICING.get(model, (3.0, 15.0))
+        price_in, price_out = get_rates("agent-loop", model)
         return BackendCapabilities(
-            supports_streaming=False,
+            supports_streaming=True,
             supports_tool_use=True,
             supports_vision=True,
             supports_system_prompt=True,
