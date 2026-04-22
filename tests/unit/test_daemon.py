@@ -42,6 +42,17 @@ async def _wait_for_status(
     )
 
 
+async def _wait_for_queue_idle(daemon: Daemon, timeout: float = 2.0) -> None:
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if daemon._queue.empty():
+            await asyncio.sleep(0.05)
+            if daemon._queue.empty():
+                return
+        await asyncio.sleep(0.02)
+    raise AssertionError(f"queue did not drain; qsize={daemon._queue.qsize()}")
+
+
 async def _with_daemon(
     config: MaxwellDaemonConfig,
     ledger_path: Path,
@@ -137,6 +148,108 @@ class TestTaskExecution:
             assert final.finished_at is not None
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+    def test_reprioritized_task_executes_once(
+        self, isolated_ledger_path: Path, register_recording_backend: None
+    ) -> None:
+        from tests.conftest import RecordingBackend
+
+        class CountingBackend(RecordingBackend):
+            calls = 0
+
+            async def complete(
+                self,
+                messages: list[Any],
+                *,
+                model: str,
+                **kwargs: Any,
+            ) -> Any:
+                type(self).calls += 1
+                return await super().complete(messages, model=model, **kwargs)
+
+        CountingBackend.calls = 0
+        registry._factories["counting-once"] = CountingBackend
+        try:
+            cfg = MaxwellDaemonConfig.model_validate(
+                {
+                    "backends": {"primary": {"type": "counting-once", "model": "x"}},
+                    "agent": {"default_backend": "primary"},
+                }
+            )
+
+            async def body() -> None:
+                d = Daemon(
+                    cfg,
+                    ledger_path=isolated_ledger_path,
+                    task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
+                )
+                task = d.submit("run once")
+                d.reprioritize_task(task.id, 1)
+
+                await d.start(worker_count=1, recover=False)
+                try:
+                    final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
+                    await _wait_for_queue_idle(d)
+
+                    assert final.status is TaskStatus.COMPLETED
+                    assert CountingBackend.calls == 1
+                finally:
+                    await d.stop()
+
+            _run(body())
+        finally:
+            registry._factories.pop("counting-once", None)
+
+    def test_cancelled_reprioritized_task_entries_are_skipped(
+        self, isolated_ledger_path: Path, register_recording_backend: None
+    ) -> None:
+        from tests.conftest import RecordingBackend
+
+        class CountingBackend(RecordingBackend):
+            calls = 0
+
+            async def complete(
+                self,
+                messages: list[Any],
+                *,
+                model: str,
+                **kwargs: Any,
+            ) -> Any:
+                type(self).calls += 1
+                return await super().complete(messages, model=model, **kwargs)
+
+        CountingBackend.calls = 0
+        registry._factories["counting-cancel"] = CountingBackend
+        try:
+            cfg = MaxwellDaemonConfig.model_validate(
+                {
+                    "backends": {"primary": {"type": "counting-cancel", "model": "x"}},
+                    "agent": {"default_backend": "primary"},
+                }
+            )
+
+            async def body() -> None:
+                d = Daemon(
+                    cfg,
+                    ledger_path=isolated_ledger_path,
+                    task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
+                )
+                task = d.submit("do not run")
+                d.reprioritize_task(task.id, 1)
+                d.cancel_task(task.id)
+
+                await d.start(worker_count=1, recover=False)
+                try:
+                    await _wait_for_queue_idle(d)
+
+                    assert d.get_task(task.id).status is TaskStatus.CANCELLED
+                    assert CountingBackend.calls == 0
+                finally:
+                    await d.stop()
+
+            _run(body())
+        finally:
+            registry._factories.pop("counting-cancel", None)
 
     def test_failed_task_records_error(
         self, isolated_ledger_path: Path, register_recording_backend: None

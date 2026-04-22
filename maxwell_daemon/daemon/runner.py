@@ -829,11 +829,10 @@ class Daemon:
     def reprioritize_task(self, task_id: str, new_priority: int) -> Task:
         """Change the priority of a queued task.
 
-        Note: the PriorityQueue cannot be mutated in-place; the new priority is
-        stored on the Task object and will be respected when the entry is
-        dequeued (the worker re-checks task.priority). Any already-dequeued
-        entry with the old priority is harmless — the task object is the source
-        of truth.
+        Note: the PriorityQueue cannot be mutated in-place. Reprioritization
+        stores the new priority on the Task object and enqueues a fresh entry;
+        workers discard stale entries whose queued priority no longer matches
+        the task, or whose task has already left QUEUED state.
         """
         with self._tasks_lock:
             task = self._tasks.get(task_id)
@@ -845,12 +844,10 @@ class Daemon:
                 )
             old_priority = task.priority
             task.priority = new_priority
-            # Enqueue a fresh entry with the new priority; the stale entry will
-            # be skipped when dequeued because the task will no longer be
-            # QUEUED by then (or the worker will simply execute it at the
-            # corrected priority). asyncio.PriorityQueue is not thread-safe, so
-            # the put_nowait stays inside _tasks_lock alongside the submit()
-            # path.
+            # Enqueue a fresh entry with the new priority; stale entries are
+            # discarded by workers before execution. asyncio.PriorityQueue is
+            # not thread-safe, so the put_nowait stays inside _tasks_lock
+            # alongside the submit() path.
             self._queue.put_nowait((new_priority, task))
         self._task_store.save(task)
         log.info("reprioritized task=%s old=%d new=%d", task_id, old_priority, new_priority)
@@ -1039,7 +1036,7 @@ class Daemon:
         log.info("worker %d ready", worker_id)
         while self._running or not self._queue.empty():
             try:
-                _priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
+                queued_priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
             except asyncio.TimeoutError:
                 continue
             # Sentinel value (None task) signals this worker to exit — used by
@@ -1047,8 +1044,20 @@ class Daemon:
             if task is None:
                 log.info("worker %d received stop sentinel; exiting", worker_id)
                 break
-            # Tasks cancelled while queued should not be executed.
-            if task.status is TaskStatus.CANCELLED:
+            if task.status is not TaskStatus.QUEUED:
+                log.debug(
+                    "skipping non-queued task entry task=%s status=%s",
+                    task.id,
+                    task.status.value,
+                )
+                continue
+            if queued_priority != task.priority:
+                log.debug(
+                    "skipping stale task priority entry task=%s queued_priority=%d current_priority=%d",
+                    task.id,
+                    queued_priority,
+                    task.priority,
+                )
                 continue
             with bind_context(task_id=task.id, worker_id=worker_id):
                 # Attempt to mark the task RUNNING in the durable store before
