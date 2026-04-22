@@ -914,6 +914,7 @@ def create_app(
             mode=payload.mode,
             backend=payload.backend,
             model=payload.model,
+            priority=payload.priority,
         )
         return TaskView.from_task(task)
 
@@ -985,6 +986,7 @@ def create_app(
                     mode=item.mode,
                     backend=item.backend,
                     model=item.model,
+                    priority=item.priority,
                 )
                 dispatched.append(TaskView.from_task(task))
             except Exception as e:

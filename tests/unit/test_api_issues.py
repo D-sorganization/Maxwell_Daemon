@@ -135,6 +135,23 @@ class TestDispatchIssue:
         assert body["issue_repo"] == "owner/repo"
         assert body["issue_number"] == 42
 
+    def test_preserves_submitted_priority(self, client: TestClient) -> None:
+        r = client.post(
+            "/api/v1/issues/dispatch",
+            json={"repo": "owner/repo", "number": 42, "mode": "plan", "priority": 25},
+        )
+
+        assert r.status_code == 202
+        assert r.json()["priority"] == 25
+
+    def test_rejects_priority_out_of_bounds(self, client: TestClient) -> None:
+        r = client.post(
+            "/api/v1/issues/dispatch",
+            json={"repo": "owner/repo", "number": 42, "priority": 201},
+        )
+
+        assert r.status_code == 422
+
     def test_rejects_bad_mode(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/issues/dispatch",

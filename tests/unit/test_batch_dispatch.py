@@ -54,6 +54,33 @@ class TestBatchDispatchEndpoint:
         assert len(body["tasks"]) == 3
         assert len(daemon.state().tasks) == 3
 
+    def test_preserves_per_item_priority(self, system: tuple[TestClient, Daemon]) -> None:
+        client, _ = system
+        r = client.post(
+            "/api/v1/issues/batch-dispatch",
+            json={
+                "items": [
+                    {"repo": "owner/a", "number": 1, "priority": 10},
+                    {"repo": "owner/a", "number": 2, "priority": 20},
+                ]
+            },
+        )
+
+        assert r.status_code == 202
+        body = r.json()
+        assert [task["priority"] for task in body["tasks"]] == [10, 20]
+
+    def test_rejects_per_item_priority_out_of_bounds(
+        self, system: tuple[TestClient, Daemon]
+    ) -> None:
+        client, _ = system
+        r = client.post(
+            "/api/v1/issues/batch-dispatch",
+            json={"items": [{"repo": "owner/a", "number": 1, "priority": -1}]},
+        )
+
+        assert r.status_code == 422
+
     def test_per_item_failure_does_not_abort_batch(self, system: tuple[TestClient, Daemon]) -> None:
         client, _ = system
         r = client.post(
