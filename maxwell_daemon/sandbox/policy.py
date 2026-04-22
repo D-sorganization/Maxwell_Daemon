@@ -108,10 +108,14 @@ class CommandPolicy:
         executable = Path(argv[0]).name.lower()
         if executable in {cmd.lower() for cmd in self.denied_commands}:
             return False, f"command denied by sandbox policy: {executable}"
-        if self.allowed_commands and executable not in {cmd.lower() for cmd in self.allowed_commands}:
+        if self.allowed_commands and executable not in {
+            cmd.lower() for cmd in self.allowed_commands
+        }:
             return False, f"command is not allowlisted by sandbox policy: {executable}"
         lowered_args = {arg.lower() for arg in argv[1:]}
-        destructive = lowered_args.intersection({token.lower() for token in self.destructive_tokens})
+        destructive = lowered_args.intersection(
+            {token.lower() for token in self.destructive_tokens}
+        )
         if destructive:
             return False, f"destructive argument denied by sandbox policy: {sorted(destructive)[0]}"
         return True, "command allowed"
@@ -195,7 +199,9 @@ class SandboxPolicy:
             allow_gpu=allow_gpu,
         )
 
-    def validate_command(self, argv: list[str] | tuple[str, ...], *, cwd: Path | str | None = None) -> GateDecision:
+    def validate_command(
+        self, argv: list[str] | tuple[str, ...], *, cwd: Path | str | None = None
+    ) -> GateDecision:
         command = tuple(argv)
         if not command:
             return self._deny("policy_denied", command, cwd, "command must be non-empty")
@@ -242,7 +248,9 @@ class SandboxPolicy:
         ensure(bool(decision.evidence), "Sandbox validation decisions must include evidence")
         return decision
 
-    def summarize_output(self, stdout: str, stderr: str, *, env: dict[str, str] | None = None) -> str:
+    def summarize_output(
+        self, stdout: str, stderr: str, *, env: dict[str, str] | None = None
+    ) -> str:
         merged = "\n".join(part for part in (stdout, stderr) if part)
         redacted = self.env.redact(merged, env=env)
         encoded = redacted.encode()
