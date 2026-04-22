@@ -16,6 +16,7 @@ from rich.table import Table
 
 from maxwell_daemon import __version__
 from maxwell_daemon.backends import Message, MessageRole, registry
+from maxwell_daemon.cli.actions import action_app
 from maxwell_daemon.cli.evals import eval_app
 from maxwell_daemon.cli.issues import issue_app
 from maxwell_daemon.cli.memory import memory_app
@@ -45,6 +46,7 @@ app.add_typer(session_app, name="session")
 app.add_typer(tasks_app, name="tasks")
 app.add_typer(memory_app, name="memory")
 app.add_typer(work_item_app, name="work-item")
+app.add_typer(action_app, name="action")
 console = Console()
 
 

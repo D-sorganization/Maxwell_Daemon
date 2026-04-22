@@ -15,6 +15,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from maxwell_daemon.cli.actions import render_actions
 from maxwell_daemon.core.presets import FilterPreset, PresetStore
 
 tasks_app = typer.Typer(name="tasks", help="List, show, cancel tasks on a running daemon.")
@@ -152,6 +153,29 @@ def show_task(
             value = value[:200] + "…"
         t.add_row(f"{key}:", str(value))
     console.print(t)
+
+
+@tasks_app.command("actions")
+def task_actions(
+    task_id: Annotated[str, typer.Argument()],
+    daemon_url: Annotated[
+        str, typer.Option("--daemon-url", envvar="MAXWELL_DAEMON_URL")
+    ] = "http://127.0.0.1:8080",
+    auth_token: Annotated[
+        str | None, typer.Option("--auth-token", envvar="MAXWELL_API_TOKEN")
+    ] = None,
+) -> None:
+    """List proposed and applied side-effect actions for a task."""
+    try:
+        r = httpx.get(
+            f"{daemon_url}/api/v1/tasks/{task_id}/actions",
+            headers=_headers(auth_token),
+            timeout=10.0,
+        )
+        r.raise_for_status()
+    except httpx.HTTPError as e:
+        _fail(f"request failed: {e}")
+    render_actions(r.json())
 
 
 @tasks_app.command("cancel")

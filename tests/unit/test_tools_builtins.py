@@ -17,6 +17,9 @@ from pathlib import Path
 
 import pytest
 
+from maxwell_daemon.core.action_policy import ActionPolicy, ApprovalMode
+from maxwell_daemon.core.action_service import ActionService
+from maxwell_daemon.core.action_store import ActionStore
 from maxwell_daemon.tools.builtins import (
     SandboxViolationError,
     _build_run_bash_env,
@@ -83,6 +86,34 @@ class TestWriteFile:
         write = make_write_file(tmp_path)
         with pytest.raises(SandboxViolationError):
             write(path="../escape.txt", content="x")
+
+    def test_suggest_mode_records_action_without_writing(self, tmp_path: Path) -> None:
+        service = ActionService(
+            ActionStore(tmp_path / "actions.db"),
+            policy=ActionPolicy(mode=ApprovalMode.SUGGEST, workspace_root=tmp_path),
+        )
+        write = make_write_file(tmp_path, action_service=service, task_id="task-1")
+
+        result = write(path="pending.txt", content="hello")
+
+        actions = service.list_for_task("task-1")
+        assert "pending approval" in result
+        assert len(actions) == 1
+        assert actions[0].status.value == "proposed"
+        assert not (tmp_path / "pending.txt").exists()
+
+    def test_full_auto_records_and_applies_write(self, tmp_path: Path) -> None:
+        service = ActionService(
+            ActionStore(tmp_path / "actions.db"),
+            policy=ActionPolicy(mode=ApprovalMode.FULL_AUTO, workspace_root=tmp_path),
+        )
+        write = make_write_file(tmp_path, action_service=service, task_id="task-1")
+
+        write(path="applied.txt", content="hello")
+
+        actions = service.list_for_task("task-1")
+        assert (tmp_path / "applied.txt").read_text() == "hello"
+        assert actions[0].status.value == "applied"
 
 
 # ── edit_file ────────────────────────────────────────────────────────────────
@@ -162,6 +193,27 @@ class TestRunBash:
         bash = make_run_bash(tmp_path, runner=runner, max_output_bytes=100)
         out = await bash(command="yes")
         assert "truncated" in out.lower()
+
+    async def test_command_records_failed_action(self, tmp_path: Path) -> None:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
+            return 2, b"", b"oops"
+
+        service = ActionService(
+            ActionStore(tmp_path / "actions.db"),
+            policy=ActionPolicy(mode=ApprovalMode.FULL_AUTO, workspace_root=tmp_path),
+        )
+        bash = make_run_bash(
+            tmp_path,
+            runner=runner,
+            action_service=service,
+            task_id="task-1",
+        )
+
+        out = await bash(command="false")
+
+        actions = service.list_for_task("task-1")
+        assert "exit 2" in out
+        assert actions[0].status.value == "failed"
 
     async def test_default_runner_strips_unexpected_env_vars(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

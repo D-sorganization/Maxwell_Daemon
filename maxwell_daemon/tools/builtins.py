@@ -20,13 +20,18 @@ import re
 import subprocess
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from maxwell_daemon.core.actions import ActionKind, ActionRiskLevel
 from maxwell_daemon.tools.mcp import (
     HookRunnerProtocol,
     ToolParam,
     ToolRegistry,
     mcp_tool,
 )
+
+if TYPE_CHECKING:
+    from maxwell_daemon.core.action_service import ActionService
 
 __all__ = [
     "BashRunner",
@@ -97,7 +102,12 @@ def make_read_file(root: Path) -> Callable[..., str]:
 
 
 # ── write_file ───────────────────────────────────────────────────────────────
-def make_write_file(root: Path) -> Callable[..., str]:
+def make_write_file(
+    root: Path,
+    *,
+    action_service: ActionService | None = None,
+    task_id: str | None = None,
+) -> Callable[..., str]:
     @mcp_tool(
         name="write_file",
         description=(
@@ -118,6 +128,23 @@ def make_write_file(root: Path) -> Callable[..., str]:
         import tempfile
 
         resolved = _resolve(root, path)
+        action_id: str | None = None
+        if action_service is not None and task_id is not None:
+            action, decision = action_service.propose(
+                task_id=task_id,
+                kind=ActionKind.FILE_WRITE,
+                summary=f"write file {path}",
+                payload={"path": path, "bytes": len(content)},
+                risk_level=ActionRiskLevel.MEDIUM,
+            )
+            action_id = action.id
+            if not decision.allowed:
+                action_service.skip(action.id, reason=decision.reason)
+                return f"action {action.id} skipped: {decision.reason}"
+            if decision.requires_approval:
+                return f"action {action.id} pending approval: {action.summary}"
+            action_service.approve(action.id, actor="policy")
+            action_service.mark_running(action.id)
         resolved.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(dir=resolved.parent, text=True)
         try:
@@ -128,14 +155,23 @@ def make_write_file(root: Path) -> Callable[..., str]:
             os.replace(tmp_path, resolved)
         except Exception:
             os.unlink(tmp_path)
+            if action_id is not None and action_service is not None:
+                action_service.mark_failed(action_id, error="write_file failed")
             raise
+        if action_id is not None and action_service is not None:
+            action_service.mark_applied(action_id, result={"path": path, "bytes": len(content)})
         return f"wrote {len(content)} bytes to {path}"
 
     return write_file
 
 
 # ── edit_file ────────────────────────────────────────────────────────────────
-def make_edit_file(root: Path) -> Callable[..., str]:
+def make_edit_file(
+    root: Path,
+    *,
+    action_service: ActionService | None = None,
+    task_id: str | None = None,
+) -> Callable[..., str]:
     @mcp_tool(
         name="edit_file",
         description=(
@@ -166,6 +202,23 @@ def make_edit_file(root: Path) -> Callable[..., str]:
                 f"old_string appears {occurrences} times in {path!r} — "
                 "refuse ambiguous edits; include more surrounding context"
             )
+        action_id: str | None = None
+        if action_service is not None and task_id is not None:
+            action, decision = action_service.propose(
+                task_id=task_id,
+                kind=ActionKind.FILE_EDIT,
+                summary=f"edit file {path}",
+                payload={"path": path, "old_bytes": len(old_string), "new_bytes": len(new_string)},
+                risk_level=ActionRiskLevel.MEDIUM,
+            )
+            action_id = action.id
+            if not decision.allowed:
+                action_service.skip(action.id, reason=decision.reason)
+                return f"action {action.id} skipped: {decision.reason}"
+            if decision.requires_approval:
+                return f"action {action.id} pending approval: {action.summary}"
+            action_service.approve(action.id, actor="policy")
+            action_service.mark_running(action.id)
         import os
         import tempfile
 
@@ -179,7 +232,11 @@ def make_edit_file(root: Path) -> Callable[..., str]:
             os.replace(tmp_path, resolved)
         except Exception:
             os.unlink(tmp_path)
+            if action_id is not None and action_service is not None:
+                action_service.mark_failed(action_id, error="edit_file failed")
             raise
+        if action_id is not None and action_service is not None:
+            action_service.mark_applied(action_id, result={"path": path})
         return f"edited {path}"
 
     return edit_file
@@ -236,6 +293,8 @@ def make_run_bash(
     runner: BashRunner | None = None,
     default_timeout: float = DEFAULT_BASH_TIMEOUT_SECONDS,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+    action_service: ActionService | None = None,
+    task_id: str | None = None,
 ) -> Callable[..., Awaitable[str]]:
     run = runner or _default_runner
 
@@ -260,6 +319,23 @@ def make_run_bash(
     async def run_bash(command: str, timeout_seconds: int | float | None = None) -> str:
         timeout = float(timeout_seconds) if timeout_seconds is not None else default_timeout
         cwd = str(root.resolve())
+        action_id: str | None = None
+        if action_service is not None and task_id is not None:
+            action, decision = action_service.propose(
+                task_id=task_id,
+                kind=ActionKind.COMMAND,
+                summary=f"run command: {command[:80]}",
+                payload={"command": command, "timeout_seconds": timeout},
+                risk_level=ActionRiskLevel.HIGH,
+            )
+            action_id = action.id
+            if not decision.allowed:
+                action_service.skip(action.id, reason=decision.reason)
+                return f"action {action.id} skipped: {decision.reason}"
+            if decision.requires_approval:
+                return f"action {action.id} pending approval: {action.summary}"
+            action_service.approve(action.id, actor="policy")
+            action_service.mark_running(action.id)
         # ``-c`` (no ``-l``) so login-profile files don't run and leak state.
         rc, stdout, stderr = await run(["bash", "-c", command], cwd, timeout)
         body = stdout + (b"\n" + stderr if stderr else b"")
@@ -272,6 +348,14 @@ def make_run_bash(
             text = f"(exit {rc})\n{text}"
         if truncated:
             text += f"\n[output truncated to {max_output_bytes} bytes]"
+        if action_id is not None and action_service is not None:
+            if rc == 0:
+                action_service.mark_applied(
+                    action_id,
+                    result={"exit_code": rc, "output_preview": text[:4000]},
+                )
+            else:
+                action_service.mark_failed(action_id, error=f"command exited {rc}")
         return text
 
     return run_bash
@@ -354,6 +438,8 @@ def build_default_registry(
     *,
     bash_runner: BashRunner | None = None,
     hook_runner: HookRunnerProtocol | None = None,
+    action_service: ActionService | None = None,
+    task_id: str | None = None,
 ) -> ToolRegistry:
     """Return a ``ToolRegistry`` with all six built-in tools bound to ``root``.
 
@@ -366,9 +452,18 @@ def build_default_registry(
     """
     reg = ToolRegistry(hook_runner=hook_runner)
     reg.register_from_function(make_read_file(root))
-    reg.register_from_function(make_write_file(root))
-    reg.register_from_function(make_edit_file(root))
+    reg.register_from_function(
+        make_write_file(root, action_service=action_service, task_id=task_id)
+    )
+    reg.register_from_function(make_edit_file(root, action_service=action_service, task_id=task_id))
     reg.register_from_function(make_glob_files(root))
     reg.register_from_function(make_grep_files(root))
-    reg.register_from_function(make_run_bash(root, runner=bash_runner))
+    reg.register_from_function(
+        make_run_bash(
+            root,
+            runner=bash_runner,
+            action_service=action_service,
+            task_id=task_id,
+        )
+    )
     return reg

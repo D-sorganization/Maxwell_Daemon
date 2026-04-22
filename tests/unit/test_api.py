@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from maxwell_daemon.api import create_app
 from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.core.actions import ActionKind
 from maxwell_daemon.core.artifacts import ArtifactKind
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
@@ -33,6 +34,7 @@ def daemon(
         work_item_store_path=tmp_path / "work_items.db",
         artifact_store_path=tmp_path / "artifacts.db",
         artifact_blob_root=tmp_path / "artifacts",
+        action_store_path=tmp_path / "actions.db",
     )
     loop.run_until_complete(d.start(worker_count=1))
     try:
@@ -263,6 +265,50 @@ class TestArtifactEndpoints:
         response = client.get("/api/v1/artifacts/missing")
 
         assert response.status_code == 404
+
+
+class TestActionEndpoints:
+    def test_lists_and_fetches_task_actions(self, client: TestClient, daemon: Daemon) -> None:
+        action = daemon.propose_action(
+            task_id="task-action",
+            kind=ActionKind.FILE_WRITE,
+            summary="write file",
+            payload={"path": "ok.py"},
+        )
+
+        listed = client.get("/api/v1/tasks/task-action/actions")
+        detail = client.get(f"/api/v1/actions/{action.id}")
+
+        assert listed.status_code == 200
+        assert [item["id"] for item in listed.json()] == [action.id]
+        assert detail.status_code == 200
+        assert detail.json()["summary"] == "write file"
+
+    def test_approve_and_reject_actions(self, client: TestClient, daemon: Daemon) -> None:
+        approved = daemon.propose_action(
+            task_id="task-action",
+            kind=ActionKind.FILE_WRITE,
+            summary="write file",
+            payload={"path": "ok.py"},
+        )
+        rejected = daemon.propose_action(
+            task_id="task-action",
+            kind=ActionKind.COMMAND,
+            summary="run tests",
+            payload={"command": "pytest"},
+        )
+
+        approve_response = client.post(f"/api/v1/actions/{approved.id}/approve")
+        reject_response = client.post(
+            f"/api/v1/actions/{rejected.id}/reject",
+            json={"reason": "not now"},
+        )
+
+        assert approve_response.status_code == 200
+        assert approve_response.json()["status"] == "approved"
+        assert reject_response.status_code == 200
+        assert reject_response.json()["status"] == "rejected"
+        assert reject_response.json()["rejection_reason"] == "not now"
 
 
 class TestJwtAuthEndpoint:

@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field, field_validator
 from maxwell_daemon import __version__
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
+from maxwell_daemon.core.actions import Action
 from maxwell_daemon.core.artifacts import Artifact, ArtifactIntegrityError, ArtifactKind
 from maxwell_daemon.core.work_items import (
     REPO_PATTERN,
@@ -183,6 +184,56 @@ class ArtifactView(BaseModel):
             created_at=artifact.created_at,
             metadata=artifact.metadata,
         )
+
+
+class ActionView(BaseModel):
+    id: str
+    task_id: str
+    work_item_id: str | None
+    kind: str
+    status: str
+    summary: str
+    payload: dict[str, Any]
+    risk_level: str
+    requires_approval: bool
+    approved_by: str | None
+    approved_at: datetime | None
+    rejected_by: str | None
+    rejected_at: datetime | None
+    rejection_reason: str | None
+    result_artifact_id: str | None
+    result: dict[str, Any]
+    error: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_action(cls, action: Action) -> ActionView:
+        return cls(
+            id=action.id,
+            task_id=action.task_id,
+            work_item_id=action.work_item_id,
+            kind=action.kind.value,
+            status=action.status.value,
+            summary=action.summary,
+            payload=action.payload,
+            risk_level=action.risk_level.value,
+            requires_approval=action.requires_approval,
+            approved_by=action.approved_by,
+            approved_at=action.approved_at,
+            rejected_by=action.rejected_by,
+            rejected_at=action.rejected_at,
+            rejection_reason=action.rejection_reason,
+            result_artifact_id=action.result_artifact_id,
+            result=action.result,
+            error=action.error,
+            created_at=action.created_at,
+            updated_at=action.updated_at,
+        )
+
+
+class ActionRejectRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class IssueCreate(BaseModel):
@@ -607,6 +658,48 @@ def create_app(
             ArtifactView.from_artifact(artifact)
             for artifact in daemon.list_task_artifacts(task_id, kind=kind)
         ]
+
+    @app.get("/api/v1/tasks/{task_id}/actions", dependencies=[Depends(_require_viewer())])
+    async def list_task_actions(task_id: str) -> list[ActionView]:
+        return [ActionView.from_action(action) for action in daemon.list_task_actions(task_id)]
+
+    @app.get("/api/v1/actions/{action_id}", dependencies=[Depends(_require_viewer())])
+    async def get_action(action_id: str) -> ActionView:
+        action = daemon.get_action(action_id)
+        if action is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "action not found")
+        return ActionView.from_action(action)
+
+    @app.post(
+        "/api/v1/actions/{action_id}/approve",
+        dependencies=[Depends(auth), Depends(_require_operator())],
+    )
+    async def approve_action(action_id: str) -> ActionView:
+        try:
+            action = daemon.approve_action(action_id, actor="api", audit=_audit)
+        except KeyError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "action not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        return ActionView.from_action(action)
+
+    @app.post(
+        "/api/v1/actions/{action_id}/reject",
+        dependencies=[Depends(auth), Depends(_require_operator())],
+    )
+    async def reject_action(action_id: str, payload: ActionRejectRequest) -> ActionView:
+        try:
+            action = daemon.reject_action(
+                action_id,
+                actor="api",
+                reason=payload.reason,
+                audit=_audit,
+            )
+        except KeyError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "action not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        return ActionView.from_action(action)
 
     @app.post(
         "/api/v1/work-items",

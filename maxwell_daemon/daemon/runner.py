@@ -20,10 +20,17 @@ from pathlib import Path
 from typing import Any
 
 from maxwell_daemon import __version__
+from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
 from maxwell_daemon.config.loader import default_config_path
 from maxwell_daemon.core import (
+    Action,
+    ActionKind,
+    ActionPolicy,
+    ActionRiskLevel,
+    ActionService,
+    ApprovalMode,
     Artifact,
     ArtifactKind,
     ArtifactStore,
@@ -33,6 +40,7 @@ from maxwell_daemon.core import (
     CostLedger,
     CostRecord,
 )
+from maxwell_daemon.core.action_store import ActionStore
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.core.work_item_store import WorkItemStore
 from maxwell_daemon.core.work_items import WorkItem, WorkItemStatus
@@ -113,6 +121,7 @@ class Daemon:
         work_item_store_path: Path | None = None,
         artifact_store_path: Path | None = None,
         artifact_blob_root: Path | None = None,
+        action_store_path: Path | None = None,
     ) -> None:
         self._config = config
         # Path used for hot-reload; populated by from_config_path.
@@ -138,6 +147,16 @@ class Daemon:
         self._artifact_store = ArtifactStore(
             artifact_store_path or default_artifact_store,
             blob_root=artifact_blob_root or default_artifact_root,
+        )
+        default_action_store = Path.home() / ".local/share/maxwell-daemon/actions.db"
+        self._action_store = ActionStore(action_store_path or default_action_store)
+        self._actions = ActionService(
+            self._action_store,
+            policy=ActionPolicy(
+                mode=ApprovalMode(config.tools.approval_tier),
+                workspace_root=self._workspace_root,
+            ),
+            events=self._events,
         )
         # Memory store — co-located with the ledger for easy backup.
         from maxwell_daemon.memory import (
@@ -623,6 +642,51 @@ class Daemon:
 
     def get_artifact(self, artifact_id: str) -> Artifact | None:
         return self._artifact_store.get(artifact_id)
+
+    def propose_action(
+        self,
+        *,
+        task_id: str,
+        kind: ActionKind,
+        summary: str,
+        payload: dict[str, Any] | None = None,
+        work_item_id: str | None = None,
+        risk_level: ActionRiskLevel = ActionRiskLevel.MEDIUM,
+    ) -> Action:
+        action, _decision = self._actions.propose(
+            task_id=task_id,
+            kind=kind,
+            summary=summary,
+            payload=payload,
+            work_item_id=work_item_id,
+            risk_level=risk_level,
+        )
+        return action
+
+    def get_action(self, action_id: str) -> Action | None:
+        return self._actions.get(action_id)
+
+    def list_task_actions(self, task_id: str) -> list[Action]:
+        return self._actions.list_for_task(task_id)
+
+    def approve_action(
+        self,
+        action_id: str,
+        *,
+        actor: str,
+        audit: AuditLogger | None = None,
+    ) -> Action:
+        return self._actions.approve(action_id, actor=actor, audit=audit)
+
+    def reject_action(
+        self,
+        action_id: str,
+        *,
+        actor: str,
+        reason: str | None = None,
+        audit: AuditLogger | None = None,
+    ) -> Action:
+        return self._actions.reject(action_id, actor=actor, reason=reason, audit=audit)
 
     def read_artifact_bytes(self, artifact_id: str) -> bytes:
         return self._artifact_store.read_bytes(artifact_id)
