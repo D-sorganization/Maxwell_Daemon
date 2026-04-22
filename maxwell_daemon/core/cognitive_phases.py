@@ -73,6 +73,4 @@ class CognitivePipeline:
                 status=PhaseDecision.SUCCESS, final_artifact=code, history=history
             )
 
-        return PipelineResult(
-            status=PhaseDecision.FAILURE, final_artifact=code, history=history
-        )
+        return PipelineResult(status=PhaseDecision.FAILURE, final_artifact=code, history=history)

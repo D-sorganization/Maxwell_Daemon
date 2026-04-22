@@ -61,8 +61,6 @@ class TestCostCommand:
         )
         path = tmp_path / "c.yaml"
         save_config(cfg, path)
-        r = runner.invoke(
-            app, ["cost", "--config", str(path), "--ledger", str(tmp_path / "l.db")]
-        )
+        r = runner.invoke(app, ["cost", "--config", str(path), "--ledger", str(tmp_path / "l.db")])
         assert r.exit_code == 0
         assert "$50" in r.stdout or "50.00" in r.stdout

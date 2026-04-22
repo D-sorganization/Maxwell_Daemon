@@ -24,9 +24,7 @@ class BackendConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str = Field(
-        ..., description="Backend type: claude, openai, ollama, google, azure"
-    )
+    type: str = Field(..., description="Backend type: claude, openai, ollama, google, azure")
     model: str = Field(..., description="Default model id for this backend")
     api_key: SecretStr | None = Field(
         None,
@@ -114,9 +112,7 @@ class RepoConfig(BaseModel):
     name: str
     path: Path
     slots: int = Field(2, ge=1, le=16, description="Max concurrent agents on this repo")
-    backend: str | None = Field(
-        None, description="Override default backend for this repo"
-    )
+    backend: str | None = Field(None, description="Override default backend for this repo")
     model: str | None = None
     tags: list[str] = Field(default_factory=list)
     # Per-repo overrides of IssueExecutor behaviour. None = use executor default.
@@ -140,9 +136,7 @@ class RepoConfig(BaseModel):
         if isinstance(v, str):
             return Path(v).expanduser()
         if not isinstance(v, Path):
-            raise ValueError(
-                f"expected str or Path for 'path', got {type(v).__name__!r}"
-            )
+            raise ValueError(f"expected str or Path for 'path', got {type(v).__name__!r}")
         return v
 
 
@@ -212,9 +206,7 @@ class APIConfig(BaseModel):
 
     def jwt_secret_value(self) -> str | None:
         """Unwrap the JWT secret SecretStr, or None if unset."""
-        return (
-            self.jwt_secret.get_secret_value() if self.jwt_secret is not None else None
-        )
+        return self.jwt_secret.get_secret_value() if self.jwt_secret is not None else None
 
 
 class MaxwellDaemonConfig(BaseModel):
@@ -235,9 +227,7 @@ class MaxwellDaemonConfig(BaseModel):
 
     @field_validator("backends")
     @classmethod
-    def _require_default_exists(
-        cls, v: dict[str, BackendConfig]
-    ) -> dict[str, BackendConfig]:
+    def _require_default_exists(cls, v: dict[str, BackendConfig]) -> dict[str, BackendConfig]:
         if not v:
             raise ValueError("At least one backend must be configured")
         return v

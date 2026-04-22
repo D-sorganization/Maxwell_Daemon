@@ -45,9 +45,7 @@ class SlowBackend(ILLMBackend):
     def capabilities(self, model: str) -> Any:
         from maxwell_daemon.backends.base import BackendCapabilities
 
-        return BackendCapabilities(
-            cost_per_1k_input_tokens=0.001, cost_per_1k_output_tokens=0.002
-        )
+        return BackendCapabilities(cost_per_1k_input_tokens=0.001, cost_per_1k_output_tokens=0.002)
 
 
 async def _wait_for_status(daemon: Daemon, task_id: str, expected: TaskStatus) -> None:

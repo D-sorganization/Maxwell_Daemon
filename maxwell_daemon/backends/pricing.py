@@ -137,6 +137,5 @@ def cost_for(provider: str, model: str, usage: TokenUsage) -> float:
     """
     price_in, price_out = get_rates(provider, model)
     return (
-        usage.prompt_tokens * price_in / 1_000_000
-        + usage.completion_tokens * price_out / 1_000_000
+        usage.prompt_tokens * price_in / 1_000_000 + usage.completion_tokens * price_out / 1_000_000
     )

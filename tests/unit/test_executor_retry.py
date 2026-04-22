@@ -52,9 +52,7 @@ class _WS:
     async def ensure_clone(self, repo: str, **_: Any) -> Path:
         return Path("/fake")
 
-    async def create_branch(
-        self, repo: str, branch: str, *, base: str = "main", **_: Any
-    ) -> None:
+    async def create_branch(self, repo: str, branch: str, *, base: str = "main", **_: Any) -> None:
         pass
 
     async def apply_diff(self, repo: str, diff: str, **_: Any) -> None:
@@ -62,9 +60,7 @@ class _WS:
         if len(self.apply_calls) <= self.apply_fails_first_n:
             raise WorkspaceError("patch does not apply")
 
-    async def commit_and_push(
-        self, repo: str, *, branch: str, message: str, **_: Any
-    ) -> None:
+    async def commit_and_push(self, repo: str, *, branch: str, message: str, **_: Any) -> None:
         pass
 
 
@@ -77,9 +73,7 @@ class _ScriptedBackend(ILLMBackend):
         self._responses = responses
         self.calls: list[list[Message]] = []
 
-    async def complete(
-        self, messages: list[Message], *, model: str, **_: Any
-    ) -> BackendResponse:
+    async def complete(self, messages: list[Message], *, model: str, **_: Any) -> BackendResponse:
         self.calls.append(messages)
         payload = self._responses[min(len(self.calls) - 1, len(self._responses) - 1)]
         return BackendResponse(
@@ -115,14 +109,10 @@ class TestDiffRetry:
                 {"plan": "corrected", "diff": "diff --git a/x b/x\n"},
             ]
         )
-        executor = IssueExecutor(
-            github=gh, workspace=ws, backend=backend, max_diff_retries=2
-        )
+        executor = IssueExecutor(github=gh, workspace=ws, backend=backend, max_diff_retries=2)
 
         result = asyncio.run(
-            executor.execute_issue(
-                repo="o/r", issue_number=1, model="m", mode="implement"
-            )
+            executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="implement")
         )
         assert result.applied_diff is True
         assert len(ws.apply_calls) == 2  # first failed, second succeeded
@@ -134,15 +124,11 @@ class TestDiffRetry:
         gh = _GH(issue=_issue())
         ws = _WS(apply_fails_first_n=99)
         backend = _ScriptedBackend([{"plan": "p", "diff": "diff --git a/x b/x\n"}])
-        executor = IssueExecutor(
-            github=gh, workspace=ws, backend=backend, max_diff_retries=2
-        )
+        executor = IssueExecutor(github=gh, workspace=ws, backend=backend, max_diff_retries=2)
 
         with pytest.raises(IssueExecutionError, match=r"after \d+ attempt"):
             asyncio.run(
-                executor.execute_issue(
-                    repo="o/r", issue_number=1, model="m", mode="implement"
-                )
+                executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="implement")
             )
         # Initial attempt + 2 retries = 3 total apply calls.
         assert len(ws.apply_calls) == 3
@@ -151,13 +137,9 @@ class TestDiffRetry:
         gh = _GH(issue=_issue())
         ws = _WS()
         backend = _ScriptedBackend([{"plan": "p", "diff": ""}])
-        executor = IssueExecutor(
-            github=gh, workspace=ws, backend=backend, max_diff_retries=5
-        )
+        executor = IssueExecutor(github=gh, workspace=ws, backend=backend, max_diff_retries=5)
 
-        asyncio.run(
-            executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="plan")
-        )
+        asyncio.run(executor.execute_issue(repo="o/r", issue_number=1, model="m", mode="plan"))
         # Plan mode doesn't touch the workspace.
         assert ws.apply_calls == []
         assert len(backend.calls) == 1

@@ -59,16 +59,12 @@ def logger(log_path: Path) -> AuditLogger:
 
 
 class TestAuditLogger:
-    def test_creates_file_on_first_write(
-        self, logger: AuditLogger, log_path: Path
-    ) -> None:
+    def test_creates_file_on_first_write(self, logger: AuditLogger, log_path: Path) -> None:
         logger.log_api_call(method="GET", path="/health", status=200)
         assert log_path.is_file()
 
     def test_entry_fields_present(self, logger: AuditLogger, log_path: Path) -> None:
-        logger.log_api_call(
-            method="POST", path="/api/v1/tasks", status=202, request_id="abc"
-        )
+        logger.log_api_call(method="POST", path="/api/v1/tasks", status=202, request_id="abc")
         lines = log_path.read_text().splitlines()
         assert len(lines) == 1
         obj = json.loads(lines[0])
@@ -81,9 +77,7 @@ class TestAuditLogger:
         assert "entry_hash" in obj
         assert "prev_hash" in obj
 
-    def test_first_entry_genesis_prev_hash(
-        self, logger: AuditLogger, log_path: Path
-    ) -> None:
+    def test_first_entry_genesis_prev_hash(self, logger: AuditLogger, log_path: Path) -> None:
         logger.log_api_call(method="GET", path="/health", status=200)
         obj = json.loads(log_path.read_text())
         assert obj["prev_hash"] == "0" * 64
@@ -96,17 +90,13 @@ class TestAuditLogger:
         second = json.loads(lines[1])
         assert second["prev_hash"] == first["entry_hash"]
 
-    def test_multiple_entries_appended(
-        self, logger: AuditLogger, log_path: Path
-    ) -> None:
+    def test_multiple_entries_appended(self, logger: AuditLogger, log_path: Path) -> None:
         for i in range(5):
             logger.log_api_call(method="GET", path=f"/api/v1/tasks/{i}", status=200)
         assert len(log_path.read_text().splitlines()) == 5
 
     def test_log_agent_operation(self, logger: AuditLogger, log_path: Path) -> None:
-        logger.log_agent_operation(
-            operation="task_start", task_id="t-1", repo="org/repo"
-        )
+        logger.log_agent_operation(operation="task_start", task_id="t-1", repo="org/repo")
         obj = json.loads(log_path.read_text())
         assert obj["event_type"] == "agent_operation"
         assert obj["details"]["operation"] == "task_start"
@@ -163,9 +153,7 @@ class TestAuditLogger:
         paths = [e.get("path") for e in remaining]
         assert "/new" in paths
         rotation_entries = [
-            e
-            for e in remaining
-            if e.get("details", {}).get("operation") == "log_rotation"
+            e for e in remaining if e.get("details", {}).get("operation") == "log_rotation"
         ]
         assert len(rotation_entries) == 1
         assert rotation_entries[0]["details"]["removed"] == 1
@@ -188,9 +176,7 @@ class TestAuditLogger:
 class TestBearerTokenRedaction:
     """Issue #234: bearer tokens must never be persisted in audit entries."""
 
-    def test_bearer_token_in_details_is_redacted(
-        self, logger: AuditLogger, log_path: Path
-    ) -> None:
+    def test_bearer_token_in_details_is_redacted(self, logger: AuditLogger, log_path: Path) -> None:
         logger.log_api_call(
             method="POST",
             path="/api/v1/tasks",
@@ -212,9 +198,7 @@ class TestBearerTokenRedaction:
         obj = json.loads(log_path.read_text())
         assert obj["details"]["auth"] == "Bearer ***"
 
-    def test_non_sensitive_details_pass_through(
-        self, logger: AuditLogger, log_path: Path
-    ) -> None:
+    def test_non_sensitive_details_pass_through(self, logger: AuditLogger, log_path: Path) -> None:
         logger.log_api_call(
             method="GET",
             path="/health",

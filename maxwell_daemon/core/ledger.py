@@ -166,9 +166,7 @@ class CostLedger:
     async def aprune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Non-blocking version of :meth:`prune` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None, lambda: self._prune_sync(older_than_days, now=now)
-        )
+        return await loop.run_in_executor(None, lambda: self._prune_sync(older_than_days, now=now))
 
     # ── Derived helpers ───────────────────────────────────────────────────────
 

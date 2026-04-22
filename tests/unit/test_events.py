@@ -74,9 +74,7 @@ class TestEventBus:
             tb = asyncio.create_task(collect(b))
             await asyncio.sleep(0.01)
             await bus.publish(Event(kind=EventKind.TASK_QUEUED, payload={"id": "x"}))
-            await bus.publish(
-                Event(kind=EventKind.TASK_FAILED, payload={"id": "x", "last": True})
-            )
+            await bus.publish(Event(kind=EventKind.TASK_FAILED, payload={"id": "x", "last": True}))
             await asyncio.wait_for(asyncio.gather(ta, tb), timeout=1.0)
             return a, b
 

@@ -105,9 +105,7 @@ def record_request(
             elif cost_usd == 0.0:
                 MAXWELL_FREE_REQUESTS_TOTAL.labels(backend=backend, model=model).inc()
         if duration_seconds > 0:
-            MAXWELL_REQUEST_DURATION.labels(backend=backend, model=model).observe(
-                duration_seconds
-            )
+            MAXWELL_REQUEST_DURATION.labels(backend=backend, model=model).observe(duration_seconds)
 
 
 def build_registry() -> CollectorRegistry:

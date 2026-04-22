@@ -94,9 +94,7 @@ class TestTaskStoreErrorLogging:
             _run(body())
 
         # The fix replaces suppress(Exception) with an explicit log.exception.
-        matched = [
-            r for r in caplog.records if "task store write failed" in r.getMessage()
-        ]
+        matched = [r for r in caplog.records if "task store write failed" in r.getMessage()]
         assert matched, (
             "expected 'task store write failed' log.exception; "
             f"records={[r.getMessage() for r in caplog.records]}"
@@ -144,9 +142,9 @@ class TestEventPublishFailure:
                 t = d.get_task(task.id)
                 assert t is not None
                 assert t.status is TaskStatus.FAILED
-                assert (
-                    t.finished_at is not None
-                ), "task must have finished_at set even on publish failure"
+                assert t.finished_at is not None, (
+                    "task must have finished_at set even on publish failure"
+                )
             finally:
                 await d.stop()
 

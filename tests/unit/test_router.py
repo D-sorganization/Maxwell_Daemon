@@ -29,9 +29,7 @@ class _Fake(ILLMBackend):
     def __init__(self, **_: Any) -> None:
         pass
 
-    async def complete(
-        self, messages: list[Message], *, model: str, **_: Any
-    ) -> BackendResponse:
+    async def complete(self, messages: list[Message], *, model: str, **_: Any) -> BackendResponse:
         return BackendResponse(
             content="",
             finish_reason="stop",
@@ -40,9 +38,7 @@ class _Fake(ILLMBackend):
             backend=self.name,
         )
 
-    async def stream(
-        self, messages: list[Message], *, model: str, **_: Any
-    ) -> AsyncIterator[str]:
+    async def stream(self, messages: list[Message], *, model: str, **_: Any) -> AsyncIterator[str]:
         if False:
             yield ""
 
@@ -115,16 +111,12 @@ class TestRouter:
         assert decision.model == "model-b"
         assert "private-repo" in decision.reason
 
-    def test_repo_without_backend_uses_default(
-        self, config: MaxwellDaemonConfig
-    ) -> None:
+    def test_repo_without_backend_uses_default(self, config: MaxwellDaemonConfig) -> None:
         decision = BackendRouter(config).route(repo="normal-repo")
         assert decision.backend_name == "primary"
 
     def test_explicit_override_wins(self, config: MaxwellDaemonConfig) -> None:
-        decision = BackendRouter(config).route(
-            repo="private-repo", backend_override="primary"
-        )
+        decision = BackendRouter(config).route(repo="private-repo", backend_override="primary")
         assert decision.backend_name == "primary"
         assert "override" in decision.reason
 

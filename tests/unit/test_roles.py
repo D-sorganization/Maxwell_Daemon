@@ -49,9 +49,7 @@ async def test_role_player_executes_job_orthogonally():
 
 
 def test_role_player_enforces_capabilities():
-    coder_role = Role(
-        name="Coder", requires_tool_use=True, system_prompt="You write code."
-    )
+    coder_role = Role(name="Coder", requires_tool_use=True, system_prompt="You write code.")
     backend = DummyBackend(can_use_tools=False)
 
     with pytest.raises(

@@ -17,9 +17,7 @@ from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
-def client(
-    minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
-) -> Iterator[TestClient]:
+def client(minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path) -> Iterator[TestClient]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
@@ -44,9 +42,7 @@ class TestRequestId:
         )
 
     def test_client_supplied_id_is_preserved(self, client: TestClient) -> None:
-        r = client.get(
-            "/health", headers={"x-request-id": "00000000-0000-0000-0000-000000000001"}
-        )
+        r = client.get("/health", headers={"x-request-id": "00000000-0000-0000-0000-000000000001"})
         assert r.headers["x-request-id"] == "00000000-0000-0000-0000-000000000001"
 
     def test_malformed_client_id_is_replaced(self, client: TestClient) -> None:

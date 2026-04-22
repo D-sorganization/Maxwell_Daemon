@@ -124,9 +124,7 @@ def load_hook_config(path: Path) -> HookConfig:
         raise HookViolationError(f"hook config at {path} must be a mapping")
     section = raw.get("hooks") or {}
     if not isinstance(section, dict):
-        raise HookViolationError(
-            f"hook config at {path} has non-mapping `hooks:` section"
-        )
+        raise HookViolationError(f"hook config at {path} has non-mapping `hooks:` section")
 
     return HookConfig(
         pre_tool=tuple(_parse_specs(section.get("pre_tool"))),
@@ -141,18 +139,14 @@ def _parse_specs(raw: Any) -> list[HookSpec]:
     if raw is None:
         return []
     if not isinstance(raw, list):
-        raise HookViolationError(
-            f"expected a list of hook specs, got {type(raw).__name__}"
-        )
+        raise HookViolationError(f"expected a list of hook specs, got {type(raw).__name__}")
     out: list[HookSpec] = []
     for item in raw:
         if isinstance(item, str):
             out.append(HookSpec(command=item))
             continue
         if not isinstance(item, dict):
-            raise HookViolationError(
-                f"hook spec must be a string or mapping, got {item!r}"
-            )
+            raise HookViolationError(f"hook spec must be a string or mapping, got {item!r}")
         cmd = item.get("command")
         if not isinstance(cmd, str):
             raise HookViolationError(f"hook spec is missing `command:` ({item!r})")
@@ -167,9 +161,7 @@ def _parse_strings(raw: Any) -> list[str]:
     if raw is None:
         return []
     if not isinstance(raw, list):
-        raise HookViolationError(
-            f"expected a list of commands, got {type(raw).__name__}"
-        )
+        raise HookViolationError(f"expected a list of commands, got {type(raw).__name__}")
     out: list[str] = []
     for item in raw:
         if not isinstance(item, str):
@@ -203,9 +195,7 @@ class HookRunner:
 
     # ── pre_tool ────────────────────────────────────────────────────────────
 
-    async def run_pre_tool(
-        self, tool_name: str, tool_input: dict[str, Any]
-    ) -> HookOutcome:
+    async def run_pre_tool(self, tool_name: str, tool_input: dict[str, Any]) -> HookOutcome:
         """Run every matching pre_tool hook; first non-zero exit blocks the call."""
         for spec in self._cfg.pre_tool:
             if not _matches(spec.match, tool_name):
@@ -330,11 +320,7 @@ def _substitute(command: str, tool_input: dict[str, Any]) -> str:
     """
     out = command
     for key, value in tool_input.items():
-        rendered = (
-            json.dumps(value, default=str)
-            if isinstance(value, (dict, list))
-            else str(value)
-        )
+        rendered = json.dumps(value, default=str) if isinstance(value, (dict, list)) else str(value)
         out = out.replace(f"{{{{{key}}}}}", shlex.quote(rendered))
     return out
 

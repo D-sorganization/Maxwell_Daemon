@@ -18,9 +18,7 @@ from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
 
 
 @pytest.fixture
-def daemon(
-    minimal_config: MaxwellDaemonConfig, isolated_ledger_path
-) -> Iterator[Daemon]:
+def daemon(minimal_config: MaxwellDaemonConfig, isolated_ledger_path) -> Iterator[Daemon]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
@@ -41,9 +39,7 @@ def client(daemon: Daemon) -> Iterator[TestClient]:
 
 @pytest.fixture
 def auth_client(daemon: Daemon) -> Iterator[TestClient]:
-    with TestClient(
-        create_app(daemon, auth_token="secret-abc")
-    ) as c:  # nosec B106 — intentional test fixture, not a real credential
+    with TestClient(create_app(daemon, auth_token="secret-abc")) as c:  # nosec B106 — intentional test fixture, not a real credential
         yield c
 
 
@@ -60,9 +56,7 @@ class TestHealth:
         r = auth_client.get("/health")
         assert r.status_code == 200
 
-    def test_readyz_reports_ready_when_backend_available(
-        self, client: TestClient
-    ) -> None:
+    def test_readyz_reports_ready_when_backend_available(self, client: TestClient) -> None:
         r = client.get("/readyz")
 
         assert r.status_code == 200
@@ -74,9 +68,7 @@ class TestHealth:
         daemon: Daemon,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(
-            daemon, "state", lambda: SimpleNamespace(backends_available=[])
-        )
+        monkeypatch.setattr(daemon, "state", lambda: SimpleNamespace(backends_available=[]))
 
         r = client.get("/readyz")
 
@@ -111,9 +103,7 @@ class TestTaskSubmission:
         assert r.status_code == 200
         assert len(r.json()) >= 3
 
-    def test_list_filters_by_status_kind_and_repo(
-        self, client: TestClient, daemon: Daemon
-    ) -> None:
+    def test_list_filters_by_status_kind_and_repo(self, client: TestClient, daemon: Daemon) -> None:
         matching = Task(
             id="match",
             prompt="owner/repo#7",
@@ -136,17 +126,13 @@ class TestTaskSubmission:
             daemon._tasks[matching.id] = matching
             daemon._tasks[other.id] = other
 
-        r = client.get(
-            "/api/v1/tasks?status=running&kind=issue&repo=owner/repo&limit=10"
-        )
+        r = client.get("/api/v1/tasks?status=running&kind=issue&repo=owner/repo&limit=10")
 
         assert r.status_code == 200
         body = r.json()
         assert [task["id"] for task in body] == ["match"]
 
-    def test_list_filters_by_completed_before(
-        self, client: TestClient, daemon: Daemon
-    ) -> None:
+    def test_list_filters_by_completed_before(self, client: TestClient, daemon: Daemon) -> None:
         old_done = Task(
             id="old-done",
             prompt="old",
@@ -191,9 +177,7 @@ class TestCostEndpoint:
 
 
 class TestAdminPruneEndpoint:
-    def test_prune_endpoint_runs_retention(
-        self, client: TestClient, daemon: Daemon
-    ) -> None:
+    def test_prune_endpoint_runs_retention(self, client: TestClient, daemon: Daemon) -> None:
         old_done = Task(
             id="old-prune",
             prompt="old",
@@ -212,30 +196,22 @@ class TestAdminPruneEndpoint:
 
 
 class TestJwtAuthEndpoint:
-    def test_whoami_returns_static_token_identity(
-        self, auth_client: TestClient
-    ) -> None:
+    def test_whoami_returns_static_token_identity(self, auth_client: TestClient) -> None:
         r = auth_client.get(
             "/api/v1/auth/me",
-            headers={
-                "Authorization": "Bearer secret-abc"
-            },  # nosec B106 — test fixture token matching auth_client fixture
+            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
         )
 
         assert r.status_code == 200
         assert r.json() == {"sub": "static-token", "role": "admin", "exp": None}
 
-    def test_whoami_returns_anonymous_without_auth(
-        self, auth_client: TestClient
-    ) -> None:
+    def test_whoami_returns_anonymous_without_auth(self, auth_client: TestClient) -> None:
         r = auth_client.get("/api/v1/auth/me")
 
         assert r.status_code == 200
         assert r.json() == {"sub": "anonymous", "role": None, "exp": None}
 
-    def test_whoami_rejects_wrong_static_token_identity(
-        self, auth_client: TestClient
-    ) -> None:
+    def test_whoami_rejects_wrong_static_token_identity(self, auth_client: TestClient) -> None:
         r = auth_client.get(
             "/api/v1/auth/me",
             headers={"Authorization": "Bearer wrong"},
@@ -366,9 +342,7 @@ repos:
             "discovery_interval_seconds": 120,
         }
         maxwell, other = body["repos"]
-        assert (
-            maxwell["github_url"] == "https://github.com/D-sorganization/Maxwell-Daemon"
-        )
+        assert maxwell["github_url"] == "https://github.com/D-sorganization/Maxwell-Daemon"
         assert maxwell["slots"] == 4
         assert maxwell["budget_per_story"] == 1.25
         assert maxwell["pr_target_branch"] == "main"
@@ -381,17 +355,13 @@ repos:
 
 
 class TestAuditEndpoint:
-    def test_audit_log_reports_disabled_when_not_configured(
-        self, client: TestClient
-    ) -> None:
+    def test_audit_log_reports_disabled_when_not_configured(self, client: TestClient) -> None:
         r = client.get("/api/v1/audit")
 
         assert r.status_code == 200
         assert r.json() == {"entries": [], "audit_enabled": False}
 
-    def test_audit_verify_reports_clean_when_not_configured(
-        self, client: TestClient
-    ) -> None:
+    def test_audit_verify_reports_clean_when_not_configured(self, client: TestClient) -> None:
         r = client.get("/api/v1/audit/verify")
 
         assert r.status_code == 200
@@ -399,9 +369,7 @@ class TestAuditEndpoint:
 
 
 class TestWebhookEndpoint:
-    def test_github_webhook_reports_disabled_without_secret(
-        self, client: TestClient
-    ) -> None:
+    def test_github_webhook_reports_disabled_without_secret(self, client: TestClient) -> None:
         r = client.post(
             "/api/v1/webhooks/github",
             content=b"{}",
@@ -413,9 +381,7 @@ class TestWebhookEndpoint:
 
 
 class TestAuth:
-    def test_protected_endpoint_rejects_missing_token(
-        self, auth_client: TestClient
-    ) -> None:
+    def test_protected_endpoint_rejects_missing_token(self, auth_client: TestClient) -> None:
         r = auth_client.get("/api/v1/backends")
         assert r.status_code == 401
 
@@ -436,9 +402,7 @@ class TestAuth:
     def test_accepts_correct_token(self, auth_client: TestClient) -> None:
         r = auth_client.get(
             "/api/v1/backends",
-            headers={
-                "Authorization": "Bearer secret-abc"
-            },  # nosec B106 — test fixture token matching auth_client fixture
+            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
         )
         assert r.status_code == 200
 
@@ -452,9 +416,7 @@ class TestSSHEndpointsWithoutAsyncSSH:
     the None sentinel is set correctly and the 503 guard fires.
     """
 
-    def test_ssh_sessions_returns_503_when_asyncssh_absent(
-        self, daemon: Daemon
-    ) -> None:
+    def test_ssh_sessions_returns_503_when_asyncssh_absent(self, daemon: Daemon) -> None:
         import sys
         from unittest.mock import patch
 

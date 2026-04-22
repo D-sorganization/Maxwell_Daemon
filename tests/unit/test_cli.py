@@ -62,9 +62,7 @@ class TestInit:
 
 
 class TestStatus:
-    def test_reports_configured_backends(
-        self, runner: CliRunner, populated_config: Path
-    ) -> None:
+    def test_reports_configured_backends(self, runner: CliRunner, populated_config: Path) -> None:
         r = runner.invoke(app, ["status", "--config", str(populated_config)])
         assert r.exit_code == 0
         assert "primary" in r.stdout
@@ -84,9 +82,7 @@ class TestBackendsCommand:
 
 
 class TestHealth:
-    def test_healthy_backend_passes(
-        self, runner: CliRunner, populated_config: Path
-    ) -> None:
+    def test_healthy_backend_passes(self, runner: CliRunner, populated_config: Path) -> None:
         r = runner.invoke(app, ["health", "--config", str(populated_config)])
         assert r.exit_code == 0
         assert "healthy" in r.stdout

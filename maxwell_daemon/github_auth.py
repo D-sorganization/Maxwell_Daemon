@@ -104,9 +104,7 @@ class GitHubAuth:
         """
         if self._mode == "token":
             if self._static_token is None:
-                raise ValueError(
-                    "GitHubAuth is in 'token' mode but no static token was provided"
-                )
+                raise ValueError("GitHubAuth is in 'token' mode but no static token was provided")
             return self._static_token
         return self._installation_token()
 
@@ -193,9 +191,7 @@ class GitHubAuth:
 
         expires_iso: str = data["expires_at"]
         expires_utc = _dt.datetime.fromisoformat(expires_iso.replace("Z", "+00:00"))
-        seconds_until = (
-            expires_utc - _dt.datetime.now(_dt.timezone.utc)
-        ).total_seconds()
+        seconds_until = (expires_utc - _dt.datetime.now(_dt.timezone.utc)).total_seconds()
         expires_mono = time.monotonic() + seconds_until
         return token, expires_mono
 
@@ -219,6 +215,8 @@ class GitHubAuth:
             self._private_key_pem is not None,
             "private_key_pem must be set for App auth",
         )
+        if self._private_key_pem is None:
+            raise RuntimeError("GitHub App private key is not configured.")
         jwt_token = _jwt.encode(payload, self._private_key_pem, algorithm="RS256")
 
         async with _httpx.AsyncClient(timeout=15) as client:
@@ -238,9 +236,7 @@ class GitHubAuth:
 
         expires_iso: str = data["expires_at"]
         expires_utc = _dt.datetime.fromisoformat(expires_iso.replace("Z", "+00:00"))
-        seconds_until = (
-            expires_utc - _dt.datetime.now(_dt.timezone.utc)
-        ).total_seconds()
+        seconds_until = (expires_utc - _dt.datetime.now(_dt.timezone.utc)).total_seconds()
         expires_mono = time.monotonic() + seconds_until
         return token, expires_mono
 

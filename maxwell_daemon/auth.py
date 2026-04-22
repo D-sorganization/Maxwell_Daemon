@@ -154,16 +154,12 @@ def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:
         authorization: Annotated[str | None, Header()] = None,
     ) -> TokenClaims:
         if authorization is None or not authorization.startswith("Bearer "):
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED, "JWT bearer token required"
-            )
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "JWT bearer token required")
         raw = authorization.removeprefix("Bearer ").strip()
         try:
             claims = jwt_config.decode_token(raw)
         except Exception as exc:
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED, f"invalid token: {exc}"
-            ) from exc
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"invalid token: {exc}") from exc
         if not claims.has_role(minimum):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,

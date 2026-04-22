@@ -30,9 +30,7 @@ class MemoryAnnealer:
 
         raw_content = ""
         for log_file in self.raw_logs_dir.glob("*.log"):
-            raw_content += (
-                log_file.read_text(encoding="utf-8", errors="replace") + "\n\n"
-            )
+            raw_content += log_file.read_text(encoding="utf-8", errors="replace") + "\n\n"
 
         job = Job(
             instructions=(

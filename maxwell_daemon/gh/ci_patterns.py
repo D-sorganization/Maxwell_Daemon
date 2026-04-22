@@ -97,9 +97,7 @@ class CIProfile:
 
         if self.uses_ruff:
             version = f" {self.ruff_version}" if self.ruff_version else ""
-            lines.append(
-                f"- **Linting:** ruff{version} — run `ruff check .` before committing"
-            )
+            lines.append(f"- **Linting:** ruff{version} — run `ruff check .` before committing")
             lines.append(
                 "- **Formatting:** `ruff format --check .` must pass (run `ruff format .` to fix)"
             )
@@ -109,13 +107,9 @@ class CIProfile:
 
         if self.uses_mypy:
             strict_note = (
-                " (strict mode — every function must have type hints)"
-                if self.mypy_strict
-                else ""
+                " (strict mode — every function must have type hints)" if self.mypy_strict else ""
             )
-            lines.append(
-                f"- **Type checking:** mypy{strict_note} — must pass with zero errors"
-            )
+            lines.append(f"- **Type checking:** mypy{strict_note} — must pass with zero errors")
 
         if self.uses_pytest:
             cov_note = ""
@@ -124,14 +118,8 @@ class CIProfile:
             lines.append(f"- **Tests:** pytest{cov_note}")
 
         if self.has_precommit:
-            hooks = (
-                ", ".join(self.precommit_hooks)
-                if self.precommit_hooks
-                else "configured hooks"
-            )
-            lines.append(
-                f"- **Pre-commit:** {hooks} — run `pre-commit run --all-files` to verify"
-            )
+            hooks = ", ".join(self.precommit_hooks) if self.precommit_hooks else "configured hooks"
+            lines.append(f"- **Pre-commit:** {hooks} — run `pre-commit run --all-files` to verify")
 
         if self.workflows:
             listed = ", ".join(self.workflows)
@@ -283,11 +271,7 @@ class CIPatternDetector:
                 hook_id = hook.get("id")
                 if isinstance(hook_id, str):
                     hooks.append(hook_id)
-            if (
-                ruff_version is None
-                and "ruff-pre-commit" in repo_url
-                and isinstance(rev, str)
-            ):
+            if ruff_version is None and "ruff-pre-commit" in repo_url and isinstance(rev, str):
                 ruff_version = rev
         return True, hooks, ruff_version
 

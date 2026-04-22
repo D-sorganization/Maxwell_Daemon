@@ -51,9 +51,7 @@ class HookRunnerProtocol(Protocol):
     substitute any object with the same method shape.
     """
 
-    async def run_pre_tool(
-        self, tool_name: str, tool_input: dict[str, Any]
-    ) -> _PreToolOutcome: ...
+    async def run_pre_tool(self, tool_name: str, tool_input: dict[str, Any]) -> _PreToolOutcome: ...
     async def run_post_tool(
         self, tool_name: str, tool_input: dict[str, Any], *, tool_output: str
     ) -> _PostToolOutcome: ...
@@ -186,9 +184,7 @@ class ToolRegistry:
         """Register a function previously decorated with ``@mcp_tool``."""
         spec = getattr(fn, "__mcp_tool__", None)
         if not isinstance(spec, ToolSpec):
-            raise ToolRegistryError(
-                f"{fn!r} is not decorated with @mcp_tool — nothing to register"
-            )
+            raise ToolRegistryError(f"{fn!r} is not decorated with @mcp_tool — nothing to register")
         self.register(spec)
 
     def get(self, name: str) -> ToolSpec:
@@ -229,9 +225,7 @@ class ToolRegistry:
              errors turn the success into an agent-visible error while
              preserving the original output for the agent's reference.
         """
-        spec = self.get(
-            name
-        )  # raises ToolRegistryError on unknown — caller bug, not model bug
+        spec = self.get(name)  # raises ToolRegistryError on unknown — caller bug, not model bug
 
         # Enforce approval tier before running any hooks or the handler (#237).
         if self._approval_tier not in self._AUTO_EXECUTE_TIERS:
@@ -269,9 +263,7 @@ class ToolRegistry:
             return ToolResult(content=f"{type(exc).__name__}: {exc}", is_error=True)
 
         if self._hook_runner is not None:
-            post = await self._hook_runner.run_post_tool(
-                name, arguments, tool_output=content
-            )
+            post = await self._hook_runner.run_post_tool(name, arguments, tool_output=content)
             if post.errored:
                 return ToolResult(
                     content=(
