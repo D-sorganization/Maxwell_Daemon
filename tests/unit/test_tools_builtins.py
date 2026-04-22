@@ -313,10 +313,11 @@ class TestGrepFiles:
         (tmp_path / "leak.txt").symlink_to(target)
 
         grep = make_grep_files(tmp_path)
-        result = grep(pattern="needle-from-outside")
+        result = grep(pattern="needle")
 
         assert "no match" in result.lower()
         assert "needle-from-outside" not in result
+        assert "leak.txt" not in result
 
 
 # ── registry assembly ───────────────────────────────────────────────────────
@@ -423,8 +424,9 @@ class TestBuildDefaultRegistry:
         (tmp_path / "leak.txt").symlink_to(target)
         reg = build_default_registry(tmp_path)
 
-        result = await reg.invoke("grep_files", {"pattern": "registry-secret"})
+        result = await reg.invoke("grep_files", {"pattern": "registry"})
 
         assert result.is_error is False
         assert "no match" in result.content.lower()
         assert "registry-secret" not in result.content
+        assert "leak.txt" not in result.content
