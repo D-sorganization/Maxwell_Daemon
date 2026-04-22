@@ -112,7 +112,11 @@ def test_rejects_profiles_that_cannot_handle_required_risk() -> None:
     decision = select_profile(
         profiles=[
             _profile("local.safe-only", max_risk=ActionRisk.REPO_WRITE),
-            _profile("remote.exec", deployment=DeploymentKind.REMOTE, max_risk=ActionRisk.COMMAND_EXECUTION),
+            _profile(
+                "remote.exec",
+                deployment=DeploymentKind.REMOTE,
+                max_risk=ActionRisk.COMMAND_EXECUTION,
+            ),
         ],
         policy=policy,
     )
@@ -121,4 +125,3 @@ def test_rejects_profiles_that_cannot_handle_required_risk() -> None:
         r.profile_id == "local.safe-only" and r.reason == "action_risk_too_high_for_profile"
         for r in decision.rejections
     )
-
