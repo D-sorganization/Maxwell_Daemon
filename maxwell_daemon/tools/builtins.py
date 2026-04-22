@@ -22,6 +22,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from maxwell_daemon.browser import BrowserAction, BrowserRequest, BrowserService
 from maxwell_daemon.core.actions import ActionKind, ActionRiskLevel
 from maxwell_daemon.tools.mcp import (
     HookRunnerProtocol,
@@ -42,6 +43,7 @@ __all__ = [
     "make_edit_file",
     "make_glob_files",
     "make_grep_files",
+    "make_open_browser_url",
     "make_read_file",
     "make_run_bash",
     "make_write_file",
@@ -467,6 +469,61 @@ def make_grep_files(root: Path) -> Callable[..., str]:
     return grep_files
 
 
+# ── open_browser_url ─────────────────────────────────────────────────────────
+def make_open_browser_url(browser_service: BrowserService) -> Callable[..., Awaitable[str]]:
+    @mcp_tool(
+        name="open_browser_url",
+        description=(
+            "Open an HTTP(S) URL through the configured browser automation runner and "
+            "return a text snapshot. Optional allowed_hosts limits which hosts may be visited."
+        ),
+        capabilities=frozenset({"network", "artifact_write"}),
+        risk_level="network_write",
+        requires_approval=True,
+        params=[
+            ToolParam(name="url", type="string", description="HTTP(S) URL to visit"),
+            ToolParam(
+                name="allowed_hosts",
+                type="array",
+                description="Optional host allowlist, including '*.example.com' wildcards",
+                required=False,
+            ),
+            ToolParam(
+                name="timeout_seconds",
+                type="number",
+                description="Wall-clock browser action limit",
+                required=False,
+            ),
+        ],
+    )
+    async def open_browser_url(
+        url: str,
+        allowed_hosts: list[str] | None = None,
+        timeout_seconds: int | float | None = None,
+    ) -> str:
+        request = BrowserRequest(
+            url=url,
+            action=BrowserAction.SNAPSHOT,
+            allowed_hosts=tuple(allowed_hosts or ()),
+            timeout_seconds=float(timeout_seconds) if timeout_seconds is not None else 30.0,
+        )
+        result = await browser_service.run(request)
+        parts: list[str] = [f"url: {result.url}", f"action: {result.action.value}"]
+        if result.title:
+            parts.append(f"title: {result.title}")
+        if result.screenshot_artifact_id:
+            parts.append(f"screenshot_artifact_id: {result.screenshot_artifact_id}")
+        if result.metadata:
+            metadata = ", ".join(f"{key}={value!r}" for key, value in sorted(result.metadata.items()))
+            parts.append(f"metadata: {metadata}")
+        if result.text:
+            parts.append("")
+            parts.append(result.text)
+        return "\n".join(parts)
+
+    return open_browser_url
+
+
 # ── default registry ────────────────────────────────────────────────────────
 def build_default_registry(
     root: Path,
@@ -477,6 +534,7 @@ def build_default_registry(
     task_id: str | None = None,
     policy: ToolPolicy | None = None,
     invocation_store: ToolInvocationStore | None = None,
+    browser_service: BrowserService | None = None,
 ) -> ToolRegistry:
     """Return a ``ToolRegistry`` with all six built-in tools bound to ``root``.
 
@@ -507,4 +565,6 @@ def build_default_registry(
             task_id=task_id,
         )
     )
+    if browser_service is not None:
+        reg.register_from_function(make_open_browser_url(browser_service))
     return reg
