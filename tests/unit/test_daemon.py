@@ -187,6 +187,35 @@ class TestTaskExecution:
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
 
+    def test_reprioritized_stale_queue_entry_executes_once(
+        self,
+        minimal_config: MaxwellDaemonConfig,
+        isolated_ledger_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def body() -> None:
+            d = Daemon(
+                minimal_config,
+                ledger_path=isolated_ledger_path,
+                task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
+            )
+            task = d.submit("run once", priority=100)
+            d.reprioritize_task(task.id, 10)
+            calls: list[str] = []
+
+            async def fake_execute(executed: Task) -> None:
+                calls.append(executed.id)
+                executed.status = TaskStatus.COMPLETED
+
+            monkeypatch.setattr(d, "_execute", fake_execute)
+
+            await d._worker_loop(worker_id=0)
+
+            assert calls == [task.id]
+            assert d._queue.empty()
+
+        _run(body())
+
 
 class TestTaskIdSubmission:
     @staticmethod
