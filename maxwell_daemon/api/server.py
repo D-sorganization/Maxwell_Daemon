@@ -203,6 +203,7 @@ class ActionView(BaseModel):
     payload: dict[str, Any]
     risk_level: str
     requires_approval: bool
+    approval_contract: Literal["proposal_only"] = "proposal_only"
     approved_by: str | None
     approved_at: datetime | None
     rejected_by: str | None
@@ -226,6 +227,7 @@ class ActionView(BaseModel):
             payload=action.payload,
             risk_level=action.risk_level.value,
             requires_approval=action.requires_approval,
+            approval_contract="proposal_only",
             approved_by=action.approved_by,
             approved_at=action.approved_at,
             rejected_by=action.rejected_by,

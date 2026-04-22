@@ -56,7 +56,7 @@ def render_actions(actions: list[dict[str, Any]]) -> None:
     table.add_column("Approval")
     table.add_column("Summary")
     for action in actions:
-        approval = "required" if action.get("requires_approval") else "auto"
+        approval = "required (proposal only)" if action.get("requires_approval") else "auto"
         table.add_row(
             action["id"],
             action["kind"],
@@ -103,13 +103,14 @@ def approve_action(
         str | None, typer.Option("--auth-token", envvar="MAXWELL_API_TOKEN")
     ] = None,
 ) -> None:
-    """Approve a proposed action."""
+    """Approve a proposed action without executing the side effect."""
     action = _request_json(
         "POST",
         f"{daemon_url}/api/v1/actions/{action_id}/approve",
         auth_token=auth_token,
     )
-    console.print(f"[green]approved[/green] {action['id']}")
+    contract = action.get("approval_contract", "proposal_only")
+    console.print(f"[green]approved proposal[/green] {action['id']} ({contract})")
 
 
 @action_app.command("reject")

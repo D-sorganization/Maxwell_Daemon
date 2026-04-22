@@ -405,6 +405,7 @@ class TestActionEndpoints:
 
         assert approve_response.status_code == 200
         assert approve_response.json()["status"] == "approved"
+        assert approve_response.json()["approval_contract"] == "proposal_only"
         assert reject_response.status_code == 200
         assert reject_response.json()["status"] == "rejected"
         assert reject_response.json()["rejection_reason"] == "not now"

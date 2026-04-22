@@ -99,6 +99,7 @@ class TestWriteFile:
 
         actions = service.list_for_task("task-1")
         assert "pending approval" in result
+        assert "proposal only" in result
         assert len(actions) == 1
         assert actions[0].status.value == "proposed"
         assert not (tmp_path / "pending.txt").exists()

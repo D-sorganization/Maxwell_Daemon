@@ -76,6 +76,7 @@ def _action_payload(**overrides: Any) -> dict[str, Any]:
         "payload": {"path": "ok.py"},
         "risk_level": "medium",
         "requires_approval": True,
+        "approval_contract": "proposal_only",
         "approved_by": None,
         "approved_at": None,
         "rejected_by": None,
@@ -103,6 +104,7 @@ def test_task_actions_lists_actions(
     assert result.exit_code == 0
     assert "act-1" in result.stdout
     assert "write file" in result.stdout
+    assert "proposal only" in result.stdout
 
 
 def test_action_show_fetches_action(
@@ -116,6 +118,7 @@ def test_action_show_fetches_action(
 
     assert result.exit_code == 0
     assert "file_write" in result.stdout
+    assert "proposal_only" in result.stdout
 
 
 def test_action_approve_posts_decision(
@@ -128,7 +131,8 @@ def test_action_approve_posts_decision(
     result = runner.invoke(app, ["action", "approve", "act-1"])
 
     assert result.exit_code == 0
-    assert "approved" in result.stdout
+    assert "approved proposal" in result.stdout
+    assert "proposal_only" in result.stdout
     assert any(
         call.get("url", "").endswith("/api/v1/actions/act-1/approve") for call in patch_httpx
     )
