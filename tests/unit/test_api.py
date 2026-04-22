@@ -282,6 +282,71 @@ class TestTaskSubmission:
         assert r.status_code == 404
 
 
+class TestControlPlaneGauntlet:
+    def test_returns_ordered_gate_timeline_and_delegate_status(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        task = Task(
+            id="issue-7",
+            prompt="owner/repo#7",
+            kind=TaskKind.ISSUE,
+            repo="owner/repo",
+            issue_repo="owner/repo",
+            issue_number=7,
+            status=TaskStatus.RUNNING,
+            backend="primary",
+            started_at=datetime.now(timezone.utc),
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[task.id] = task
+
+        r = client.get("/api/v1/control-plane/gauntlet")
+
+        assert r.status_code == 200
+        item = next(row for row in r.json() if row["task_id"] == "issue-7")
+        assert item["title"] == "owner/repo#7"
+        assert item["current_gate"] == "Delegate session"
+        assert [gate["id"] for gate in item["gates"]] == ["intake", "delegate", "verification"]
+        assert [gate["status"] for gate in item["gates"]] == ["passed", "running", "blocked"]
+        assert item["delegates"][0]["status"] == "running"
+        assert item["resource_routing"]["selected_backend"] == "primary"
+
+    def test_failed_task_surfaces_blocker_before_notes(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        failed = Task(
+            id="failed",
+            prompt="broken task",
+            status=TaskStatus.FAILED,
+            error="unit tests failed",
+            result="pytest output",
+        )
+        queued = Task(id="queued", prompt="queued task", status=TaskStatus.QUEUED)
+        with daemon._tasks_lock:
+            daemon._tasks[failed.id] = failed
+            daemon._tasks[queued.id] = queued
+
+        r = client.get("/api/v1/control-plane/gauntlet?limit=10")
+
+        assert r.status_code == 200
+        by_id = {row["task_id"]: row for row in r.json()}
+        failed_item = by_id["failed"]
+        assert failed_item["final_decision"] == "fail"
+        assert (
+            failed_item["next_action"]
+            == "Inspect blocker evidence, then retry or waive with a reason"
+        )
+        assert failed_item["critic_findings"][0]["severity"] == "blocker"
+        failed_gate = failed_item["gates"][1]
+        assert failed_gate["retry_allowed"] is True
+        assert failed_gate["waiver_allowed"] is True
+        assert by_id["queued"]["critic_findings"][0]["severity"] == "note"
+
+
 class TestCostEndpoint:
     def test_cost_summary_structure(self, client: TestClient) -> None:
         r = client.get("/api/v1/cost")

@@ -546,6 +546,128 @@ kbd {
 .repo-meta span { white-space: nowrap; }
 .repo-active { color: var(--ok); font-weight: 600; }
 
+/* ---- gate-aware control plane -------------------------------------- */
+.gauntlet-board {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.gauntlet-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.gauntlet-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-alt);
+}
+
+.gauntlet-item h3,
+.gauntlet-item h4,
+.gauntlet-item p {
+  margin: 0;
+}
+
+.gauntlet-item h3 {
+  font-size: 14px;
+}
+
+.gauntlet-item p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.decision-pill {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.decision-pass .decision-pill { color: var(--ok); }
+.decision-fail .decision-pill,
+.decision-blocked .decision-pill { color: var(--err); }
+.decision-running .decision-pill { color: var(--accent); }
+.decision-pending .decision-pill { color: var(--warn); }
+
+.gauntlet-columns {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.2fr) minmax(220px, 1fr) minmax(200px, 0.8fr);
+  gap: 16px;
+  padding: 14px;
+}
+
+.gauntlet-columns h4 {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.gate-timeline,
+.finding-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gate-step,
+.finding {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.gate-name {
+  font-weight: 600;
+}
+
+.gate-status,
+.finding strong {
+  width: fit-content;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.gate-passed .gate-status { color: var(--ok); }
+.gate-failed .gate-status,
+.gate-blocked .gate-status { color: var(--err); }
+.gate-waived .gate-status,
+.gate-pending .gate-status { color: var(--warn); }
+.gate-running .gate-status { color: var(--accent); }
+
+.gate-action,
+.routing-warning {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.finding-blocker strong { color: var(--err); }
+.finding-warning strong { color: var(--warn); }
+.finding-note strong { color: var(--muted); }
+
+.empty-state {
+  color: var(--muted);
+  padding: 14px;
+}
+
 /* ---- responsive ------------------------------------------------------- */
 @media (max-width: 768px) {
   .workbench-shell {
@@ -558,6 +680,7 @@ kbd {
     grid-column: 2 / 3;
   }
   #view-tasks { grid-template-columns: 1fr; }
+  .gauntlet-columns { grid-template-columns: 1fr; }
   .cost-summary-detail { flex-wrap: wrap; }
   .timeline li { grid-template-columns: 1fr auto; }
   .timeline .ts { grid-column: 1 / -1; }

@@ -384,6 +384,55 @@ class TaskView(BaseModel):
         )
 
 
+class GateTimelineEntry(BaseModel):
+    id: str
+    name: str
+    status: Literal["passed", "failed", "blocked", "waived", "running", "pending"]
+    evidence_links: tuple[str, ...] = ()
+    next_action: str | None = None
+    retry_allowed: bool = False
+    waiver_allowed: bool = False
+
+
+class CriticFindingView(BaseModel):
+    severity: Literal["blocker", "warning", "note"]
+    critic: str
+    message: str
+    file: str | None = None
+    line: int | None = None
+    evidence: str | None = None
+
+
+class DelegateSessionView(BaseModel):
+    id: str
+    role: str
+    status: str
+    machine: str | None = None
+    backend: str | None = None
+    latest_checkpoint: str | None = None
+    cost_usd: float = 0.0
+    duration_seconds: float | None = None
+
+
+class ResourceRoutingView(BaseModel):
+    selected_backend: str | None
+    alternatives_considered: tuple[str, ...] = ()
+    warning: str | None = None
+
+
+class ControlPlaneWorkItemView(BaseModel):
+    task_id: str
+    title: str
+    status: str
+    final_decision: Literal["pass", "fail", "blocked", "running", "pending", "cancelled"]
+    current_gate: str | None
+    next_action: str
+    gates: tuple[GateTimelineEntry, ...]
+    critic_findings: tuple[CriticFindingView, ...] = ()
+    delegates: tuple[DelegateSessionView, ...]
+    resource_routing: ResourceRoutingView
+
+
 class CostSummary(BaseModel):
     month_to_date_usd: float
     by_backend: dict[str, float]
@@ -530,6 +579,191 @@ async def _websocket_auth_or_close(
         await ws.close(code=1008)
         return False
     return True
+
+
+def _task_title(task: Task) -> str:
+    if task.issue_repo and task.issue_number is not None:
+        return f"{task.issue_repo}#{task.issue_number}"
+    return task.prompt[:80]
+
+
+def _duration_seconds(task: Task) -> float | None:
+    if task.started_at is None:
+        return None
+    end = task.finished_at or datetime.now(timezone.utc)
+    return max(0.0, (end - task.started_at).total_seconds())
+
+
+def _gate_statuses_for_task(task: Task) -> tuple[GateTimelineEntry, ...]:
+    status_value = task.status.value
+    target = _task_title(task)
+    evidence = (task.pr_url,) if task.pr_url else ()
+    intake = GateTimelineEntry(
+        id="intake",
+        name="Work intake",
+        status="passed",
+        evidence_links=evidence,
+    )
+    if status_value == "queued":
+        return (
+            intake,
+            GateTimelineEntry(
+                id="delegate",
+                name="Delegate session",
+                status="pending",
+                next_action="Waiting for a delegate slot",
+            ),
+            GateTimelineEntry(id="verification", name="Verification", status="pending"),
+        )
+    if status_value in {"running", "dispatched"}:
+        return (
+            intake,
+            GateTimelineEntry(
+                id="delegate",
+                name="Delegate session",
+                status="running",
+                next_action="Delegate is still working",
+            ),
+            GateTimelineEntry(
+                id="verification",
+                name="Verification",
+                status="blocked",
+                next_action="Wait for delegate output before retrying verification",
+            ),
+        )
+    if status_value == "completed":
+        return (
+            intake,
+            GateTimelineEntry(
+                id="delegate",
+                name="Delegate session",
+                status="passed",
+                evidence_links=evidence,
+            ),
+            GateTimelineEntry(
+                id="verification",
+                name="Verification",
+                status="passed",
+                evidence_links=evidence,
+            ),
+        )
+    if status_value == "failed":
+        return (
+            intake,
+            GateTimelineEntry(
+                id="delegate",
+                name="Delegate session",
+                status="failed",
+                evidence_links=evidence,
+                next_action="Inspect failure evidence and retry if policy allows",
+                retry_allowed=True,
+                waiver_allowed=True,
+            ),
+            GateTimelineEntry(
+                id="verification",
+                name="Verification",
+                status="blocked",
+                next_action="Blocked by failed delegate session",
+            ),
+        )
+    if status_value == "cancelled":
+        return (
+            intake,
+            GateTimelineEntry(
+                id="delegate",
+                name="Delegate session",
+                status="waived",
+                evidence_links=evidence,
+                next_action=f"{target} was cancelled by policy or operator action",
+            ),
+            GateTimelineEntry(id="verification", name="Verification", status="blocked"),
+        )
+    return (
+        intake,
+        GateTimelineEntry(
+            id="delegate",
+            name="Delegate session",
+            status="blocked",
+            next_action=f"Unknown task status {status_value!r}",
+        ),
+    )
+
+
+def _critic_findings_for_task(task: Task) -> tuple[CriticFindingView, ...]:
+    findings: list[CriticFindingView] = []
+    if task.status.value == "failed":
+        findings.append(
+            CriticFindingView(
+                severity="blocker",
+                critic="runtime",
+                message=task.error or "Delegate failed without a recorded error",
+                evidence=task.result,
+            )
+        )
+    if task.status.value in {"queued", "running", "dispatched"}:
+        findings.append(
+            CriticFindingView(
+                severity="note",
+                critic="control-plane",
+                message="No critic verdict is available until the delegate reaches a gate.",
+            )
+        )
+    priority = {"blocker": 0, "warning": 1, "note": 2}
+    return tuple(sorted(findings, key=lambda finding: priority[finding.severity]))
+
+
+def _control_plane_view_from_task(task: Task) -> ControlPlaneWorkItemView:
+    gates = _gate_statuses_for_task(task)
+    current_gate = next(
+        (gate.name for gate in gates if gate.status in {"failed", "blocked", "running", "pending"}),
+        None,
+    )
+    decision_by_status: dict[
+        str, Literal["pass", "fail", "blocked", "running", "pending", "cancelled"]
+    ] = {
+        "completed": "pass",
+        "failed": "fail",
+        "cancelled": "cancelled",
+        "running": "running",
+        "dispatched": "running",
+        "queued": "pending",
+    }
+    next_action_by_status = {
+        "completed": "Review artifacts and merge only if policy allows",
+        "failed": "Inspect blocker evidence, then retry or waive with a reason",
+        "cancelled": "No action required unless the task should be requeued",
+        "running": "Wait for the delegate to reach the next gate",
+        "dispatched": "Wait for the assigned worker heartbeat or recovery timeout",
+        "queued": "Assign or wait for an available delegate",
+    }
+    backend = task.backend or task.model
+    return ControlPlaneWorkItemView(
+        task_id=task.id,
+        title=_task_title(task),
+        status=task.status.value,
+        final_decision=decision_by_status.get(task.status.value, "blocked"),
+        current_gate=current_gate,
+        next_action=next_action_by_status.get(task.status.value, "Inspect task state"),
+        gates=gates,
+        critic_findings=_critic_findings_for_task(task),
+        delegates=(
+            DelegateSessionView(
+                id=f"{task.id}:delegate",
+                role="implementer" if task.kind.value == "issue" else "operator",
+                status=task.status.value,
+                machine=task.dispatched_to,
+                backend=backend,
+                latest_checkpoint=task.result or task.error,
+                cost_usd=task.cost_usd,
+                duration_seconds=_duration_seconds(task),
+            ),
+        ),
+        resource_routing=ResourceRoutingView(
+            selected_backend=backend,
+            alternatives_considered=(),
+            warning=None if backend else "No backend has been selected yet",
+        ),
+    )
 
 
 def create_app(
@@ -766,6 +1000,18 @@ def create_app(
         if t is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
         return TaskView.from_task(t)
+
+    @app.get(
+        "/api/v1/control-plane/gauntlet",
+        response_model=tuple[ControlPlaneWorkItemView, ...],
+        dependencies=[Depends(_require_viewer())],
+    )
+    async def control_plane_gauntlet(
+        limit: int = Query(50, ge=1, le=200),
+    ) -> tuple[ControlPlaneWorkItemView, ...]:
+        tasks = list(daemon.state().tasks.values())
+        tasks.sort(key=lambda task: task.created_at, reverse=True)
+        return tuple(_control_plane_view_from_task(task) for task in tasks[:limit])
 
     @app.get("/api/v1/tasks/{task_id}/artifacts", dependencies=[Depends(_require_viewer())])
     async def list_task_artifacts(

@@ -28,6 +28,7 @@
     <nav class="activity-bar" role="tablist" aria-label="Activity Bar">
       <button class="tab active" data-view="tasks" role="tab" aria-selected="true" title="Tasks">T</button>
       <button class="tab" data-view="fleet" role="tab" aria-selected="false" title="Fleet">F</button>
+      <button class="tab" data-view="gauntlet" role="tab" aria-selected="false" title="Gauntlet">G</button>
       <button class="tab" data-view="repos" role="tab" aria-selected="false" title="Repositories">R</button>
       <button class="tab" data-view="monitor" role="tab" aria-selected="false" title="Monitor">M</button>
       <button class="tab" data-view="history" role="tab" aria-selected="false" title="History">H</button>
@@ -40,6 +41,7 @@
         <h2>Explorer</h2>
         <button class="sidebar-item active" data-view="tasks">Tasks</button>
         <button class="sidebar-item" data-view="fleet">Fleet nodes</button>
+        <button class="sidebar-item" data-view="gauntlet">Gauntlet</button>
         <button class="sidebar-item" data-view="repos">Repositories</button>
         <button class="sidebar-item" data-view="monitor">Daemon logs</button>
       </section>
@@ -103,6 +105,17 @@
         <h2>Backends</h2>
       </div>
       <ul id="backends-list"></ul>
+    </section>
+  </main>
+
+  <!-- ── Gauntlet view ──────────────────────────────────────────────── -->
+  <main id="view-gauntlet" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Gate Gauntlet</h2>
+        <button id="gauntlet-refresh-btn">refresh</button>
+      </div>
+      <div id="gauntlet-board" class="gauntlet-board"></div>
     </section>
   </main>
 

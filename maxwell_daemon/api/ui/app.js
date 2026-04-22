@@ -9,6 +9,7 @@ const headers = () => authToken ? { authorization: `Bearer ${authToken}` } : {};
 const state = {
   tasks: new Map(),           // id -> task object (filtered by Tasks tab status filter)
   allTasks: new Map(),        // id -> task object (always unfiltered, used for cost analytics)
+  controlPlane: [],           // gate-aware work item snapshots
   selected: null,             // currently-shown task id
   testOutput: new Map(),      // task id -> accumulated text
   monitorLines: [],           // raw event lines (capped at 500)
@@ -19,6 +20,7 @@ const state = {
 const commands = [
   { id: "view.tasks", title: "Show Tasks", detail: "Open the task editor", run: () => switchView("tasks") },
   { id: "view.fleet", title: "Show Fleet", detail: "Open fleet overview", run: () => switchView("fleet") },
+  { id: "view.gauntlet", title: "Show Gauntlet", detail: "Open gate and critic status", run: () => switchView("gauntlet") },
   { id: "view.repos", title: "Show Repositories", detail: "Open repository dashboard", run: () => switchView("repos") },
   { id: "view.monitor", title: "Show Daemon Logs", detail: "Open live monitor", run: () => switchView("monitor") },
   { id: "view.history", title: "Show History", detail: "Open completed work timeline", run: () => switchView("history") },
@@ -70,6 +72,7 @@ function switchView(name) {
 
   // Lazy-load view data
   if (name === "fleet") fetchFleet().catch(console.error);
+  if (name === "gauntlet") fetchGauntlet().catch(console.error);
   if (name === "cost") fetchCostDetail().catch(console.error);
   if (name === "history") renderHistory();
   if (name === "repos") fetchFleet().catch(console.error);  // repos uses same data
@@ -112,6 +115,13 @@ async function fetchTasks() {
   if (state.currentView === "cost") renderCostTasks();
 }
 
+async function fetchGauntlet() {
+  const r = await fetch("/api/v1/control-plane/gauntlet?limit=100", { headers: headers() });
+  if (!r.ok) throw new Error(`gauntlet: ${r.status}`);
+  state.controlPlane = await r.json();
+  renderGauntlet();
+}
+
 async function fetchBackends() {
   const r = await fetch("/api/v1/backends", { headers: headers() });
   if (!r.ok) return;
@@ -146,6 +156,7 @@ async function refreshAll() {
     fetchTasks().catch(console.error),
     fetchBackends().catch(console.error),
     fetchFleet().catch(console.error),
+    fetchGauntlet().catch(console.error),
     fetchCost().catch(console.error),
   ]);
   document.getElementById("status-operation").textContent = "Ready";
@@ -301,6 +312,72 @@ function renderRepos() {
     `;
     grid.appendChild(div);
   }
+}
+
+function renderGauntlet() {
+  const board = document.getElementById("gauntlet-board");
+  if (!board) return;
+  board.innerHTML = "";
+  if (state.controlPlane.length === 0) {
+    board.innerHTML = `<div class="empty-state">No work items have reached the control plane yet.</div>`;
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const item of state.controlPlane) {
+    const section = document.createElement("article");
+    section.className = `gauntlet-item decision-${item.final_decision}`;
+    const gates = (item.gates || []).map((gate) => `
+      <li class="gate-step gate-${gate.status}">
+        <span class="gate-name">${escapeHtml(gate.name)}</span>
+        <span class="gate-status">${escapeHtml(gate.status)}</span>
+        ${gate.next_action ? `<span class="gate-action">${escapeHtml(gate.next_action)}</span>` : ""}
+        ${(gate.evidence_links || []).map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">evidence</a>`).join("")}
+      </li>
+    `).join("");
+    const findings = (item.critic_findings || []).map((finding) => `
+      <li class="finding finding-${finding.severity}">
+        <strong>${escapeHtml(finding.severity)}</strong>
+        <span>${escapeHtml(finding.critic)}: ${escapeHtml(finding.message)}</span>
+      </li>
+    `).join("") || `<li class="finding finding-note">No critic findings recorded.</li>`;
+    const delegates = (item.delegates || []).map((delegate) => `
+      <li>
+        <span class="status-${delegate.status}">${escapeHtml(delegate.status)}</span>
+        ${escapeHtml(delegate.role)}
+        ${delegate.backend ? ` via ${escapeHtml(delegate.backend)}` : ""}
+        ${delegate.machine ? ` on ${escapeHtml(delegate.machine)}` : ""}
+      </li>
+    `).join("");
+    const routing = item.resource_routing || {};
+    section.innerHTML = `
+      <div class="gauntlet-item-head">
+        <div>
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.next_action)}</p>
+        </div>
+        <span class="decision-pill">${escapeHtml(item.final_decision)}</span>
+      </div>
+      <div class="gauntlet-columns">
+        <section>
+          <h4>Timeline</h4>
+          <ol class="gate-timeline">${gates}</ol>
+        </section>
+        <section>
+          <h4>Critics</h4>
+          <ul class="finding-list">${findings}</ul>
+        </section>
+        <section>
+          <h4>Delegate</h4>
+          <ul class="compact-list">${delegates}</ul>
+          <h4>Routing</h4>
+          <p>${escapeHtml(routing.selected_backend || "No backend selected")}</p>
+          ${routing.warning ? `<p class="routing-warning">${escapeHtml(routing.warning)}</p>` : ""}
+        </section>
+      </div>
+    `;
+    fragment.appendChild(section);
+  }
+  board.appendChild(fragment);
 }
 
 async function fetchTaskDetail(id) {
@@ -671,6 +748,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Fleet view
   document.getElementById("fleet-refresh-btn").addEventListener("click", () => fetchFleet().catch(console.error));
+
+  // Gauntlet view
+  document.getElementById("gauntlet-refresh-btn").addEventListener("click", () => fetchGauntlet().catch(console.error));
 
   // Cost view
   document.getElementById("cost-refresh-btn").addEventListener("click", () => fetchCostDetail().catch(console.error));
