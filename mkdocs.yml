@@ -67,6 +67,7 @@ nav:
       - Observability: operations/observability.md
       - Budgets: operations/budgets.md
       - GitHub webhooks: operations/webhooks.md
+      - Beta release readiness: operations/release-readiness.md
       - Documentation publishing: operations/docs-publishing.md
   - Reference:
       - CLI: reference/cli.md
