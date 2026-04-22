@@ -14,13 +14,26 @@ function parseIssueRef(raw) {
 function render(snapshot, offline = false) {
   const tasks = snapshot?.tasks || [];
   const repos = snapshot?.fleet?.repos || [];
+  const activeTasks = tasks.filter((task) => ["queued", "running", "dispatched"].includes(task.status)).length;
   $("tasks").innerHTML = tasks
     .map((task) => `<li>${task.status}: ${task.issue_repo ? `${task.issue_repo}#${task.issue_number}` : task.prompt}</li>`)
     .join("");
   $("fleet").innerHTML = repos
     .map((repo) => `<li>${repo.name}: ${repo.active_tasks || 0} active</li>`)
     .join("");
+  $("status-strip").className = `status-strip ${offline ? "offline" : "online"}`;
+  $("connection-state").textContent = offline ? "offline cache" : "online";
+  $("resource-state").textContent = `${activeTasks} active task(s), ${repos.length} repo(s)`;
+  $("updated-state").textContent = snapshot?.updatedAt
+    ? `synced ${new Date(snapshot.updatedAt).toLocaleTimeString()}`
+    : "not synced";
   document.title = offline ? "Maxwell-Daemon Desktop (offline)" : "Maxwell-Daemon Desktop";
+  window.maxwellDesktop.updateTrayStatus({
+    online: !offline,
+    activeTasks,
+    repos: repos.length,
+    updatedAt: snapshot?.updatedAt || null,
+  });
 }
 
 async function refresh() {

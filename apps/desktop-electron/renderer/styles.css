@@ -60,11 +60,31 @@ main {
 }
 
 article,
+.status-strip,
 .drop-zone {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
   padding: 14px;
+}
+
+.status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.status-strip span {
+  color: var(--muted);
+}
+
+.status-strip.online span:first-child {
+  color: #68b06d;
+}
+
+.status-strip.offline span:first-child {
+  color: #dc6d6d;
 }
 
 .drop-zone {

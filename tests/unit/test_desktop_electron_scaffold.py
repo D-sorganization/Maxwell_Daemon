@@ -24,6 +24,8 @@ def test_electron_main_process_wires_native_desktop_features() -> None:
     main = (APP_DIR / "main.js").read_text(encoding="utf-8")
 
     assert "new Tray" in main
+    assert "updateTray" in main
+    assert "desktop:updateTrayStatus" in main
     assert "new Notification" in main
     assert "globalShortcut.register" in main
     assert "autoUpdater.checkForUpdates" in main
@@ -36,6 +38,8 @@ def test_renderer_wires_daemon_api_offline_cache_and_drag_drop() -> None:
     assert "/api/v1/tasks?limit=100" in preload
     assert "/api/v1/fleet" in preload
     assert "/api/v1/issues/dispatch" in preload
+    assert "updateTrayStatus" in preload
     assert "localStorage.setItem(cacheKey" in preload
     assert "cachedSnapshot" in renderer
+    assert "status-strip" in renderer
     assert "dataTransfer.files" in renderer

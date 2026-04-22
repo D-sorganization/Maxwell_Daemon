@@ -12,6 +12,11 @@
     <button id="command-button">Command</button>
   </header>
   <main>
+    <section class="status-strip" id="status-strip">
+      <span id="connection-state">connecting</span>
+      <span id="resource-state">0 tasks, 0 repos</span>
+      <span id="updated-state">not synced</span>
+    </section>
     <section class="toolbar">
       <input id="daemon-url" type="url" placeholder="http://127.0.0.1:8080">
       <input id="token" type="password" placeholder="Bearer token">

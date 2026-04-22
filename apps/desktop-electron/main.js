@@ -6,6 +6,12 @@ const path = require("path");
 
 let mainWindow = null;
 let tray = null;
+let lastFleetStatus = {
+  online: false,
+  activeTasks: 0,
+  repos: 0,
+  updatedAt: null,
+};
 
 function trayIcon() {
   return nativeImage.createFromDataURL(
@@ -41,9 +47,21 @@ function createWindow() {
 function createTray() {
   const icon = trayIcon();
   tray = new Tray(icon);
-  tray.setToolTip("Maxwell-Daemon");
+  updateTray(lastFleetStatus);
+}
+
+function updateTray(status) {
+  lastFleetStatus = { ...lastFleetStatus, ...status };
+  if (!tray) return;
+  const state = lastFleetStatus.online ? "online" : "offline";
+  const tooltip =
+    `Maxwell-Daemon ${state}: ${lastFleetStatus.activeTasks} active task(s), ` +
+    `${lastFleetStatus.repos} repo(s)`;
+  tray.setToolTip(tooltip);
   tray.setContextMenu(
     Menu.buildFromTemplate([
+      { label: tooltip, enabled: false },
+      { type: "separator" },
       { label: "Show Maxwell-Daemon", click: () => mainWindow?.show() },
       { label: "Refresh Fleet", click: () => mainWindow?.webContents.send("desktop:refresh") },
       { type: "separator" },
@@ -72,6 +90,11 @@ ipcMain.handle("desktop:notify", (_event, payload) => {
     body: payload.body || "",
   }).show();
   return true;
+});
+
+ipcMain.handle("desktop:updateTrayStatus", (_event, status) => {
+  updateTray(status || {});
+  return lastFleetStatus;
 });
 
 ipcMain.handle("desktop:checkForUpdates", async () => {

@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld("maxwellDesktop", {
   notify(payload) {
     return ipcRenderer.invoke("desktop:notify", payload);
   },
+  updateTrayStatus(status) {
+    return ipcRenderer.invoke("desktop:updateTrayStatus", status);
+  },
   checkForUpdates() {
     return ipcRenderer.invoke("desktop:checkForUpdates");
   },
