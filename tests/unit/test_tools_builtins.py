@@ -290,7 +290,9 @@ class TestGrepFiles:
         result = grep(pattern="zzz")
         assert "no match" in result.lower()
 
-    def test_symlink_escape_is_skipped(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_symlink_escape_is_skipped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         outside = tmp_path.parent / "outside.txt"
         outside.write_text("secret needle")
 
