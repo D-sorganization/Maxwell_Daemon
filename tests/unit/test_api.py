@@ -356,6 +356,49 @@ class TestControlPlaneGauntlet:
         assert failed_gate["waiver_allowed"] is True
         assert by_id["queued"]["critic_findings"][0]["severity"] == "note"
 
+    def test_cancelled_task_surfaces_cancelled_decision_and_delegate_waived(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        cancelled = Task(
+            id="cancelled",
+            prompt="cancelled task",
+            status=TaskStatus.CANCELLED,
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[cancelled.id] = cancelled
+
+        r = client.get("/api/v1/control-plane/gauntlet")
+
+        assert r.status_code == 200
+        item = next(row for row in r.json() if row["task_id"] == "cancelled")
+        assert item["final_decision"] == "cancelled"
+        assert item["next_action"] == "No action required unless the task should be requeued"
+        assert item["gates"][1]["status"] == "waived"
+        assert "cancelled by policy or operator action" in item["gates"][1]["next_action"]
+        assert item["gates"][2]["status"] == "blocked"
+
+    def test_unknown_status_falls_back_to_blocked_gate_and_default_next_action(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        unknown = Task(id="unknown-status", prompt="unknown status task")
+        unknown.status = SimpleNamespace(value="mystery")  # type: ignore[assignment]
+        with daemon._tasks_lock:
+            daemon._tasks[unknown.id] = unknown
+
+        r = client.get("/api/v1/control-plane/gauntlet")
+
+        assert r.status_code == 200
+        item = next(row for row in r.json() if row["task_id"] == "unknown-status")
+        assert item["status"] == "mystery"
+        assert item["final_decision"] == "blocked"
+        assert item["next_action"] == "Inspect task state"
+        assert item["gates"][1]["status"] == "blocked"
+        assert item["gates"][1]["next_action"] == "Unknown task status 'mystery'"
+
 
 class TestControlPlaneActions:
     def test_failed_task_exposes_retry_and_waive_actions(
