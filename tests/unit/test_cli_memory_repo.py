@@ -71,3 +71,153 @@ def test_repo_memory_lifecycle_commands(tmp_path: Path) -> None:
     assert snapshot.exit_code == 0
     assert "Repo memory snapshot" in snapshot.stdout
     assert "Use pytest tests/unit" in snapshot.stdout
+
+
+def test_repo_memory_listing_and_review_commands(tmp_path: Path) -> None:
+    runner = CliRunner()
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    empty_list = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "list",
+            str(repo_root),
+            "--repo-id",
+            "D-sorganization/Maxwell-Daemon",
+        ],
+    )
+
+    assert empty_list.exit_code == 0
+    assert "No memory entries" in empty_list.stdout
+
+    empty_snapshot = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "snapshot",
+            str(repo_root),
+            "--repo-id",
+            "D-sorganization/Maxwell-Daemon",
+        ],
+    )
+
+    assert empty_snapshot.exit_code == 0
+    assert "No memory selected" in empty_snapshot.stdout
+
+    for entry_id, body in (
+        ("old", "Use pytest."),
+        ("new", "Use pytest tests/unit."),
+        ("rejected", "Prefer unrelated old workflow."),
+    ):
+        proposed = runner.invoke(
+            app,
+            [
+                "memory",
+                "repo",
+                "propose",
+                str(repo_root),
+                entry_id,
+                "--repo-id",
+                "D-sorganization/Maxwell-Daemon",
+                "--body",
+                body,
+                "--source",
+                f"issue-397-{entry_id}",
+                "--proposed-by",
+                "delegate-1",
+                "--reason",
+                "validated in CI triage",
+            ],
+        )
+        assert proposed.exit_code == 0
+
+    proposals = runner.invoke(app, ["memory", "repo", "proposals", str(repo_root)])
+
+    assert proposals.exit_code == 0
+    assert "pending" in proposals.stdout
+    assert "delegate-1" in proposals.stdout
+
+    invalid_review = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "review",
+            str(repo_root),
+            "old",
+            "--reviewer",
+            "maintainer",
+            "--status",
+            "maybe",
+        ],
+    )
+
+    assert invalid_review.exit_code == 2
+    assert "--status must be accepted" in invalid_review.stdout
+
+    accepted_old = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "accept",
+            str(repo_root),
+            "old",
+            "--reviewer",
+            "maintainer",
+        ],
+    )
+    accepted_new = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "review",
+            str(repo_root),
+            "new",
+            "--reviewer",
+            "maintainer",
+            "--status",
+            "accepted",
+        ],
+    )
+    rejected = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "reject",
+            str(repo_root),
+            "rejected",
+            "--reviewer",
+            "maintainer",
+            "--reason",
+            "not durable enough",
+        ],
+    )
+
+    assert accepted_old.exit_code == 0
+    assert accepted_new.exit_code == 0
+    assert rejected.exit_code == 0
+    assert "rejected" in rejected.stdout
+
+    active_list = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "list",
+            str(repo_root),
+            "--repo-id",
+            "D-sorganization/Maxwell-Daemon",
+        ],
+    )
+
+    assert active_list.exit_code == 0
+    assert "old" in active_list.stdout
+    assert "new" in active_list.stdout
+    assert "rejected" not in active_list.stdout
