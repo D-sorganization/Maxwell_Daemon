@@ -45,6 +45,7 @@ from maxwell_daemon.backends.base import (
 from maxwell_daemon.backends.condensation import Condenser
 from maxwell_daemon.backends.pricing import cost_for, get_rates
 from maxwell_daemon.backends.registry import registry
+from maxwell_daemon.contracts import PreconditionError
 from maxwell_daemon.gh.ci_patterns import detect_ci_profile
 from maxwell_daemon.gh.repo_schematic import build_repo_schematic
 from maxwell_daemon.tools import ToolRegistry, build_default_registry
@@ -300,8 +301,7 @@ class AgentLoopBackend(ILLMBackend):
         ``budget_per_story_usd`` / ``wall_clock_timeout_seconds``.
         """
         effective_model = model or self._default_model
-        workspace_raw = workspace_dir or self._default_workspace or os.getcwd()
-        effective_workspace = Path(workspace_raw).resolve()
+        effective_workspace = self._resolve_workspace(workspace_dir)
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
         tool_registry = self._registry_factory(effective_workspace)
@@ -472,8 +472,7 @@ class AgentLoopBackend(ILLMBackend):
         user-visible text so the latency difference is unnoticeable.
         """
         effective_model = model or self._default_model
-        workspace_raw = workspace_dir or self._default_workspace or os.getcwd()
-        effective_workspace = Path(workspace_raw).resolve()
+        effective_workspace = self._resolve_workspace(workspace_dir)
         effective_max_turns = kwargs.pop("max_turns", None)
         if effective_max_turns is None:
             effective_max_turns = self._max_turns
@@ -644,6 +643,14 @@ class AgentLoopBackend(ILLMBackend):
             result = close()
             if hasattr(result, "__await__"):
                 await result
+
+    def _resolve_workspace(self, workspace_dir: str | None) -> Path:
+        workspace_raw = workspace_dir or self._default_workspace
+        if not workspace_raw:
+            raise PreconditionError(
+                "AgentLoopBackend requires workspace_dir; refusing to fall back to cwd"
+            )
+        return Path(workspace_raw).resolve()
 
 
 registry.register("agent-loop", AgentLoopBackend)

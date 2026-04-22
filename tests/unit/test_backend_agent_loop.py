@@ -23,6 +23,7 @@ from maxwell_daemon.backends.agent_loop import (
     WallClockTimeoutError,
 )
 from maxwell_daemon.backends.base import Message, MessageRole
+from maxwell_daemon.contracts import PreconditionError
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,35 @@ def _system_as_text(system: str | list[dict[str, Any]]) -> str:
 
 
 # ── Loop control ──────────────────────────────────────────────────────────────
+
+
+class TestWorkspaceSelection:
+    async def test_complete_requires_explicit_workspace(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        backend = AgentLoopBackend()
+        create = _install_mock_client(backend, [_response(text="should not call")])
+
+        with pytest.raises(PreconditionError, match="workspace_dir"):
+            await backend.complete(_user("hi"), model="claude-sonnet-4-6")
+
+        create.assert_not_called()
+
+    async def test_stream_requires_explicit_workspace(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        backend = AgentLoopBackend()
+        client = MagicMock()
+        client.messages = MagicMock()
+        client.messages.stream = MagicMock()
+        backend._client = client  # type: ignore[assignment]
+
+        with pytest.raises(PreconditionError, match="workspace_dir"):
+            _ = [chunk async for chunk in backend.stream(_user("hi"), model="claude-sonnet-4-6")]
+
+        client.messages.stream.assert_not_called()
 
 
 class TestTurnLimit:
