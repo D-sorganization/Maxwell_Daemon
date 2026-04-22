@@ -24,7 +24,11 @@ instead of reading full contents.
 ```bash
 npm install
 npm start
+npm run smoke:launch
 npm run dist
 ```
+
+`npm run smoke:launch` starts Electron in smoke mode and fails if the renderer
+does not reach `ready-to-show` within the 2 second launch budget.
 
 The `dist` script is configured for DMG, MSI, AppImage, and Snap targets through `electron-builder`.
