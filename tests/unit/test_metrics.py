@@ -82,6 +82,22 @@ class TestRecordRequest:
         free_after = MAXWELL_FREE_REQUESTS_TOTAL.labels(backend="claude", model="m")._value.get()
         assert free_after == free_before
 
+    def test_unknown_cost_does_not_increment_free_counter(self) -> None:
+        free_before = MAXWELL_FREE_REQUESTS_TOTAL.labels(
+            backend="claude", model="unknown-cost"
+        )._value.get()
+        record_request(
+            backend="claude",
+            model="unknown-cost",
+            status="success",
+            tokens=10,
+            duration_seconds=0.1,
+        )
+        free_after = MAXWELL_FREE_REQUESTS_TOTAL.labels(
+            backend="claude", model="unknown-cost"
+        )._value.get()
+        assert free_after == free_before
+
     def test_error_status_skips_token_and_cost(self) -> None:
         # Error path still bumps the request counter but not tokens/cost.
         tokens_before = MAXWELL_TOKENS_TOTAL.labels(backend="claude", model="err")._value.get()
