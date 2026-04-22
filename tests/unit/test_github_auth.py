@@ -152,6 +152,26 @@ class TestAppAuth:
         response.raise_for_status.assert_called_once()
         fake_httpx.post.assert_called_once()
 
+    def test_missing_private_key_raises_with_contracts_off(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MAXWELL_CONTRACTS", "off")
+        auth = GitHubAuth(
+            _mode="app",
+            _app_id=12345,
+            _installation_id=99999,
+            _private_key_pem=None,
+        )
+        fake_jwt = MagicMock()
+
+        with (
+            patch.dict("sys.modules", {"jwt": fake_jwt}),
+            pytest.raises(RuntimeError, match="GitHub App private key is not configured"),
+        ):
+            auth._fetch_installation_token()
+
+        fake_jwt.encode.assert_not_called()
+
 
 class TestAsyncGetToken:
     """Tests for the async get_token() / _async_fetch_installation_token() path."""
@@ -262,6 +282,26 @@ class TestAsyncGetToken:
             pytest.raises(ImportError, match="httpx"),
         ):
             await auth._async_fetch_installation_token()
+
+    async def test_async_fetch_missing_private_key_raises_with_contracts_off(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MAXWELL_CONTRACTS", "off")
+        auth = GitHubAuth(
+            _mode="app",
+            _app_id=12345,
+            _installation_id=99999,
+            _private_key_pem=None,
+        )
+        fake_jwt = MagicMock()
+
+        with (
+            patch.dict("sys.modules", {"jwt": fake_jwt}),
+            pytest.raises(RuntimeError, match="GitHub App private key is not configured"),
+        ):
+            await auth._async_fetch_installation_token()
+
+        fake_jwt.encode.assert_not_called()
 
     async def test_async_installation_token_caches_result(self) -> None:
         """_async_installation_token updates the cache after a fresh fetch."""

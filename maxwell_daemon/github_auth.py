@@ -152,6 +152,8 @@ class GitHubAuth:
 
     def _fetch_installation_token(self) -> tuple[str, float]:
         """Call GitHub to get a fresh installation token."""
+        private_key_pem = self._app_private_key_pem()
+
         try:
             import jwt as _jwt
         except ImportError as exc:
@@ -164,15 +166,9 @@ class GitHubAuth:
         except ImportError as exc:
             raise ImportError("httpx is required for GitHub App auth.") from exc
 
-        require(
-            self._private_key_pem is not None,
-            "private_key_pem must be set for App auth",
-        )
         now = int(time.time())
         payload = {"iat": now - 60, "exp": now + 600, "iss": str(self._app_id)}
-        if self._private_key_pem is None:
-            raise RuntimeError("GitHub App private key is not configured.")
-        jwt_token = _jwt.encode(payload, self._private_key_pem, algorithm="RS256")
+        jwt_token = _jwt.encode(payload, private_key_pem, algorithm="RS256")
 
         resp = _httpx.post(
             f"https://api.github.com/app/installations/{self._installation_id}/access_tokens",
@@ -197,6 +193,8 @@ class GitHubAuth:
 
     async def _async_fetch_installation_token(self) -> tuple[str, float]:
         """Call GitHub asynchronously to get a fresh installation token."""
+        private_key_pem = self._app_private_key_pem()
+
         try:
             import jwt as _jwt
         except ImportError as exc:
@@ -211,13 +209,7 @@ class GitHubAuth:
 
         now = int(time.time())
         payload = {"iat": now - 60, "exp": now + 600, "iss": str(self._app_id)}
-        require(
-            self._private_key_pem is not None,
-            "private_key_pem must be set for App auth",
-        )
-        if self._private_key_pem is None:
-            raise RuntimeError("GitHub App private key is not configured.")
-        jwt_token = _jwt.encode(payload, self._private_key_pem, algorithm="RS256")
+        jwt_token = _jwt.encode(payload, private_key_pem, algorithm="RS256")
 
         async with _httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
@@ -239,6 +231,15 @@ class GitHubAuth:
         seconds_until = (expires_utc - _dt.datetime.now(_dt.timezone.utc)).total_seconds()
         expires_mono = time.monotonic() + seconds_until
         return token, expires_mono
+
+    def _app_private_key_pem(self) -> str:
+        require(
+            self._private_key_pem is not None,
+            "private_key_pem must be set for App auth",
+        )
+        if self._private_key_pem is None:
+            raise RuntimeError("GitHub App private key is not configured.")
+        return self._private_key_pem
 
 
 def _env_token() -> str | None:
