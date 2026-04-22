@@ -214,7 +214,13 @@ class IssueExecutor:
         context_prompt = ""
         if mode == "implement" and self._context_builder is not None:
             repo_path = await self._ws.ensure_clone(repo, task_id=effective_task_id)
-            ctx = await self._context_builder.build(repo_path, issue.body)
+            ctx = await self._context_builder.build(
+                repo_path,
+                issue.body,
+                repo_id=repo,
+                issue_title=issue.title,
+                issue_number=issue_number,
+            )
             context_prompt = ctx.to_prompt(max_chars=ctx_max)
 
         # Memory: assemble repo profile + related episodes + scratchpad, if any.

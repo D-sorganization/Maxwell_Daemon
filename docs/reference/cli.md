@@ -52,6 +52,22 @@ Month-to-date spend, budget utilisation, per-backend breakdown.
 maxwell-daemon cost [--config PATH] [--ledger PATH]
 ```
 
+## `maxwell-daemon memory`
+
+Inspect the local markdown memory store or manage repo-carried memory
+proposals inside a repository root.
+
+```
+maxwell-daemon memory status [--config PATH]
+maxwell-daemon memory anneal [--config PATH]
+maxwell-daemon memory repo list REPO_ROOT --repo-id OWNER/REPO [--include-superseded]
+maxwell-daemon memory repo proposals REPO_ROOT
+maxwell-daemon memory repo propose REPO_ROOT ENTRY_ID --repo-id OWNER/REPO --body TEXT --source TEXT --proposed-by TEXT --reason TEXT
+maxwell-daemon memory repo accept REPO_ROOT PROPOSAL_ID --reviewer NAME
+maxwell-daemon memory repo reject REPO_ROOT PROPOSAL_ID --reviewer NAME
+maxwell-daemon memory repo snapshot REPO_ROOT --repo-id OWNER/REPO [--issue-number N]
+```
+
 ## `maxwell-daemon task-graph`
 
 Create and inspect typed sub-agent delivery graph definitions.

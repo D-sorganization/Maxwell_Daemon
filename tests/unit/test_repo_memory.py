@@ -162,3 +162,20 @@ def test_accepted_repo_memory_can_be_loaded_by_another_store_instance(tmp_path: 
     second = RepoMemoryStore(tmp_path)
 
     assert second.list_entries(repo_id="D-sorganization/Maxwell-Daemon") == [_entry("m1")]
+
+
+def test_snapshot_render_includes_selection_reasons(tmp_path: Path) -> None:
+    store = RepoMemoryStore(tmp_path)
+    store.add_entry(_entry("repo-1", body="Repository fact."))
+    store.add_entry(_entry("issue-1", scope="issue", work_item_id="397", body="Issue fact."))
+
+    rendered = store.render_snapshot(
+        repo_id="D-sorganization/Maxwell-Daemon",
+        work_item_id="397",
+        max_items=2,
+        token_budget=128,
+    )
+
+    assert "Repo memory snapshot" in rendered
+    assert "repo-1" in rendered
+    assert "work item" in rendered

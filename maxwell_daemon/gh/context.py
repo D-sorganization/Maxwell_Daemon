@@ -19,6 +19,7 @@ from pathlib import Path
 
 from maxwell_daemon.contracts import require
 from maxwell_daemon.gh.ci_patterns import CIProfile, detect_ci_profile
+from maxwell_daemon.memory import RepoMemoryStore
 
 __all__ = ["ContextBuilder", "RepoContext", "detect_language"]
 
@@ -88,6 +89,7 @@ class RepoContext:
     language: str | None = None
     file_tree: str = ""
     readme: str = ""
+    memory: str = ""
     relevant_files: dict[str, str] = field(default_factory=dict)
     recent_commits: list[str] = field(default_factory=list)
     #: CI contract inferred from workspace files — see ``maxwell_daemon.gh.ci_patterns``.
@@ -101,10 +103,12 @@ class RepoContext:
         truncated with a ``... truncated ...`` marker so the LLM knows the
         section was cut rather than short.
         """
-        # Split the budget: 15% file tree, 25% README, 45% snippets, 10% commits, 5% CI.
+        # Split the budget: 15% file tree, 25% README, 15% repo memory, 30% snippets,
+        # 10% commits, 5% CI.
         budget_tree = max(200, int(max_chars * 0.15))
         budget_readme = max(300, int(max_chars * 0.25))
-        budget_snippets = max(500, int(max_chars * 0.45))
+        budget_memory = max(300, int(max_chars * 0.15))
+        budget_snippets = max(500, int(max_chars * 0.30))
         budget_commits = max(200, int(max_chars * 0.10))
         budget_ci = max(400, int(max_chars * 0.05))
 
@@ -123,6 +127,10 @@ class RepoContext:
         if self.readme:
             parts.append("\n## README\n")
             parts.append(_truncate(self.readme, budget_readme))
+
+        if self.memory:
+            parts.append("\n## Repo memory\n")
+            parts.append(_truncate(self.memory, budget_memory))
 
         if self.relevant_files:
             parts.append("\n## Likely relevant files\n")
@@ -173,7 +181,15 @@ class ContextBuilder:
         self._snippet_max_bytes = snippet_max_bytes
         self._commit_count = commit_count
 
-    async def build(self, repo_path: Path, issue_body: str) -> RepoContext:
+    async def build(
+        self,
+        repo_path: Path,
+        issue_body: str,
+        *,
+        repo_id: str | None = None,
+        issue_title: str = "",
+        issue_number: int | None = None,
+    ) -> RepoContext:
         require(
             repo_path.is_dir(),
             f"ContextBuilder.build: repo_path {repo_path} must exist and be a directory",
@@ -183,12 +199,20 @@ class ContextBuilder:
         readme = self._read_readme(repo_path)
         relevant = await self._find_relevant_files(repo_path, issue_body, top_n=5)
         commits = await self._recent_commits(repo_path, limit=self._commit_count)
+        memory = self._read_repo_memory(
+            repo_path,
+            repo_id=repo_id or repo_path.name,
+            issue_title=issue_title,
+            issue_body=issue_body,
+            issue_number=issue_number,
+        )
         # Detect CI contract synchronously — file-system only, fast.
         ci_profile = detect_ci_profile(repo_path)
         return RepoContext(
             language=language,
             file_tree=file_tree,
             readme=readme,
+            memory=memory,
             relevant_files=relevant,
             recent_commits=commits,
             ci_profile=ci_profile,
@@ -261,6 +285,30 @@ class ContextBuilder:
         if rc != 0:
             return []
         return [line for line in out.decode(errors="replace").splitlines() if line]
+
+    def _read_repo_memory(
+        self,
+        repo_path: Path,
+        *,
+        repo_id: str,
+        issue_title: str,
+        issue_body: str,
+        issue_number: int | None,
+    ) -> str:
+        store = RepoMemoryStore(repo_path)
+        if not store.memory_dir.exists():
+            return ""
+        issue_number_text = f"{issue_number}" if issue_number is not None else None
+        try:
+            return store.render_snapshot(
+                repo_id=repo_id,
+                work_item_id=issue_number_text,
+                max_items=6,
+                token_budget=1_000,
+                max_chars=4_000,
+            )
+        except Exception:
+            return ""
 
     @staticmethod
     def _extract_keywords(body: str) -> list[str]:

@@ -235,6 +235,24 @@ class MemorySnapshot:
             "MemorySnapshot: selection reasons must cover every entry",
         )
 
+    def render(self, *, max_chars: int = 4000) -> str:
+        if not self.entries:
+            return ""
+        lines = [f"## Repo memory snapshot for {self.repo_id}"]
+        for entry in self.entries:
+            reason = self.selection_reasons[entry.id]
+            lines.append(f"- {entry.scope}/{entry.kind} {entry.id} ({reason})")
+            lines.append(f"  source: {entry.source}")
+            lines.append(f"  confidence: {entry.confidence:.2f}")
+            if entry.work_item_id is not None:
+                lines.append(f"  work item: {entry.work_item_id}")
+            for body_line in entry.body.strip().splitlines():
+                lines.append(f"  {body_line}")
+        rendered = "\n".join(lines)
+        if len(rendered) > max_chars:
+            rendered = rendered[:max_chars] + "\n... (truncated)"
+        return rendered
+
 
 class RepoMemoryStore:
     """Append-only JSONL store rooted at ``<repo>/.maxwell/memory``."""
@@ -293,6 +311,9 @@ class RepoMemoryStore:
     def list_proposals(self) -> list[MemoryProposal]:
         return self._load_proposals()
 
+    def latest_proposals(self) -> list[MemoryProposal]:
+        return list(self._latest_proposals().values())
+
     def accept_proposal(
         self,
         proposal_id: str,
@@ -335,6 +356,43 @@ class RepoMemoryStore:
         )
         self._append_jsonl(self._proposals_path, superseded.to_json_dict())
         return superseded
+
+    def load_snapshot(
+        self,
+        *,
+        repo_id: str,
+        work_item_id: str | None = None,
+        max_items: int = 12,
+        token_budget: int = 800,
+        include_superseded: bool = False,
+    ) -> MemorySnapshot:
+        entries = self.list_entries(repo_id=repo_id, include_superseded=include_superseded)
+        return select_memory_snapshot(
+            entries,
+            repo_id=repo_id,
+            work_item_id=work_item_id,
+            max_items=max_items,
+            token_budget=token_budget,
+        )
+
+    def render_snapshot(
+        self,
+        *,
+        repo_id: str,
+        work_item_id: str | None = None,
+        max_items: int = 12,
+        token_budget: int = 800,
+        include_superseded: bool = False,
+        max_chars: int = 4000,
+    ) -> str:
+        snapshot = self.load_snapshot(
+            repo_id=repo_id,
+            work_item_id=work_item_id,
+            max_items=max_items,
+            token_budget=token_budget,
+            include_superseded=include_superseded,
+        )
+        return snapshot.render(max_chars=max_chars)
 
     def find_conflicts(self, candidate: MemoryEntry) -> list[MemoryEntry]:
         reject_secret_looking_values(candidate.to_json_dict())

@@ -13,14 +13,30 @@ us searchable episodic memory at a tenth of the complexity.
 from maxwell_daemon.memory.episodic import Episode, EpisodicStore
 from maxwell_daemon.memory.manager import MemoryBackend, MemoryManager
 from maxwell_daemon.memory.profile import RepoProfile
+from maxwell_daemon.memory.repo_memory import (
+    MemoryEntry,
+    MemoryProposal,
+    MemorySnapshot,
+    RepoMemoryStore,
+    redact_secret_looking_values,
+    reject_secret_looking_values,
+    select_memory_snapshot,
+)
 from maxwell_daemon.memory.scratchpad import ScratchEntry, ScratchPad
 
 __all__ = [
     "Episode",
     "EpisodicStore",
     "MemoryBackend",
+    "MemoryEntry",
     "MemoryManager",
+    "MemoryProposal",
+    "MemorySnapshot",
+    "RepoMemoryStore",
     "RepoProfile",
     "ScratchEntry",
     "ScratchPad",
+    "redact_secret_looking_values",
+    "reject_secret_looking_values",
+    "select_memory_snapshot",
 ]

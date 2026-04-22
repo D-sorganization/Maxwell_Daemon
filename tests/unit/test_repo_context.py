@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import textwrap
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from maxwell_daemon.gh.context import ContextBuilder, RepoContext, detect_language
+from maxwell_daemon.memory import MemoryEntry, RepoMemoryStore
 
 
 class TestLanguageDetection:
@@ -108,6 +110,20 @@ class TestBuild:
         (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
         (tmp_path / "README.md").write_text("# X\n")
         (tmp_path / "parser.py").write_text("def parse(): pass\n")
+        store = RepoMemoryStore(tmp_path)
+        store.add_entry(
+            MemoryEntry(
+                id="repo-1",
+                scope="repo",
+                repo_id="D-sorganization/Maxwell-Daemon",
+                work_item_id=None,
+                kind="semantic",
+                body="Use pytest tests/unit for local verification.",
+                source="issue-397",
+                confidence=0.9,
+                created_at=datetime(2026, 4, 22, 12, tzinfo=timezone.utc),
+            )
+        )
 
         async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             if argv[1] == "ls-files":
@@ -117,11 +133,20 @@ class TestBuild:
             return 0, b"", b""
 
         builder = ContextBuilder(git_runner=fake_git)
-        ctx = asyncio.run(builder.build(tmp_path, issue_body="fix the parser"))
+        ctx = asyncio.run(
+            builder.build(
+                tmp_path,
+                issue_body="fix the parser",
+                repo_id="D-sorganization/Maxwell-Daemon",
+                issue_title="parser fix",
+                issue_number=397,
+            )
+        )
 
         assert ctx.language == "python"
         assert "parser.py" in ctx.file_tree
         assert "X" in ctx.readme
+        assert "Repo memory snapshot" in ctx.memory
         assert "parser.py" in ctx.relevant_files
         assert len(ctx.recent_commits) == 2
 
@@ -132,6 +157,7 @@ class TestPromptRendering:
             language="python",
             file_tree="a.py\nb.py\n",
             readme="# Project\n",
+            memory="## Repo memory\n- fact",
             relevant_files={"a.py": "def a(): pass\n"},
             recent_commits=["add a", "fix b"],
         )
@@ -139,6 +165,7 @@ class TestPromptRendering:
         assert "Language: python" in prompt
         assert "a.py" in prompt
         assert "Project" in prompt
+        assert "Repo memory" in prompt
         assert "add a" in prompt
 
     def test_prompt_respects_size_budget(self) -> None:
