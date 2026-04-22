@@ -14,13 +14,14 @@ Modes:
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 
 from maxwell_daemon.backends.base import ILLMBackend, Message, MessageRole
 from maxwell_daemon.core.artifacts import ArtifactKind
@@ -219,7 +220,7 @@ class IssueExecutor:
         # Memory: assemble repo profile + related episodes + scratchpad, if any.
         memory_prompt = ""
         if self._memory is not None:
-            memory_prompt = self._memory.assemble_context(
+            memory_prompt = await self._assemble_memory_context(
                 repo=repo,
                 issue_title=issue.title,
                 issue_body=issue.body,
@@ -390,7 +391,7 @@ class IssueExecutor:
         # related issues can retrieve it. Outcome is "completed" until/unless
         # the PR is later merged — we don't know that from here.
         if self._memory is not None:
-            self._memory.record_outcome(
+            await self._record_memory_outcome(
                 task_id=effective_task_id,
                 repo=repo,
                 issue_number=issue_number,
@@ -408,6 +409,83 @@ class IssueExecutor:
             pr_number=pr.number,
             plan=plan,
             applied_diff=applied,
+        )
+
+    async def _assemble_memory_context(
+        self,
+        *,
+        repo: str,
+        issue_title: str,
+        issue_body: str,
+        task_id: str,
+        max_chars: int,
+    ) -> str:
+        if self._memory is None:
+            return ""
+        method = getattr(self._memory, "assemble_context_async", None)
+        if callable(method):
+            result = method(
+                repo=repo,
+                issue_title=issue_title,
+                issue_body=issue_body,
+                task_id=task_id,
+                max_chars=max_chars,
+            )
+            if inspect.isawaitable(result):
+                return cast(str, await result)
+            if isinstance(result, str):
+                return result
+        return self._memory.assemble_context(
+            repo=repo,
+            issue_title=issue_title,
+            issue_body=issue_body,
+            task_id=task_id,
+            max_chars=max_chars,
+        )
+
+    async def _record_memory_outcome(
+        self,
+        *,
+        task_id: str,
+        repo: str,
+        issue_number: int,
+        issue_title: str,
+        issue_body: str,
+        plan: str,
+        applied_diff: bool,
+        pr_url: str,
+        outcome: str,
+    ) -> None:
+        if self._memory is None:
+            return
+        method = getattr(self._memory, "record_outcome_async", None)
+        if callable(method):
+            result = method(
+                task_id=task_id,
+                repo=repo,
+                issue_number=issue_number,
+                issue_title=issue_title,
+                issue_body=issue_body,
+                plan=plan,
+                applied_diff=applied_diff,
+                pr_url=pr_url,
+                outcome=outcome,
+            )
+            if inspect.isawaitable(result):
+                await result
+                return
+            if result is None:
+                return
+        self._memory.record_outcome(
+            task_id=task_id,
+            repo=repo,
+            issue_number=issue_number,
+            issue_title=issue_title,
+            issue_body=issue_body,
+            plan=plan,
+            applied_diff=applied_diff,
+            pr_url=pr_url,
+            outcome=outcome,
         )
 
     def _record_artifact(

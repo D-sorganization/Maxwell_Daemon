@@ -28,17 +28,17 @@ class _Response:
             )
 
 
-class _Client:
+class _AsyncClient:
     requests: ClassVar[list[dict[str, Any]]] = []
     response: ClassVar[_Response | Exception] = _Response({"context": "shared context"})
 
-    def __enter__(self) -> _Client:
+    async def __aenter__(self) -> _AsyncClient:
         return self
 
-    def __exit__(self, *exc_info: object) -> None:
+    async def __aexit__(self, *exc_info: object) -> None:
         return None
 
-    def post(
+    async def post(
         self,
         url: str,
         *,
@@ -56,9 +56,9 @@ class _Client:
 
 @pytest.fixture(autouse=True)
 def _reset_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    _Client.requests = []
-    _Client.response = _Response({"context": "shared context"})
-    monkeypatch.setattr(httpx, "Client", _Client)
+    _AsyncClient.requests = []
+    _AsyncClient.response = _Response({"context": "shared context"})
+    monkeypatch.setattr(httpx, "AsyncClient", _AsyncClient)
 
 
 def test_assemble_context_merges_remote_context_and_local_scratchpad() -> None:
@@ -74,12 +74,12 @@ def test_assemble_context_merges_remote_context_and_local_scratchpad() -> None:
 
     assert "shared context" in assembled
     assert "local note" in assembled
-    assert _Client.requests[0]["url"] == "https://coordinator.test/api/v1/memory/assemble"
-    assert _Client.requests[0]["headers"]["Authorization"] == "Bearer token"
+    assert _AsyncClient.requests[0]["url"] == "https://coordinator.test/api/v1/memory/assemble"
+    assert _AsyncClient.requests[0]["headers"]["Authorization"] == "Bearer token"
 
 
 def test_assemble_context_falls_back_to_scratchpad_when_remote_fails() -> None:
-    _Client.response = httpx.ConnectError("offline")
+    _AsyncClient.response = httpx.ConnectError("offline")
     manager = RemoteMemoryManager("https://coordinator.test")
     manager.scratchpad.append("task-1", role="plan", content="offline note")
 
@@ -109,6 +109,32 @@ def test_record_outcome_posts_to_coordinator_and_clears_scratchpad() -> None:
         outcome="completed",
     )
 
-    assert _Client.requests[0]["url"] == "https://coordinator.test/api/v1/memory/record"
-    assert _Client.requests[0]["json"]["issue_number"] == 296
+    assert _AsyncClient.requests[0]["url"] == "https://coordinator.test/api/v1/memory/record"
+    assert _AsyncClient.requests[0]["json"]["issue_number"] == 296
     assert manager.scratchpad.entries("task-1") == []
+
+
+async def test_assemble_context_async_uses_async_client() -> None:
+    manager = RemoteMemoryManager("https://coordinator.test")
+
+    assembled = await manager.assemble_context_async(
+        repo="D-sorganization/Maxwell-Daemon",
+        issue_title="title",
+        issue_body="body",
+        task_id="task-1",
+    )
+
+    assert assembled == "shared context"
+    assert _AsyncClient.requests[0]["url"] == "https://coordinator.test/api/v1/memory/assemble"
+
+
+async def test_sync_methods_reject_active_event_loop() -> None:
+    manager = RemoteMemoryManager("https://coordinator.test")
+
+    with pytest.raises(RuntimeError, match="active event loop"):
+        manager.assemble_context(
+            repo="D-sorganization/Maxwell-Daemon",
+            issue_title="title",
+            issue_body="body",
+            task_id="task-1",
+        )

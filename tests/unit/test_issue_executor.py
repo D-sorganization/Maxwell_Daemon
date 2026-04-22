@@ -109,6 +109,28 @@ class ScriptedBackend(ILLMBackend):
         return BackendCapabilities()
 
 
+class AsyncOnlyMemory:
+    def __init__(self) -> None:
+        from maxwell_daemon.memory import ScratchPad
+
+        self.scratchpad = ScratchPad()
+        self.assembled: list[dict[str, Any]] = []
+        self.recorded: list[dict[str, Any]] = []
+
+    async def assemble_context_async(self, **kwargs: Any) -> str:
+        self.assembled.append(kwargs)
+        return "async memory context"
+
+    def assemble_context(self, **_: Any) -> str:
+        raise AssertionError("sync assemble_context should not be used")
+
+    async def record_outcome_async(self, **kwargs: Any) -> None:
+        self.recorded.append(kwargs)
+
+    def record_outcome(self, **_: Any) -> None:
+        raise AssertionError("sync record_outcome should not be used")
+
+
 def _issue(body: str = "fix the bug") -> Issue:
     return Issue(
         number=42,
@@ -171,6 +193,27 @@ class TestPlanMode:
         ]
         assert artifact_store.read_text(artifacts[0].id) == "artifact plan"
         assert "Closes #42" in artifact_store.read_text(artifacts[2].id)
+
+    def test_uses_async_memory_methods_when_available(self) -> None:
+        gh = FakeGitHub(issue=_issue())
+        ws = FakeWorkspace()
+        backend = ScriptedBackend(payload={"plan": "memory-aware plan", "diff": ""})
+        memory = AsyncOnlyMemory()
+        executor = IssueExecutor(github=gh, workspace=ws, backend=backend, memory=memory)
+
+        asyncio.run(
+            executor.execute_issue(
+                repo="owner/repo",
+                issue_number=42,
+                model="fake-model",
+                mode="plan",
+                task_id="task-42",
+            )
+        )
+
+        assert memory.assembled[0]["repo"] == "owner/repo"
+        assert memory.assembled[0]["task_id"] == "task-42"
+        assert memory.recorded[0]["pr_url"] == "https://x/pull/100"
 
 
 class TestImplementMode:
