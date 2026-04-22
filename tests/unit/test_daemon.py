@@ -88,6 +88,38 @@ class TestLifecycle:
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=2, body=body))
 
+    def test_dream_cycle_disabled_by_default(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        async def body(d: Daemon) -> None:
+            bg_names = {task.get_name() for task in d._bg_tasks}
+            assert "memory-dream-cycle" not in bg_names
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+    def test_dream_cycle_starts_when_configured(
+        self,
+        isolated_ledger_path: Path,
+        tmp_path: Path,
+        register_recording_backend: None,
+    ) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {"primary": {"type": "recording", "model": "test-model"}},
+                "agent": {"default_backend": "primary"},
+                "memory": {
+                    "workspace_path": str(tmp_path),
+                    "dream_interval_seconds": 3600,
+                },
+            }
+        )
+
+        async def body(d: Daemon) -> None:
+            bg_names = {task.get_name() for task in d._bg_tasks}
+            assert "memory-dream-cycle" in bg_names
+
+        _run(_with_daemon(cfg, isolated_ledger_path, worker_count=1, body=body))
+
 
 class TestTaskExecution:
     def test_queued_task_transitions_to_completed(

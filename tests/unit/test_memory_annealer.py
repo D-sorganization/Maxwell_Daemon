@@ -43,3 +43,18 @@ async def test_memory_annealer_cleanup(tmp_path: Path):
     memory_file = tmp_path / ".maxwell" / "memory" / "architectural_state.md"
     assert memory_file.exists()
     assert memory_file.read_text() == "Annealed architectural state."
+
+
+def test_memory_annealer_status_counts_raw_logs(tmp_path: Path) -> None:
+    raw_dir = tmp_path / ".maxwell" / "raw_logs"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "session_1.log").write_text("abc", encoding="utf-8")
+    (raw_dir / "ignored.txt").write_text("not raw memory", encoding="utf-8")
+
+    annealer = MemoryAnnealer(workspace=tmp_path)
+    status = annealer.status()
+
+    assert status.workspace == tmp_path
+    assert status.raw_log_count == 1
+    assert status.raw_bytes == 3
+    assert status.memory_exists is False
