@@ -48,6 +48,34 @@ List all tasks known to the daemon (in-memory, not durable across restarts).
 
 Fetch a single task by id. Returns 404 if not found.
 
+## `POST /api/v1/task-graphs`
+
+Create a named sub-agent delivery graph from an existing work item. Returns the
+validated graph definition and any node runs already recorded for that graph.
+
+```json
+{
+  "work_item_id": "wi-123",
+  "template": "standard-delivery",
+  "labels": ["frontend"]
+}
+```
+
+## `GET /api/v1/task-graphs`
+
+List stored task graph records. Optional filters: `work_item_id`, `status`, and
+`limit`.
+
+## `GET /api/v1/task-graphs/{graph_id}`
+
+Fetch a stored graph definition and its latest node run records.
+
+## `POST /api/v1/task-graphs/{graph_id}/start`
+
+Start a graph through the configured graph executor. If backend-routed graph
+execution has not been configured on this daemon, the endpoint returns 503 with
+a clear executor-unavailable message.
+
 ## `GET /api/v1/cost`
 
 ```json

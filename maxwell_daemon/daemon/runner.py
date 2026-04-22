@@ -44,6 +44,14 @@ from maxwell_daemon.core.action_store import ActionStore
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.core.work_item_store import WorkItemStore
 from maxwell_daemon.core.work_items import WorkItem, WorkItemStatus
+from maxwell_daemon.director import (
+    GraphNodeExecutor,
+    GraphStatus,
+    TaskGraphRecord,
+    TaskGraphService,
+    TaskGraphStore,
+    TaskGraphTemplate,
+)
 from maxwell_daemon.events import Event, EventBus, EventKind, attach_observability
 from maxwell_daemon.metrics import record_request
 
@@ -123,6 +131,7 @@ class Daemon:
         workspace_root: Path | None = None,
         task_store_path: Path | None = None,
         work_item_store_path: Path | None = None,
+        task_graph_store_path: Path | None = None,
         artifact_store_path: Path | None = None,
         artifact_blob_root: Path | None = None,
         action_store_path: Path | None = None,
@@ -146,11 +155,17 @@ class Daemon:
         self._task_store = TaskStore(task_store_path or default_store)
         default_work_item_store = Path.home() / ".local/share/maxwell-daemon/work_items.db"
         self._work_item_store = WorkItemStore(work_item_store_path or default_work_item_store)
+        default_task_graph_store = Path.home() / ".local/share/maxwell-daemon/task_graphs.db"
+        self._task_graph_store = TaskGraphStore(task_graph_store_path or default_task_graph_store)
         default_artifact_store = Path.home() / ".local/share/maxwell-daemon/artifacts.db"
         default_artifact_root = Path.home() / ".local/share/maxwell-daemon/artifacts"
         self._artifact_store = ArtifactStore(
             artifact_store_path or default_artifact_store,
             blob_root=artifact_blob_root or default_artifact_root,
+        )
+        self._task_graphs = TaskGraphService(
+            store=self._task_graph_store,
+            artifact_store=self._artifact_store,
         )
         default_action_store = Path.home() / ".local/share/maxwell-daemon/actions.db"
         self._action_store = ActionStore(action_store_path or default_action_store)
@@ -706,6 +721,51 @@ class Daemon:
             source=source,
             max_priority=max_priority,
         )
+
+    def set_task_graph_executor(self, executor: GraphNodeExecutor | None) -> None:
+        """Inject or clear the task graph node executor.
+
+        Production backend-routed execution is intentionally a follow-up slice;
+        tests and specialized hosts can supply a concrete executor now.
+        """
+        self._task_graphs.set_executor(executor)
+
+    def create_task_graph(
+        self,
+        work_item_id: str,
+        *,
+        template: TaskGraphTemplate | None = None,
+        graph_id: str | None = None,
+        labels: tuple[str, ...] = (),
+    ) -> TaskGraphRecord:
+        item = self._work_item_store.get(work_item_id)
+        if item is None:
+            raise KeyError(work_item_id)
+        return self._task_graphs.create_from_work_item(
+            item,
+            template=template,
+            graph_id=graph_id,
+            labels=labels,
+        )
+
+    def get_task_graph(self, graph_id: str) -> TaskGraphRecord | None:
+        return self._task_graphs.get(graph_id)
+
+    def list_task_graphs(
+        self,
+        *,
+        work_item_id: str | None = None,
+        status: GraphStatus | None = None,
+        limit: int = 100,
+    ) -> list[TaskGraphRecord]:
+        return self._task_graphs.list_records(
+            work_item_id=work_item_id,
+            status=status,
+            limit=limit,
+        )
+
+    def start_task_graph(self, graph_id: str) -> TaskGraphRecord:
+        return self._task_graphs.start(graph_id)
 
     def get_artifact(self, artifact_id: str) -> Artifact | None:
         return self._artifact_store.get(artifact_id)
