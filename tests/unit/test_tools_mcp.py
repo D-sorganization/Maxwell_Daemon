@@ -10,7 +10,9 @@ from __future__ import annotations
 import pytest
 
 from maxwell_daemon.tools.mcp import (
+    ToolInvocationStore,
     ToolParam,
+    ToolPolicy,
     ToolRegistry,
     ToolRegistryError,
     ToolResult,
@@ -215,6 +217,106 @@ class TestApprovalTierEnforcement:
         reg.register(_echo_spec())
         result = await reg.invoke("echo", {"message": "x"})
         assert "echo" in result.content
+
+
+class TestToolPolicyAndInvocationAudit:
+    async def test_readonly_policy_allows_read_tool_and_records_success(self, tmp_path) -> None:
+        store = ToolInvocationStore(tmp_path / "tool-invocations.jsonl")
+        reg = ToolRegistry(
+            policy=ToolPolicy.readonly_default(),
+            invocation_store=store,
+        )
+        reg.register(
+            ToolSpec(
+                name="read_file",
+                description="read",
+                params=[ToolParam(name="path", type="string", description="path")],
+                handler=lambda path, **_: f"read {path}",
+                capabilities=frozenset({"file_read"}),
+                risk_level="read_only",
+            )
+        )
+
+        result = await reg.invoke("read_file", {"path": "README.md", "token": "secret-token"})
+
+        assert result == ToolResult(content="read README.md", is_error=False)
+        [record] = store.records
+        assert record.tool_name == "read_file"
+        assert record.status == "succeeded"
+        assert record.redacted_arguments == {"path": "README.md", "token": "***"}
+        assert "secret-token" not in (tmp_path / "tool-invocations.jsonl").read_text()
+
+    async def test_policy_denies_unallowed_capability_before_handler_runs(self) -> None:
+        ran: list[bool] = []
+        store = ToolInvocationStore()
+        reg = ToolRegistry(
+            policy=ToolPolicy.readonly_default(),
+            invocation_store=store,
+        )
+        reg.register(
+            ToolSpec(
+                name="write_file",
+                description="write",
+                params=[],
+                handler=lambda: ran.append(True),
+                capabilities=frozenset({"file_write"}),
+                risk_level="local_write",
+            )
+        )
+
+        result = await reg.invoke("write_file", {"path": "out.txt"})
+
+        assert result.is_error is True
+        assert "denied by policy" in result.content
+        assert ran == []
+        [record] = store.records
+        assert record.status == "denied"
+        assert "unallowed capabilities" in (record.error or "")
+
+    async def test_denied_tool_id_wins_over_allowed_capability(self) -> None:
+        store = ToolInvocationStore()
+        reg = ToolRegistry(
+            policy=ToolPolicy(
+                denied_tool_ids=frozenset({"repo_status"}),
+                allowed_capabilities=frozenset({"repo_read"}),
+                max_risk_level_without_approval="read_only",
+            ),
+            invocation_store=store,
+        )
+        reg.register(
+            ToolSpec(
+                name="repo_status",
+                description="status",
+                params=[],
+                handler=lambda: "clean",
+                capabilities=frozenset({"repo_read"}),
+                risk_level="read_only",
+            )
+        )
+
+        result = await reg.invoke("repo_status", {})
+
+        assert result.is_error is True
+        assert store.records[0].status == "denied"
+        assert "denied by policy" in (store.records[0].error or "")
+
+    async def test_suggest_tier_records_approval_required_with_redacted_nested_values(self) -> None:
+        store = ToolInvocationStore()
+        reg = ToolRegistry(approval_tier="suggest", invocation_store=store)
+        reg.register(_echo_spec())
+
+        result = await reg.invoke(
+            "echo",
+            {
+                "message": "hi",
+                "headers": {"Authorization": "Bearer abc123"},
+            },
+        )
+
+        assert result.is_error is True
+        [record] = store.records
+        assert record.status == "approval_required"
+        assert record.redacted_arguments["headers"]["Authorization"] == "***"
 
 
 class TestMcpToolDecorator:

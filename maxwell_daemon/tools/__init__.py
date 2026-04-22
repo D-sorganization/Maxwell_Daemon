@@ -12,10 +12,15 @@ from maxwell_daemon.tools.builtins import (
     build_default_registry,
 )
 from maxwell_daemon.tools.mcp import (
+    ToolCapability,
+    ToolInvocationRecord,
+    ToolInvocationStore,
     ToolParam,
+    ToolPolicy,
     ToolRegistry,
     ToolRegistryError,
     ToolResult,
+    ToolRiskLevel,
     ToolSpec,
     mcp_tool,
 )
@@ -23,10 +28,15 @@ from maxwell_daemon.tools.mcp import (
 __all__ = [
     "BashRunner",
     "SandboxViolationError",
+    "ToolCapability",
+    "ToolInvocationRecord",
+    "ToolInvocationStore",
     "ToolParam",
+    "ToolPolicy",
     "ToolRegistry",
     "ToolRegistryError",
     "ToolResult",
+    "ToolRiskLevel",
     "ToolSpec",
     "build_default_registry",
     "mcp_tool",
