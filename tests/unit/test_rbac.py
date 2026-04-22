@@ -241,6 +241,64 @@ class TestAdminJWT:
         assert r.status_code == 200
 
 
+# ── worker pool RBAC ─────────────────────────────────────────────────────────
+
+
+class TestWorkerPoolRbac:
+    """Worker resizing is mutating operator work, while worker status is read-only."""
+
+    def test_viewer_can_read_worker_status(
+        self, jwt_only_client: TestClient, jwt_cfg: JWTConfig
+    ) -> None:
+        r = jwt_only_client.get("/api/v1/workers", headers=_bearer(viewer_token(jwt_cfg)))
+        assert r.status_code == 200
+
+    def test_viewer_cannot_resize_worker_pool(
+        self, jwt_only_client: TestClient, jwt_cfg: JWTConfig
+    ) -> None:
+        r = jwt_only_client.put(
+            "/api/v1/workers",
+            params={"count": 1},
+            headers=_bearer(viewer_token(jwt_cfg)),
+        )
+        assert r.status_code == 403
+
+    def test_operator_can_resize_worker_pool(
+        self, jwt_only_client: TestClient, jwt_cfg: JWTConfig
+    ) -> None:
+        r = jwt_only_client.put(
+            "/api/v1/workers",
+            params={"count": 1},
+            headers=_bearer(operator_token(jwt_cfg)),
+        )
+        assert r.status_code == 200
+        assert r.json()["worker_count"] == 1
+
+    def test_admin_can_resize_worker_pool(
+        self, jwt_only_client: TestClient, jwt_cfg: JWTConfig
+    ) -> None:
+        r = jwt_only_client.put(
+            "/api/v1/workers",
+            params={"count": 1},
+            headers=_bearer(admin_token(jwt_cfg)),
+        )
+        assert r.status_code == 200
+        assert r.json()["worker_count"] == 1
+
+    def test_missing_token_cannot_resize_worker_pool(self, jwt_only_client: TestClient) -> None:
+        r = jwt_only_client.put("/api/v1/workers", params={"count": 1})
+        assert r.status_code == 401
+
+    def test_static_token_can_resize_worker_pool(self, static_only_client: TestClient) -> None:
+        r = static_only_client.put(
+            "/api/v1/workers",
+            params={"count": 1},
+            headers=_bearer("admin-static-secret"),
+        )
+        assert r.status_code == 200
+        assert r.json()["worker_count"] == 1
+
+
 # ── JWT token issuance ────────────────────────────────────────────────────────
 
 
