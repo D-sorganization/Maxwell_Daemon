@@ -183,7 +183,9 @@ class FleetConfig(BaseModel):
     discovery_method: Literal["manual", "mdns"] = "manual"
     heartbeat_seconds: int = Field(30, ge=5)
     coordinator_poll_seconds: int = Field(30, ge=5)
-    coordinator_url: str | None = Field(None, description="URL of the coordinator daemon (e.g. https://coordinator:8080)")
+    coordinator_url: str | None = Field(
+        None, description="URL of the coordinator daemon (e.g. https://coordinator:8080)"
+    )
 
 
 class WebhookRouteConfig(BaseModel):

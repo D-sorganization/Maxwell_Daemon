@@ -27,7 +27,7 @@ from maxwell_daemon.core.repo_overrides import RepoOverrides
 from maxwell_daemon.gh.context import ContextBuilder
 from maxwell_daemon.gh.test_runner import TestResult, TestRunner
 from maxwell_daemon.gh.workspace import WorkspaceError
-from maxwell_daemon.memory import MemoryManager
+from maxwell_daemon.memory import MemoryBackend
 from maxwell_daemon.templates import classify_issue, render_system_prompt
 from maxwell_daemon.tracing import span as _trace_span
 
@@ -112,7 +112,7 @@ class IssueExecutor:
         test_runner: TestRunner | Any | None = None,
         max_test_retries: int = 1,
         test_timeout_seconds: float = 300.0,
-        memory: MemoryManager | None = None,
+        memory: MemoryBackend | None = None,
         memory_max_chars: int = 8000,
     ) -> None:
         self._gh = github

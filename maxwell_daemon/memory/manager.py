@@ -7,11 +7,43 @@ task ends successfully.
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from maxwell_daemon.memory.episodic import Episode, EpisodicStore
 from maxwell_daemon.memory.profile import RepoProfile
 from maxwell_daemon.memory.scratchpad import ScratchPad
 
-__all__ = ["MemoryManager"]
+__all__ = ["MemoryBackend", "MemoryManager"]
+
+
+class MemoryBackend(Protocol):
+    """Shared interface used by issue execution for local or coordinator memory."""
+
+    scratchpad: ScratchPad
+
+    def assemble_context(
+        self,
+        *,
+        repo: str,
+        issue_title: str,
+        issue_body: str,
+        task_id: str,
+        max_chars: int = 8000,
+    ) -> str: ...
+
+    def record_outcome(
+        self,
+        *,
+        task_id: str,
+        repo: str,
+        issue_number: int,
+        issue_title: str,
+        issue_body: str,
+        plan: str,
+        applied_diff: bool,
+        pr_url: str,
+        outcome: str,
+    ) -> None: ...
 
 
 class MemoryManager:

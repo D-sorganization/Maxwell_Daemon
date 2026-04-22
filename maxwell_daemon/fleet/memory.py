@@ -29,6 +29,7 @@ class RemoteMemoryManager(MemoryManager):
         task_id: str,
         max_chars: int = 8000,
     ) -> str:
+        base_context = ""
         with httpx.Client() as client:
             try:
                 resp = client.post(
@@ -44,10 +45,12 @@ class RemoteMemoryManager(MemoryManager):
                     timeout=10.0,
                 )
                 resp.raise_for_status()
-                data = resp.json()
-                context = data.get("context", "") if isinstance(data, dict) else ""
-                base_context = context if isinstance(context, str) else str(context)
-            except Exception:
+                payload = resp.json()
+                if isinstance(payload, dict):
+                    context = payload.get("context")
+                    if isinstance(context, str):
+                        base_context = context
+            except (httpx.HTTPError, ValueError, TypeError):
                 base_context = ""
 
         # Merge local scratchpad
@@ -69,8 +72,8 @@ class RemoteMemoryManager(MemoryManager):
         pr_url: str,
         outcome: str,
     ) -> None:
-        with httpx.Client() as client, contextlib.suppress(Exception):
-            client.post(
+        with httpx.Client() as client, contextlib.suppress(httpx.HTTPError):
+            resp = client.post(
                 f"{self._url}/api/v1/memory/record",
                 json={
                     "task_id": task_id,
@@ -86,4 +89,5 @@ class RemoteMemoryManager(MemoryManager):
                 headers=self._headers,
                 timeout=10.0,
             )
+            resp.raise_for_status()
         self.scratchpad.clear(task_id)
