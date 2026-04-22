@@ -212,7 +212,8 @@ def ask(
             resp = await decision.backend.complete(msgs, model=decision.model)
             console.print(resp.content)
             cost = decision.backend.estimate_cost(resp.usage, decision.model)
-            console.print(f"\n[dim]tokens: {resp.usage.total_tokens}  cost: ${cost:.4f}[/dim]")
+            cost_text = f"${cost:.4f}" if cost is not None else "unknown"
+            console.print(f"\n[dim]tokens: {resp.usage.total_tokens}  cost: {cost_text}[/dim]")
 
     try:
         asyncio.run(_run())

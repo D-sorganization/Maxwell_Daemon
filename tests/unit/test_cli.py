@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from maxwell_daemon.backends import registry
+from maxwell_daemon.backends import BackendCapabilities, registry
 from maxwell_daemon.cli.main import app
+from tests.conftest import RecordingBackend
 
 
 @pytest.fixture
@@ -151,6 +152,35 @@ class TestAsk:
         assert r.exit_code == 0
         assert "ok" in r.stdout
         assert "tokens" in r.stdout
+
+    def test_one_shot_prompt_handles_unknown_cost(self, runner: CliRunner, tmp_path: Path) -> None:
+        from maxwell_daemon.config import MaxwellDaemonConfig, save_config
+
+        class UnknownCostBackend(RecordingBackend):
+            def capabilities(self, model: str) -> BackendCapabilities:
+                return BackendCapabilities()
+
+        registry._factories["unknown-cost"] = UnknownCostBackend
+        try:
+            cfg = MaxwellDaemonConfig.model_validate(
+                {
+                    "backends": {"primary": {"type": "unknown-cost", "model": "test-model"}},
+                    "agent": {"default_backend": "primary"},
+                }
+            )
+            config_path = tmp_path / "c.yaml"
+            save_config(cfg, config_path)
+
+            r = runner.invoke(
+                app,
+                ["ask", "hello world", "--config", str(config_path), "--no-stream"],
+            )
+        finally:
+            registry._factories.pop("unknown-cost", None)
+
+        assert r.exit_code == 0
+        assert "ok" in r.stdout
+        assert "cost: unknown" in r.stdout
 
 
 class TestCrossAudit:
