@@ -514,7 +514,9 @@ def make_open_browser_url(browser_service: BrowserService) -> Callable[..., Awai
         if result.screenshot_artifact_id:
             parts.append(f"screenshot_artifact_id: {result.screenshot_artifact_id}")
         if result.metadata:
-            metadata = ", ".join(f"{key}={value!r}" for key, value in sorted(result.metadata.items()))
+            metadata = ", ".join(
+                f"{key}={value!r}" for key, value in sorted(result.metadata.items())
+            )
             parts.append(f"metadata: {metadata}")
         if result.text:
             parts.append("")

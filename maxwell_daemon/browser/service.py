@@ -72,7 +72,9 @@ class BrowserRequest(BaseModel):
     def _host_is_allowed(self) -> BrowserRequest:
         parsed = urlparse(self.url)
         host = (parsed.hostname or "").lower()
-        if self.allowed_hosts and not any(_host_matches(host, allowed) for allowed in self.allowed_hosts):
+        if self.allowed_hosts and not any(
+            _host_matches(host, allowed) for allowed in self.allowed_hosts
+        ):
             raise ValueError(f"browser url host {host!r} is not in allowed_hosts")
         return self
 
