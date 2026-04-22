@@ -135,6 +135,37 @@ class ActionStore:
             ).fetchall()
         return [_row_to_action(row) for row in rows]
 
+    def list(
+        self,
+        *,
+        status: ActionStatus | None = None,
+        task_id: str | None = None,
+        work_item_id: str | None = None,
+        limit: int = 100,
+    ) -> list[Action]:
+        """Return actions across tasks for queue and audit views."""
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        query = "SELECT * FROM actions"
+        clauses: list[str] = []
+        args: list[object] = []
+        if status is not None:
+            clauses.append("status = ?")
+            args.append(status.value)
+        if task_id is not None:
+            clauses.append("task_id = ?")
+            args.append(task_id)
+        if work_item_id is not None:
+            clauses.append("work_item_id = ?")
+            args.append(work_item_id)
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY created_at ASC, id ASC LIMIT ?"
+        args.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(query, args).fetchall()
+        return [_row_to_action(row) for row in rows]
+
     def list_pending(self, *, limit: int = 100) -> list[Action]:
         with self._connect() as conn:
             rows = conn.execute(

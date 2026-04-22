@@ -92,6 +92,21 @@ class ActionService:
     def list_for_task(self, task_id: str) -> list[Action]:
         return self._store.list_for_task(task_id)
 
+    def list(
+        self,
+        *,
+        status: ActionStatus | None = None,
+        task_id: str | None = None,
+        work_item_id: str | None = None,
+        limit: int = 100,
+    ) -> list[Action]:
+        return self._store.list(
+            status=status,
+            task_id=task_id,
+            work_item_id=work_item_id,
+            limit=limit,
+        )
+
     def approve(
         self,
         action_id: str,

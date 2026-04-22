@@ -552,6 +552,32 @@ class TestActionEndpoints:
         assert detail.status_code == 200
         assert detail.json()["summary"] == "write file"
 
+    def test_lists_actions_queue_across_tasks(self, client: TestClient, daemon: Daemon) -> None:
+        proposed = daemon.propose_action(
+            task_id="task-action-a",
+            work_item_id="wi-approval",
+            kind=ActionKind.FILE_WRITE,
+            summary="write file",
+            payload={"path": "ok.py"},
+        )
+        approved = daemon.propose_action(
+            task_id="task-action-b",
+            work_item_id="wi-approval",
+            kind=ActionKind.COMMAND,
+            summary="run tests",
+            payload={"command": "pytest"},
+        )
+        daemon.approve_action(approved.id, actor="test")
+
+        listed = client.get(
+            "/api/v1/actions",
+            params={"status": "proposed", "work_item_id": "wi-approval"},
+        )
+
+        assert listed.status_code == 200
+        assert [item["id"] for item in listed.json()] == [proposed.id]
+        assert listed.json()[0]["approval_contract"] == "proposal_only"
+
     def test_approve_and_reject_actions(self, client: TestClient, daemon: Daemon) -> None:
         approved = daemon.propose_action(
             task_id="task-action",

@@ -29,6 +29,11 @@
       <button class="tab active" data-view="tasks" role="tab" aria-selected="true" title="Tasks">T</button>
       <button class="tab" data-view="fleet" role="tab" aria-selected="false" title="Fleet">F</button>
       <button class="tab" data-view="gauntlet" role="tab" aria-selected="false" title="Gauntlet">G</button>
+      <button class="tab" data-view="work-items" role="tab" aria-selected="false" title="Work Items">W</button>
+      <button class="tab" data-view="approvals" role="tab" aria-selected="false" title="Approvals">A</button>
+      <button class="tab" data-view="artifacts" role="tab" aria-selected="false" title="Artifacts">I</button>
+      <button class="tab" data-view="graphs" role="tab" aria-selected="false" title="Graphs">G</button>
+      <button class="tab" data-view="checks" role="tab" aria-selected="false" title="Checks">K</button>
       <button class="tab" data-view="repos" role="tab" aria-selected="false" title="Repositories">R</button>
       <button class="tab" data-view="monitor" role="tab" aria-selected="false" title="Monitor">M</button>
       <button class="tab" data-view="history" role="tab" aria-selected="false" title="History">H</button>
@@ -42,6 +47,11 @@
         <button class="sidebar-item active" data-view="tasks">Tasks</button>
         <button class="sidebar-item" data-view="fleet">Fleet nodes</button>
         <button class="sidebar-item" data-view="gauntlet">Gauntlet</button>
+        <button class="sidebar-item" data-view="work-items">Work items</button>
+        <button class="sidebar-item" data-view="approvals">Approvals</button>
+        <button class="sidebar-item" data-view="artifacts">Artifacts</button>
+        <button class="sidebar-item" data-view="graphs">Task graphs</button>
+        <button class="sidebar-item" data-view="checks">Checks</button>
         <button class="sidebar-item" data-view="repos">Repositories</button>
         <button class="sidebar-item" data-view="monitor">Daemon logs</button>
       </section>
@@ -105,17 +115,6 @@
         <h2>Backends</h2>
       </div>
       <ul id="backends-list"></ul>
-    </section>
-  </main>
-
-  <!-- ── Gauntlet view ──────────────────────────────────────────────── -->
-  <main id="view-gauntlet" class="view" hidden>
-    <section class="card full-width">
-      <div class="card-head">
-        <h2>Gate Gauntlet</h2>
-        <button id="gauntlet-refresh-btn">refresh</button>
-      </div>
-      <div id="gauntlet-board" class="gauntlet-board"></div>
     </section>
   </main>
 
@@ -217,6 +216,148 @@
         <button id="repos-refresh-btn">refresh</button>
       </div>
       <div id="repos-grid" class="repos-grid"></div>
+    </section>
+  </main>
+
+  <!-- ── Gauntlet view ──────────────────────────────────────────────── -->
+  <main id="view-gauntlet" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Gate Gauntlet</h2>
+        <button id="gauntlet-refresh-btn">refresh</button>
+      </div>
+      <div id="gauntlet-board" class="gauntlet-board"></div>
+    </section>
+  </main>
+
+  <!-- ── Work item control view ─────────────────────────────────────── -->
+  <main id="view-work-items" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Work Items</h2>
+        <button id="work-items-refresh-btn">refresh</button>
+      </div>
+      <table id="work-items-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Repo</th>
+            <th>Priority</th>
+            <th>Tasks</th>
+            <th>Updated</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="work-items-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- ── Approval queue view ────────────────────────────────────────── -->
+  <main id="view-approvals" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Approvals</h2>
+        <button id="approvals-refresh-btn">refresh</button>
+      </div>
+      <table id="approvals-table">
+        <thead>
+          <tr>
+            <th>Action</th>
+            <th>Kind</th>
+            <th>Risk</th>
+            <th>Task</th>
+            <th>Work Item</th>
+            <th>Summary</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="approvals-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- ── Artifact browser view ──────────────────────────────────────── -->
+  <main id="view-artifacts" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Artifacts</h2>
+        <div class="filters">
+          <select id="artifact-owner-kind" aria-label="Artifact owner">
+            <option value="task">task</option>
+            <option value="work-item">work item</option>
+          </select>
+          <input id="artifact-owner-id" type="text" placeholder="owner id" aria-label="Artifact owner id" autocomplete="off">
+          <button id="artifacts-refresh-btn">refresh</button>
+        </div>
+      </div>
+      <div class="split-pane">
+        <table id="artifacts-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Kind</th>
+              <th>Name</th>
+              <th>Media</th>
+              <th>Size</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="artifacts-body"></tbody>
+        </table>
+        <div id="artifact-content" class="artifact-content">(select an artifact)</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Task graph view ────────────────────────────────────────────── -->
+  <main id="view-graphs" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Task Graphs</h2>
+        <button id="graphs-refresh-btn">refresh</button>
+      </div>
+      <div class="split-pane">
+        <table id="graphs-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Work Item</th>
+              <th>Status</th>
+              <th>Template</th>
+              <th>Nodes</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody id="graphs-body"></tbody>
+        </table>
+        <pre id="graph-detail" class="graph-detail">(select a graph)</pre>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Checks view ────────────────────────────────────────────────── -->
+  <main id="view-checks" class="view" hidden>
+    <section class="card full-width">
+      <div class="card-head">
+        <h2>Checks</h2>
+        <button id="checks-refresh-btn">refresh</button>
+      </div>
+      <table id="checks-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Target</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody id="checks-body"></tbody>
+      </table>
     </section>
   </main>
 

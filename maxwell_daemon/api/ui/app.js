@@ -17,10 +17,20 @@ const state = {
   currentView: "tasks",       // active tab
 };
 
+const viewOrder = [
+  "tasks", "fleet", "gauntlet", "work-items", "approvals", "artifacts",
+  "graphs", "checks", "repos", "history", "cost", "monitor", "debug",
+];
+
 const commands = [
   { id: "view.tasks", title: "Show Tasks", detail: "Open the task editor", run: () => switchView("tasks") },
   { id: "view.fleet", title: "Show Fleet", detail: "Open fleet overview", run: () => switchView("fleet") },
   { id: "view.gauntlet", title: "Show Gauntlet", detail: "Open gate and critic status", run: () => switchView("gauntlet") },
+  { id: "view.work-items", title: "Show Work Items", detail: "Open work-item queue", run: () => switchView("work-items") },
+  { id: "view.approvals", title: "Show Approvals", detail: "Open action approval queue", run: () => switchView("approvals") },
+  { id: "view.artifacts", title: "Show Artifacts", detail: "Open artifact browser", run: () => switchView("artifacts") },
+  { id: "view.graphs", title: "Show Task Graphs", detail: "Open sub-agent graph runs", run: () => switchView("graphs") },
+  { id: "view.checks", title: "Show Checks", detail: "Open validation checks", run: () => switchView("checks") },
   { id: "view.repos", title: "Show Repositories", detail: "Open repository dashboard", run: () => switchView("repos") },
   { id: "view.monitor", title: "Show Daemon Logs", detail: "Open live monitor", run: () => switchView("monitor") },
   { id: "view.history", title: "Show History", detail: "Open completed work timeline", run: () => switchView("history") },
@@ -52,6 +62,31 @@ function fmtTsShort(iso) {
   return d.toLocaleString(undefined, { timeStyle: "short" });
 }
 
+function fmtBytes(n) {
+  const value = Number(n || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function setTableMessage(tbodyId, colspan, message) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  const tr = document.createElement("tr");
+  const td = document.createElement("td");
+  td.colSpan = colspan;
+  td.className = "empty-cell";
+  td.textContent = message;
+  tr.appendChild(td);
+  tbody.appendChild(tr);
+}
+
+function shortId(value) {
+  const s = String(value || "");
+  return s.length > 12 ? `${s.slice(0, 12)}…` : s;
+}
+
 // ---- tab navigation --------------------------------------------------------
 
 function switchView(name) {
@@ -73,6 +108,10 @@ function switchView(name) {
   // Lazy-load view data
   if (name === "fleet") fetchFleet().catch(console.error);
   if (name === "gauntlet") fetchGauntlet().catch(console.error);
+  if (name === "work-items") fetchWorkItems().catch(console.error);
+  if (name === "approvals") fetchApprovals().catch(console.error);
+  if (name === "graphs") fetchTaskGraphs().catch(console.error);
+  if (name === "checks") fetchChecks().catch(console.error);
   if (name === "cost") fetchCostDetail().catch(console.error);
   if (name === "history") renderHistory();
   if (name === "repos") fetchFleet().catch(console.error);  // repos uses same data
@@ -113,13 +152,6 @@ async function fetchTasks() {
   updateStatusResources();
   if (state.currentView === "history") renderHistory();
   if (state.currentView === "cost") renderCostTasks();
-}
-
-async function fetchGauntlet() {
-  const r = await fetch("/api/v1/control-plane/gauntlet?limit=100", { headers: headers() });
-  if (!r.ok) throw new Error(`gauntlet: ${r.status}`);
-  state.controlPlane = await r.json();
-  renderGauntlet();
 }
 
 async function fetchBackends() {
@@ -314,6 +346,13 @@ function renderRepos() {
   }
 }
 
+async function fetchGauntlet() {
+  const r = await fetch("/api/v1/control-plane/gauntlet?limit=100", { headers: headers() });
+  if (!r.ok) throw new Error(`gauntlet: ${r.status}`);
+  state.controlPlane = await r.json();
+  renderGauntlet();
+}
+
 function renderGauntlet() {
   const board = document.getElementById("gauntlet-board");
   if (!board) return;
@@ -378,6 +417,269 @@ function renderGauntlet() {
     fragment.appendChild(section);
   }
   board.appendChild(fragment);
+}
+
+async function fetchWorkItems() {
+  const r = await fetch("/api/v1/work-items?limit=100", { headers: headers() });
+  if (!r.ok) {
+    setTableMessage("work-items-body", 8, `Work items unavailable (${r.status})`);
+    return;
+  }
+  renderWorkItems(await r.json());
+}
+
+function renderWorkItems(items) {
+  const tbody = document.getElementById("work-items-body");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!items.length) {
+    setTableMessage("work-items-body", 8, "No work items yet");
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const item of items) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><code>${escapeHtml(shortId(item.id))}</code></td>
+      <td>${escapeHtml(item.title)}</td>
+      <td>${escapeHtml(item.status)}</td>
+      <td>${escapeHtml(item.repo || "—")}</td>
+      <td>${Number(item.priority || 0)}</td>
+      <td>${(item.task_ids || []).length}</td>
+      <td>${escapeHtml(fmtTs(item.updated_at))}</td>
+      <td><button data-owner-kind="work-item" data-owner-id="${escapeHtml(item.id)}">artifacts</button></td>
+    `;
+    fragment.appendChild(tr);
+  }
+  tbody.appendChild(fragment);
+  tbody.querySelectorAll("[data-owner-kind]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      document.getElementById("artifact-owner-kind").value = btn.dataset.ownerKind;
+      document.getElementById("artifact-owner-id").value = btn.dataset.ownerId;
+      switchView("artifacts");
+      fetchArtifacts().catch(console.error);
+    });
+  });
+}
+
+async function fetchApprovals() {
+  const r = await fetch("/api/v1/actions?status=proposed&limit=100", { headers: headers() });
+  if (!r.ok) {
+    setTableMessage("approvals-body", 8, `Approvals unavailable (${r.status})`);
+    return;
+  }
+  renderApprovals(await r.json());
+}
+
+function renderApprovals(actions) {
+  const tbody = document.getElementById("approvals-body");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!actions.length) {
+    setTableMessage("approvals-body", 8, "No proposed actions");
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const action of actions) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><code>${escapeHtml(shortId(action.id))}</code></td>
+      <td>${escapeHtml(action.kind)}</td>
+      <td>${escapeHtml(action.risk_level)}</td>
+      <td><code>${escapeHtml(shortId(action.task_id))}</code></td>
+      <td>${action.work_item_id ? `<code>${escapeHtml(shortId(action.work_item_id))}</code>` : "—"}</td>
+      <td>${escapeHtml(action.summary)}</td>
+      <td>${escapeHtml(fmtTs(action.created_at))}</td>
+      <td class="row-actions">
+        <button data-action-approve="${escapeHtml(action.id)}">approve</button>
+        <button data-action-reject="${escapeHtml(action.id)}">reject</button>
+      </td>
+    `;
+    fragment.appendChild(tr);
+  }
+  tbody.appendChild(fragment);
+  tbody.querySelectorAll("[data-action-approve]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      decideAction(btn.dataset.actionApprove, "approve").catch(console.error);
+    });
+  });
+  tbody.querySelectorAll("[data-action-reject]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      decideAction(btn.dataset.actionReject, "reject").catch(console.error);
+    });
+  });
+}
+
+async function decideAction(actionId, decision) {
+  const body = decision === "reject"
+    ? JSON.stringify({ reason: prompt("Reject reason") || null })
+    : undefined;
+  const r = await fetch(`/api/v1/actions/${encodeURIComponent(actionId)}/${decision}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers() },
+    body,
+  });
+  if (!r.ok) {
+    alert(`${decision} failed: ${r.status}`);
+    return;
+  }
+  await fetchApprovals();
+}
+
+async function fetchArtifacts() {
+  const ownerKind = document.getElementById("artifact-owner-kind").value;
+  const ownerId = document.getElementById("artifact-owner-id").value.trim();
+  document.getElementById("artifact-content").textContent = "(select an artifact)";
+  if (!ownerId) {
+    setTableMessage("artifacts-body", 7, "Enter an owner id");
+    return;
+  }
+  const base = ownerKind === "work-item"
+    ? `/api/v1/work-items/${encodeURIComponent(ownerId)}/artifacts`
+    : `/api/v1/tasks/${encodeURIComponent(ownerId)}/artifacts`;
+  const r = await fetch(base, { headers: headers() });
+  if (!r.ok) {
+    setTableMessage("artifacts-body", 7, `Artifacts unavailable (${r.status})`);
+    return;
+  }
+  renderArtifacts(await r.json());
+}
+
+function renderArtifacts(artifacts) {
+  const tbody = document.getElementById("artifacts-body");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!artifacts.length) {
+    setTableMessage("artifacts-body", 7, "No artifacts found");
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const artifact of artifacts) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><code>${escapeHtml(shortId(artifact.id))}</code></td>
+      <td>${escapeHtml(artifact.kind)}</td>
+      <td>${escapeHtml(artifact.name)}</td>
+      <td>${escapeHtml(artifact.media_type)}</td>
+      <td>${fmtBytes(artifact.size_bytes)}</td>
+      <td>${escapeHtml(fmtTs(artifact.created_at))}</td>
+      <td><button data-artifact-id="${escapeHtml(artifact.id)}" data-artifact-media="${escapeHtml(artifact.media_type)}">view</button></td>
+    `;
+    fragment.appendChild(tr);
+  }
+  tbody.appendChild(fragment);
+  tbody.querySelectorAll("[data-artifact-id]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      fetchArtifactContent(btn.dataset.artifactId, btn.dataset.artifactMedia).catch(console.error);
+    });
+  });
+}
+
+let _artifactObjectUrl = null;
+
+async function fetchArtifactContent(artifactId, mediaType) {
+  const r = await fetch(`/api/v1/artifacts/${encodeURIComponent(artifactId)}/content`, {
+    headers: headers(),
+  });
+  const el = document.getElementById("artifact-content");
+  if (!r.ok) {
+    el.textContent = `Artifact unavailable (${r.status})`;
+    return;
+  }
+  if (_artifactObjectUrl) URL.revokeObjectURL(_artifactObjectUrl);
+  const blob = await r.blob();
+  el.innerHTML = "";
+  if (String(mediaType || "").startsWith("image/")) {
+    _artifactObjectUrl = URL.createObjectURL(blob);
+    const img = document.createElement("img");
+    img.src = _artifactObjectUrl;
+    img.alt = artifactId;
+    el.appendChild(img);
+    return;
+  }
+  const pre = document.createElement("pre");
+  pre.textContent = (await blob.text()).slice(0, 128_000);
+  el.appendChild(pre);
+}
+
+async function fetchTaskGraphs() {
+  const r = await fetch("/api/v1/task-graphs?limit=100", { headers: headers() });
+  if (!r.ok) {
+    setTableMessage("graphs-body", 6, `Task graphs unavailable (${r.status})`);
+    return;
+  }
+  renderTaskGraphs(await r.json());
+}
+
+function renderTaskGraphs(records) {
+  const tbody = document.getElementById("graphs-body");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!records.length) {
+    setTableMessage("graphs-body", 6, "No task graphs yet");
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const record of records) {
+    const graph = record.graph || {};
+    const tr = document.createElement("tr");
+    tr.dataset.graphId = graph.id;
+    tr.innerHTML = `
+      <td><code>${escapeHtml(shortId(graph.id))}</code></td>
+      <td><code>${escapeHtml(shortId(graph.work_item_id))}</code></td>
+      <td>${escapeHtml(graph.status)}</td>
+      <td>${escapeHtml(graph.template)}</td>
+      <td>${(graph.nodes || []).length}</td>
+      <td>${escapeHtml(fmtTs(graph.updated_at))}</td>
+    `;
+    tr.addEventListener("click", () => renderGraphDetail(record));
+    fragment.appendChild(tr);
+  }
+  tbody.appendChild(fragment);
+}
+
+function renderGraphDetail(record) {
+  const detail = document.getElementById("graph-detail");
+  detail.textContent = JSON.stringify(record, null, 2);
+}
+
+async function fetchChecks() {
+  const r = await fetch("/api/v1/check-runs?limit=100", { headers: headers() });
+  if (r.status === 404) {
+    setTableMessage("checks-body", 4, "Check run API unavailable");
+    return;
+  }
+  if (!r.ok) {
+    setTableMessage("checks-body", 4, `Checks unavailable (${r.status})`);
+    return;
+  }
+  renderChecks(await r.json());
+}
+
+function renderChecks(checks) {
+  const tbody = document.getElementById("checks-body");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!checks.length) {
+    setTableMessage("checks-body", 4, "No checks found");
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const check of checks) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(check.name || check.id || "check")}</td>
+      <td>${escapeHtml(check.status || check.conclusion || "unknown")}</td>
+      <td>${escapeHtml(check.target || check.task_id || check.work_item_id || "—")}</td>
+      <td>${escapeHtml(fmtTs(check.updated_at || check.completed_at || check.created_at))}</td>
+    `;
+    fragment.appendChild(tr);
+  }
+  tbody.appendChild(fragment);
 }
 
 async function fetchTaskDetail(id) {
@@ -752,6 +1054,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // Gauntlet view
   document.getElementById("gauntlet-refresh-btn").addEventListener("click", () => fetchGauntlet().catch(console.error));
 
+  // Control-plane views
+  document.getElementById("work-items-refresh-btn").addEventListener("click", () => fetchWorkItems().catch(console.error));
+  document.getElementById("approvals-refresh-btn").addEventListener("click", () => fetchApprovals().catch(console.error));
+  document.getElementById("artifacts-refresh-btn").addEventListener("click", () => fetchArtifacts().catch(console.error));
+  document.getElementById("graphs-refresh-btn").addEventListener("click", () => fetchTaskGraphs().catch(console.error));
+  document.getElementById("checks-refresh-btn").addEventListener("click", () => fetchChecks().catch(console.error));
+
   // Cost view
   document.getElementById("cost-refresh-btn").addEventListener("click", () => fetchCostDetail().catch(console.error));
 
@@ -792,7 +1101,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (first) runCommand(first.dataset.command);
   });
 
-  // Keyboard shortcut: digit keys 1-7 switch tabs
+  // Keyboard shortcut: digit keys switch primary tabs
   document.addEventListener("keydown", (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "k") {
       ev.preventDefault();
@@ -801,16 +1110,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    const views = ["tasks", "fleet", "cost", "history", "monitor", "repos", "debug"];
     const idx = parseInt(ev.key, 10) - 1;
-    if (idx >= 0 && idx < views.length) {
+    if (idx >= 0 && idx < viewOrder.length) {
       ev.preventDefault();
-      switchView(views[idx]);
+      switchView(viewOrder[idx]);
     }
   });
 
   // Touch swipe to navigate tabs (left/right swipe)
-  const views = ["tasks", "fleet", "cost", "history", "monitor", "repos", "debug"];
   let touchStartX = 0;
   let touchStartY = 0;
   document.addEventListener("touchstart", (ev) => {
@@ -821,17 +1128,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const dx = ev.changedTouches[0].clientX - touchStartX;
     const dy = ev.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return; // not a horizontal swipe
-    const current = views.indexOf(state.currentView);
+    const current = viewOrder.indexOf(state.currentView);
     if (current === -1) return;
     const next = dx < 0
-      ? Math.min(current + 1, views.length - 1)
+      ? Math.min(current + 1, viewOrder.length - 1)
       : Math.max(current - 1, 0);
-    if (next !== current) switchView(views[next]);
+    if (next !== current) switchView(viewOrder[next]);
   }, { passive: true });
 
   // Handle ?view= URL param on load (PWA shortcut links)
   const viewParam = new URLSearchParams(location.search).get("view");
-  if (viewParam && views.includes(viewParam)) switchView(viewParam);
+  if (viewParam && viewOrder.includes(viewParam)) switchView(viewParam);
 
   // Initial load
   fetchTasks().catch(console.error);

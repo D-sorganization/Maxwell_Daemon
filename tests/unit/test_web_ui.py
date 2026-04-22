@@ -23,6 +23,7 @@ def client(minimal_config: MaxwellDaemonConfig, tmp_path: Path) -> Iterator[Test
         ledger_path=tmp_path / "ledger.db",
         task_store_path=tmp_path / "tasks.db",
         work_item_store_path=tmp_path / "work_items.db",
+        task_graph_store_path=tmp_path / "task_graphs.db",
         artifact_store_path=tmp_path / "artifacts.db",
         artifact_blob_root=tmp_path / "artifacts",
         action_store_path=tmp_path / "actions.db",
@@ -91,6 +92,47 @@ class TestHTMLContent:
         assert "/api/v1/events" in js or "WebSocket" in js
         assert "openCommandPalette" in js
         assert "terminal-log" in js
+
+    def test_has_control_plane_sections(self, client: TestClient) -> None:
+        html = client.get("/ui/").text
+
+        for expected in (
+            'data-view="work-items"',
+            'data-view="approvals"',
+            'data-view="artifacts"',
+            'data-view="graphs"',
+            'data-view="checks"',
+            "view-work-items",
+            "view-approvals",
+            "view-artifacts",
+            "view-graphs",
+            "view-checks",
+        ):
+            assert expected in html
+
+    def test_references_control_plane_endpoints_in_js(self, client: TestClient) -> None:
+        js = client.get("/ui/app.js").text
+
+        for expected in (
+            "/api/v1/work-items",
+            "/api/v1/actions?status=proposed",
+            "/api/v1/task-graphs",
+            "/api/v1/artifacts/",
+            "/api/v1/check-runs",
+        ):
+            assert expected in js
+
+    def test_control_plane_rendering_escapes_untrusted_text(self, client: TestClient) -> None:
+        js = client.get("/ui/app.js").text
+
+        for expected in (
+            "escapeHtml(item.title)",
+            "escapeHtml(action.summary)",
+            "escapeHtml(artifact.name)",
+            "pre.textContent",
+            "JSON.stringify(record, null, 2)",
+        ):
+            assert expected in js
 
     def test_deferred_test_output_keeps_selected_task_context(self, client: TestClient) -> None:
         js = client.get("/ui/app.js").text

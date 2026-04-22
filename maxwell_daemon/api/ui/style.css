@@ -240,6 +240,12 @@ tbody tr:hover { background: var(--panel-alt); cursor: pointer; }
 .status-completed { color: var(--ok); }
 .status-failed    { color: var(--err); }
 .status-cancelled { color: var(--muted); }
+.status-proposed,
+.status-approved,
+.status-applied { color: var(--ok); }
+.status-rejected,
+.status-blocked { color: var(--err); }
+.status-skipped { color: var(--muted); }
 
 #detail-fields {
   margin: 0;
@@ -279,6 +285,7 @@ button {
 button:hover { background: var(--border); }
 button.cancel { color: var(--err); }
 
+input,
 select {
   background: var(--panel-alt);
   color: var(--text);
@@ -668,6 +675,59 @@ kbd {
   padding: 14px;
 }
 
+/* ---- control-plane views ------------------------------------------- */
+.empty-cell {
+  color: var(--muted);
+  padding: 16px 14px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.split-pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+  min-height: 360px;
+}
+
+.split-pane > table {
+  min-width: 0;
+}
+
+.artifact-content,
+.graph-detail {
+  margin: 0;
+  min-width: 0;
+  max-height: 60vh;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  background: #050608;
+  color: #dce0e8;
+  padding: 14px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.artifact-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.artifact-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#artifact-owner-id {
+  min-width: 220px;
+}
+
 /* ---- responsive ------------------------------------------------------- */
 @media (max-width: 768px) {
   .workbench-shell {
@@ -684,6 +744,12 @@ kbd {
   .cost-summary-detail { flex-wrap: wrap; }
   .timeline li { grid-template-columns: 1fr auto; }
   .timeline .ts { grid-column: 1 / -1; }
+  .split-pane { grid-template-columns: 1fr; }
+  .artifact-content,
+  .graph-detail {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
 }
 
 /* ---- PWA / mobile touch targets --------------------------------------- */

@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field, field_validator
 from maxwell_daemon import __version__
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
-from maxwell_daemon.core.actions import Action
+from maxwell_daemon.core.actions import Action, ActionStatus
 from maxwell_daemon.core.artifacts import Artifact, ArtifactIntegrityError, ArtifactKind
 from maxwell_daemon.core.work_items import (
     REPO_PATTERN,
@@ -1026,6 +1026,23 @@ def create_app(
     @app.get("/api/v1/tasks/{task_id}/actions", dependencies=[Depends(_require_viewer())])
     async def list_task_actions(task_id: str) -> list[ActionView]:
         return [ActionView.from_action(action) for action in daemon.list_task_actions(task_id)]
+
+    @app.get("/api/v1/actions", dependencies=[Depends(_require_viewer())])
+    async def list_actions(
+        status_filter: Annotated[ActionStatus | None, Query(alias="status")] = None,
+        task_id: Annotated[str | None, Query()] = None,
+        work_item_id: Annotated[str | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    ) -> list[ActionView]:
+        return [
+            ActionView.from_action(action)
+            for action in daemon.list_actions(
+                status=status_filter,
+                task_id=task_id,
+                work_item_id=work_item_id,
+                limit=limit,
+            )
+        ]
 
     @app.get("/api/v1/actions/{action_id}", dependencies=[Depends(_require_viewer())])
     async def get_action(action_id: str) -> ActionView:
