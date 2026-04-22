@@ -266,6 +266,20 @@ class TestGlobFiles:
         result = glob(pattern="*.nonesuch")
         assert "no matches" in result.lower()
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Symlinks require admin privileges on Windows",
+    )
+    def test_symlink_escape_is_not_listed(self, tmp_path: Path) -> None:
+        target = tmp_path.parent / "outside.py"
+        target.write_text("print('outside')", encoding="utf-8")
+        (tmp_path / "outside.py").symlink_to(target)
+
+        glob = make_glob_files(tmp_path)
+        result = glob(pattern="*.py")
+
+        assert "outside.py" not in result
+
 
 # ── grep_files ───────────────────────────────────────────────────────────────
 class TestGrepFiles:
@@ -288,6 +302,21 @@ class TestGrepFiles:
         grep = make_grep_files(tmp_path)
         result = grep(pattern="zzz")
         assert "no match" in result.lower()
+
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Symlinks require admin privileges on Windows",
+    )
+    def test_symlink_escape_is_not_read(self, tmp_path: Path) -> None:
+        target = tmp_path.parent / "outside.txt"
+        target.write_text("needle-from-outside", encoding="utf-8")
+        (tmp_path / "leak.txt").symlink_to(target)
+
+        grep = make_grep_files(tmp_path)
+        result = grep(pattern="needle-from-outside")
+
+        assert "no match" in result.lower()
+        assert "needle-from-outside" not in result
 
 
 # ── registry assembly ───────────────────────────────────────────────────────
@@ -383,3 +412,19 @@ class TestBuildDefaultRegistry:
         result = await reg.invoke("read_file", {"path": "/etc/passwd"})
         assert result.is_error is True
         assert "Sandbox" in result.content or "sandbox" in result.content
+
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Symlinks require admin privileges on Windows",
+    )
+    async def test_grep_registry_tool_does_not_read_symlink_escape(self, tmp_path: Path) -> None:
+        target = tmp_path.parent / "outside.txt"
+        target.write_text("registry-secret", encoding="utf-8")
+        (tmp_path / "leak.txt").symlink_to(target)
+        reg = build_default_registry(tmp_path)
+
+        result = await reg.invoke("grep_files", {"pattern": "registry-secret"})
+
+        assert result.is_error is False
+        assert "no match" in result.content.lower()
+        assert "registry-secret" not in result.content
