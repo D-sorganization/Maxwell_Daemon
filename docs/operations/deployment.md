@@ -22,7 +22,7 @@ keys to `maxwell-daemon.yaml`.
 
 ## Ansible Fleet
 
-Use Ansible when you already know the hosts that should run workers.
+Use Ansible when you already know the hosts that should run workers. For securely connecting your fleet over a private network, see the [Tailscale Fleet Deployment Guide](tailscale.md).
 
 ```bash
 cp ansible/inventory.example.yml ansible/inventory.yml
