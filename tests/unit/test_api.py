@@ -421,7 +421,10 @@ class TestSSHEndpointsWithoutAsyncSSH:
         from unittest.mock import patch
 
         # Simulate asyncssh being absent by making it unimportable.
-        with patch.dict(sys.modules, {"asyncssh": None}), TestClient(create_app(daemon)) as c:
+        with (
+            patch.dict(sys.modules, {"asyncssh": None}),
+            TestClient(create_app(daemon)) as c,
+        ):
             r = c.get("/api/v1/ssh/sessions")
         assert r.status_code == 503
         assert "SSH support not installed" in r.json()["detail"]
@@ -430,7 +433,10 @@ class TestSSHEndpointsWithoutAsyncSSH:
         import sys
         from unittest.mock import patch
 
-        with patch.dict(sys.modules, {"asyncssh": None}), TestClient(create_app(daemon)) as c:
+        with (
+            patch.dict(sys.modules, {"asyncssh": None}),
+            TestClient(create_app(daemon)) as c,
+        ):
             r = c.post(
                 "/api/v1/ssh/connect",
                 json={"host": "srv", "user": "ubuntu"},

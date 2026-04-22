@@ -49,7 +49,8 @@ class TestDefaultRunner:
             return _FakeProcess()
 
         monkeypatch.setattr(
-            "maxwell_daemon.backends.claude_code.asyncio.create_subprocess_exec", fake_exec
+            "maxwell_daemon.backends.claude_code.asyncio.create_subprocess_exec",
+            fake_exec,
         )
 
         rc, stdout, stderr = asyncio.run(_default_runner("claude", "-p", "hi", cwd="repo"))

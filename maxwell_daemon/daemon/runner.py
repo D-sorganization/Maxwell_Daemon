@@ -559,7 +559,11 @@ class Daemon:
                 worker_id = current + i
                 task = asyncio.create_task(self._worker_loop(worker_id), name=f"worker-{worker_id}")
                 self._workers.append(task)
-                log.info("scaled up: added worker %d (total=%d)", worker_id, len(self._workers))
+                log.info(
+                    "scaled up: added worker %d (total=%d)",
+                    worker_id,
+                    len(self._workers),
+                )
         elif n < current:
             # Send sentinel (priority=-1, task=None) to excess workers so they
             # exit cleanly after finishing their current task.
@@ -616,7 +620,11 @@ class Daemon:
     async def _dispatch_to_fleet(self) -> None:
         """One coordinator dispatch tick: probe machines, plan, submit, requeue stale tasks."""
         from maxwell_daemon.fleet.client import RemoteDaemonClient, RemoteDaemonError
-        from maxwell_daemon.fleet.dispatcher import FleetDispatcher, MachineState, TaskRequirement
+        from maxwell_daemon.fleet.dispatcher import (
+            FleetDispatcher,
+            MachineState,
+            TaskRequirement,
+        )
 
         fleet_machines = self._config.fleet_machines
         if not fleet_machines:
@@ -727,7 +735,9 @@ class Daemon:
                 result = await client.submit_task(machine, task_payload=task_payload)
             except RemoteDaemonError:
                 log.exception(
-                    "failed to dispatch task %s to machine %s", assigned_task.id, machine.name
+                    "failed to dispatch task %s to machine %s",
+                    assigned_task.id,
+                    machine.name,
                 )
                 continue
 
@@ -840,7 +850,8 @@ class Daemon:
                 model=decision.model,
             )
             task.result = resp.content
-            task.cost_usd = decision.backend.estimate_cost(resp.usage, decision.model)
+            estimated_cost = decision.backend.estimate_cost(resp.usage, decision.model)
+            task.cost_usd = estimated_cost if estimated_cost is not None else 0.0
             task.status = TaskStatus.COMPLETED
             self._ledger.record(
                 CostRecord(
@@ -858,7 +869,7 @@ class Daemon:
                 model=decision.model,
                 status="success",
                 tokens=resp.usage.total_tokens,
-                cost_usd=task.cost_usd,
+                cost_usd=estimated_cost,
                 duration_seconds=(
                     (datetime.now(timezone.utc) - task.started_at).total_seconds()
                     if task.started_at is not None

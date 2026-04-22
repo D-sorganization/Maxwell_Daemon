@@ -167,7 +167,12 @@ class AuditLogger:
             status=None,
             user=None,
             request_id=None,
-            details={"operation": operation, "task_id": task_id, "repo": repo, **(details or {})},
+            details={
+                "operation": operation,
+                "task_id": task_id,
+                "repo": repo,
+                **(details or {}),
+            },
         )
 
     def log_config_change(

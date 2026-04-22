@@ -150,7 +150,9 @@ def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:
     """
     from fastapi import Header, HTTPException, status
 
-    async def _dep(authorization: Annotated[str | None, Header()] = None) -> TokenClaims:
+    async def _dep(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> TokenClaims:
         if authorization is None or not authorization.startswith("Bearer "):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "JWT bearer token required")
         raw = authorization.removeprefix("Bearer ").strip()

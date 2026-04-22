@@ -10,10 +10,15 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import FastAPI, Response
-from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, generate_latest
+from prometheus_client import (
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 __all__ = [
-    "MAXWELL_COST_FORECAST_USD",
     "MAXWELL_COST_FORECAST_USD",
     "MAXWELL_FREE_REQUESTS_TOTAL",
     "MAXWELL_REQUESTS_TOTAL",
@@ -97,7 +102,7 @@ def record_request(
         if cost_usd is not None:
             if cost_usd > 0:
                 MAXWELL_REQUEST_COST.labels(backend=backend, model=model).inc(cost_usd)
-            else:
+            elif cost_usd == 0.0:
                 MAXWELL_FREE_REQUESTS_TOTAL.labels(backend=backend, model=model).inc()
         if duration_seconds > 0:
             MAXWELL_REQUEST_DURATION.labels(backend=backend, model=model).observe(duration_seconds)

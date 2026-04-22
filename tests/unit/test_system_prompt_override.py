@@ -210,7 +210,9 @@ class TestSystemPromptInExecuteIssue:
         backend = CapturingBackend()
         asyncio.run(
             IssueExecutor(
-                github=FakeGitHub(issue=_issue()), workspace=FakeWorkspace(), backend=backend
+                github=FakeGitHub(issue=_issue()),
+                workspace=FakeWorkspace(),
+                backend=backend,
             ).execute_issue(repo="o/r", issue_number=42, model="m", mode="plan", overrides=None)
         )
         assert any("JSON" in msg or "json" in msg.lower() for msg in backend.system_messages)
@@ -219,7 +221,9 @@ class TestSystemPromptInExecuteIssue:
         backend = CapturingBackend()
         asyncio.run(
             IssueExecutor(
-                github=FakeGitHub(issue=_issue()), workspace=FakeWorkspace(), backend=backend
+                github=FakeGitHub(issue=_issue()),
+                workspace=FakeWorkspace(),
+                backend=backend,
             ).execute_issue(
                 repo="o/r",
                 issue_number=42,
@@ -236,7 +240,9 @@ class TestSystemPromptInExecuteIssue:
         backend = CapturingBackend()
         asyncio.run(
             IssueExecutor(
-                github=FakeGitHub(issue=_issue()), workspace=FakeWorkspace(), backend=backend
+                github=FakeGitHub(issue=_issue()),
+                workspace=FakeWorkspace(),
+                backend=backend,
             ).execute_issue(
                 repo="o/r",
                 issue_number=42,
@@ -251,7 +257,9 @@ class TestSystemPromptInExecuteIssue:
         backend = CapturingBackend()
         asyncio.run(
             IssueExecutor(
-                github=FakeGitHub(issue=_issue()), workspace=FakeWorkspace(), backend=backend
+                github=FakeGitHub(issue=_issue()),
+                workspace=FakeWorkspace(),
+                backend=backend,
             ).execute_issue(
                 repo="owner/testrepo",
                 issue_number=42,
@@ -286,7 +294,11 @@ class TestRepoConfigSystemPromptFields:
 
     def test_accepts_system_prompt_file(self, tmp_path: Path) -> None:
         rc = RepoConfig.model_validate(
-            {"name": "x", "path": "/tmp/x", "system_prompt_file": str(tmp_path / "p.md")}
+            {
+                "name": "x",
+                "path": "/tmp/x",
+                "system_prompt_file": str(tmp_path / "p.md"),
+            }
         )
         assert rc.system_prompt_file == tmp_path / "p.md"
 
