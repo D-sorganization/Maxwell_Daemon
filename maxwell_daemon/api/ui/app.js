@@ -400,18 +400,30 @@ function renderHistory() {
 
 // ---- monitor view ----------------------------------------------------------
 
+// ⚡ Bolt: Batch DOM updates using requestAnimationFrame.
+// This prevents layout thrashing (forced synchronous layout from accessing scrollHeight)
+// and limits DOM updates to the display refresh rate (usually 60fps), massively
+// reducing main thread blockage during rapid WebSocket event streams.
+let _monitorRaf = null;
+
 function appendMonitorLine(line) {
   state.monitorLines.push(line);
   if (state.monitorLines.length > 500) state.monitorLines.shift();
 
   if (state.currentView !== "monitor") return;
-  const el = document.getElementById("monitor-log");
-  const filterVal = document.getElementById("monitor-filter")?.value?.toLowerCase() || "";
-  const visible = filterVal
-    ? state.monitorLines.filter((l) => l.toLowerCase().includes(filterVal))
-    : state.monitorLines;
-  el.textContent = visible.join("\n") || "(no matching events)";
-  el.scrollTop = el.scrollHeight;
+  if (!_monitorRaf) {
+    _monitorRaf = requestAnimationFrame(() => {
+      _monitorRaf = null;
+      const el = document.getElementById("monitor-log");
+      if (!el) return;
+      const filterVal = document.getElementById("monitor-filter")?.value?.toLowerCase() || "";
+      const visible = filterVal
+        ? state.monitorLines.filter((l) => l.toLowerCase().includes(filterVal))
+        : state.monitorLines;
+      el.textContent = visible.join("\n") || "(no matching events)";
+      el.scrollTop = el.scrollHeight;
+    });
+  }
 }
 
 function refreshMonitorDisplay() {
@@ -427,13 +439,24 @@ function refreshMonitorDisplay() {
 
 // ---- debug view ------------------------------------------------------------
 
+// ⚡ Bolt: Batch DOM updates using requestAnimationFrame to prevent layout thrashing
+// during rapid WebSocket event bursts.
+let _debugRaf = null;
+
 function appendDebugEvent(raw) {
   state.debugEvents.push(raw);
   if (state.debugEvents.length > 200) state.debugEvents.shift();
   if (state.currentView !== "debug") return;
-  const el = document.getElementById("debug-log");
-  el.textContent = state.debugEvents.join("\n");
-  el.scrollTop = el.scrollHeight;
+
+  if (!_debugRaf) {
+    _debugRaf = requestAnimationFrame(() => {
+      _debugRaf = null;
+      const el = document.getElementById("debug-log");
+      if (!el) return;
+      el.textContent = state.debugEvents.join("\n");
+      el.scrollTop = el.scrollHeight;
+    });
+  }
 }
 
 function refreshDebugDisplay() {
@@ -481,14 +504,25 @@ function openEventStream() {
 let _fetchTasksTimer = null;
 const _fetchTaskDetailTimers = new Map();
 
+// ⚡ Bolt: Batch DOM updates using requestAnimationFrame to prevent layout thrashing
+// during high-frequency text streaming.
+let _testOutputRaf = null;
+
 function handleEvent(evt) {
   const p = evt.payload || {};
   if (evt.kind === "test_output" && p.task_id) {
     const prev = state.testOutput.get(p.task_id) || "";
     state.testOutput.set(p.task_id, (prev + (p.chunk || "")).slice(-64_000));
     if (p.task_id === state.selected) {
-      document.getElementById("detail-output").textContent =
-        state.testOutput.get(p.task_id);
+      if (!_testOutputRaf) {
+        _testOutputRaf = requestAnimationFrame(() => {
+          _testOutputRaf = null;
+          const outEl = document.getElementById("detail-output");
+          if (outEl) {
+            outEl.textContent = state.testOutput.get(state.selected);
+          }
+        });
+      }
     }
     return;
   }
