@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -71,6 +72,126 @@ class TestStatus:
     def test_reports_missing_config(self, runner: CliRunner, tmp_path: Path) -> None:
         r = runner.invoke(app, ["status", "--config", str(tmp_path / "missing.yaml")])
         assert r.exit_code == 1
+
+
+class TestFleetStatus:
+    def test_fetches_registry_status_and_redacts_private_fields(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        payload: dict[str, object] = {
+            "repo": "acme/repo",
+            "tool": "dispatch",
+            "required_capabilities": ["gpu"],
+            "selected_node": {
+                "node_id": "node-a",
+                "hostname": "alpha",
+                "eligible": True,
+                "score": 100,
+                "reasons": [],
+                "capability_names": ["gpu"],
+                "capabilities": [
+                    {"name": "gpu", "observed_at": "2026-04-22T17:59:00+00:00", "has_value": True}
+                ],
+                "policy": {
+                    "has_repo_allowlist": True,
+                    "has_tool_allowlist": True,
+                    "allowed_repo_count": 1,
+                    "allowed_tool_count": 1,
+                    "max_concurrent_sessions": 2,
+                    "heartbeat_stale_after_seconds": 600,
+                },
+                "active_sessions": 0,
+                "heartbeat_at": "2026-04-22T17:59:00+00:00",
+                "heartbeat_age_seconds": 60,
+                "tailscale_status": {
+                    "peer_id": "node-a",
+                    "hostname": "alpha",
+                    "online": True,
+                    "last_seen_at": "2026-04-22T17:58:00+00:00",
+                },
+            },
+            "nodes": [
+                {
+                    "node_id": "node-a",
+                    "hostname": "alpha",
+                    "eligible": True,
+                    "score": 100,
+                    "reasons": [],
+                    "capability_names": ["gpu"],
+                    "capabilities": [
+                        {
+                            "name": "gpu",
+                            "observed_at": "2026-04-22T17:59:00+00:00",
+                            "has_value": True,
+                        }
+                    ],
+                    "policy": {
+                        "has_repo_allowlist": True,
+                        "has_tool_allowlist": True,
+                        "allowed_repo_count": 1,
+                        "allowed_tool_count": 1,
+                        "max_concurrent_sessions": 2,
+                        "heartbeat_stale_after_seconds": 600,
+                    },
+                    "active_sessions": 0,
+                    "heartbeat_at": "2026-04-22T17:59:00+00:00",
+                    "heartbeat_age_seconds": 60,
+                    "tailscale_status": {
+                        "peer_id": "node-a",
+                        "hostname": "alpha",
+                        "online": True,
+                        "last_seen_at": "2026-04-22T17:58:00+00:00",
+                    },
+                }
+            ],
+            "explanation": "selected 'alpha' for repo 'acme/repo' and tool 'dispatch'; rejections=[]",
+        }
+
+        class _Response:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return payload
+
+        class _Client:
+            def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+                self.calls: list[tuple[str, dict[str, object]]] = []
+
+            def __enter__(self) -> _Client:
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def get(self, url: str, *, params: object, headers: object) -> _Response:
+                self.calls.append((url, {"params": params, "headers": headers}))
+                return _Response()
+
+        monkeypatch.setattr("maxwell_daemon.cli.fleet.httpx.Client", _Client)
+
+        r = runner.invoke(
+            app,
+            [
+                "fleet",
+                "status",
+                "--repo",
+                "acme/repo",
+                "--tool",
+                "dispatch",
+                "--required-capability",
+                "gpu",
+                "--json",
+            ],
+        )
+
+        assert r.exit_code == 0
+        body = json.loads(r.stdout)
+        assert body["selected_node"]["hostname"] == "alpha"
+        assert "tailnet_ip" not in r.stdout
+        assert "allowed_repo_count" in r.stdout
 
 
 class TestMemory:

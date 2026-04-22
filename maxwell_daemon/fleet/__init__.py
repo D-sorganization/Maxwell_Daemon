@@ -13,6 +13,22 @@ transport changes (httpx → something else) land in the other.
 
 from __future__ import annotations
 
+from maxwell_daemon.fleet.capabilities import (
+    CapabilityView,
+    FleetAssignment,
+    FleetNode,
+    FleetRegistryStatus,
+    InMemoryFleetCapabilityRegistry,
+    NodeCapability,
+    NodeDecision,
+    NodePolicy,
+    NodePolicySummary,
+    NodeResourceSnapshot,
+    NodeStatusView,
+    TailscalePeerStatus,
+    TailscaleStatusView,
+    parse_tailscale_status_json,
+)
 from maxwell_daemon.fleet.client import (
     HTTPClientProtocol,
     RemoteDaemonClient,
@@ -30,13 +46,27 @@ from maxwell_daemon.fleet.dispatcher import (
 
 __all__ = [
     "Assignment",
+    "CapabilityView",
     "DispatchPlan",
+    "FleetAssignment",
     "FleetDispatcher",
+    "FleetNode",
+    "FleetRegistryStatus",
     "HTTPClientProtocol",
+    "InMemoryFleetCapabilityRegistry",
     "MachineState",
+    "NodeCapability",
+    "NodeDecision",
+    "NodePolicy",
+    "NodePolicySummary",
+    "NodeResourceSnapshot",
+    "NodeStatusView",
     "RemoteDaemonClient",
     "RemoteDaemonError",
     "RemoteTaskResult",
+    "TailscalePeerStatus",
+    "TailscaleStatusView",
     "TaskRequirement",
+    "parse_tailscale_status_json",
     "score_machine",
 ]

@@ -54,6 +54,7 @@ from maxwell_daemon.director import (
     TaskGraphTemplate,
 )
 from maxwell_daemon.events import Event, EventBus, EventKind, attach_observability
+from maxwell_daemon.fleet.capabilities import InMemoryFleetCapabilityRegistry
 from maxwell_daemon.metrics import record_request
 
 log = logging.getLogger("maxwell_daemon.daemon")
@@ -146,6 +147,7 @@ class Daemon:
         # Protects atomic swap of _config and _router during reload.
         self._config_lock = threading.Lock()
         self._router = BackendRouter(config)
+        self._fleet_registry = InMemoryFleetCapabilityRegistry()
         self._ledger = CostLedger(
             ledger_path or Path.home() / ".local/share/maxwell-daemon/ledger.db"
         )
@@ -1192,6 +1194,11 @@ class Daemon:
             worker_count=self._worker_count,
             queue_depth=self._queue.qsize(),
         )
+
+    @property
+    def fleet_registry(self) -> InMemoryFleetCapabilityRegistry:
+        """Mutable in-memory capability registry for fleet status surfaces."""
+        return self._fleet_registry
 
     async def _worker_loop(self, worker_id: int) -> None:
         from maxwell_daemon.logging import bind_context

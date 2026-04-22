@@ -354,6 +354,89 @@ def test_eligible_nodes_return_reasons_and_scores() -> None:
     assert by_id["bad"].reasons == ("missing capabilities: 'gpu'",)
 
 
+def test_registry_operations_update_node_state() -> None:
+    registry = InMemoryFleetCapabilityRegistry()
+    node = _node(
+        "node-a",
+        hostname="alpha",
+        capabilities=(_capability("cpu"),),
+        minutes_ago=4,
+        sessions=0,
+        repos=frozenset({"acme/repo"}),
+        tools=frozenset({"dispatch"}),
+    )
+
+    registry.register(node)
+    registry.update_capabilities(
+        "node-a",
+        (
+            _capability("gpu"),
+            _capability("tailscale"),
+        ),
+    )
+    registry.heartbeat(
+        "node-a",
+        NodeResourceSnapshot(
+            captured_at=_dt(),
+            heartbeat_at=_dt(),
+            active_sessions=1,
+        ),
+    )
+    registry.mark_offline("node-a")
+
+    updated = registry.list_nodes()[0]
+    assert updated.capabilities[0].name == "gpu"
+    assert updated.resource_snapshot.active_sessions == 1
+    assert updated.tailscale_status is not None
+    assert updated.tailscale_status.online is False
+
+
+def test_registry_status_redacts_policy_and_capability_values() -> None:
+    registry = InMemoryFleetCapabilityRegistry(
+        (
+            _node(
+                "node-a",
+                hostname="alpha",
+                capabilities=(
+                    NodeCapability(name="gpu", observed_at=_dt(), value=8),
+                    NodeCapability(name="secret-capability", observed_at=_dt(), value="hidden"),
+                ),
+                sessions=0,
+                repos=frozenset({"acme/repo"}),
+                tools=frozenset({"dispatch"}),
+            ),
+        )
+    )
+
+    status = registry.describe(
+        repo="acme/repo",
+        tool="dispatch",
+        required_capabilities=("gpu",),
+        now=_dt(),
+    )
+
+    payload = status.to_dict()
+    node = payload["nodes"][0]
+    assert node["policy"] == {
+        "has_repo_allowlist": True,
+        "has_tool_allowlist": True,
+        "allowed_repo_count": 1,
+        "allowed_tool_count": 1,
+        "max_concurrent_sessions": 2,
+        "heartbeat_stale_after_seconds": 600,
+    }
+    assert node["capability_names"] == ["gpu", "secret-capability"]
+    assert node["capabilities"][0] == {
+        "name": "gpu",
+        "observed_at": _dt().isoformat(),
+        "has_value": True,
+    }
+    assert "allowed_repos" not in node["policy"]
+    assert "value" not in payload
+    assert payload["selected_node"]["hostname"] == "alpha"
+    assert payload["selected_node"]["tailscale_status"] is not None
+
+
 def test_frozen_dataclasses_stay_frozen() -> None:
     node = _node("node-a")
     with pytest.raises(dataclasses.FrozenInstanceError):

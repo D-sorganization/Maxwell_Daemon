@@ -1709,6 +1709,21 @@ def create_app(
             result["machines"] = machines_summary
         return result
 
+    @app.get("/api/v1/fleet/capabilities", dependencies=[Depends(_require_viewer())])
+    async def fleet_capabilities(
+        repo: str = Query(..., min_length=1),
+        tool: str = Query(..., min_length=1),
+        required_capability: Annotated[list[str] | None, Query()] = None,
+    ) -> dict[str, Any]:
+        """Return a redacted capability registry snapshot for dispatch decisions."""
+
+        status_view = daemon.fleet_registry.describe(
+            repo=repo,
+            tool=tool,
+            required_capabilities=tuple(required_capability or ()),
+        )
+        return status_view.to_dict()
+
     @app.get("/api/v1/audit", dependencies=[Depends(_require_viewer())])
     async def audit_log(
         limit: int = Query(default=200, ge=1, le=10_000),

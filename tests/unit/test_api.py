@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,12 +20,19 @@ from maxwell_daemon.core.work_items import AcceptanceCriterion, ScopeBoundary, W
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
 from maxwell_daemon.director import GraphExecutionContext, GraphNodeOutput
+from maxwell_daemon.fleet.capabilities import (
+    FleetNode,
+    NodeCapability,
+    NodePolicy,
+    NodeResourceSnapshot,
+    TailscalePeerStatus,
+)
 
 
 @pytest.fixture
 def daemon(
     minimal_config: MaxwellDaemonConfig,
-    isolated_ledger_path,
+    isolated_ledger_path: Path,
     tmp_path: Path,
 ) -> Iterator[Daemon]:
     loop = asyncio.new_event_loop()
@@ -129,7 +137,9 @@ class TestTaskSubmission:
 
         assert duplicate.status_code == 409
         assert "api-duplicate-id" in duplicate.json()["detail"]
-        assert daemon._task_store.get("api-duplicate-id").prompt == "first"
+        task = daemon._task_store.get("api-duplicate-id")
+        assert task is not None
+        assert task.prompt == "first"
 
     def test_submit_rejects_invalid_issue_mode(self, client: TestClient) -> None:
         r = client.post(
@@ -823,7 +833,7 @@ class TestBatchDispatchEndpoint:
     ) -> None:
         original_submit_issue = daemon.submit_issue
 
-        def flaky_submit_issue(**kwargs):
+        def flaky_submit_issue(**kwargs: Any) -> Task:
             if kwargs["issue_number"] == 2:
                 raise ValueError("backend unavailable")
             return original_submit_issue(**kwargs)
@@ -946,6 +956,71 @@ repos:
 
         assert r.status_code == 200
         assert r.json()["fleet"]["name"] == "desktop-fleet"
+
+
+class TestFleetCapabilityRegistryEndpoint:
+    def test_returns_redacted_registry_snapshot(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        daemon.fleet_registry.register(
+            FleetNode(
+                node_id="node-a",
+                hostname="alpha",
+                capabilities=(
+                    NodeCapability(name="gpu", observed_at=datetime.now(timezone.utc), value=8),
+                    NodeCapability(
+                        name="secret-capability",
+                        observed_at=datetime.now(timezone.utc),
+                        value="hidden",
+                    ),
+                ),
+                resource_snapshot=NodeResourceSnapshot(
+                    captured_at=datetime.now(timezone.utc),
+                    heartbeat_at=datetime.now(timezone.utc),
+                    active_sessions=0,
+                ),
+                policy=NodePolicy(
+                    allowed_repos=frozenset({"acme/repo"}),
+                    allowed_tools=frozenset({"dispatch"}),
+                    max_concurrent_sessions=2,
+                    heartbeat_stale_after_seconds=600,
+                ),
+                tailscale_status=TailscalePeerStatus(
+                    peer_id="node-a",
+                    hostname="alpha",
+                    online=True,
+                    tailnet_ip="100.64.0.10",
+                    current_address="100.64.0.10:41641",
+                    last_seen_at=datetime.now(timezone.utc),
+                ),
+            )
+        )
+
+        response = client.get(
+            "/api/v1/fleet/capabilities",
+            params={
+                "repo": "acme/repo",
+                "tool": "dispatch",
+                "required_capability": ["gpu"],
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["selected_node"]["hostname"] == "alpha"
+        assert body["nodes"][0]["policy"] == {
+            "has_repo_allowlist": True,
+            "has_tool_allowlist": True,
+            "allowed_repo_count": 1,
+            "allowed_tool_count": 1,
+            "max_concurrent_sessions": 2,
+            "heartbeat_stale_after_seconds": 600,
+        }
+        assert body["nodes"][0]["capabilities"][0]["name"] == "gpu"
+        assert "tailnet_ip" not in body["nodes"][0]["tailscale_status"]
+        assert "current_address" not in body["nodes"][0]["tailscale_status"]
 
 
 class TestAuditEndpoint:
