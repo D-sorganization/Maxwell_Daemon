@@ -151,3 +151,34 @@ class TestAsk:
         assert r.exit_code == 0
         assert "ok" in r.stdout
         assert "tokens" in r.stdout
+
+
+class TestCrossAudit:
+    def test_cross_audit_json_output(self, runner: CliRunner, populated_config: Path) -> None:
+        r = runner.invoke(
+            app,
+            ["cross-audit", "review this task", "--config", str(populated_config), "--json"],
+        )
+
+        assert r.exit_code == 0
+        assert '"summary"' in r.stdout
+        assert "Cross-audit completed: 1 succeeded, 0 failed" in r.stdout
+        assert '"backend": "primary"' in r.stdout
+
+    def test_cross_audit_rejects_unknown_role(
+        self, runner: CliRunner, populated_config: Path
+    ) -> None:
+        r = runner.invoke(
+            app,
+            [
+                "cross-audit",
+                "review this task",
+                "--config",
+                str(populated_config),
+                "--role",
+                "not-a-role",
+            ],
+        )
+
+        assert r.exit_code == 2
+        assert "Unknown role" in r.stdout
