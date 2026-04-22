@@ -65,10 +65,24 @@ class TestHTMLContent:
         for expected in ("Tasks", "Cost", "Backends"):
             assert expected in html
 
+    def test_has_vs_code_like_shell_regions(self, client: TestClient) -> None:
+        html = client.get("/ui/").text
+        for expected in (
+            "activity-bar",
+            "sidebar",
+            "editor-area",
+            "terminal-panel",
+            "status-bar",
+            "command-palette",
+        ):
+            assert expected in html
+
     def test_references_api_endpoints_in_js(self, client: TestClient) -> None:
         js = client.get("/ui/app.js").text
         assert "/api/v1/tasks" in js
         assert "/api/v1/events" in js or "WebSocket" in js
+        assert "openCommandPalette" in js
+        assert "terminal-log" in js
 
 
 class TestNewTaskDialog:

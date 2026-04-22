@@ -16,6 +16,17 @@ const state = {
   currentView: "tasks",       // active tab
 };
 
+const commands = [
+  { id: "view.tasks", title: "Show Tasks", detail: "Open the task editor", run: () => switchView("tasks") },
+  { id: "view.fleet", title: "Show Fleet", detail: "Open fleet overview", run: () => switchView("fleet") },
+  { id: "view.repos", title: "Show Repositories", detail: "Open repository dashboard", run: () => switchView("repos") },
+  { id: "view.monitor", title: "Show Daemon Logs", detail: "Open live monitor", run: () => switchView("monitor") },
+  { id: "view.history", title: "Show History", detail: "Open completed work timeline", run: () => switchView("history") },
+  { id: "view.cost", title: "Show Cost", detail: "Open cost analytics", run: () => switchView("cost") },
+  { id: "task.new", title: "Dispatch New Task", detail: "Open task dispatch dialog", run: () => openNewTaskDialog() },
+  { id: "data.refresh", title: "Refresh Dashboard", detail: "Reload task, cost, and fleet data", run: () => refreshAll() },
+];
+
 // ---- helpers ---------------------------------------------------------------
 
 function escapeHtml(s) {
@@ -48,6 +59,9 @@ function switchView(name) {
     btn.classList.toggle("active", active);
     btn.setAttribute("aria-selected", String(active));
   });
+  document.querySelectorAll(".sidebar-item").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === name);
+  });
   document.querySelectorAll(".view").forEach((el) => {
     const active = el.id === `view-${name}`;
     el.hidden = !active;
@@ -59,6 +73,7 @@ function switchView(name) {
   if (name === "cost") fetchCostDetail().catch(console.error);
   if (name === "history") renderHistory();
   if (name === "repos") fetchFleet().catch(console.error);  // repos uses same data
+  document.getElementById("status-operation").textContent = `Viewing ${name}`;
 }
 
 // ---- data fetching ---------------------------------------------------------
@@ -90,6 +105,7 @@ async function fetchTasks() {
   }
 
   renderTasks();
+  updateStatusResources();
   if (state.currentView === "history") renderHistory();
   if (state.currentView === "cost") renderCostTasks();
 }
@@ -99,11 +115,16 @@ async function fetchBackends() {
   if (!r.ok) return;
   const body = await r.json();
   const ul = document.getElementById("backends-list");
+  const compact = document.getElementById("sidebar-backends-list");
   ul.innerHTML = "";
+  compact.innerHTML = "";
   for (const name of body.backends) {
     const li = document.createElement("li");
     li.textContent = name;
     ul.appendChild(li);
+    const compactLi = document.createElement("li");
+    compactLi.textContent = name;
+    compact.appendChild(compactLi);
   }
 }
 
@@ -113,7 +134,27 @@ async function fetchCost() {
   const body = await r.json();
   const el = document.getElementById("cost-summary");
   el.textContent = `MTD ${fmtUsdShort(body.month_to_date_usd)}`;
+  updateStatusResources(body.month_to_date_usd);
   return body;
+}
+
+async function refreshAll() {
+  document.getElementById("status-operation").textContent = "Refreshing";
+  await Promise.all([
+    fetchTasks().catch(console.error),
+    fetchBackends().catch(console.error),
+    fetchFleet().catch(console.error),
+    fetchCost().catch(console.error),
+  ]);
+  document.getElementById("status-operation").textContent = "Ready";
+}
+
+function updateStatusResources(costOverride) {
+  const taskCount = state.allTasks.size || state.tasks.size;
+  const running = [...state.allTasks.values()].filter((t) => t.status === "running").length;
+  const totalCost = costOverride ?? [...state.allTasks.values()].reduce((s, t) => s + (t.cost_usd || 0), 0);
+  const el = document.getElementById("status-resources");
+  if (el) el.textContent = `Tasks ${taskCount} | Running ${running} | Cost ${fmtUsdShort(totalCost)}`;
 }
 
 async function fetchCostDetail() {
@@ -202,6 +243,11 @@ function renderFleet() {
   metaEl.textContent =
     `${fleet.name} — discovery every ${fleet.discovery_interval_seconds}s` +
     (fleet.auto_promote_staging ? " — auto-promote enabled" : "");
+  const sidebarSummary = document.getElementById("sidebar-fleet-summary");
+  if (sidebarSummary) {
+    const active = repos.reduce((sum, repo) => sum + (repo.active_tasks || 0), 0);
+    sidebarSummary.textContent = `${repos.length} repos, ${active} active tasks`;
+  }
 
   const tbody = document.getElementById("fleet-body");
   tbody.innerHTML = "";
@@ -405,10 +451,12 @@ function renderHistory() {
 // and limits DOM updates to the display refresh rate (usually 60fps), massively
 // reducing main thread blockage during rapid WebSocket event streams.
 let _monitorRaf = null;
+let _terminalRaf = null;
 
 function appendMonitorLine(line) {
   state.monitorLines.push(line);
   if (state.monitorLines.length > 500) state.monitorLines.shift();
+  scheduleTerminalRefresh();
 
   if (state.currentView !== "monitor") return;
   if (!_monitorRaf) {
@@ -424,6 +472,17 @@ function appendMonitorLine(line) {
       el.scrollTop = el.scrollHeight;
     });
   }
+}
+
+function scheduleTerminalRefresh() {
+  if (_terminalRaf) return;
+  _terminalRaf = requestAnimationFrame(() => {
+    _terminalRaf = null;
+    const el = document.getElementById("terminal-log");
+    if (!el) return;
+    el.textContent = state.monitorLines.join("\n") || "(waiting for daemon output...)";
+    el.scrollTop = el.scrollHeight;
+  });
 }
 
 function refreshMonitorDisplay() {
@@ -464,6 +523,53 @@ function refreshDebugDisplay() {
   if (!el) return;
   el.textContent = state.debugEvents.join("\n") || "(no events yet)";
   el.scrollTop = el.scrollHeight;
+}
+
+// ---- command palette -------------------------------------------------------
+
+function renderCommandPalette(query = "") {
+  const results = document.getElementById("command-palette-results");
+  const needle = query.trim().toLowerCase();
+  const matches = commands.filter((cmd) => {
+    if (!needle) return true;
+    return `${cmd.title} ${cmd.detail}`.toLowerCase().includes(needle);
+  });
+  results.innerHTML = "";
+  for (const cmd of matches) {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.dataset.command = cmd.id;
+    btn.innerHTML = `<span>${escapeHtml(cmd.title)}</span><small>${escapeHtml(cmd.detail)}</small>`;
+    btn.addEventListener("click", () => runCommand(cmd.id));
+    li.appendChild(btn);
+    results.appendChild(li);
+  }
+  if (matches.length === 0) {
+    const li = document.createElement("li");
+    li.innerHTML = `<button type="button" disabled><span>No commands found</span></button>`;
+    results.appendChild(li);
+  }
+}
+
+function openCommandPalette() {
+  const dialog = document.getElementById("command-palette");
+  const input = document.getElementById("command-palette-input");
+  input.value = "";
+  renderCommandPalette();
+  dialog.showModal();
+  setTimeout(() => input.focus(), 0);
+}
+
+function closeCommandPalette() {
+  document.getElementById("command-palette").close();
+}
+
+function runCommand(id) {
+  const cmd = commands.find((item) => item.id === id);
+  if (!cmd) return;
+  closeCommandPalette();
+  cmd.run();
 }
 
 // ---- live event stream -----------------------------------------------------
@@ -547,6 +653,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".tab").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
+  document.querySelectorAll(".sidebar-item").forEach((btn) => {
+    btn.addEventListener("click", () => switchView(btn.dataset.view));
+  });
 
   // Tasks view
   document.getElementById("refresh-btn").addEventListener("click", fetchTasks);
@@ -571,6 +680,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("monitor-clear-btn").addEventListener("click", () => {
     state.monitorLines.length = 0;
     document.getElementById("monitor-log").textContent = "(cleared)";
+    document.getElementById("terminal-log").textContent = "(cleared)";
+  });
+  document.getElementById("terminal-clear-btn").addEventListener("click", () => {
+    state.monitorLines.length = 0;
+    document.getElementById("monitor-log").textContent = "(cleared)";
+    document.getElementById("terminal-log").textContent = "(cleared)";
   });
 
   // Repos view
@@ -582,8 +697,24 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("debug-log").textContent = "(cleared)";
   });
 
+  // Command palette
+  document.getElementById("command-palette-btn").addEventListener("click", openCommandPalette);
+  document.getElementById("command-palette-input").addEventListener("input", (ev) => {
+    renderCommandPalette(ev.target.value);
+  });
+  document.getElementById("command-palette-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const first = document.querySelector("#command-palette-results button[data-command]");
+    if (first) runCommand(first.dataset.command);
+  });
+
   // Keyboard shortcut: digit keys 1-7 switch tabs
   document.addEventListener("keydown", (ev) => {
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "k") {
+      ev.preventDefault();
+      openCommandPalette();
+      return;
+    }
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
     const views = ["tasks", "fleet", "cost", "history", "monitor", "repos", "debug"];

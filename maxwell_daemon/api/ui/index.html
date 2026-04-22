@@ -18,20 +18,42 @@
     <h1>Maxwell-Daemon</h1>
     <div class="toolbar">
       <button id="new-task-btn" title="Dispatch a task (shortcut: N)">+ New</button>
+      <button id="command-palette-btn" title="Open command palette (shortcut: Ctrl+K)">Command</button>
       <span id="connection" class="pill">connecting…</span>
       <span id="cost-summary" class="pill"></span>
     </div>
   </header>
 
-  <nav class="tab-bar" role="tablist">
-    <button class="tab active" data-view="tasks" role="tab" aria-selected="true">Tasks</button>
-    <button class="tab" data-view="fleet" role="tab" aria-selected="false">Fleet</button>
-    <button class="tab" data-view="cost" role="tab" aria-selected="false">Cost</button>
-    <button class="tab" data-view="history" role="tab" aria-selected="false">History</button>
-    <button class="tab" data-view="monitor" role="tab" aria-selected="false">Monitor</button>
-    <button class="tab" data-view="repos" role="tab" aria-selected="false">Repos</button>
-    <button class="tab" data-view="debug" role="tab" aria-selected="false">Debug</button>
-  </nav>
+  <div class="workbench-shell">
+    <nav class="activity-bar" role="tablist" aria-label="Activity Bar">
+      <button class="tab active" data-view="tasks" role="tab" aria-selected="true" title="Tasks">T</button>
+      <button class="tab" data-view="fleet" role="tab" aria-selected="false" title="Fleet">F</button>
+      <button class="tab" data-view="repos" role="tab" aria-selected="false" title="Repositories">R</button>
+      <button class="tab" data-view="monitor" role="tab" aria-selected="false" title="Monitor">M</button>
+      <button class="tab" data-view="history" role="tab" aria-selected="false" title="History">H</button>
+      <button class="tab" data-view="cost" role="tab" aria-selected="false" title="Cost">C</button>
+      <button class="tab" data-view="debug" role="tab" aria-selected="false" title="Debug">D</button>
+    </nav>
+
+    <aside class="sidebar" aria-label="Sidebar">
+      <section>
+        <h2>Explorer</h2>
+        <button class="sidebar-item active" data-view="tasks">Tasks</button>
+        <button class="sidebar-item" data-view="fleet">Fleet nodes</button>
+        <button class="sidebar-item" data-view="repos">Repositories</button>
+        <button class="sidebar-item" data-view="monitor">Daemon logs</button>
+      </section>
+      <section>
+        <h2>Agents</h2>
+        <ul id="sidebar-backends-list" class="compact-list"></ul>
+      </section>
+      <section>
+        <h2>Fleet</h2>
+        <div id="sidebar-fleet-summary" class="sidebar-summary">No fleet snapshot</div>
+      </section>
+    </aside>
+
+    <div class="editor-area">
 
   <!-- ── Tasks view ─────────────────────────────────────────────────── -->
   <main id="view-tasks" class="view active">
@@ -197,6 +219,16 @@
     </section>
   </main>
 
+      <section class="terminal-panel" aria-label="Terminal">
+        <div class="terminal-head">
+          <span>Terminal</span>
+          <button id="terminal-clear-btn">clear</button>
+        </div>
+        <pre id="terminal-log" class="terminal-log">(waiting for daemon output...)</pre>
+      </section>
+    </div>
+  </div>
+
   <dialog id="new-task-dialog">
     <form id="new-task-form" method="dialog">
       <h3>Dispatch a task</h3>
@@ -234,9 +266,18 @@
     </form>
   </dialog>
 
-  <footer>
-    <span>Docs: <a href="https://github.com/D-sorganization/Maxwell-Daemon">repository</a></span>
-    <span class="hint">Press <kbd>N</kbd> to dispatch, <kbd>Esc</kbd> to close dialogs.</span>
+  <dialog id="command-palette">
+    <form method="dialog" id="command-palette-form">
+      <h3>Command Palette</h3>
+      <input id="command-palette-input" type="search" placeholder="Search commands..." autocomplete="off">
+      <ul id="command-palette-results" class="command-results"></ul>
+    </form>
+  </dialog>
+
+  <footer class="status-bar" aria-label="Status Bar">
+    <span id="status-operation">Ready</span>
+    <span id="status-resources">Tasks 0 | Cost $0.00</span>
+    <span class="hint">Press <kbd>N</kbd> to dispatch, <kbd>Ctrl</kbd>+<kbd>K</kbd> for commands.</span>
   </footer>
 
   <script src="/ui/app.js"></script>
