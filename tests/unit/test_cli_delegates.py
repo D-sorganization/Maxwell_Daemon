@@ -114,7 +114,9 @@ class TestDelegateList:
         assert "running" in r.stdout
         assert "worker-a" in r.stdout
 
-    def test_filters_query_params(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
+    def test_filters_query_params(
+        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
+    ) -> None:
         holder = patch_httpx[-1]["_holder"]
         holder.response = _FakeResponse(payload=[])
         r = runner.invoke(
@@ -128,7 +130,9 @@ class TestDelegateList:
 
 
 class TestDelegateShow:
-    def test_shows_session_detail(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
+    def test_shows_session_detail(
+        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
+    ) -> None:
         holder = patch_httpx[-1]["_holder"]
         holder.response = _FakeResponse(
             payload={

@@ -779,7 +779,7 @@ class DelegateSessionStore:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 row,
-        )
+            )
         return checkpoint
 
     def get_checkpoint(self, checkpoint_id: str) -> Checkpoint | None:
@@ -858,7 +858,9 @@ class DelegateLifecycleService:
         self._clock = clock or _utc_now
 
     def create_session(self, session: DelegateSession) -> DelegateSession:
-        require(self._store.get_session(session.id) is None, f"session {session.id!r} already exists")
+        require(
+            self._store.get_session(session.id) is None, f"session {session.id!r} already exists"
+        )
         self._store.save_session(session)
         return session
 
@@ -972,7 +974,13 @@ class DelegateLifecycleService:
     ) -> Checkpoint:
         session = self._require_session(session_id)
         require(
-            session.status in {DelegateSessionStatus.LEASED, DelegateSessionStatus.RUNNING, DelegateSessionStatus.PAUSED, DelegateSessionStatus.BLOCKED},
+            session.status
+            in {
+                DelegateSessionStatus.LEASED,
+                DelegateSessionStatus.RUNNING,
+                DelegateSessionStatus.PAUSED,
+                DelegateSessionStatus.BLOCKED,
+            },
             "checkpoint can only be recorded for an active or paused session",
         )
         now = self._now()
