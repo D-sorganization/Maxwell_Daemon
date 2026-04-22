@@ -66,6 +66,7 @@ nav:
       - Deployment (Ansible): operations/ansible.md
       - Observability: operations/observability.md
       - Budgets: operations/budgets.md
+      - Tailscale fleet: operations/tailscale.md
       - GitHub webhooks: operations/webhooks.md
       - Beta release readiness: operations/release-readiness.md
       - Production release readiness: operations/production-readiness.md
@@ -76,6 +77,16 @@ nav:
       - REST API: reference/api.md
       - OpenAPI: reference/openapi.md
       - Configuration: reference/configuration.md
+  - Development:
+      - Agentic orchestrator strategy: development/planning/orchestrator_market_comparison.md
+      - Open-source agents review: development/open_source_agents_review.md
+      - IJFW feature review: development/ijfw_feature_review.md
+      - Feature evaluations:
+          - AST repo mapping: feature_evaluation/01_ast_repo_mapping.md
+          - Sandboxing and auto-fix loops: feature_evaluation/02_docker_sandboxing_and_auto_fix.md
+          - MCP integration: feature_evaluation/03_mcp_integration.md
+          - Multi-agent SOPs and QA: feature_evaluation/04_multi_agent_sops_and_trident_qa.md
+          - Phase gates and memory: feature_evaluation/05_phase_gate_workflows_and_memory.md
   - Community:
       - Contributing: contributing.md
       - Roadmap and Governance: community/roadmap-governance.md
