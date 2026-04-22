@@ -88,6 +88,13 @@ def admin_token(cfg: JWTConfig) -> str:
     return cfg.create_token("carol", Role.admin)
 
 
+def _stub_worker_rescale(daemon: Daemon, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _set_worker_count(count: int) -> None:
+        daemon._worker_count = count
+
+    monkeypatch.setattr(daemon, "set_worker_count", _set_worker_count)
+
+
 # ── open mode (no auth configured) ───────────────────────────────────────────
 
 
@@ -131,6 +138,23 @@ class TestStaticTokenBackwardCompat:
         r = static_only_client.get("/api/v1/cost", headers=_bearer("admin-static-secret"))
         assert r.status_code == 200
 
+    def test_static_token_can_rescale_workers(
+        self,
+        static_only_client: TestClient,
+        daemon: Daemon,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _stub_worker_rescale(daemon, monkeypatch)
+
+        r = static_only_client.put(
+            "/api/v1/workers",
+            params={"count": 2},
+            headers=_bearer("admin-static-secret"),
+        )
+
+        assert r.status_code == 200
+        assert r.json() == {"worker_count": 2}
+
     def test_wrong_static_token_rejected(self, static_only_client: TestClient) -> None:
         r = static_only_client.get("/api/v1/tasks", headers=_bearer("wrong-token"))
         assert r.status_code == 401
@@ -169,6 +193,10 @@ class TestViewerJWT:
         r = jwt_only_client.get("/api/v1/fleet", headers=_bearer(viewer_token(jwt_cfg)))
         assert r.status_code == 200
 
+    def test_viewer_can_get_workers(self, jwt_only_client: TestClient, jwt_cfg: JWTConfig) -> None:
+        r = jwt_only_client.get("/api/v1/workers", headers=_bearer(viewer_token(jwt_cfg)))
+        assert r.status_code == 200
+
     def test_viewer_cannot_post_tasks(
         self, jwt_only_client: TestClient, jwt_cfg: JWTConfig
     ) -> None:
@@ -184,6 +212,16 @@ class TestViewerJWT:
     ) -> None:
         r = jwt_only_client.post(
             "/api/v1/tasks/nonexistent/cancel",
+            headers=_bearer(viewer_token(jwt_cfg)),
+        )
+        assert r.status_code == 403
+
+    def test_viewer_cannot_rescale_workers(
+        self, jwt_only_client: TestClient, jwt_cfg: JWTConfig
+    ) -> None:
+        r = jwt_only_client.put(
+            "/api/v1/workers",
+            params={"count": 2},
             headers=_bearer(viewer_token(jwt_cfg)),
         )
         assert r.status_code == 403
@@ -206,6 +244,24 @@ class TestOperatorJWT:
             headers=_bearer(operator_token(jwt_cfg)),
         )
         assert r.status_code == 202
+
+    def test_operator_can_rescale_workers(
+        self,
+        jwt_only_client: TestClient,
+        jwt_cfg: JWTConfig,
+        daemon: Daemon,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _stub_worker_rescale(daemon, monkeypatch)
+
+        r = jwt_only_client.put(
+            "/api/v1/workers",
+            params={"count": 2},
+            headers=_bearer(operator_token(jwt_cfg)),
+        )
+
+        assert r.status_code == 200
+        assert r.json() == {"worker_count": 2}
 
     def test_operator_cannot_dispatch_issue(
         self, jwt_only_client: TestClient, jwt_cfg: JWTConfig
@@ -239,6 +295,24 @@ class TestAdminJWT:
     def test_admin_can_get_fleet(self, jwt_only_client: TestClient, jwt_cfg: JWTConfig) -> None:
         r = jwt_only_client.get("/api/v1/fleet", headers=_bearer(admin_token(jwt_cfg)))
         assert r.status_code == 200
+
+    def test_admin_can_rescale_workers(
+        self,
+        jwt_only_client: TestClient,
+        jwt_cfg: JWTConfig,
+        daemon: Daemon,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _stub_worker_rescale(daemon, monkeypatch)
+
+        r = jwt_only_client.put(
+            "/api/v1/workers",
+            params={"count": 2},
+            headers=_bearer(admin_token(jwt_cfg)),
+        )
+
+        assert r.status_code == 200
+        assert r.json() == {"worker_count": 2}
 
 
 # ── JWT token issuance ────────────────────────────────────────────────────────

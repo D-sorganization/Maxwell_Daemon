@@ -1219,7 +1219,7 @@ def create_app(
             "queue_depth": state.queue_depth,
         }
 
-    @app.put("/api/v1/workers", dependencies=[Depends(_require_viewer())])
+    @app.put("/api/v1/workers", dependencies=[Depends(_require_operator())])
     async def set_workers(count: int) -> dict[str, Any]:
         """Rescale the worker pool to *count* workers."""
         try:
