@@ -30,6 +30,7 @@ from maxwell_daemon.core import (
     ActionPolicy,
     ActionRiskLevel,
     ActionService,
+    ActionStatus,
     ApprovalMode,
     Artifact,
     ArtifactKind,
@@ -795,6 +796,21 @@ class Daemon:
 
     def list_task_actions(self, task_id: str) -> list[Action]:
         return self._actions.list_for_task(task_id)
+
+    def list_actions(
+        self,
+        *,
+        status: ActionStatus | None = None,
+        task_id: str | None = None,
+        work_item_id: str | None = None,
+        limit: int = 100,
+    ) -> list[Action]:
+        return self._actions.list(
+            status=status,
+            task_id=task_id,
+            work_item_id=work_item_id,
+            limit=limit,
+        )
 
     def approve_action(
         self,
