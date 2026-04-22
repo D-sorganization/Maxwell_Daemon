@@ -53,6 +53,10 @@ def list_checks(
 @checks_app.command("run")
 def run_checks(
     repo: Annotated[Path | None, typer.Option("--repo", help="Repository root.")] = None,
+    event: Annotated[
+        str,
+        typer.Option("--event", help="Event name used to select triggered checks."),
+    ] = "pull_request",
     changed_file: Annotated[
         list[str] | None,
         typer.Option("--changed-file", help="Changed file path. Repeatable."),
@@ -63,7 +67,7 @@ def run_checks(
     repo_path = repo or Path.cwd()
     changed_files = tuple(changed_file or ())
     try:
-        results = LocalCheckRunner(repo_path).run(changed_files=changed_files)
+        results = LocalCheckRunner(repo_path).run(changed_files=changed_files, event=event)
     except CheckLoadError as exc:
         console.print(f"[red]x[/red] {exc}")
         raise typer.Exit(1) from exc

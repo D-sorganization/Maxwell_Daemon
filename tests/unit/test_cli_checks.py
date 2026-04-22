@@ -58,6 +58,31 @@ def test_checks_run_reports_matching_result(runner: CliRunner, tmp_path: Path) -
     assert payload[0]["conclusion"] == "pass"
 
 
+def test_checks_run_skips_non_triggered_event(runner: CliRunner, tmp_path: Path) -> None:
+    _write_check(tmp_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "checks",
+            "run",
+            "--repo",
+            str(tmp_path),
+            "--event",
+            "task_completed",
+            "--changed-file",
+            "src/app.py",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload[0]["conclusion"] == "skipped"
+    assert payload[0]["metadata"]["event"] == "task_completed"
+    assert payload[0]["metadata"]["trigger_events"] == ["pull_request"]
+
+
 def test_checks_run_reports_loader_errors(runner: CliRunner, tmp_path: Path) -> None:
     check_dir = tmp_path / ".maxwell" / "checks"
     check_dir.mkdir(parents=True)
