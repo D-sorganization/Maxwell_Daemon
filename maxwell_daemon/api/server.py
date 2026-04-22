@@ -73,6 +73,12 @@ def _mount_web_ui(app: FastAPI) -> None:
         return RedirectResponse(url="/ui/", status_code=308)
 
 
+def _coerce_datetime_to_utc(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 class TaskSubmit(BaseModel):
     prompt: str = Field(..., min_length=1)
     task_id: str | None = None
@@ -626,6 +632,7 @@ def create_app(
         kind: Annotated[str | None, Query()] = None,
         repo: Annotated[str | None, Query()] = None,
         completed_before: Annotated[datetime | None, Query()] = None,
+        completed_before_camel: Annotated[datetime | None, Query(alias="completedBefore")] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     ) -> list[TaskView]:
         tasks = list(daemon.state().tasks.values())
@@ -635,9 +642,13 @@ def create_app(
             tasks = [t for t in tasks if t.kind.value == kind]
         if repo:
             tasks = [t for t in tasks if t.repo == repo or t.issue_repo == repo]
-        if completed_before is not None:
+        completed_before_filter = completed_before or completed_before_camel
+        if completed_before_filter is not None:
+            cutoff = _coerce_datetime_to_utc(completed_before_filter)
             tasks = [
-                t for t in tasks if t.finished_at is not None and t.finished_at < completed_before
+                t
+                for t in tasks
+                if t.finished_at is not None and _coerce_datetime_to_utc(t.finished_at) < cutoff
             ]
         tasks.sort(key=lambda t: t.created_at, reverse=True)
         return [TaskView.from_task(t) for t in tasks[:limit]]

@@ -169,6 +169,34 @@ class TestTaskSubmission:
         assert r.status_code == 200
         assert [task["id"] for task in r.json()] == ["old-done"]
 
+    @pytest.mark.parametrize("query_name", ["completed_before", "completedBefore"])
+    def test_list_filters_with_naive_completed_before(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+        query_name: str,
+    ) -> None:
+        old_done = Task(
+            id=f"old-done-{query_name}",
+            prompt="old",
+            status=TaskStatus.COMPLETED,
+            finished_at=datetime(2026, 4, 19, tzinfo=timezone.utc),
+        )
+        recent_done = Task(
+            id=f"recent-done-{query_name}",
+            prompt="recent",
+            status=TaskStatus.COMPLETED,
+            finished_at=datetime(2026, 4, 21, tzinfo=timezone.utc),
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[old_done.id] = old_done
+            daemon._tasks[recent_done.id] = recent_done
+
+        r = client.get("/api/v1/tasks", params={query_name: "2026-04-20T00:00:00"})
+
+        assert r.status_code == 200
+        assert [task["id"] for task in r.json()] == [old_done.id]
+
     def test_get_task_by_id(self, client: TestClient) -> None:
         submitted = client.post("/api/v1/tasks", json={"prompt": "x"}).json()
         r = client.get(f"/api/v1/tasks/{submitted['id']}")
