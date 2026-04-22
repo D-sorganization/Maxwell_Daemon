@@ -15,10 +15,18 @@ from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
-def client(minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path) -> Iterator[TestClient]:
+def client(minimal_config: MaxwellDaemonConfig, tmp_path: Path) -> Iterator[TestClient]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
+    d = Daemon(
+        minimal_config,
+        ledger_path=tmp_path / "ledger.db",
+        task_store_path=tmp_path / "tasks.db",
+        work_item_store_path=tmp_path / "work_items.db",
+        artifact_store_path=tmp_path / "artifacts.db",
+        artifact_blob_root=tmp_path / "artifacts",
+        action_store_path=tmp_path / "actions.db",
+    )
     try:
         with TestClient(create_app(d)) as c:
             yield c
