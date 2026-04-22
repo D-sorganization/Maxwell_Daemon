@@ -268,4 +268,3 @@ def _check_no_cycles(nodes: tuple[TaskGraphNode, ...]) -> None:
             if nxt_color == _WHITE:
                 color[nxt] = _GREY
                 stack.append((nxt, list(graph[nxt])))
-

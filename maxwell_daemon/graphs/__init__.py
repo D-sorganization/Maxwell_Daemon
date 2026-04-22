@@ -29,4 +29,3 @@ __all__ = [
     "TaskGraphNode",
     "select_template_kind",
 ]
-

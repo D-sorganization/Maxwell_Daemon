@@ -177,4 +177,3 @@ def test_all_built_in_templates_instantiate_valid_graphs() -> None:
         template = template_for_kind(kind)
         graph = template.instantiate(graph_id=f"g-{kind.value}", work_item_id="wi1")
         graph.validate()
-
