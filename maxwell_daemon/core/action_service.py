@@ -12,7 +12,7 @@ from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.core.action_policy import ActionPolicy, PolicyDecision
 from maxwell_daemon.core.action_store import ActionStore
 from maxwell_daemon.core.actions import Action, ActionKind, ActionRiskLevel, ActionStatus
-from maxwell_daemon.events import Event, EventBus, EventKind
+from maxwell_daemon.events import Event, EventBus, EventKind, attach_observability
 
 
 class ActionService:
@@ -179,6 +179,12 @@ class ActionService:
             "status": action.status.value,
             "summary": action.summary,
         }
+        payload = attach_observability(
+            payload,
+            task_id=action.task_id,
+            work_item_id=action.work_item_id,
+            action_id=action.id,
+        )
         try:
             loop = asyncio.get_running_loop()
             task = loop.create_task(self._events.publish(Event(kind=kind, payload=payload)))

@@ -44,7 +44,7 @@ from maxwell_daemon.core.action_store import ActionStore
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.core.work_item_store import WorkItemStore
 from maxwell_daemon.core.work_items import WorkItem, WorkItemStatus
-from maxwell_daemon.events import Event, EventBus, EventKind
+from maxwell_daemon.events import Event, EventBus, EventKind, attach_observability
 from maxwell_daemon.metrics import record_request
 
 log = logging.getLogger("maxwell_daemon.daemon")
@@ -460,7 +460,15 @@ class Daemon:
             loop = asyncio.get_running_loop()
             # Task kept alive via strong reference in _bg_tasks.
             bg = loop.create_task(
-                self._events.publish(Event(kind=EventKind.TASK_QUEUED, payload={"id": task.id}))
+                self._events.publish(
+                    Event(
+                        kind=EventKind.TASK_QUEUED,
+                        payload=attach_observability(
+                            {"id": task.id},
+                            task_id=task.id,
+                        ),
+                    )
+                )
             )
             self._bg_tasks.add(bg)
             bg.add_done_callback(self._bg_tasks.discard)
@@ -1035,7 +1043,10 @@ class Daemon:
             await self._events.publish(
                 Event(
                     kind=EventKind.TASK_STARTED,
-                    payload={"id": task.id, "prompt": task.prompt},
+                    payload=attach_observability(
+                        {"id": task.id, "prompt": task.prompt},
+                        task_id=task.id,
+                    ),
                 )
             )
             self._budget.require_under_budget()
@@ -1081,7 +1092,16 @@ class Daemon:
             await self._events.publish(
                 Event(
                     kind=EventKind.TASK_COMPLETED,
-                    payload={"id": task.id, "cost_usd": task.cost_usd},
+                    payload=attach_observability(
+                        {"id": task.id, "cost_usd": task.cost_usd},
+                        task_id=task.id,
+                        backend=decision.backend_name,
+                        model=decision.model,
+                        cost_usd=task.cost_usd,
+                        duration_seconds=(
+                            datetime.now(timezone.utc) - task.started_at
+                        ).total_seconds(),
+                    ),
                 )
             )
         except BudgetExceededError as e:
@@ -1096,11 +1116,16 @@ class Daemon:
             await self._events.publish(
                 Event(
                     kind=EventKind.TASK_FAILED,
-                    payload={
-                        "id": task.id,
-                        "error": str(e),
-                        "reason": "budget_exceeded",
-                    },
+                    payload=attach_observability(
+                        {
+                            "id": task.id,
+                            "error": str(e),
+                            "reason": "budget_exceeded",
+                        },
+                        task_id=task.id,
+                        backend=decision_backend,
+                        model=decision_model,
+                    ),
                 )
             )
         except Exception as e:
@@ -1109,7 +1134,15 @@ class Daemon:
             task.error = str(e)
             record_request(backend=decision_backend, model=decision_model, status="error")
             await self._events.publish(
-                Event(kind=EventKind.TASK_FAILED, payload={"id": task.id, "error": str(e)})
+                Event(
+                    kind=EventKind.TASK_FAILED,
+                    payload=attach_observability(
+                        {"id": task.id, "error": str(e)},
+                        task_id=task.id,
+                        backend=decision_backend,
+                        model=decision_model,
+                    ),
+                )
             )
         finally:
             task.finished_at = datetime.now(timezone.utc)
@@ -1193,11 +1226,14 @@ class Daemon:
             await self._events.publish(
                 Event(
                     kind=EventKind.TEST_OUTPUT,
-                    payload={
-                        "task_id": task.id,
-                        "chunk": chunk,
-                        "stream": stream,
-                    },
+                    payload=attach_observability(
+                        {
+                            "task_id": task.id,
+                            "chunk": chunk,
+                            "stream": stream,
+                        },
+                        task_id=task.id,
+                    ),
                 )
             )
 
@@ -1225,13 +1261,18 @@ class Daemon:
         await self._events.publish(
             Event(
                 kind=EventKind.TASK_COMPLETED,
-                payload={
-                    "id": task.id,
-                    "kind": "issue",
-                    "repo": task.issue_repo,
-                    "issue": task.issue_number,
-                    "pr_url": result.pr_url,
-                },
+                payload=attach_observability(
+                    {
+                        "id": task.id,
+                        "kind": "issue",
+                        "repo": task.issue_repo,
+                        "issue": task.issue_number,
+                        "pr_url": result.pr_url,
+                    },
+                    task_id=task.id,
+                    backend=decision.backend_name,
+                    model=decision.model,
+                ),
             )
         )
 

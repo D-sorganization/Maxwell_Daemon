@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from maxwell_daemon.events import Event, EventBus, EventKind
+from maxwell_daemon.events import Event, EventBus, EventKind, attach_observability
 
 
 @dataclass
@@ -140,3 +140,35 @@ class TestEvent:
         assert data["kind"] == "task_completed"
         assert data["payload"]["id"] == "x"
         assert "ts" in data
+
+
+class TestAttachObservability:
+    def test_adds_normalized_observability_context(self) -> None:
+        payload = attach_observability(
+            {"id": "t1"},
+            task_id="t1",
+            work_item_id="wi-1",
+            action_id="a1",
+            artifact_ids=("art-1", "art-2"),
+            backend="ollama",
+            model="devstral",
+            cost_usd=0.0,
+            duration_seconds=1.25,
+        )
+        assert payload["id"] == "t1"
+        obs = payload["observability"]
+        assert obs["task_id"] == "t1"
+        assert obs["work_item_id"] == "wi-1"
+        assert obs["action_id"] == "a1"
+        assert obs["artifact_ids"] == ["art-1", "art-2"]
+        assert obs["backend"] == "ollama"
+        assert obs["model"] == "devstral"
+        assert obs["cost_usd"] == 0.0
+        assert obs["duration_seconds"] == 1.25
+
+    def test_does_not_mutate_input_or_emit_empty_context(self) -> None:
+        original = {"id": "t2"}
+        payload = attach_observability(original)
+        assert payload == original
+        assert "observability" not in payload
+        assert "observability" not in original
