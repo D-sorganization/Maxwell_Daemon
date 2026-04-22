@@ -400,8 +400,10 @@ function renderHistory() {
 
 // ---- monitor view ----------------------------------------------------------
 
-// ⚡ Bolt: Debounce monitor log updates with requestAnimationFrame to prevent UI freezing
-// on rapid event streams.
+// ⚡ Bolt: Batch DOM updates using requestAnimationFrame.
+// This prevents layout thrashing (forced synchronous layout from accessing scrollHeight)
+// and limits DOM updates to the display refresh rate (usually 60fps), massively
+// reducing main thread blockage during rapid WebSocket event streams.
 let _monitorRaf = null;
 
 function appendMonitorLine(line) {
@@ -413,6 +415,7 @@ function appendMonitorLine(line) {
     _monitorRaf = requestAnimationFrame(() => {
       _monitorRaf = null;
       const el = document.getElementById("monitor-log");
+      if (!el) return;
       const filterVal = document.getElementById("monitor-filter")?.value?.toLowerCase() || "";
       const visible = filterVal
         ? state.monitorLines.filter((l) => l.toLowerCase().includes(filterVal))
@@ -436,7 +439,8 @@ function refreshMonitorDisplay() {
 
 // ---- debug view ------------------------------------------------------------
 
-// ⚡ Bolt: Debounce debug log updates with requestAnimationFrame.
+// ⚡ Bolt: Batch DOM updates using requestAnimationFrame to prevent layout thrashing
+// during rapid WebSocket event bursts.
 let _debugRaf = null;
 
 function appendDebugEvent(raw) {
@@ -448,6 +452,7 @@ function appendDebugEvent(raw) {
     _debugRaf = requestAnimationFrame(() => {
       _debugRaf = null;
       const el = document.getElementById("debug-log");
+      if (!el) return;
       el.textContent = state.debugEvents.join("\n");
       el.scrollTop = el.scrollHeight;
     });
@@ -499,7 +504,8 @@ function openEventStream() {
 let _fetchTasksTimer = null;
 const _fetchTaskDetailTimers = new Map();
 
-// ⚡ Bolt: Debounce test output updates to prevent layout thrashing on streams.
+// ⚡ Bolt: Batch DOM updates using requestAnimationFrame to prevent layout thrashing
+// during high-frequency text streaming.
 let _testOutputRaf = null;
 
 function handleEvent(evt) {
@@ -511,8 +517,10 @@ function handleEvent(evt) {
       if (!_testOutputRaf) {
         _testOutputRaf = requestAnimationFrame(() => {
           _testOutputRaf = null;
-          document.getElementById("detail-output").textContent =
-            state.testOutput.get(p.task_id);
+          const outEl = document.getElementById("detail-output");
+          if (outEl) {
+            outEl.textContent = state.testOutput.get(state.selected);
+          }
         });
       }
     }

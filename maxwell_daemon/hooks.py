@@ -27,7 +27,6 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import json
-import os
 import shlex
 import subprocess
 from collections.abc import Awaitable, Callable
@@ -38,6 +37,7 @@ from typing import Any
 import yaml
 
 from maxwell_daemon.contracts import require
+from maxwell_daemon.tools.builtins import _build_run_bash_env
 
 __all__ = [
     "HookConfig",
@@ -331,7 +331,7 @@ def _env(
     tool_output: str | None,
 ) -> dict[str, str]:
     """Build the environment visible to a hook subprocess."""
-    env: dict[str, str] = dict(os.environ)
+    env: dict[str, str] = _build_run_bash_env()
     env["MAXWELL_TOOL_NAME"] = tool_name or ""
     env["MAXWELL_TOOL_INPUT"] = json.dumps(tool_input or {}, default=str)
     env["MAXWELL_TOOL_OUTPUT"] = tool_output or ""
