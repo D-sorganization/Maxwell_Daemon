@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-class TaskType(StrEnum):
+class TaskType(str, Enum):
     ISSUE_TRIAGE = "issue_triage"
     PATCH_GENERATION = "patch_generation"
     FINAL_REVIEW = "final_review"
 
 
-class Capability(StrEnum):
+class Capability(str, Enum):
     STRUCTURED_OUTPUT = "structured_output"
     PATCH_GENERATION = "patch_generation"
     LONG_CONTEXT = "long_context"
 
 
-class DeploymentKind(StrEnum):
+class DeploymentKind(str, Enum):
     LOCAL = "local"
     REMOTE = "remote"
 
@@ -88,4 +88,3 @@ class ModelRoutingPolicy(BaseModel):
                 "required_benchmark_suite and min_benchmark_score must be set together"
             )
         return self
-
