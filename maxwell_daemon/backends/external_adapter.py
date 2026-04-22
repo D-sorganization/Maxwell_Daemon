@@ -7,14 +7,27 @@ contract rules, and provides a structured unavailable fallback.
 
 from __future__ import annotations
 
+import asyncio
 import re
+import threading
 from abc import ABC, abstractmethod
+from collections.abc import Coroutine
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypeVar, runtime_checkable
+
+from maxwell_daemon.backends.base import (
+    BackendResponse,
+    BackendUnavailableError,
+    ILLMBackend,
+    Message,
+    MessageRole,
+)
+from maxwell_daemon.backends.codex_cli import CodexCLIBackend
 
 __all__ = [
+    "CodexCLIExternalAgentAdapter",
     "ExternalAgentAdapterBase",
     "ExternalAgentAdapterError",
     "ExternalAgentAdapterProtocol",
@@ -39,9 +52,15 @@ class ExternalAgentOperation(str, Enum):
     """Supported external-agent operations."""
 
     PROBE = "probe"
+    PLAN = "plan"
+    IMPLEMENT = "implement"
+    REVIEW = "review"
+    VALIDATE = "validate"
+    CHECKPOINT = "checkpoint"
+    CANCEL = "cancel"
+    # Legacy compatibility with the first contract slice.
     READ = "read"
     WRITE = "write"
-    REVIEW = "review"
 
 
 class ExternalAgentRunStatus(str, Enum):
@@ -71,6 +90,60 @@ _SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
 )
 
+_T = TypeVar("_T")
+
+
+def _operation_is_read_only(operation: ExternalAgentOperation) -> bool:
+    return operation in {
+        ExternalAgentOperation.PROBE,
+        ExternalAgentOperation.PLAN,
+        ExternalAgentOperation.REVIEW,
+        ExternalAgentOperation.VALIDATE,
+        ExternalAgentOperation.CHECKPOINT,
+        ExternalAgentOperation.READ,
+    }
+
+
+def _default_read_only_operations() -> frozenset[ExternalAgentOperation]:
+    return frozenset(
+        operation for operation in ExternalAgentOperation if _operation_is_read_only(operation)
+    )
+
+
+def _default_write_operations() -> frozenset[ExternalAgentOperation]:
+    return frozenset({ExternalAgentOperation.IMPLEMENT, ExternalAgentOperation.WRITE})
+
+
+def _run_coroutine_sync(coroutine: Coroutine[Any, Any, _T]) -> _T:
+    """Run an async backend call from the synchronous adapter contract."""
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coroutine)
+
+    result: list[_T] = []
+    errors: list[BaseException] = []
+
+    def runner() -> None:
+        try:
+            result.append(asyncio.run(coroutine))
+        except BaseException as exc:  # pragma: no cover - defensive thread handoff
+            errors.append(exc)
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    thread.join()
+    if errors:
+        raise errors[0]
+    return result[0]
+
+
+def _snippet(text: str, *, limit: int = 4_000) -> str:
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}... [truncated]"
+
 
 def redact_secrets(text: str) -> str:
     """Redact common credential forms from diagnostic text."""
@@ -97,16 +170,32 @@ def _redact_value(value: Any) -> Any:
 class ExternalAgentCapability:
     """Declares what an adapter can do."""
 
+    adapter_id: str | None = None
+    display_name: str = "External agent"
+    version: str | None = None
+    probe_info: tuple[str, ...] = ()
+    supported_roles: frozenset[str] = field(default_factory=frozenset)
     supported_operations: frozenset[ExternalAgentOperation] = field(
         default_factory=lambda: frozenset(ExternalAgentOperation)
     )
     read_only_operations: frozenset[ExternalAgentOperation] = field(
-        default_factory=lambda: frozenset({ExternalAgentOperation.REVIEW})
+        default_factory=_default_read_only_operations
     )
     write_operations: frozenset[ExternalAgentOperation] = field(
-        default_factory=lambda: frozenset({ExternalAgentOperation.WRITE})
+        default_factory=_default_write_operations
     )
+    capability_tags: frozenset[str] = field(default_factory=frozenset)
+    context_limits: dict[str, int] = field(default_factory=dict)
+    cost_model: str | None = None
+    quota_model: str | None = None
+    required_credentials: tuple[str, ...] = ()
+    required_binaries: tuple[str, ...] = ()
+    workspace_requirements: tuple[str, ...] = ()
+    can_edit_files: bool = False
+    can_run_tests: bool = False
+    supports_background: bool = False
     supports_cancellation: bool = True
+    safety_notes: tuple[str, ...] = ()
 
     def supports(self, operation: ExternalAgentOperation) -> bool:
         return operation in self.supported_operations
@@ -126,13 +215,16 @@ class ExternalAgentRunContext:
     operation: ExternalAgentOperation
     prompt: str
     workspace: Path | None = None
+    task_id: str | None = None
+    work_item_id: str | None = None
+    gate_context: dict[str, Any] = field(default_factory=dict)
     request_id: str | None = None
     cancellation_requested: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def read_only(self) -> bool:
-        return self.operation is ExternalAgentOperation.REVIEW
+        return _operation_is_read_only(self.operation)
 
     @property
     def has_workspace(self) -> bool:
@@ -145,6 +237,7 @@ class ExternalAgentProbeResult:
 
     adapter_id: str
     summary: str
+    version: str | None = None
     details: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
     available: bool = True
@@ -168,7 +261,15 @@ class ExternalAgentRunResult:
     summary: str
     details: tuple[str, ...] = ()
     changed_files: tuple[str, ...] = ()
+    commands_run: tuple[str, ...] = ()
+    tests_run: tuple[str, ...] = ()
     artifacts: tuple[str, ...] = ()
+    cost_estimate_usd: float | None = None
+    quota_estimate: str | None = None
+    stdout_snippet: str | None = None
+    stderr_snippet: str | None = None
+    checkpoint: str | None = None
+    policy_warnings: tuple[str, ...] = ()
     read_only: bool = False
     cancellation_requested: bool = False
     cancellation_recorded: bool = False
@@ -184,7 +285,15 @@ class ExternalAgentRunResult:
         summary: str,
         details: tuple[str, ...] | list[str] = (),
         changed_files: tuple[str, ...] | list[str] = (),
+        commands_run: tuple[str, ...] | list[str] = (),
+        tests_run: tuple[str, ...] | list[str] = (),
         artifacts: tuple[str, ...] | list[str] = (),
+        cost_estimate_usd: float | None = None,
+        quota_estimate: str | None = None,
+        stdout_snippet: str | None = None,
+        stderr_snippet: str | None = None,
+        checkpoint: str | None = None,
+        policy_warnings: tuple[str, ...] | list[str] = (),
         read_only: bool | None = None,
         cancellation_requested: bool = False,
         cancellation_recorded: bool = False,
@@ -197,14 +306,20 @@ class ExternalAgentRunResult:
             summary=summary,
             details=tuple(details),
             changed_files=tuple(changed_files),
+            commands_run=tuple(commands_run),
+            tests_run=tuple(tests_run),
             artifacts=tuple(artifacts),
-            read_only=operation is ExternalAgentOperation.REVIEW
-            if read_only is None
-            else read_only,
+            cost_estimate_usd=cost_estimate_usd,
+            quota_estimate=quota_estimate,
+            stdout_snippet=stdout_snippet,
+            stderr_snippet=stderr_snippet,
+            checkpoint=checkpoint,
+            policy_warnings=tuple(policy_warnings),
+            read_only=_operation_is_read_only(operation) if read_only is None else read_only,
             cancellation_requested=cancellation_requested,
             cancellation_recorded=cancellation_recorded,
             metadata={} if metadata is None else metadata,
-        )
+        ).redacted()
 
     @classmethod
     def unavailable(
@@ -214,6 +329,11 @@ class ExternalAgentRunResult:
         operation: ExternalAgentOperation,
         reason: str,
         details: tuple[str, ...] | list[str] = (),
+        commands_run: tuple[str, ...] | list[str] = (),
+        tests_run: tuple[str, ...] | list[str] = (),
+        artifacts: tuple[str, ...] | list[str] = (),
+        stderr_snippet: str | None = None,
+        policy_warnings: tuple[str, ...] | list[str] = (),
         cancellation_requested: bool = False,
         cancellation_recorded: bool = False,
         metadata: dict[str, Any] | None = None,
@@ -224,12 +344,17 @@ class ExternalAgentRunResult:
             status=ExternalAgentRunStatus.UNAVAILABLE,
             summary=reason,
             details=tuple(details),
-            read_only=operation is ExternalAgentOperation.REVIEW,
+            commands_run=tuple(commands_run),
+            tests_run=tuple(tests_run),
+            artifacts=tuple(artifacts),
+            stderr_snippet=stderr_snippet,
+            policy_warnings=tuple(policy_warnings),
+            read_only=_operation_is_read_only(operation),
             cancellation_requested=cancellation_requested,
             cancellation_recorded=cancellation_recorded,
             unavailable_reason=reason,
             metadata={} if metadata is None else metadata,
-        )
+        ).redacted()
 
     @classmethod
     def cancelled(
@@ -240,6 +365,7 @@ class ExternalAgentRunResult:
         reason: str,
         cancellation_requested: bool = True,
         cancellation_recorded: bool = True,
+        checkpoint: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> ExternalAgentRunResult:
         return cls(
@@ -247,10 +373,35 @@ class ExternalAgentRunResult:
             operation=operation,
             status=ExternalAgentRunStatus.CANCELLED,
             summary=reason,
-            read_only=operation is ExternalAgentOperation.REVIEW,
+            checkpoint=checkpoint,
+            read_only=_operation_is_read_only(operation),
             cancellation_requested=cancellation_requested,
             cancellation_recorded=cancellation_recorded,
             metadata={} if metadata is None else metadata,
+        ).redacted()
+
+    def redacted(self) -> ExternalAgentRunResult:
+        return replace(
+            self,
+            summary=redact_secrets(self.summary),
+            details=tuple(redact_secrets(detail) for detail in self.details),
+            commands_run=tuple(redact_secrets(command) for command in self.commands_run),
+            tests_run=tuple(redact_secrets(test) for test in self.tests_run),
+            quota_estimate=redact_secrets(self.quota_estimate)
+            if self.quota_estimate is not None
+            else None,
+            stdout_snippet=redact_secrets(self.stdout_snippet)
+            if self.stdout_snippet is not None
+            else None,
+            stderr_snippet=redact_secrets(self.stderr_snippet)
+            if self.stderr_snippet is not None
+            else None,
+            checkpoint=redact_secrets(self.checkpoint) if self.checkpoint is not None else None,
+            policy_warnings=tuple(redact_secrets(warning) for warning in self.policy_warnings),
+            unavailable_reason=redact_secrets(self.unavailable_reason)
+            if self.unavailable_reason is not None
+            else None,
+            metadata=_redact_value(self.metadata),
         )
 
 
@@ -305,9 +456,20 @@ class ExternalAgentAdapterBase(ABC):
             raise ExternalAgentAdapterError(
                 f"{type(self).__name__}.run() must return ExternalAgentRunResult"
             )
+        if self.capabilities.is_read_only(context.operation) and result.changed_files:
+            return ExternalAgentRunResult.unavailable(
+                adapter_id=self.adapter_id,
+                operation=context.operation,
+                reason=f"read-only operation reported changed files: {context.operation.value}",
+                details=result.details,
+                policy_warnings=(
+                    "Read-only adapter operation returned changed_files and was rejected.",
+                ),
+                metadata=result.metadata,
+            )
         if context.read_only and not result.read_only:
             result = replace(result, read_only=True)
-        return result
+        return result.redacted()
 
     def cancel(self, context: ExternalAgentRunContext) -> ExternalAgentRunResult:
         return ExternalAgentRunResult.cancelled(
@@ -319,6 +481,19 @@ class ExternalAgentAdapterBase(ABC):
         )
 
     def _validate_context(self, context: ExternalAgentRunContext) -> ExternalAgentRunResult | None:
+        if not self.adapter_id.strip():
+            raise ExternalAgentAdapterError(f"{type(self).__name__}.adapter_id cannot be empty")
+        capability_adapter_id = self.capabilities.adapter_id
+        if capability_adapter_id is not None and capability_adapter_id != self.adapter_id:
+            raise ExternalAgentAdapterError(
+                f"{type(self).__name__}.capabilities.adapter_id must match adapter_id"
+            )
+        if not context.prompt.strip() and context.task_id is None and context.work_item_id is None:
+            return ExternalAgentRunResult.unavailable(
+                adapter_id=self.adapter_id,
+                operation=context.operation,
+                reason="work item or task context required",
+            )
         if context.adapter_id != self.adapter_id:
             return ExternalAgentRunResult.unavailable(
                 adapter_id=self.adapter_id,
@@ -337,7 +512,7 @@ class ExternalAgentAdapterBase(ABC):
             return ExternalAgentRunResult.unavailable(
                 adapter_id=self.adapter_id,
                 operation=context.operation,
-                reason="workspace assignment required for write operations",
+                reason="workspace assignment required for write-capable operations",
             )
         return None
 
@@ -406,6 +581,13 @@ class ExternalAgentAdapterRegistry:
         self._adapters: dict[str, ExternalAgentAdapterProtocol] = {}
 
     def register(self, adapter: ExternalAgentAdapterProtocol) -> None:
+        if not adapter.adapter_id.strip():
+            raise ExternalAgentAdapterError("Adapter id cannot be empty")
+        capability_adapter_id = adapter.capabilities.adapter_id
+        if capability_adapter_id is not None and capability_adapter_id != adapter.adapter_id:
+            raise ExternalAgentAdapterError(
+                f"Adapter '{adapter.adapter_id}' capability id does not match"
+            )
         if adapter.adapter_id in self._adapters:
             raise ExternalAgentAdapterError(f"Adapter '{adapter.adapter_id}' already registered")
         self._adapters[adapter.adapter_id] = adapter
@@ -421,3 +603,170 @@ class ExternalAgentAdapterRegistry:
 
     def available(self) -> list[str]:
         return sorted(self._adapters)
+
+
+class CodexCLIExternalAgentAdapter(ExternalAgentAdapterBase):
+    """Expose the existing Codex CLI backend through the external-agent contract."""
+
+    def __init__(
+        self,
+        *,
+        backend: ILLMBackend | None = None,
+        model: str = "gpt-5-codex",
+        adapter_id: str = "codex-cli",
+        version: str | None = None,
+        command_hint: str | None = None,
+    ) -> None:
+        if not adapter_id.strip():
+            raise ExternalAgentAdapterError("Adapter id cannot be empty")
+        self.adapter_id = adapter_id
+        self._backend = backend if backend is not None else CodexCLIBackend(approval="suggest")
+        self._model = model
+        self._version = version
+        self._command_hint = command_hint or f"codex exec --approval suggest --model {model}"
+        backend_caps = self._backend.capabilities(model)
+        self.capabilities = ExternalAgentCapability(
+            adapter_id=adapter_id,
+            display_name="Codex CLI",
+            version=version,
+            probe_info=("codex --version",),
+            supported_roles=frozenset({"planner", "reviewer", "validator", "checkpoint"}),
+            supported_operations=frozenset(
+                {
+                    ExternalAgentOperation.PROBE,
+                    ExternalAgentOperation.PLAN,
+                    ExternalAgentOperation.REVIEW,
+                    ExternalAgentOperation.VALIDATE,
+                    ExternalAgentOperation.CHECKPOINT,
+                    ExternalAgentOperation.CANCEL,
+                    ExternalAgentOperation.READ,
+                }
+            ),
+            read_only_operations=frozenset(
+                {
+                    ExternalAgentOperation.PROBE,
+                    ExternalAgentOperation.PLAN,
+                    ExternalAgentOperation.REVIEW,
+                    ExternalAgentOperation.VALIDATE,
+                    ExternalAgentOperation.CHECKPOINT,
+                    ExternalAgentOperation.READ,
+                }
+            ),
+            write_operations=frozenset(),
+            capability_tags=frozenset({"cli", "codex", "llm", "non-interactive"}),
+            context_limits={"max_context_tokens": backend_caps.max_context_tokens},
+            cost_model="uses the caller's Codex/OpenAI account; exact cost may be unavailable",
+            quota_model="delegated to Codex CLI authentication and provider quota",
+            required_credentials=("codex login or equivalent CLI authentication",),
+            required_binaries=("codex",),
+            workspace_requirements=("workspace optional for read-only suggest-mode runs",),
+            can_edit_files=False,
+            can_run_tests=False,
+            supports_background=True,
+            supports_cancellation=True,
+            safety_notes=(
+                "Default wrapper uses Codex CLI suggest mode and must not edit files.",
+                "Gate decisions, merges, and policy approvals remain outside the adapter.",
+            ),
+        )
+
+    def _probe(self, spec: ExternalAgentProbeSpec) -> ExternalAgentProbeResult:
+        _ = spec
+        try:
+            available = _run_coroutine_sync(self._backend.health_check())
+        except BackendUnavailableError as exc:
+            return ExternalAgentProbeResult(
+                adapter_id=self.adapter_id,
+                summary=f"Codex CLI backend unavailable: {exc}",
+                version=self._version,
+                details=(self._command_hint,),
+                metadata={"backend": self._backend.name, "model": self._model},
+                available=False,
+            )
+        summary = "Codex CLI backend available" if available else "Codex CLI backend unavailable"
+        return ExternalAgentProbeResult(
+            adapter_id=self.adapter_id,
+            summary=summary,
+            version=self._version,
+            details=(self._command_hint,),
+            metadata={"backend": self._backend.name, "model": self._model},
+            available=available,
+        )
+
+    def _run(self, context: ExternalAgentRunContext) -> ExternalAgentRunResult:
+        if context.operation is ExternalAgentOperation.CANCEL:
+            return self.cancel(context)
+        if context.operation is ExternalAgentOperation.PROBE:
+            probe = self.probe()
+            return ExternalAgentRunResult.completed(
+                adapter_id=self.adapter_id,
+                operation=context.operation,
+                summary=probe.summary,
+                details=probe.details,
+                read_only=True,
+                metadata=probe.metadata,
+            )
+
+        try:
+            response = _run_coroutine_sync(
+                self._backend.complete(
+                    self._messages_for(context),
+                    model=self._model,
+                    temperature=0.0,
+                )
+            )
+        except BackendUnavailableError as exc:
+            return ExternalAgentRunResult.unavailable(
+                adapter_id=self.adapter_id,
+                operation=context.operation,
+                reason=f"Codex CLI backend unavailable: {exc}",
+                commands_run=(self._command_hint,),
+                stderr_snippet=str(exc),
+            )
+
+        return self._result_from_response(context, response)
+
+    def _messages_for(self, context: ExternalAgentRunContext) -> list[Message]:
+        return [
+            Message(role=MessageRole.SYSTEM, content=self._system_prompt_for(context.operation)),
+            Message(role=MessageRole.USER, content=context.prompt),
+        ]
+
+    def _system_prompt_for(self, operation: ExternalAgentOperation) -> str:
+        instructions = {
+            ExternalAgentOperation.PLAN: "Produce a plan only. Do not edit files.",
+            ExternalAgentOperation.REVIEW: (
+                "Review the provided context and return structured findings. Do not edit files."
+            ),
+            ExternalAgentOperation.VALIDATE: (
+                "Analyze or propose validation commands. Do not edit files."
+            ),
+            ExternalAgentOperation.CHECKPOINT: (
+                "Summarize recoverable state, decisions, blockers, and next steps. Do not edit files."
+            ),
+            ExternalAgentOperation.READ: "Inspect and summarize the requested context. Do not edit files.",
+        }
+        return instructions.get(operation, "Respond without editing files.")
+
+    def _result_from_response(
+        self, context: ExternalAgentRunContext, response: BackendResponse
+    ) -> ExternalAgentRunResult:
+        return ExternalAgentRunResult.completed(
+            adapter_id=self.adapter_id,
+            operation=context.operation,
+            summary=response.content,
+            details=(f"finish_reason={response.finish_reason}",),
+            commands_run=(self._command_hint,),
+            stdout_snippet=_snippet(response.content),
+            checkpoint=response.content
+            if context.operation is ExternalAgentOperation.CHECKPOINT
+            else None,
+            read_only=True,
+            cost_estimate_usd=self._backend.estimate_cost(response.usage, self._model),
+            quota_estimate=self.capabilities.quota_model,
+            metadata={
+                "backend": response.backend,
+                "model": response.model,
+                "raw": response.raw,
+            },
+        )
