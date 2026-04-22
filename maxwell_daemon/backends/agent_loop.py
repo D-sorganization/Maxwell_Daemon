@@ -46,7 +46,7 @@ from maxwell_daemon.backends.condensation import Condenser
 from maxwell_daemon.backends.pricing import cost_for, get_rates
 from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.gh.ci_patterns import detect_ci_profile
-from maxwell_daemon.gh.repo_map import build_repo_map
+from maxwell_daemon.gh.repo_schematic import build_repo_schematic
 from maxwell_daemon.tools import ToolRegistry, build_default_registry
 
 __all__ = [
@@ -213,7 +213,7 @@ class AgentLoopBackend(ILLMBackend):
         # Inject a compact repo map (file -> top-level symbols) so the agent
         # knows where things live without paying for full-file context per turn.
         with suppress(Exception):
-            map_block = build_repo_map(workspace).to_prompt(max_chars=2000)
+            map_block = build_repo_schematic(workspace).to_prompt(max_chars=2000)
             if map_block:
                 parts.append(map_block)
 
@@ -358,7 +358,7 @@ class AgentLoopBackend(ILLMBackend):
                 prompt_tokens=response.usage.input_tokens - cached_tokens,
                 completion_tokens=response.usage.output_tokens,
                 total_tokens=response.usage.input_tokens + response.usage.output_tokens,
-                cached_tokens=cached_tokens,
+                cached_tokens=getattr(response.usage, "cache_read_input_tokens", 0) or 0,
             )
             total_usage = total_usage + turn_usage
             turn_cost = self._cost_for(turn_usage, effective_model)

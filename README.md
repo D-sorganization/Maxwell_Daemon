@@ -1,135 +1,49 @@
-# Maxwell-Daemon
+# ⚡ Maxwell-Daemon
 
-> **Multi-backend autonomous code agent orchestrator** — use any LLM, from any provider, across any fleet of machines.
+> **Your Autonomous Software Engineering Team in a Box.**
 
-Maxwell-Daemon is an open-source orchestration platform for autonomous coding agents. It lets one person (or a small team) run a fleet of agents that discover, implement, and deliver work across many repositories — and it's **backend-agnostic** so you can mix expensive frontier models with cheap local ones on the same task queue.
+Maxwell-Daemon is a professionally packaged, autonomous desktop application that orchestrates an entire AI development team to build, test, and ship your software.
 
-**Status:** 🚧 Alpha — under active development. See the [roadmap](https://github.com/D-sorganization/Maxwell-Daemon/issues).
+Unlike existing tools that are locked to the terminal, Maxwell-Daemon provides a stunning **Native Desktop GUI**, strict **Test-Driven Development (TDD)** enforcement, and **Bring-Your-Own-CLI (BYO-CLI)** flexibility. It ensures you never burn an API token on tasks you don't need to.
 
-## Why Maxwell-Daemon??
+## 🚀 Why Maxwell-Daemon?
+- **Professional Desktop Application**: Say goodbye to the terminal. Double-click `Launch-Maxwell.bat` and experience a gorgeous, glassmorphic dark-mode PyQt6 interface.
+- **The Cognitive Pipeline**: A state-machine orchestrated team:
+  - 🧠 **Strategist**: Formulates architectural plans using the compressed `RepoSchematic`.
+  - 💻 **Implementer**: Safely generates code within the Docker `ExecutionSandbox`.
+  - ⚔️ **Maxwell Crucible**: Adversarial QA role that violently tests the Implementer's code against the Strategist's contract.
+- **BYO-CLI**: Don't pay double API taxes. Maxwell-Daemon can hook into your existing local CLI subscriptions (like `jules-cli`, `claude-code`, or `ollama`).
 
-The existing autonomous-agent tools are locked to one vendor and one machine. Maxwell-Daemon solves both:
+## 📥 Installation & Setup (It Just Works)
 
-- **Resource-agnostic.** Claude, GPT-4o, Gemini, Llama via Ollama, any OpenAI-compatible endpoint — all through one interface. Your Claude subscription, your OpenAI key, and your local RTX 4090 can all serve the same job queue.
-- **Built for the little guy.** Route the cheap tasks to local models, the hard ones to Claude Opus, and stop burning tokens on work a 7B model could handle.
-- **Fleet-native.** Run on one laptop, five boxes in your basement, or a cloud cluster. Same config, same CLI, same dashboard.
-- **Cost-aware by default.** Every request is metered, every repo has a budget, every backend has a price. When you hit 90% of your monthly cap, Maxwell-Daemon knows.
+**Prerequisites:**
+- Python 3.13+
+- Docker Desktop (Required for the safe Execution Sandbox)
 
-## Quick Start
-
+**1. Clone the Repository**
 ```bash
+git clone https://github.com/D-sorganization/Maxwell-Daemon.git
+cd Maxwell-Daemon
+```
+
+**2. Initialize the Environment**
+Run the setup script to install all dependencies and construct the virtual environment:
+```bash
+python -m venv .venv
+.venv\Scripts\activate
 pip install -e ".[dev]"
-maxwell-daemon init
-export ANTHROPIC_API_KEY=sk-ant-...
-maxwell-daemon health
-maxwell-daemon ask "Explain what this repo does"
 ```
 
-## Architecture
+**3. Launch the Application!**
+No more terminal commands. Just double-click the executable:
+👉 **`Launch-Maxwell.bat`**
 
-```
-┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
-│  CLI / GUI /    │   │  REST / gRPC    │   │  VS Code Ext    │
-│  Web Dashboard  │   │  API            │   │                 │
-└────────┬────────┘   └────────┬────────┘   └────────┬────────┘
-         │                     │                     │
-         └─────────────────────┴─────────────────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │   Maxwell-Daemon daemon  │
-                    │  - Task queue       │
-                    │  - Backend router   │
-                    │  - Cost ledger      │
-                    └──────────┬──────────┘
-                               │
-         ┌─────────┬───────────┼───────────┬─────────┐
-         │         │           │           │         │
-    ┌────▼───┐ ┌───▼────┐ ┌────▼───┐ ┌─────▼────┐ ┌──▼─────┐
-    │ Claude │ │ OpenAI │ │ Ollama │ │  Google  │ │ Azure  │
-    │ (API)  │ │ (API)  │ │(local) │ │ (Vertex) │ │ OpenAI │
-    └────────┘ └────────┘ └────────┘ └──────────┘ └────────┘
-```
+The sleek PyQt6 dashboard will open automatically, allowing you to configure your backends, assign roles, and watch the Cognitive Pipeline work its magic.
 
-## Configuration
+## 🧠 Architectural Highlights
+- **RepoSchematic**: Generates highly compressed file-and-symbol trees, saving massive token budgets compared to dumping raw files.
+- **Memory Annealer**: Automatically compresses verbose agent logs into dense `architectural_state.md` files, responsibly purging raw logs to save disk space.
+- **Execution Sandbox**: All TDD execution is isolated using ephemeral Docker containers (`--rm --network none`), guaranteeing perfect security and zero disk-space leaks.
 
-`~/.config/maxwell-daemon/maxwell-daemon.yaml`:
-
-```yaml
-version: "1"
-
-backends:
-  claude:
-    type: claude
-    model: claude-sonnet-4-6
-    api_key: ${ANTHROPIC_API_KEY}
-
-  local:
-    type: ollama
-    model: llama3.1
-    base_url: http://localhost:11434
-
-  gpt:
-    type: openai
-    model: gpt-4o-mini
-    api_key: ${OPENAI_API_KEY}
-
-agent:
-  default_backend: claude
-  max_turns: 200
-
-repos:
-  - name: my-project
-    path: ~/work/my-project
-    backend: claude          # override per-repo
-    slots: 2
-
-  - name: scratch
-    path: ~/work/scratch
-    backend: local           # route cheap work to Ollama
-
-budget:
-  monthly_limit_usd: 200
-  alert_thresholds: [0.75, 0.9, 1.0]
-
-api:
-  enabled: true
-  host: 127.0.0.1
-  port: 8080
-  auth_token: ${MAXWELL_API_TOKEN}
-```
-
-## CLI
-
-```bash
-maxwell-daemon init            # create starter config
-maxwell-daemon status          # show configured backends and repos
-maxwell-daemon backends        # list registered adapters
-maxwell-daemon health          # probe every backend
-maxwell-daemon ask "hello"     # one-shot prompt (useful for smoke tests)
-maxwell-daemon-runner          # run the daemon (systemd entrypoint)
-```
-
-## Roadmap
-
-See the [full issue roadmap](https://github.com/D-sorganization/Maxwell-Daemon/issues). At a glance:
-
-| Phase  | Focus                           | Status |
-|--------|---------------------------------|--------|
-| 1      | Foundation & architecture       | 🟢 In progress |
-| 2      | Multi-backend LLM support       | 🟡 Claude/OpenAI/Ollama done |
-| 3      | VS Code-like GUI                | ⚪ Planned |
-| 4      | Remote access & fleet mgmt      | 🟡 REST API scaffolded |
-| 5      | Ansible + Terraform deployment  | ⚪ Planned |
-| 6      | VS Code extension, desktop app  | ⚪ Planned |
-| 7      | Observability & cost analytics  | 🟡 Ledger done, Prometheus next |
-| 8      | Encryption, RBAC, audit logging | ⚪ Planned |
-| 9      | Docs site, community            | 🟡 Community standards scaffolded |
-| 10     | 1.0.0 release                   | ⚪ Target Q3 2026 |
-
-## Contributing
-
-Maxwell-Daemon is MIT-licensed and contributor-friendly. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-MIT © D-sorganization
+---
+**License**: MIT © D-sorganization

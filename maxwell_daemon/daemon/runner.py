@@ -29,7 +29,6 @@ from maxwell_daemon.core import (
     BudgetExceededError,
     CostLedger,
     CostRecord,
-    resolve_overrides,
 )
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.events import Event, EventBus, EventKind
@@ -215,7 +214,6 @@ class Daemon:
             # Coordinator: runs discovery and dispatches to remote workers — no local execution.
             self._worker_count = 0
             log.info("daemon started as coordinator (no local workers)")
-            # Start coordinator dispatch loop as a background task.
             coord_task = asyncio.create_task(self._coordinator_loop(), name="coordinator-loop")
             self._bg_tasks.add(coord_task)
             coord_task.add_done_callback(self._bg_tasks.discard)
@@ -226,7 +224,7 @@ class Daemon:
                 self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
             log.info("daemon started as worker with %d workers", worker_count)
         else:
-            # Standalone (default): run both discovery and local execution.
+            # Standalone (default): run local workers.
             self._worker_count = worker_count
             for i in range(worker_count):
                 self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
@@ -824,6 +822,12 @@ class Daemon:
 
     async def _execute(self, task: Task) -> None:
         task.status = TaskStatus.RUNNING
+        task.started_at = datetime.now(timezone.utc)
+        try:
+            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
+        except Exception:
+            log.exception("task store write failed for task=%s", task.id)
+            raise
         decision_backend = decision_model = "unknown"
         try:
             await self._events.publish(
@@ -869,12 +873,8 @@ class Daemon:
                 model=decision.model,
                 status="success",
                 tokens=resp.usage.total_tokens,
-                cost_usd=estimated_cost,
-                duration_seconds=(
-                    (datetime.now(timezone.utc) - task.started_at).total_seconds()
-                    if task.started_at is not None
-                    else 0.0
-                ),
+                cost_usd=task.cost_usd,
+                duration_seconds=(datetime.now(timezone.utc) - task.started_at).total_seconds(),
             )
             await self._events.publish(
                 Event(
@@ -930,6 +930,7 @@ class Daemon:
 
     async def _execute_issue(self, task: Task, decision: Any) -> None:
         """Run the issue → PR flow. Called with status already RUNNING."""
+        from maxwell_daemon.core.repo_overrides import resolve_overrides
         from maxwell_daemon.gh import GitHubClient
         from maxwell_daemon.gh.executor import IssueExecutor
         from maxwell_daemon.gh.workspace import Workspace
@@ -1006,6 +1007,7 @@ class Daemon:
             task_id=task.id,
             on_test_output=_emit_test_output,
         )
+
         task.status = TaskStatus.COMPLETED
         task.pr_url = result.pr_url
         task.result = result.plan
@@ -1053,7 +1055,9 @@ def main() -> None:
             except Exception:
                 log.exception("config reload failed; keeping existing config")
 
-        loop.add_signal_handler(signal.SIGHUP, _sighup_handler)
+        sighup = getattr(signal, "SIGHUP", None)
+        if sighup is not None:
+            loop.add_signal_handler(sighup, _sighup_handler)
         await stop.wait()
         await daemon.stop()
 

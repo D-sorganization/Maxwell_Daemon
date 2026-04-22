@@ -9,11 +9,11 @@ Scope: Python via stdlib ``ast`` (exact); JS/TS/Go/Rust/Java via regex
 (best-effort). Zero extra deps — a future tree-sitter pass can replace
 the regex extractors without touching the API.
 
-DbC: ``build_repo_map(workspace)`` enforces workspace-is-a-directory.
+DbC: ``build_repo_schematic(workspace)`` enforces workspace-is-a-directory.
 Per-file parse failures are swallowed (one broken file shouldn't starve
 the whole map).
 
-LOD: each file parse is a pure function of its text. ``build_repo_map`` is
+LOD: each file parse is a pure function of its text. ``build_repo_schematic`` is
 a thin coordinator — walk + parse + sort. No knowledge of prompts,
 backends, or the agent loop.
 """
@@ -29,9 +29,9 @@ from pathlib import Path
 from maxwell_daemon.contracts import require
 
 __all__ = [
-    "RepoMap",
-    "RepoMapEntry",
-    "build_repo_map",
+    "RepoSchematic",
+    "RepoSchematicEntry",
+    "build_repo_schematic",
 ]
 
 #: Directories we never descend into — noise that dilutes the map.
@@ -71,7 +71,7 @@ _TRUNCATED_MARKER = "\n... (map truncated — read_file to drill in) ..."
 
 
 @dataclass(slots=True, frozen=True)
-class RepoMapEntry:
+class RepoSchematicEntry:
     """One file's outline: top-level functions + classes + class methods."""
 
     path: str
@@ -88,10 +88,10 @@ class RepoMapEntry:
 
 
 @dataclass(slots=True, frozen=True)
-class RepoMap:
-    """Ordered collection of :class:`RepoMapEntry` for a workspace."""
+class RepoSchematic:
+    """Ordered collection of :class:`RepoSchematicEntry` for a workspace."""
 
-    entries: tuple[RepoMapEntry, ...] = field(default_factory=tuple)
+    entries: tuple[RepoSchematicEntry, ...] = field(default_factory=tuple)
 
     def entry_count(self) -> int:
         return len(self.entries)
@@ -118,17 +118,17 @@ class RepoMap:
         return header + "".join(body_chunks)
 
 
-def build_repo_map(workspace: Path) -> RepoMap:
-    """Walk ``workspace`` for source files and build a :class:`RepoMap`.
+def build_repo_schematic(workspace: Path) -> RepoSchematic:
+    """Walk ``workspace`` for source files and build a :class:`RepoSchematic`.
 
     One file's parse failure is swallowed so a single malformed module
     never disables the whole map.
     """
     require(
         workspace.is_dir(),
-        f"build_repo_map: workspace {workspace} must be a directory",
+        f"build_repo_schematic: workspace {workspace} must be a directory",
     )
-    entries: list[RepoMapEntry] = []
+    entries: list[RepoSchematicEntry] = []
     for path in _walk_source_files(workspace):
         parser = _PARSERS.get(path.suffix)
         if parser is None:
@@ -141,7 +141,7 @@ def build_repo_map(workspace: Path) -> RepoMap:
         if entry is not None:
             entries.append(entry)
     entries.sort(key=lambda e: e.path)
-    return RepoMap(entries=tuple(entries))
+    return RepoSchematic(entries=tuple(entries))
 
 
 def _walk_source_files(root: Path) -> list[Path]:
@@ -185,10 +185,10 @@ def _finalize(
     path: Path,
     functions: list[str],
     classes: list[str],
-) -> RepoMapEntry | None:
+) -> RepoSchematicEntry | None:
     if not functions and not classes:
         return None
-    return RepoMapEntry(
+    return RepoSchematicEntry(
         path=_relpath(root, path),
         functions=tuple(functions),
         classes=tuple(classes),
@@ -198,7 +198,7 @@ def _finalize(
 # ── Python (ast-based, exact) ────────────────────────────────────────────────
 
 
-def _parse_python_file(root: Path, path: Path) -> RepoMapEntry | None:
+def _parse_python_file(root: Path, path: Path) -> RepoSchematicEntry | None:
     """Parse one Python file. Returns ``None`` on read / parse failure."""
     source = _read_text(path)
     if source is None:
@@ -291,7 +291,7 @@ def _js_extract(source: str) -> tuple[list[str], list[str]]:
     return functions, classes
 
 
-def _parse_javascript_file(root: Path, path: Path) -> RepoMapEntry | None:
+def _parse_javascript_file(root: Path, path: Path) -> RepoSchematicEntry | None:
     source = _read_text(path)
     if source is None:
         return None
@@ -299,7 +299,7 @@ def _parse_javascript_file(root: Path, path: Path) -> RepoMapEntry | None:
     return _finalize(root, path, functions, classes)
 
 
-def _parse_typescript_file(root: Path, path: Path) -> RepoMapEntry | None:
+def _parse_typescript_file(root: Path, path: Path) -> RepoSchematicEntry | None:
     source = _read_text(path)
     if source is None:
         return None
@@ -344,7 +344,7 @@ _GO_TYPE_OTHER_RE = re.compile(
 )
 
 
-def _parse_go_file(root: Path, path: Path) -> RepoMapEntry | None:
+def _parse_go_file(root: Path, path: Path) -> RepoSchematicEntry | None:
     source = _read_text(path)
     if source is None:
         return None
@@ -450,7 +450,7 @@ def _mask_ranges(source: str, ranges: list[tuple[int, int]]) -> str:
     return "".join(buf)
 
 
-def _parse_rust_file(root: Path, path: Path) -> RepoMapEntry | None:
+def _parse_rust_file(root: Path, path: Path) -> RepoSchematicEntry | None:
     source = _read_text(path)
     if source is None:
         return None
@@ -535,7 +535,7 @@ _JAVA_NON_METHODS: frozenset[str] = frozenset(
 )
 
 
-def _parse_java_file(root: Path, path: Path) -> RepoMapEntry | None:
+def _parse_java_file(root: Path, path: Path) -> RepoSchematicEntry | None:
     source = _read_text(path)
     if source is None:
         return None
@@ -569,7 +569,7 @@ def _parse_java_file(root: Path, path: Path) -> RepoMapEntry | None:
 
 # ── Dispatcher ───────────────────────────────────────────────────────────────
 
-_Parser = Callable[[Path, Path], "RepoMapEntry | None"]
+_Parser = Callable[[Path, Path], "RepoSchematicEntry | None"]
 
 _PARSERS: dict[str, _Parser] = {
     ".py": _parse_python_file,

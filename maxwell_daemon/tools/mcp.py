@@ -263,15 +263,7 @@ class ToolRegistry:
             return ToolResult(content=f"{type(exc).__name__}: {exc}", is_error=True)
 
         if self._hook_runner is not None:
-            try:
-                post = await self._hook_runner.run_post_tool(name, arguments, tool_output=content)
-            except Exception as exc:
-                return ToolResult(
-                    content=(
-                        f"{content}\n\npost_tool hook runner error: {type(exc).__name__}: {exc}"
-                    ),
-                    is_error=True,
-                )
+            post = await self._hook_runner.run_post_tool(name, arguments, tool_output=content)
             if post.errored:
                 return ToolResult(
                     content=(

@@ -173,7 +173,7 @@ class TestSystemPrompt:
         blob = _system_as_text(create.call_args.kwargs["system"])
         assert "CI requirements" not in blob
 
-    async def test_repo_map_injected_when_python_files_present(self, tmp_path: Path) -> None:
+    async def test_repo_schematic_injected_when_python_files_present(self, tmp_path: Path) -> None:
         (tmp_path / "pkg").mkdir()
         (tmp_path / "pkg" / "__init__.py").write_text("")
         (tmp_path / "pkg" / "core.py").write_text("class Widget: ...\ndef build() -> None: ...\n")
@@ -186,7 +186,7 @@ class TestSystemPrompt:
         assert "Widget" in blob
         assert "build" in blob
 
-    async def test_repo_map_absent_on_workspace_with_no_python(self, tmp_path: Path) -> None:
+    async def test_repo_schematic_absent_on_workspace_with_no_python(self, tmp_path: Path) -> None:
         (tmp_path / "readme.md").write_text("hi")
         backend = AgentLoopBackend(workspace_dir=str(tmp_path))
         create = _install_mock_client(backend, [_response()])

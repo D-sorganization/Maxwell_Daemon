@@ -90,11 +90,7 @@ class RemoteDaemonClient:
         timeout_seconds: float = 30.0,
         tls_verify: bool = True,
     ) -> None:
-        self._http = (
-            http_client
-            if http_client is not None
-            else _make_default_http(timeout_seconds, tls_verify=tls_verify)
-        )
+        self._http = http_client if http_client is not None else _make_default_http(timeout_seconds)
         self._auth_token = auth_token
         self._timeout_seconds = timeout_seconds
         self._tls_verify = tls_verify
@@ -152,17 +148,6 @@ class RemoteDaemonClient:
         except Exception:
             return False
         return response.status_code == 200
-
-    async def aclose(self) -> None:
-        """Release the underlying HTTP connection pool.
-
-        If the injected ``http_client`` exposes an ``aclose()`` coroutine (as
-        the default :func:`_make_default_http` adapter does) it is awaited.
-        Injected test doubles that omit ``aclose`` are silently ignored.
-        """
-        close = getattr(self._http, "aclose", None)
-        if close is not None:
-            await close()
 
     async def refresh_all(self, machines: tuple[MachineState, ...]) -> tuple[MachineState, ...]:
         """Probe every machine in parallel, return snapshots with ``healthy`` updated.

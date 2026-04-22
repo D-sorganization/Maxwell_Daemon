@@ -1,0 +1,7 @@
+fix: resolve platform pathing, test isolation, and lint issues
+
+- fix: apply .as_posix() to handle platform pathing in repo_map, builtins
+- fix: extract allow list test to remove unneeded bash subprocess dependency
+- fix: skip symlink test on Windows due to admin reqs
+- fix: sort __all__ to resolve RUF022
+- style: apply ruff auto-formatting

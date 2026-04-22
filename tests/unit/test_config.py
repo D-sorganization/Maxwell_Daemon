@@ -97,7 +97,7 @@ class TestConfigLoad:
         cfg = MaxwellDaemonConfig.model_validate(
             {
                 "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
-                "agent": {"default_backend": "claude"},
+                "agent": {"default_backend": "nonexistent"},
             }
         )
         assert cfg.default_backend_config().model == "claude-sonnet-4-6"

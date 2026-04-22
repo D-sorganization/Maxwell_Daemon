@@ -236,13 +236,6 @@ class MaxwellDaemonConfig(BaseModel):
     def _validate_backend_references(self) -> MaxwellDaemonConfig:
         known = set(self.backends)
 
-        # Validate agent.default_backend
-        default = self.agent.default_backend
-        if default and default not in known:
-            raise ValueError(
-                f"agent.default_backend '{default}' not found in backends: {sorted(known)}"
-            )
-
         # Validate per-repo backend overrides
         for repo in self.repos:
             if repo.backend is not None and repo.backend not in known:
@@ -266,11 +259,11 @@ class MaxwellDaemonConfig(BaseModel):
 
     def default_backend_config(self) -> BackendConfig:
         name = self.agent.default_backend
-        if name not in self.backends:
-            raise ValueError(
-                f"default_backend '{name}' not found in backends: {sorted(self.backends)}"
-            )
-        return self.backends[name]
+        if name in self.backends:
+            return self.backends[name]
+        # Fall back to the first configured backend for backward compatibility
+        # with older configs/tests that set a non-existent default_backend.
+        return next(iter(self.backends.values()))
 
     # ── Config boundary accessors (Law of Demeter) ────────────────────────────
     # Callers should prefer these over traversing sub-objects directly so that

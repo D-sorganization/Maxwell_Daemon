@@ -38,7 +38,7 @@ from maxwell_daemon.backends.base import (
 from maxwell_daemon.backends.condensation import Condenser
 from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.gh.ci_patterns import detect_ci_profile
-from maxwell_daemon.gh.repo_map import build_repo_map
+from maxwell_daemon.gh.repo_schematic import build_repo_schematic
 from maxwell_daemon.tools import ToolRegistry, build_default_registry
 
 __all__ = [
@@ -286,7 +286,7 @@ class OllamaAgentLoopBackend(ILLMBackend):
                 system_parts.append(ci_block)
 
         with suppress(Exception):
-            map_block = build_repo_map(workspace).to_prompt(max_chars=2000)
+            map_block = build_repo_schematic(workspace).to_prompt(max_chars=2000)
             if map_block:
                 system_parts.append(map_block)
 
