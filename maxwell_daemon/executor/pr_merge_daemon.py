@@ -41,6 +41,18 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
+_TERMINAL_UNSUCCESSFUL_CONCLUSIONS = frozenset(
+    {
+        "action_required",
+        "cancelled",
+        "failure",
+        "stale",
+        "startup_failure",
+        "timed_out",
+    }
+)
+_PENDING_CHECK_STATUSES = frozenset({"in_progress", "pending", "queued", "requested", "waiting"})
+
 
 class PrMergeDecision(str, Enum):
     """Outcome of one shepherd pass on a single PR."""
@@ -200,10 +212,17 @@ class PrMergeDaemon:
     @staticmethod
     def _classify_blocked(check_runs: Iterable[dict[str, str]]) -> PrMergeDecision:
         """Decide between ``CI_FAILED`` and ``WAITING_FOR_CI`` given a check-run snapshot."""
-        failed = [c for c in check_runs if c.get("conclusion") == "failure"]
-        if failed:
+        checks = list(check_runs)
+        if any(
+            (check.get("conclusion") or "").lower() in _TERMINAL_UNSUCCESSFUL_CONCLUSIONS
+            for check in checks
+        ):
             return PrMergeDecision.CI_FAILED
-        return PrMergeDecision.WAITING_FOR_CI
+        if not checks:
+            return PrMergeDecision.WAITING_FOR_CI
+        if any((check.get("status") or "").lower() in _PENDING_CHECK_STATUSES for check in checks):
+            return PrMergeDecision.WAITING_FOR_CI
+        return PrMergeDecision.UNKNOWN_STATE
 
     # ── Optional: batch shepherd across many PRs ────────────────────────────
 

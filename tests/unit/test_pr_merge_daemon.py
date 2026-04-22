@@ -238,31 +238,71 @@ class TestBehindBranchHandling:
 
 
 class TestBlockedState:
-    async def test_blocked_with_failed_check_marks_ci_failed(self) -> None:
+    @pytest.mark.parametrize(
+        "conclusion",
+        [
+            "failure",
+            "cancelled",
+            "timed_out",
+            "action_required",
+            "startup_failure",
+            "stale",
+        ],
+    )
+    async def test_blocked_with_terminal_unsuccessful_check_marks_ci_failed(
+        self, conclusion: str
+    ) -> None:
         pr = _StubPr(
             repo="a/b",
             number=1,
             mergeable_state="blocked",
             labels=["maxwell:auto-merge-ok"],
-            check_runs=[{"name": "ci", "conclusion": "failure"}],
+            check_runs=[{"name": "ci", "status": "completed", "conclusion": conclusion}],
         )
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config())
         result = await daemon.shepherd(pr, gh=gh)
         assert result.decision == PrMergeDecision.CI_FAILED
 
-    async def test_blocked_with_running_checks_means_wait(self) -> None:
+    @pytest.mark.parametrize("status", ["queued", "in_progress"])
+    async def test_blocked_with_pending_checks_means_wait(self, status: str) -> None:
         pr = _StubPr(
             repo="a/b",
             number=1,
             mergeable_state="blocked",
             labels=["maxwell:auto-merge-ok"],
-            check_runs=[{"name": "ci", "conclusion": ""}],  # still running
+            check_runs=[{"name": "ci", "status": status, "conclusion": ""}],
         )
         gh = _StubGh(pr)
         daemon = PrMergeDaemon(config=_default_config())
         result = await daemon.shepherd(pr, gh=gh)
         assert result.decision == PrMergeDecision.WAITING_FOR_CI
+
+    async def test_blocked_with_no_check_snapshot_means_wait(self) -> None:
+        pr = _StubPr(
+            repo="a/b",
+            number=1,
+            mergeable_state="blocked",
+            labels=["maxwell:auto-merge-ok"],
+            check_runs=[],
+        )
+        gh = _StubGh(pr)
+        daemon = PrMergeDaemon(config=_default_config())
+        result = await daemon.shepherd(pr, gh=gh)
+        assert result.decision == PrMergeDecision.WAITING_FOR_CI
+
+    async def test_blocked_with_only_terminal_successful_checks_is_unknown(self) -> None:
+        pr = _StubPr(
+            repo="a/b",
+            number=1,
+            mergeable_state="blocked",
+            labels=["maxwell:auto-merge-ok"],
+            check_runs=[{"name": "ci", "status": "completed", "conclusion": "success"}],
+        )
+        gh = _StubGh(pr)
+        daemon = PrMergeDaemon(config=_default_config())
+        result = await daemon.shepherd(pr, gh=gh)
+        assert result.decision == PrMergeDecision.UNKNOWN_STATE
 
 
 # ── Dry-run ─────────────────────────────────────────────────────────────────
