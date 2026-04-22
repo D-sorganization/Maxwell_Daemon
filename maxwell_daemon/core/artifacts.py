@@ -33,6 +33,7 @@ class ArtifactKind(str, Enum):
     COMMAND_LOG = "command_log"
     TEST_RESULT = "test_result"
     CHECK_RESULT = "check_result"
+    SANDBOX_EXECUTION = "sandbox_execution"
     SCREENSHOT = "screenshot"
     BROWSER_CONSOLE = "browser_console"
     PAGE_ERROR = "page_error"
@@ -160,6 +161,27 @@ class ArtifactStore:
             kind=kind,
             name=name,
             data=text.encode("utf-8"),
+            task_id=task_id,
+            work_item_id=work_item_id,
+            media_type=media_type,
+            metadata=metadata,
+        )
+
+    def put_json(
+        self,
+        *,
+        kind: ArtifactKind,
+        name: str,
+        value: object,
+        task_id: str | None = None,
+        work_item_id: str | None = None,
+        media_type: str = "application/json",
+        metadata: dict[str, Any] | None = None,
+    ) -> Artifact:
+        return self.put_text(
+            kind=kind,
+            name=name,
+            text=_json(value),
             task_id=task_id,
             work_item_id=work_item_id,
             media_type=media_type,

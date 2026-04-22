@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from maxwell_daemon.core.artifacts import ArtifactKind, ArtifactStore
 from maxwell_daemon.core.gates import GateDefinition
 from maxwell_daemon.sandbox.gates import SandboxGateAdapter
 from maxwell_daemon.sandbox.runner import SandboxRunResult
@@ -40,6 +41,8 @@ def gate(
     output_summary_bytes: int | None = None,
     network_enabled: bool | None = None,
     allow_gpu: bool | None = None,
+    task_id: str | None = None,
+    work_item_id: str | None = None,
 ) -> GateDefinition:
     metadata: dict[str, str] = {
         "sandbox.policy": policy,
@@ -59,6 +62,10 @@ def gate(
         metadata["sandbox.network_enabled"] = str(network_enabled).lower()
     if allow_gpu is not None:
         metadata["sandbox.allow_gpu"] = str(allow_gpu).lower()
+    if task_id is not None:
+        metadata["sandbox.task_id"] = task_id
+    if work_item_id is not None:
+        metadata["sandbox.work_item_id"] = work_item_id
     return GateDefinition(
         gate_id="gate-1",
         name="Sandbox Gate",
@@ -234,3 +241,41 @@ async def test_network_flags_flow_into_policy_evidence(tmp_path: Path) -> None:
     assert decision.passed is True
     assert "network_enabled=true" in evidence
     assert "allow_gpu=true" in evidence
+
+
+@pytest.mark.asyncio
+async def test_persists_redacted_execution_artifact_for_task_owner(tmp_path: Path) -> None:
+    executor = FakeExecutor(
+        SandboxRunResult(
+            returncode=1,
+            stdout="stdout secret-token",
+            stderr="stderr secret-token",
+        )
+    )
+    artifact_store = ArtifactStore(tmp_path / "artifacts.db", blob_root=tmp_path / "artifacts")
+    adapter = SandboxGateAdapter(executor=executor, artifact_store=artifact_store)
+
+    decision = await adapter.run(
+        gate(
+            tmp_path,
+            policy="custom-command",
+            command=["python", "-m", "pytest"],
+            env={"MAXWELL_TOKEN": "secret-token"},
+            task_id="task-1",
+        )
+    )
+
+    artifacts = artifact_store.list_for_task("task-1", kind=ArtifactKind.SANDBOX_EXECUTION)
+    assert len(artifacts) == 1
+    artifact = artifacts[0]
+    payload = json.loads(artifact_store.read_text(artifact.id))
+
+    assert decision.passed is False
+    assert artifact.kind is ArtifactKind.SANDBOX_EXECUTION
+    assert payload["gate"]["decision"]["status"] == "failed"
+    assert payload["gate"]["decision"]["passed"] is False
+    assert payload["execution"]["stdout"] == "stdout [REDACTED]"
+    assert payload["execution"]["stderr"] == "stderr [REDACTED]"
+    assert payload["execution"]["summary"].startswith("stdout [REDACTED]")
+    assert "secret-token" not in json.dumps(payload)
+    assert any(item == f"artifact_id={artifact.id}" for item in decision.evidence)

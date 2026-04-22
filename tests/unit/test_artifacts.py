@@ -64,6 +64,22 @@ def test_text_artifact_round_trips_with_metadata(tmp_path: Path) -> None:
     assert artifact.path.as_posix().startswith("tasks/task-1/")
 
 
+def test_json_artifact_round_trips_with_sorted_payload(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+
+    artifact = store.put_json(
+        task_id="task-1",
+        kind=ArtifactKind.SANDBOX_EXECUTION,
+        name="Sandbox execution",
+        value={"b": 2, "a": 1},
+        metadata={"gate": "lint"},
+    )
+
+    assert artifact.media_type == "application/json"
+    assert store.read_text(artifact.id) == '{"a":1,"b":2}'
+    assert artifact.kind is ArtifactKind.SANDBOX_EXECUTION
+
+
 def test_binary_artifact_persists_across_store_instances(tmp_path: Path) -> None:
     db_path = tmp_path / "artifacts.db"
     blob_root = tmp_path / "blobs"

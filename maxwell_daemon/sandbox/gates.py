@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from maxwell_daemon.core.artifacts import ArtifactStore
 from maxwell_daemon.core.gates import GateAdapterResult, GateDefinition
 from maxwell_daemon.sandbox.policy import EnvPolicy, SandboxPolicy
 from maxwell_daemon.sandbox.runner import (
@@ -29,6 +30,8 @@ _TIMEOUT_KEY = "sandbox.timeout_seconds"
 _OUTPUT_LIMIT_KEY = "sandbox.output_summary_bytes"
 _NETWORK_KEY = "sandbox.network_enabled"
 _GPU_KEY = "sandbox.allow_gpu"
+_TASK_ID_KEY = "sandbox.task_id"
+_WORK_ITEM_ID_KEY = "sandbox.work_item_id"
 
 _PRESET_COMMANDS: dict[str, tuple[str, ...]] = {
     "unit-tests": ("python", "-m", "pytest"),
@@ -63,9 +66,15 @@ class _CapturingExecutor(CommandExecutor):
 class SandboxGateAdapter:
     """Execute sandbox gate definitions through the sandbox runner."""
 
-    def __init__(self, *, executor: CommandExecutor | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        executor: CommandExecutor | None = None,
+        artifact_store: ArtifactStore | None = None,
+    ) -> None:
         self._capture = _CapturingExecutor(executor or SubprocessCommandExecutor())
         self._runner = SandboxCommandRunner(executor=self._capture)
+        self._artifact_store = artifact_store
 
     async def run(self, gate: GateDefinition) -> GateAdapterResult:
         policy_name = self._read_metadata(gate.metadata, _POLICY_KEY)
@@ -106,6 +115,8 @@ class SandboxGateAdapter:
         network_enabled = self._parse_bool(gate.metadata.get(_NETWORK_KEY), default=False)
         allow_gpu = self._parse_bool(gate.metadata.get(_GPU_KEY), default=False)
         cwd = self._read_metadata(gate.metadata, _CWD_KEY)
+        task_id = self._read_metadata(gate.metadata, _TASK_ID_KEY)
+        work_item_id = self._read_metadata(gate.metadata, _WORK_ITEM_ID_KEY)
 
         try:
             policy = SandboxPolicy.for_workspace(
@@ -129,7 +140,18 @@ class SandboxGateAdapter:
 
         try:
             self._capture.last_result = None
-            decision = await self._runner.run(command, policy=policy, cwd=cwd, env=env)
+            decision = await self._runner.run(
+                command,
+                policy=policy,
+                cwd=cwd,
+                env=env,
+                artifact_store=self._artifact_store,
+                task_id=task_id,
+                work_item_id=work_item_id,
+                gate_id=gate.gate_id,
+                gate_name=gate.name,
+                policy_name=policy_name,
+            )
         except Exception as exc:
             return self._failure(
                 "sandbox command execution error",

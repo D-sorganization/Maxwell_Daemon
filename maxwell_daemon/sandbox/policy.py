@@ -42,6 +42,9 @@ class GateEvidence:
     name: str
     value: str
 
+    def to_dict(self) -> dict[str, str]:
+        return {"name": self.name, "value": self.value}
+
 
 @dataclass(slots=True, frozen=True)
 class GateDecision:
@@ -60,6 +63,17 @@ class GateDecision:
             if item.name == name:
                 return item.value
         return None
+
+    def to_dict(self, *, command_display: str | None = None) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "passed": self.passed,
+            "status": self.status,
+            "command": command_display if command_display is not None else list(self.command),
+            "workspace_root": self.workspace_root,
+            "cwd": self.cwd,
+            "evidence": [item.to_dict() for item in self.evidence],
+        }
 
 
 @dataclass(slots=True, frozen=True)
