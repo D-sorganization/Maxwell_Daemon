@@ -41,6 +41,23 @@ Populate every field that is knowable without executing work:
 - Whether the adapter can edit files, run tests, or execute in the background.
 - Terms, safety, and policy notes.
 
+## Plugin Descriptors
+
+External-agent plugins can be described locally with a `plugin.json` file. The
+descriptor layer validates metadata only; it does not import or execute the
+runtime adapter.
+
+Required fields:
+
+- `name`: unique plugin name.
+- `kind`: must be `external-agent`.
+- `entrypoint`: import path in `module:attribute` form.
+- `version`: descriptor version string.
+- `capabilities`: explicit list of capability tags.
+
+Descriptors are rejected when `kind` is wrong, `entrypoint` is malformed, or a
+duplicate `name` is registered in the local registry.
+
 ## Run Evidence
 
 Every run result should fill the fields Maxwell gates and UI need:
