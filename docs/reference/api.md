@@ -4,6 +4,8 @@ Base URL: whatever host/port you gave `maxwell-daemon serve`. Default `http://12
 
 When `api.auth_token` is set in the config, all `/api/v1/*` routes require `Authorization: Bearer <token>`. `/health` and `/metrics` stay unauthenticated so infrastructure can probe them.
 
+For generated clients and full route metadata, use the live [OpenAPI reference](openapi.md). FastAPI serves the raw schema at `/openapi.json`, Swagger UI at `/docs`, and ReDoc at `/redoc`.
+
 ## `GET /health`
 
 ```json

@@ -72,6 +72,7 @@ nav:
       - CLI: reference/cli.md
       - Tasks CLI: reference/tasks-cli.md
       - REST API: reference/api.md
+      - OpenAPI: reference/openapi.md
       - Configuration: reference/configuration.md
   - Community:
       - Contributing: contributing.md
