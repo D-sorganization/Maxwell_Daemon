@@ -31,6 +31,17 @@ def test_electron_main_process_wires_native_desktop_features() -> None:
     assert "autoUpdater.checkForUpdates" in main
 
 
+def test_electron_main_process_wires_taskbar_status() -> None:
+    main = (APP_DIR / "main.js").read_text(encoding="utf-8")
+
+    assert "function updateTaskbar" in main
+    assert "app.setAppUserModelId" in main
+    assert "app.setBadgeCount(activeTasks)" in main
+    assert 'mainWindow.setProgressBar(2, { mode: "indeterminate" })' in main
+    assert 'mainWindow.setProgressBar(1, { mode: "error" })' in main
+    assert "mainWindow.setProgressBar(-1)" in main
+
+
 def test_renderer_wires_daemon_api_offline_cache_and_drag_drop() -> None:
     preload = (APP_DIR / "preload.js").read_text(encoding="utf-8")
     renderer = (APP_DIR / "renderer" / "app.js").read_text(encoding="utf-8")

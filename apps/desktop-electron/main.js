@@ -36,6 +36,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   mainWindow.once("ready-to-show", () => mainWindow.show());
+  updateTaskbar(lastFleetStatus);
   mainWindow.on("close", (event) => {
     if (!app.isQuitting) {
       event.preventDefault();
@@ -52,6 +53,7 @@ function createTray() {
 
 function updateTray(status) {
   lastFleetStatus = { ...lastFleetStatus, ...status };
+  updateTaskbar(lastFleetStatus);
   if (!tray) return;
   const state = lastFleetStatus.online ? "online" : "offline";
   const tooltip =
@@ -74,6 +76,22 @@ function updateTray(status) {
       },
     ])
   );
+}
+
+function updateTaskbar(status) {
+  const activeTasks = Math.max(0, Number(status.activeTasks || 0));
+  app.setBadgeCount(activeTasks);
+
+  if (!mainWindow) return;
+  if (!status.online) {
+    mainWindow.setProgressBar(1, { mode: "error" });
+    return;
+  }
+  if (activeTasks > 0) {
+    mainWindow.setProgressBar(2, { mode: "indeterminate" });
+    return;
+  }
+  mainWindow.setProgressBar(-1);
 }
 
 function registerShortcuts() {
@@ -107,6 +125,7 @@ ipcMain.handle("desktop:checkForUpdates", async () => {
 });
 
 app.whenReady().then(() => {
+  app.setAppUserModelId("org.d-sorganization.maxwell-daemon");
   createWindow();
   createTray();
   registerShortcuts();
