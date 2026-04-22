@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +28,7 @@ from maxwell_daemon.config import (
 )
 from maxwell_daemon.config.loader import default_config_path
 from maxwell_daemon.core import BackendRouter
+from maxwell_daemon.core.cross_audit import DEFAULT_CROSS_AUDIT_ROLES, CrossAuditService
 
 app = typer.Typer(
     name="maxwell-daemon",
@@ -208,6 +210,122 @@ def ask(
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted[/yellow]")
         sys.exit(130)
+
+
+@app.command()
+def cross_audit(
+    prompt: Annotated[str, typer.Argument(help="Prompt or task to audit")],
+    backend: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--backend",
+            "-b",
+            help="Backend config name to include. Repeat for multiple backends.",
+        ),
+    ] = None,
+    role: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--role",
+            "-r",
+            help=(
+                "Audit role to include. Repeat for multiple roles. "
+                f"Known roles: {', '.join(sorted(DEFAULT_CROSS_AUDIT_ROLES))}."
+            ),
+        ),
+    ] = None,
+    repo: Annotated[str | None, typer.Option("--repo", help="Repo override name")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit JSON instead of tables")
+    ] = False,
+) -> None:
+    """Run a prompt through multiple role/backend auditors."""
+    cfg = load_config(config)
+    router = BackendRouter(cfg)
+    unknown_roles = sorted(set(role or []) - set(DEFAULT_CROSS_AUDIT_ROLES))
+    if unknown_roles:
+        console.print(
+            "[red]Unknown role(s): "
+            f"{', '.join(unknown_roles)}. Known: {', '.join(sorted(DEFAULT_CROSS_AUDIT_ROLES))}"
+            "[/red]"
+        )
+        raise typer.Exit(2)
+
+    selected_roles = [DEFAULT_CROSS_AUDIT_ROLES[name] for name in role] if role else None
+    service = CrossAuditService(router)
+
+    async def _run() -> int:
+        try:
+            report = await service.run(
+                prompt,
+                roles=selected_roles,
+                backend_names=backend,
+                repo=repo,
+            )
+        finally:
+            await router.aclose_all()
+
+        if json_output:
+            console.print(json.dumps(report.to_dict(), indent=2))
+            return 0 if report.succeeded else 1
+
+        table = Table(title="Cross-Audit Results", header_style="bold cyan")
+        table.add_column("Role")
+        table.add_column("Backend")
+        table.add_column("Model")
+        table.add_column("Status")
+        table.add_column("Tokens", justify="right")
+        for result in report.results:
+            status = "[green]ok[/green]" if result.succeeded else "[red]failed[/red]"
+            table.add_row(
+                result.role_name,
+                result.backend_name,
+                result.model or "-",
+                status,
+                str(result.usage.total_tokens),
+            )
+        console.print(table)
+        console.print(Panel(report.summary, title="Summary", border_style="cyan"))
+        return 0 if report.succeeded else 1
+
+    exit_code = asyncio.run(_run())
+    if exit_code:
+        raise typer.Exit(exit_code)
+
+
+@app.command(name="audit")
+def audit_alias(
+    prompt: Annotated[str, typer.Argument(help="Prompt or task to audit")],
+    backend: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--backend",
+            "-b",
+            help="Backend config name to include. Repeat for multiple backends.",
+        ),
+    ] = None,
+    role: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--role",
+            "-r",
+            help=(
+                "Audit role to include. Repeat for multiple roles. "
+                f"Known roles: {', '.join(sorted(DEFAULT_CROSS_AUDIT_ROLES))}."
+            ),
+        ),
+    ] = None,
+    repo: Annotated[str | None, typer.Option("--repo", help="Repo override name")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit JSON instead of tables")
+    ] = False,
+) -> None:
+    """Alias for cross-audit."""
+    cross_audit(
+        prompt, backend=backend, role=role, repo=repo, config=config, json_output=json_output
+    )
 
 
 @app.command()

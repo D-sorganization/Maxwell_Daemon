@@ -89,6 +89,11 @@ When `auth_token` is configured, `/api/v1/*` routes require bearer-token
 authentication. `/health` and `/metrics` remain available for infrastructure
 probes.
 
+For tailnet deployments, keep `auth_token` configured even when all nodes are on
+Tailscale. Use a Tailscale MagicDNS name or `100.x.y.z` address in each
+`fleet.machines[].host` entry, but treat Tailscale as private transport rather
+than as a replacement for Maxwell-Daemon API authorization.
+
 ## Budget Settings
 
 ```yaml

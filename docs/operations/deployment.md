@@ -36,6 +36,63 @@ configuration, installs a hardened systemd unit, and starts the daemon.
 Use the playbooks under `deploy/ansible/` for conductor-oriented fleet
 operations such as backups, health checks, upgrades, and agent deployment.
 
+## Tailscale Tailnet Fleet
+
+Maxwell-Daemon does not install, join, or administer Tailscale. It can run over a
+tailnet when the coordinator and workers already have Tailscale installed and
+authenticated by your normal device-management process.
+
+Use this topology when workers should be reachable only on the private tailnet:
+
+- Join the coordinator and every worker to the same tailnet.
+- Address workers by MagicDNS names such as `worker-1.tailnet-name.ts.net` or by
+  their stable `100.x.y.z` Tailscale addresses.
+- Keep `api.auth_token` enabled on every Maxwell-Daemon API node.
+- Avoid public-network exposure for memory, task, or fleet API routes. Bind to a
+  Tailscale interface address, a private interface behind host firewall rules, or
+  `127.0.0.1` when the process is only accessed through a local proxy.
+
+Example fleet excerpt:
+
+```yaml
+fleet:
+  discovery_method: manual
+  heartbeat_seconds: 30
+  machines:
+    - name: coordinator
+      host: coordinator.tailnet-name.ts.net
+      port: 8080
+      capacity: 2
+      tags: [coordinator]
+    - name: gpu-worker-1
+      host: gpu-worker-1.tailnet-name.ts.net
+      port: 8080
+      capacity: 4
+      tags: [gpu, tailnet]
+
+api:
+  enabled: true
+  host: 100.64.12.34
+  port: 8080
+  auth_token: ${MAXWELL_API_TOKEN}
+```
+
+Before dispatching work, run these checks from the coordinator:
+
+```bash
+tailscale status
+tailscale ping gpu-worker-1.tailnet-name.ts.net
+curl -fsS -H "Authorization: Bearer ${MAXWELL_API_TOKEN}" \
+  http://gpu-worker-1.tailnet-name.ts.net:8080/health
+maxwell-daemon doctor --config ~/.config/maxwell-daemon/maxwell-daemon.yaml
+```
+
+If those checks fail, fix Tailscale reachability, firewall policy, or the daemon
+service before changing Maxwell-Daemon task routing. Treat Tailscale
+provisioning and Maxwell-Daemon transport as separate layers: Tailscale provides
+private IP reachability, while Maxwell-Daemon still owns API authentication,
+task authorization, and fleet metadata.
+
 ## Terraform Infrastructure
 
 Use Terraform when the fleet should be provisioned from scratch.
