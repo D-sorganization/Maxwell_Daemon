@@ -81,6 +81,7 @@ nav:
       - Configuration: reference/configuration.md
   - Development:
       - Agentic orchestrator strategy: development/planning/orchestrator_market_comparison.md
+      - Backend and extension guide: development/backend-extension-guide.md
       - External agent adapters: development/external-agent-adapters.md
       - Open-source agents review: development/open_source_agents_review.md
       - IJFW feature review: development/ijfw_feature_review.md
