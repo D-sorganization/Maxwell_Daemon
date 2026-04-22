@@ -695,6 +695,13 @@ kbd {
   padding: 14px;
 }
 
+.gauntlet-error {
+  color: var(--err);
+  background: var(--panel-alt);
+  border-left: 3px solid var(--err);
+  border-bottom: 1px solid var(--border);
+}
+
 /* ---- control-plane views ------------------------------------------- */
 .empty-cell {
   color: var(--muted);

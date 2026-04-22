@@ -10,6 +10,7 @@ const state = {
   tasks: new Map(),           // id -> task object (filtered by Tasks tab status filter)
   allTasks: new Map(),        // id -> task object (always unfiltered, used for cost analytics)
   controlPlane: [],           // gate-aware work item snapshots
+  controlPlaneError: "",      // visible gauntlet fetch failure message
   selected: null,             // currently-shown task id
   testOutput: new Map(),      // task id -> accumulated text
   monitorLines: [],           // raw event lines (capped at 500)
@@ -347,9 +348,22 @@ function renderRepos() {
 }
 
 async function fetchGauntlet() {
-  const r = await fetch("/api/v1/control-plane/gauntlet?limit=100", { headers: headers() });
-  if (!r.ok) throw new Error(`gauntlet: ${r.status}`);
-  state.controlPlane = await r.json();
+  state.controlPlaneError = "";
+  try {
+    const r = await fetch("/api/v1/control-plane/gauntlet?limit=100", { headers: headers() });
+    if (!r.ok) {
+      state.controlPlane = [];
+      state.controlPlaneError = `Gate gauntlet unavailable (${r.status})`;
+      renderGauntlet();
+      return;
+    }
+    state.controlPlane = await r.json();
+  } catch {
+    state.controlPlane = [];
+    state.controlPlaneError = "Gate gauntlet unavailable (network error)";
+    renderGauntlet();
+    return;
+  }
   renderGauntlet();
 }
 
@@ -357,6 +371,10 @@ function renderGauntlet() {
   const board = document.getElementById("gauntlet-board");
   if (!board) return;
   board.innerHTML = "";
+  if (state.controlPlaneError) {
+    board.innerHTML = `<div class="empty-state gauntlet-error">${escapeHtml(state.controlPlaneError)}</div>`;
+    return;
+  }
   if (state.controlPlane.length === 0) {
     board.innerHTML = `<div class="empty-state">No work items have reached the control plane yet.</div>`;
     return;
@@ -386,7 +404,7 @@ function renderGauntlet() {
         ${delegate.backend ? ` via ${escapeHtml(delegate.backend)}` : ""}
         ${delegate.machine ? ` on ${escapeHtml(delegate.machine)}` : ""}
       </li>
-    `).join("");
+    `).join("") || `<li class="empty-state">No delegate sessions recorded yet.</li>`;
     const routing = item.resource_routing || {};
     const actions = (item.actions || []).map((action) => `
       <button

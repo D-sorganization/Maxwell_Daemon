@@ -119,6 +119,7 @@ class TestHTMLContent:
             "/api/v1/task-graphs",
             "/api/v1/artifacts/",
             "/api/v1/check-runs",
+            "/api/v1/control-plane/gauntlet",
         ):
             assert expected in js
 
@@ -131,6 +132,7 @@ class TestHTMLContent:
             "escapeHtml(artifact.name)",
             "pre.textContent",
             "JSON.stringify(record, null, 2)",
+            "controlPlaneError",
         ):
             assert expected in js
 
@@ -142,6 +144,17 @@ class TestHTMLContent:
         assert "data-gate-action" in js
         assert "prompt(`Who is waiving" in js
         assert "confirm(`Retry" in js
+
+    def test_gauntlet_view_ships_empty_and_error_states(self, client: TestClient) -> None:
+        html = client.get("/ui/").text
+        js = client.get("/ui/app.js").text
+        css = client.get("/ui/style.css").text
+
+        assert "view-gauntlet" in html
+        assert "No work items have reached the control plane yet." in js
+        assert "No delegate sessions recorded yet." in js
+        assert "Gate gauntlet unavailable" in js
+        assert "gauntlet-error" in css
 
     def test_deferred_test_output_keeps_selected_task_context(self, client: TestClient) -> None:
         js = client.get("/ui/app.js").text
