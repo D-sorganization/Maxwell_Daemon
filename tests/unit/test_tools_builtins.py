@@ -208,7 +208,8 @@ def test_sandbox_cmd_mac_sandbox_exec(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("sys.platform", "darwin")
     monkeypatch.setattr(
-        "shutil.which", lambda cmd: "/usr/bin/sandbox-exec" if cmd == "sandbox-exec" else None
+        "shutil.which",
+        lambda cmd: "/usr/bin/sandbox-exec" if cmd == "sandbox-exec" else None,
     )
     res = get_sandboxed_bash_cmd(["bash", "-c", "echo hi"], "/tmp/workspace")
     assert res[:3] == ["sandbox-exec", "-f", "/usr/share/sandbox/pure_computation.sb"]

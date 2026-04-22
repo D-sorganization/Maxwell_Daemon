@@ -141,8 +141,8 @@ class ContinueCLIBackend(ILLMBackend):
             supports_system_prompt=True,
             max_context_tokens=128_000,
             is_local=False,
-            cost_per_1k_input_tokens=0.0,
-            cost_per_1k_output_tokens=0.0,
+            cost_per_1k_input_tokens=None,
+            cost_per_1k_output_tokens=None,
         )
 
 

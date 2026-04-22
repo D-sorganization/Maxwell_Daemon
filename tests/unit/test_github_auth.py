@@ -103,7 +103,9 @@ class TestAppAuth:
         )
 
         with patch.object(
-            auth, "_fetch_installation_token", return_value=("refreshed", time.monotonic() + 3600)
+            auth,
+            "_fetch_installation_token",
+            return_value=("refreshed", time.monotonic() + 3600),
         ):
             result = auth.token
 
@@ -112,7 +114,10 @@ class TestAppAuth:
     def test_no_jwt_import_raises_helpful_error(self) -> None:
         auth = self._make_auth()
 
-        with patch.dict("sys.modules", {"jwt": None}), pytest.raises(ImportError, match="PyJWT"):
+        with (
+            patch.dict("sys.modules", {"jwt": None}),
+            pytest.raises(ImportError, match="PyJWT"),
+        ):
             auth._fetch_installation_token()
 
     def test_no_httpx_import_raises_helpful_error(self) -> None:
@@ -242,7 +247,10 @@ class TestAsyncGetToken:
 
     async def test_async_fetch_no_jwt_raises(self) -> None:
         auth = self._make_auth()
-        with patch.dict("sys.modules", {"jwt": None}), pytest.raises(ImportError, match="PyJWT"):
+        with (
+            patch.dict("sys.modules", {"jwt": None}),
+            pytest.raises(ImportError, match="PyJWT"),
+        ):
             await auth._async_fetch_installation_token()
 
     async def test_async_fetch_no_httpx_raises(self) -> None:

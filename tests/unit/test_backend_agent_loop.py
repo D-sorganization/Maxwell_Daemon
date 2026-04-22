@@ -448,7 +448,9 @@ class TestMonthlyBudgetEnforcerPerTurn:
     async def test_budget_enforcer_raises_aborts_loop(self, tmp_path: Path) -> None:
         """If require_under_budget() raises, the loop must abort immediately."""
         from maxwell_daemon.config import BudgetConfig
-        from maxwell_daemon.core.budget import BudgetExceededError as CoreBudgetExceededError
+        from maxwell_daemon.core.budget import (
+            BudgetExceededError as CoreBudgetExceededError,
+        )
 
         enforcer = MagicMock()
         enforcer.require_under_budget = MagicMock(

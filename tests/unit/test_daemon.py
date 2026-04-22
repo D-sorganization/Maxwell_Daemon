@@ -48,7 +48,9 @@ async def _with_daemon(
     body: Callable[[Daemon], Awaitable[T]],
 ) -> T:
     d = Daemon(
-        config, ledger_path=ledger_path, task_store_path=ledger_path.with_suffix(".tasks.db")
+        config,
+        ledger_path=ledger_path,
+        task_store_path=ledger_path.with_suffix(".tasks.db"),
     )
     await d.start(worker_count=worker_count)
     try:
@@ -424,7 +426,11 @@ class TestSubmitThreadsafe:
             task = await asyncio.to_thread(background)
             assert isinstance(task, Task)
             assert task.prompt == "my prompt"
-            assert task.status in (TaskStatus.QUEUED, TaskStatus.RUNNING, TaskStatus.COMPLETED)
+            assert task.status in (
+                TaskStatus.QUEUED,
+                TaskStatus.RUNNING,
+                TaskStatus.COMPLETED,
+            )
             await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))

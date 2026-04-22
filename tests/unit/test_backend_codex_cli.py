@@ -75,7 +75,8 @@ class TestDefaultRunner:
             return process
 
         monkeypatch.setattr(
-            "maxwell_daemon.backends.codex_cli.asyncio.create_subprocess_exec", fake_exec
+            "maxwell_daemon.backends.codex_cli.asyncio.create_subprocess_exec",
+            fake_exec,
         )
 
         rc, stdout, stderr = asyncio.run(
@@ -273,7 +274,7 @@ class TestHealthCheck:
 
 
 class TestCapabilities:
-    def test_non_local_with_tool_use_and_zero_cost(self) -> None:
+    def test_non_local_with_tool_use_and_unknown_cost(self) -> None:
         backend = CodexCLIBackend(runner=_Runner())
         caps = backend.capabilities("gpt-5-codex")
         assert caps.is_local is False
@@ -282,8 +283,10 @@ class TestCapabilities:
         assert caps.supports_vision is False
         assert caps.supports_system_prompt is True
         assert caps.max_context_tokens == 128_000
-        assert caps.cost_per_1k_input_tokens == 0.0
-        assert caps.cost_per_1k_output_tokens == 0.0
+        # Codex CLI rides the user's own OpenAI subscription — cost is unknown
+        # to the daemon, so the adapter returns None rather than a misleading 0.0.
+        assert caps.cost_per_1k_input_tokens is None
+        assert caps.cost_per_1k_output_tokens is None
 
 
 # ---------------------------------------------------------------- registry

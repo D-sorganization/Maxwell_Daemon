@@ -11,7 +11,13 @@ import json
 
 import pytest
 
-from maxwell_daemon.gh import GhCliError, GitHubClient, Issue, PullRequest, RateLimitError
+from maxwell_daemon.gh import (
+    GhCliError,
+    GitHubClient,
+    Issue,
+    PullRequest,
+    RateLimitError,
+)
 from maxwell_daemon.gh.client import GitHubRateLimitError
 
 
@@ -312,7 +318,16 @@ class TestRateLimitHandling:
         import json as _json
 
         issues_payload = _json.dumps(
-            [{"number": 1, "title": "t", "body": "", "state": "OPEN", "labels": [], "url": "u"}]
+            [
+                {
+                    "number": 1,
+                    "title": "t",
+                    "body": "",
+                    "state": "OPEN",
+                    "labels": [],
+                    "url": "u",
+                }
+            ]
         ).encode()
 
         runner = self._make_runner(
@@ -360,7 +375,16 @@ class TestRateLimitHandling:
         import json as _json
 
         issues_payload = _json.dumps(
-            [{"number": 2, "title": "x", "body": "", "state": "OPEN", "labels": [], "url": "u"}]
+            [
+                {
+                    "number": 2,
+                    "title": "x",
+                    "body": "",
+                    "state": "OPEN",
+                    "labels": [],
+                    "url": "u",
+                }
+            ]
         ).encode()
 
         runner = self._make_runner(
@@ -614,7 +638,16 @@ class TestRateLimitRetry:
         monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
         issues_json = json.dumps(
-            [{"number": 1, "title": "t", "body": "b", "state": "OPEN", "labels": [], "url": "u"}]
+            [
+                {
+                    "number": 1,
+                    "title": "t",
+                    "body": "b",
+                    "state": "OPEN",
+                    "labels": [],
+                    "url": "u",
+                }
+            ]
         ).encode()
 
         runner = RetryRunner(
@@ -639,7 +672,14 @@ class TestRateLimitRetry:
         monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
         issue_json = json.dumps(
-            {"number": 7, "title": "t", "body": "b", "state": "OPEN", "labels": [], "url": "u"}
+            {
+                "number": 7,
+                "title": "t",
+                "body": "b",
+                "state": "OPEN",
+                "labels": [],
+                "url": "u",
+            }
         ).encode()
 
         runner = RetryRunner(

@@ -130,7 +130,10 @@ class SSHSession:
 
     async def download(self, remote_path: str) -> bytes:
         """Download a remote file and return its contents."""
-        async with self._conn.start_sftp_client() as sftp, sftp.open(remote_path, "rb") as fh:
+        async with (
+            self._conn.start_sftp_client() as sftp,
+            sftp.open(remote_path, "rb") as fh,
+        ):
             data: bytes = await fh.read()
             return data
 

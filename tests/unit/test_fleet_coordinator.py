@@ -463,7 +463,9 @@ class TestSetWorkerCount:
         async def _run() -> None:
             cfg = _make_config()
             daemon = Daemon(
-                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+                cfg,
+                ledger_path=tmp_path / "ledger.db",
+                task_store_path=tmp_path / "tasks.db",
             )
             await daemon.start(worker_count=1)
             try:
@@ -479,7 +481,9 @@ class TestSetWorkerCount:
         async def _run() -> None:
             cfg = _make_config()
             daemon = Daemon(
-                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+                cfg,
+                ledger_path=tmp_path / "ledger.db",
+                task_store_path=tmp_path / "tasks.db",
             )
             await daemon.start(worker_count=3)
             try:
@@ -495,7 +499,9 @@ class TestSetWorkerCount:
         async def _run() -> None:
             cfg = _make_config()
             daemon = Daemon(
-                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+                cfg,
+                ledger_path=tmp_path / "ledger.db",
+                task_store_path=tmp_path / "tasks.db",
             )
             await daemon.start(worker_count=1)
             try:
@@ -514,7 +520,9 @@ class TestReprioritizeTask:
         async def _run() -> None:
             cfg = _make_config()
             daemon = Daemon(
-                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+                cfg,
+                ledger_path=tmp_path / "ledger.db",
+                task_store_path=tmp_path / "tasks.db",
             )
             await daemon.start(worker_count=1)
             try:
@@ -532,7 +540,9 @@ class TestReprioritizeTask:
         async def _run() -> None:
             cfg = _make_config()
             daemon = Daemon(
-                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+                cfg,
+                ledger_path=tmp_path / "ledger.db",
+                task_store_path=tmp_path / "tasks.db",
             )
             await daemon.start(worker_count=1)
             try:
@@ -555,7 +565,9 @@ class TestReloadConfig:
             cfg_path = tmp_path / "config.yaml"
             save_config(cfg, cfg_path)
             daemon = Daemon(
-                cfg, ledger_path=tmp_path / "ledger.db", task_store_path=tmp_path / "tasks.db"
+                cfg,
+                ledger_path=tmp_path / "ledger.db",
+                task_store_path=tmp_path / "tasks.db",
             )
             daemon._config_path = cfg_path
             await daemon.start(worker_count=1)

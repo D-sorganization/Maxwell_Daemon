@@ -150,8 +150,8 @@ class CodexCLIBackend(ILLMBackend):
             is_local=False,
             # Codex rides the user's own OpenAI subscription/API key — no
             # pricing owned by this adapter.
-            cost_per_1k_input_tokens=0.0,
-            cost_per_1k_output_tokens=0.0,
+            cost_per_1k_input_tokens=None,
+            cost_per_1k_output_tokens=None,
         )
 
 

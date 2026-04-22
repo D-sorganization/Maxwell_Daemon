@@ -368,13 +368,19 @@ def create_app(
         return TokenResponse(access_token=token, expires_in=ttl, role=role.value)
 
     @app.get("/api/v1/auth/me")
-    async def whoami(authorization: Annotated[str | None, Header()] = None) -> dict[str, Any]:
+    async def whoami(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
         """Decode and return the caller's JWT claims (or static-token identity)."""
         if jwt_config is not None and authorization and authorization.startswith("Bearer "):
             raw = authorization.removeprefix("Bearer ").strip()
             try:
                 claims = jwt_config.decode_token(raw)
-                return {"sub": claims.sub, "role": claims.role.value, "exp": claims.exp.isoformat()}
+                return {
+                    "sub": claims.sub,
+                    "role": claims.role.value,
+                    "exp": claims.exp.isoformat(),
+                }
             except Exception:  # nosec B110 — invalid/expired JWT, fall through to token check
                 pass
         if auth_token is not None and authorization:
@@ -447,7 +453,8 @@ def create_app(
         return TaskView.from_task(t)
 
     @app.post(
-        "/api/v1/tasks/{task_id}/cancel", dependencies=[Depends(auth), Depends(_require_operator())]
+        "/api/v1/tasks/{task_id}/cancel",
+        dependencies=[Depends(auth), Depends(_require_operator())],
     )
     async def cancel_task(task_id: str) -> TaskView:
         try:
@@ -597,7 +604,10 @@ def create_app(
         if not machine_name:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "machine_name required")
         daemon.record_worker_heartbeat(machine_name)
-        return {"machine_name": machine_name, "recorded_at": datetime.now(timezone.utc).isoformat()}
+        return {
+            "machine_name": machine_name,
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     @app.get("/api/v1/fleet", dependencies=[Depends(_require_viewer())])
     async def fleet_overview() -> dict[str, Any]:
@@ -698,7 +708,7 @@ def create_app(
                 {
                     "name": name,
                     "org": org,
-                    "github_url": f"https://github.com/{org}/{name}" if org and name else None,
+                    "github_url": (f"https://github.com/{org}/{name}" if org and name else None),
                     "slots": r.get("slots", default_slots),
                     "budget_per_story": r.get("budget_per_story", default_budget),
                     "pr_target_branch": r.get("pr_target_branch", default_branch),
