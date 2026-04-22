@@ -16,6 +16,13 @@ from maxwell_daemon.core.cross_audit import (
 from maxwell_daemon.core.ledger import CostLedger, CostRecord
 from maxwell_daemon.core.repo_overrides import RepoOverrides, resolve_overrides
 from maxwell_daemon.core.router import BackendRouter
+from maxwell_daemon.core.workspace_service import WorkspaceService
+from maxwell_daemon.core.workspace_store import WorkspaceStore
+from maxwell_daemon.core.workspaces import (
+    TaskWorkspace,
+    WorkspaceCheckpoint,
+    WorkspaceStatus,
+)
 
 __all__ = [
     "DEFAULT_CROSS_AUDIT_ROLES",
@@ -42,5 +49,10 @@ __all__ = [
     "CrossAuditTarget",
     "PolicyDecision",
     "RepoOverrides",
+    "TaskWorkspace",
+    "WorkspaceCheckpoint",
+    "WorkspaceService",
+    "WorkspaceStatus",
+    "WorkspaceStore",
     "resolve_overrides",
 ]
