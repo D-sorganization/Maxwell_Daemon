@@ -2,14 +2,6 @@
 
 from __future__ import annotations
 
-from maxwell_daemon.graphs.types import (
-    GraphTemplate,
-    GraphTemplateKind,
-    GraphTemplateSelectorInput,
-    HandoffArtifactKind,
-    TaskGraphNode,
-    select_template_kind,
-)
 from maxwell_daemon.graphs.models import (
     AgentRole,
     GraphNode,
@@ -24,14 +16,22 @@ from maxwell_daemon.graphs.templates import (
     build_template_graph,
     select_template,
 )
+from maxwell_daemon.graphs.types import (
+    GraphTemplate,
+    GraphTemplateKind,
+    GraphTemplateSelectorInput,
+    HandoffArtifactKind,
+    TaskGraphNode,
+    select_template_kind,
+)
 
 __all__ = [
     "AgentRole",
+    "GraphNode",
+    "GraphStatus",
     "GraphTemplate",
     "GraphTemplateKind",
     "GraphTemplateSelectorInput",
-    "GraphNode",
-    "GraphStatus",
     "HandoffArtifactKind",
     "NodeRun",
     "NodeRunStatus",
