@@ -18,6 +18,7 @@ import pytest
 
 from maxwell_daemon.backends.base import Message, MessageRole
 from maxwell_daemon.backends.ollama_agent_loop import OllamaAgentLoopBackend
+from maxwell_daemon.contracts import PreconditionError
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,18 @@ class TestInit:
 
 
 class TestLoopControl:
+    async def test_missing_workspace_fails_without_cwd_fallback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        client = _FakeClient([_chat_completion(content="should not post")])
+        backend = OllamaAgentLoopBackend(client=client)
+
+        with pytest.raises(PreconditionError, match="workspace_dir"):
+            await backend.complete(_user("hi"))
+
+        assert client.posts == []
+
     async def test_ends_on_finish_reason_stop(self, tmp_path: Path) -> None:
         client = _FakeClient([_chat_completion(content="all done")])
         backend = OllamaAgentLoopBackend(workspace_dir=str(tmp_path), client=client)

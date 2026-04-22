@@ -37,6 +37,7 @@ from maxwell_daemon.backends.base import (
 )
 from maxwell_daemon.backends.condensation import Condenser
 from maxwell_daemon.backends.registry import registry
+from maxwell_daemon.contracts import PreconditionError
 from maxwell_daemon.gh.ci_patterns import detect_ci_profile
 from maxwell_daemon.gh.repo_schematic import build_repo_schematic
 from maxwell_daemon.tools import ToolRegistry, build_default_registry
@@ -115,8 +116,7 @@ class OllamaAgentLoopBackend(ILLMBackend):
         max_turns: int | None = None,
         **_: Any,
     ) -> BackendResponse:
-        workspace_raw = workspace_dir or self._workspace or os.getcwd()
-        effective_workspace = Path(workspace_raw).resolve()
+        effective_workspace = self._resolve_workspace(workspace_dir)
         effective_model = model or self.default_model
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
@@ -216,6 +216,14 @@ class OllamaAgentLoopBackend(ILLMBackend):
             **kwargs,
         )
         yield resp.content
+
+    def _resolve_workspace(self, workspace_dir: str | None) -> Path:
+        workspace_raw = workspace_dir or self._workspace
+        if not workspace_raw:
+            raise PreconditionError(
+                "OllamaAgentLoopBackend requires workspace_dir; refusing to fall back to cwd"
+            )
+        return Path(workspace_raw).resolve()
 
     async def health_check(self) -> bool:
         with suppress(Exception):
