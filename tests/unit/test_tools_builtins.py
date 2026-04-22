@@ -31,6 +31,7 @@ from maxwell_daemon.tools.builtins import (
     make_run_bash,
     make_write_file,
 )
+from maxwell_daemon.tools.mcp import ToolInvocationStore, ToolPolicy
 
 
 # ── read_file ────────────────────────────────────────────────────────────────
@@ -310,6 +311,23 @@ class TestBuildDefaultRegistry:
             # Every real tool takes at least one argument.
             assert spec.params, f"{name} declared zero params"
 
+    def test_each_tool_has_governance_metadata(self, tmp_path: Path) -> None:
+        reg = build_default_registry(tmp_path)
+        expected = {
+            "read_file": ({"file_read", "repo_read"}, "read_only", False),
+            "glob_files": ({"file_read", "repo_read"}, "read_only", False),
+            "grep_files": ({"file_read", "repo_read"}, "read_only", False),
+            "write_file": ({"file_write", "repo_write"}, "local_write", True),
+            "edit_file": ({"file_read", "file_write", "repo_write"}, "local_write", True),
+            "run_bash": ({"shell_read", "shell_write"}, "command_execution", True),
+        }
+
+        for name, (capabilities, risk_level, requires_approval) in expected.items():
+            spec = reg.get(name)
+            assert spec.capabilities == frozenset(capabilities)
+            assert spec.risk_level == risk_level
+            assert spec.requires_approval is requires_approval
+
     def test_emits_valid_anthropic_schemas(self, tmp_path: Path) -> None:
         reg = build_default_registry(tmp_path)
         schemas = reg.to_anthropic()
@@ -323,6 +341,42 @@ class TestBuildDefaultRegistry:
         result = await reg.invoke("read_file", {"path": "hi.txt"})
         assert result.content == "payload"
         assert result.is_error is False
+
+    async def test_readonly_policy_denies_default_write_tool(self, tmp_path: Path) -> None:
+        store = ToolInvocationStore()
+        reg = build_default_registry(
+            tmp_path,
+            policy=ToolPolicy.readonly_default(),
+            invocation_store=store,
+        )
+
+        result = await reg.invoke("write_file", {"path": "out.txt", "content": "nope"})
+
+        assert result.is_error is True
+        assert "denied by policy" in result.content
+        assert not (tmp_path / "out.txt").exists()
+        [record] = store.records
+        assert record.status == "denied"
+        assert "unallowed capabilities" in (record.error or "")
+
+    async def test_readonly_policy_denies_default_shell_tool(self, tmp_path: Path) -> None:
+        ran: list[bool] = []
+
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
+            ran.append(True)
+            return 0, b"ran", b""
+
+        reg = build_default_registry(
+            tmp_path,
+            bash_runner=runner,
+            policy=ToolPolicy.readonly_default(),
+        )
+
+        result = await reg.invoke("run_bash", {"command": "echo ran"})
+
+        assert result.is_error is True
+        assert "denied by policy" in result.content
+        assert ran == []
 
     async def test_sandbox_violation_surfaces_as_tool_error(self, tmp_path: Path) -> None:
         reg = build_default_registry(tmp_path)

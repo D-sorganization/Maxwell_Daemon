@@ -25,7 +25,9 @@ from typing import TYPE_CHECKING
 from maxwell_daemon.core.actions import ActionKind, ActionRiskLevel
 from maxwell_daemon.tools.mcp import (
     HookRunnerProtocol,
+    ToolInvocationStore,
     ToolParam,
+    ToolPolicy,
     ToolRegistry,
     mcp_tool,
 )
@@ -84,6 +86,8 @@ def make_read_file(root: Path) -> Callable[..., str]:
     @mcp_tool(
         name="read_file",
         description="Read a UTF-8 text file from the workspace. Returns the file contents.",
+        capabilities=frozenset({"file_read", "repo_read"}),
+        risk_level="read_only",
         params=[
             ToolParam(
                 name="path",
@@ -114,6 +118,9 @@ def make_write_file(
             "Write or overwrite a UTF-8 text file in the workspace. Creates parent "
             "directories as needed. Returns a short confirmation."
         ),
+        capabilities=frozenset({"file_write", "repo_write"}),
+        risk_level="local_write",
+        requires_approval=True,
         params=[
             ToolParam(
                 name="path",
@@ -179,6 +186,9 @@ def make_edit_file(
             "``new_string`` in the named file. Refuses if ``old_string`` is "
             "missing or appears more than once."
         ),
+        capabilities=frozenset({"file_read", "file_write", "repo_write"}),
+        risk_level="local_write",
+        requires_approval=True,
         params=[
             ToolParam(
                 name="path",
@@ -306,6 +316,9 @@ def make_run_bash(
             "reduced to a safe allowlist (see MAXWELL_ALLOW_ENV). Output is "
             "combined stdout+stderr, truncated to a bounded length."
         ),
+        capabilities=frozenset({"shell_read", "shell_write"}),
+        risk_level="command_execution",
+        requires_approval=True,
         params=[
             ToolParam(name="command", type="string", description="Bash command line"),
             ToolParam(
@@ -369,6 +382,8 @@ def make_glob_files(root: Path) -> Callable[..., str]:
             "List files matching a glob pattern, one per line, paths relative to "
             "the workspace root. Use ``**/`` for recursive matching."
         ),
+        capabilities=frozenset({"file_read", "repo_read"}),
+        risk_level="read_only",
         params=[
             ToolParam(
                 name="pattern",
@@ -399,6 +414,8 @@ def make_grep_files(root: Path) -> Callable[..., str]:
             "Search files under the workspace for a Python-regex pattern. Returns "
             "matching lines as ``path:lineno:line``. Optionally scoped to a glob."
         ),
+        capabilities=frozenset({"file_read", "repo_read"}),
+        risk_level="read_only",
         params=[
             ToolParam(name="pattern", type="string", description="Python regex pattern"),
             ToolParam(
@@ -440,6 +457,8 @@ def build_default_registry(
     hook_runner: HookRunnerProtocol | None = None,
     action_service: ActionService | None = None,
     task_id: str | None = None,
+    policy: ToolPolicy | None = None,
+    invocation_store: ToolInvocationStore | None = None,
 ) -> ToolRegistry:
     """Return a ``ToolRegistry`` with all six built-in tools bound to ``root``.
 
@@ -450,7 +469,11 @@ def build_default_registry(
     Callers who want a different tool set can build their own registry and
     register only what they need — this helper is the agent-loop default.
     """
-    reg = ToolRegistry(hook_runner=hook_runner)
+    reg = ToolRegistry(
+        hook_runner=hook_runner,
+        policy=policy,
+        invocation_store=invocation_store,
+    )
     reg.register_from_function(make_read_file(root))
     reg.register_from_function(
         make_write_file(root, action_service=action_service, task_id=task_id)

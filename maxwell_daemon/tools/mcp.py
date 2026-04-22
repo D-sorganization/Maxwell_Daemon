@@ -506,6 +506,9 @@ def mcp_tool(
     description: str,
     params: list[ToolParam] | None = None,
     name: str | None = None,
+    capabilities: frozenset[ToolCapability] | None = None,
+    risk_level: ToolRiskLevel = "read_only",
+    requires_approval: bool = False,
 ) -> Callable[[F], F]:
     """Attach a ``ToolSpec`` to a function so a registry can pick it up.
 
@@ -521,6 +524,9 @@ def mcp_tool(
             description=description,
             params=list(params or []),
             handler=fn,
+            capabilities=capabilities or frozenset(),
+            risk_level=risk_level,
+            requires_approval=requires_approval,
         )
         fn.__mcp_tool__ = spec  # type: ignore[attr-defined]
         return fn
