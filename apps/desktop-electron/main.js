@@ -2,10 +2,13 @@
 
 const { app, BrowserWindow, Menu, Notification, Tray, globalShortcut, ipcMain, nativeImage } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const { performance } = require("perf_hooks");
 const path = require("path");
 
 let mainWindow = null;
 let tray = null;
+const launchStartedAt = performance.now();
+const launchSmokeBudgetMs = Number(process.env.MAXWELL_DESKTOP_LAUNCH_BUDGET_MS || 2000);
 let lastFleetStatus = {
   online: false,
   activeTasks: 0,
@@ -25,6 +28,25 @@ function trayIcon() {
   );
 }
 
+function isLaunchSmoke() {
+  return process.env.MAXWELL_DESKTOP_LAUNCH_SMOKE === "1";
+}
+
+function finishLaunchSmoke(stage) {
+  if (!isLaunchSmoke()) return;
+  const elapsedMs = Math.round(performance.now() - launchStartedAt);
+  const passed = elapsedMs <= launchSmokeBudgetMs;
+  process.stdout.write(
+    `${JSON.stringify({
+      budgetMs: launchSmokeBudgetMs,
+      elapsedMs,
+      passed,
+      stage,
+    })}\n`
+  );
+  app.exit(passed ? 0 : 1);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -41,7 +63,10 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
-  mainWindow.once("ready-to-show", () => mainWindow.show());
+  mainWindow.once("ready-to-show", () => {
+    finishLaunchSmoke("ready-to-show");
+    if (!isLaunchSmoke()) mainWindow.show();
+  });
   updateTaskbar(lastFleetStatus);
   mainWindow.on("close", (event) => {
     if (!app.isQuitting) {
@@ -200,6 +225,7 @@ ipcMain.handle("desktop:installUpdate", () => {
 app.whenReady().then(() => {
   app.setAppUserModelId("org.d-sorganization.maxwell-daemon");
   createWindow();
+  if (isLaunchSmoke()) return;
   createTray();
   registerAutoUpdaterEvents();
   registerShortcuts();

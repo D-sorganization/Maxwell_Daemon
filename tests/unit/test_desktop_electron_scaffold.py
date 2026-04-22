@@ -14,6 +14,7 @@ def test_electron_manifest_declares_native_distribution_targets() -> None:
     assert manifest["main"] == "main.js"
     assert "electron" in manifest["devDependencies"]
     assert "electron-updater" in manifest["dependencies"]
+    assert manifest["scripts"]["smoke:launch"] == "node smoke-launch.js"
     assert manifest["build"]["mac"]["target"] == ["dmg"]
     assert manifest["build"]["win"]["target"] == ["msi"]
     assert "AppImage" in manifest["build"]["linux"]["target"]
@@ -29,6 +30,20 @@ def test_electron_main_process_wires_native_desktop_features() -> None:
     assert "new Notification" in main
     assert "globalShortcut.register" in main
     assert "autoUpdater.checkForUpdates" in main
+
+
+def test_electron_launch_smoke_enforces_ready_to_show_budget() -> None:
+    main = (APP_DIR / "main.js").read_text(encoding="utf-8")
+    smoke = (APP_DIR / "smoke-launch.js").read_text(encoding="utf-8")
+    readme = (APP_DIR / "README.md").read_text(encoding="utf-8")
+
+    assert "MAXWELL_DESKTOP_LAUNCH_SMOKE" in main
+    assert "MAXWELL_DESKTOP_LAUNCH_BUDGET_MS || 2000" in main
+    assert 'finishLaunchSmoke("ready-to-show")' in main
+    assert "app.exit(passed ? 0 : 1)" in main
+    assert "desktop ready in" in smoke
+    assert "timed out" in smoke
+    assert "npm run smoke:launch" in readme
 
 
 def test_electron_auto_updater_streams_lifecycle_to_renderer() -> None:
