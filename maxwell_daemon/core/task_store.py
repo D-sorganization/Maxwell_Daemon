@@ -464,6 +464,13 @@ def _row_to_task(row: sqlite3.Row) -> Task:
             return default
         return default if value is None else value
 
+    ab_group_value = _optional("ab_group")
+    priority_value = _optional("priority", 100)
+    dispatched_to_value = _optional("dispatched_to")
+    ab_group = ab_group_value if isinstance(ab_group_value, str) else None
+    priority = priority_value if isinstance(priority_value, int) else int(str(priority_value))
+    dispatched_to = dispatched_to_value if isinstance(dispatched_to_value, str) else None
+
     return Task(
         id=row["id"],
         prompt=row["prompt"],
@@ -475,9 +482,9 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         issue_repo=row["issue_repo"],
         issue_number=row["issue_number"],
         issue_mode=row["issue_mode"],
-        ab_group=_optional("ab_group"),
-        priority=int(_optional("priority", 100)),
-        dispatched_to=_optional("dispatched_to"),
+        ab_group=ab_group,
+        priority=priority,
+        dispatched_to=dispatched_to,
         result=row["result"],
         error=row["error"],
         pr_url=row["pr_url"],
