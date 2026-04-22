@@ -18,6 +18,11 @@ from maxwell_daemon.director.task_graph_runner import (
     GraphNodeOutput,
     GraphRunner,
 )
+from maxwell_daemon.director.task_graph_service import (
+    TaskGraphExecutorUnavailableError,
+    TaskGraphService,
+)
+from maxwell_daemon.director.task_graph_store import TaskGraphRecord, TaskGraphStore
 from maxwell_daemon.director.task_graphs import (
     AgentRole,
     GraphNode,
@@ -51,6 +56,10 @@ __all__ = [
     "Story",
     "Task",
     "TaskGraph",
+    "TaskGraphExecutorUnavailableError",
+    "TaskGraphRecord",
+    "TaskGraphService",
+    "TaskGraphStore",
     "TaskGraphTemplate",
     "build_task_graph",
     "diff_plans",

@@ -49,6 +49,14 @@ from maxwell_daemon.core.work_items import (
 )
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import DuplicateTaskIdError, Task
+from maxwell_daemon.director import (
+    GraphStatus,
+    NodeRun,
+    TaskGraph,
+    TaskGraphExecutorUnavailableError,
+    TaskGraphRecord,
+    TaskGraphTemplate,
+)
 from maxwell_daemon.logging import bind_context
 from maxwell_daemon.metrics import mount_metrics_endpoint
 
@@ -160,6 +168,55 @@ class WorkItemView(BaseModel):
             started_at=item.started_at,
             completed_at=item.completed_at,
             task_ids=item.task_ids,
+        )
+
+
+class TaskGraphCreate(BaseModel):
+    work_item_id: str = Field(..., min_length=1)
+    id: str | None = Field(default=None, min_length=1)
+    template: TaskGraphTemplate | None = None
+    labels: tuple[str, ...] = ()
+
+
+class NodeRunView(BaseModel):
+    id: str
+    graph_id: str
+    node_id: str
+    status: str
+    task_id: str | None
+    artifact_ids: tuple[str, ...]
+    started_at: datetime | None
+    finished_at: datetime | None
+    cost_usd: float
+    attempts: int
+    error: str | None
+
+    @classmethod
+    def from_run(cls, run: NodeRun) -> NodeRunView:
+        return cls(
+            id=run.id,
+            graph_id=run.graph_id,
+            node_id=run.node_id,
+            status=run.status.value,
+            task_id=run.task_id,
+            artifact_ids=run.artifact_ids,
+            started_at=run.started_at,
+            finished_at=run.finished_at,
+            cost_usd=run.cost_usd,
+            attempts=run.attempts,
+            error=run.error,
+        )
+
+
+class TaskGraphView(BaseModel):
+    graph: TaskGraph
+    node_runs: tuple[NodeRunView, ...]
+
+    @classmethod
+    def from_record(cls, record: TaskGraphRecord) -> TaskGraphView:
+        return cls(
+            graph=record.graph,
+            node_runs=tuple(NodeRunView.from_run(run) for run in record.node_runs),
         )
 
 
@@ -856,6 +913,62 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         return WorkItemView.from_item(item)
+
+    @app.post(
+        "/api/v1/task-graphs",
+        dependencies=[Depends(auth), Depends(_require_operator())],
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def create_task_graph(payload: TaskGraphCreate) -> TaskGraphView:
+        try:
+            record = daemon.create_task_graph(
+                payload.work_item_id,
+                template=payload.template,
+                graph_id=payload.id,
+                labels=payload.labels,
+            )
+        except KeyError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        return TaskGraphView.from_record(record)
+
+    @app.get("/api/v1/task-graphs", dependencies=[Depends(_require_viewer())])
+    async def list_task_graphs(
+        work_item_id: Annotated[str | None, Query()] = None,
+        status_filter: Annotated[GraphStatus | None, Query(alias="status")] = None,
+        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    ) -> list[TaskGraphView]:
+        return [
+            TaskGraphView.from_record(record)
+            for record in daemon.list_task_graphs(
+                work_item_id=work_item_id,
+                status=status_filter,
+                limit=limit,
+            )
+        ]
+
+    @app.get("/api/v1/task-graphs/{graph_id}", dependencies=[Depends(_require_viewer())])
+    async def get_task_graph(graph_id: str) -> TaskGraphView:
+        record = daemon.get_task_graph(graph_id)
+        if record is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "task graph not found")
+        return TaskGraphView.from_record(record)
+
+    @app.post(
+        "/api/v1/task-graphs/{graph_id}/start",
+        dependencies=[Depends(auth), Depends(_require_operator())],
+    )
+    async def start_task_graph(graph_id: str) -> TaskGraphView:
+        try:
+            record = daemon.start_task_graph(graph_id)
+        except KeyError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "task graph not found") from exc
+        except TaskGraphExecutorUnavailableError as exc:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        return TaskGraphView.from_record(record)
 
     @app.post(
         "/api/v1/tasks/{task_id}/cancel",

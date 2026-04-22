@@ -15,8 +15,10 @@ from maxwell_daemon.api import create_app
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.core.actions import ActionKind
 from maxwell_daemon.core.artifacts import ArtifactKind
+from maxwell_daemon.core.work_items import AcceptanceCriterion, ScopeBoundary, WorkItem
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
+from maxwell_daemon.director import GraphExecutionContext, GraphNodeOutput
 
 
 @pytest.fixture
@@ -32,6 +34,7 @@ def daemon(
         ledger_path=isolated_ledger_path,
         task_store_path=tmp_path / "tasks.db",
         work_item_store_path=tmp_path / "work_items.db",
+        task_graph_store_path=tmp_path / "task_graphs.db",
         artifact_store_path=tmp_path / "artifacts.db",
         artifact_blob_root=tmp_path / "artifacts",
         action_store_path=tmp_path / "actions.db",
@@ -306,6 +309,107 @@ class TestAdminPruneEndpoint:
         assert r.status_code == 200
         assert r.json()["tasks_pruned"] == 1
         assert daemon.get_task(old_done.id) is None
+
+
+class _FakeGraphExecutor:
+    def __init__(self) -> None:
+        self.contexts: list[GraphExecutionContext] = []
+
+    def execute(self, context: GraphExecutionContext) -> GraphNodeOutput:
+        self.contexts.append(context)
+        return GraphNodeOutput(text=f"{context.node.id} output")
+
+
+class TestTaskGraphEndpoints:
+    def test_create_list_and_get_task_graph(self, client: TestClient, daemon: Daemon) -> None:
+        daemon.create_work_item(
+            WorkItem(
+                id="wi-graph",
+                title="Graph work",
+                acceptance_criteria=(
+                    AcceptanceCriterion(id="ac-1", text="plan exists"),
+                    AcceptanceCriterion(id="ac-2", text="tests pass"),
+                    AcceptanceCriterion(id="ac-3", text="review passes"),
+                ),
+                scope=ScopeBoundary(risk_level="medium"),
+            )
+        )
+
+        created = client.post(
+            "/api/v1/task-graphs",
+            json={
+                "id": "graph-api",
+                "work_item_id": "wi-graph",
+                "template": "standard-delivery",
+            },
+        )
+        listed = client.get("/api/v1/task-graphs?work_item_id=wi-graph")
+        detail = client.get("/api/v1/task-graphs/graph-api")
+
+        assert created.status_code == 201
+        assert created.json()["graph"]["id"] == "graph-api"
+        assert created.json()["graph"]["status"] == "queued"
+        assert created.json()["node_runs"] == []
+        assert [item["graph"]["id"] for item in listed.json()] == ["graph-api"]
+        assert detail.status_code == 200
+        assert [node["id"] for node in detail.json()["graph"]["nodes"]] == [
+            "planner",
+            "implementer",
+            "qa",
+            "reviewer",
+        ]
+
+    def test_create_task_graph_rejects_missing_work_item(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/task-graphs",
+            json={"work_item_id": "missing"},
+        )
+
+        assert response.status_code == 404
+
+    def test_start_reports_unavailable_without_executor(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        daemon.create_work_item(WorkItem(id="wi-graph", title="Graph work"))
+        graph = daemon.create_task_graph(
+            "wi-graph",
+            graph_id="graph-unavailable",
+        )
+
+        response = client.post(f"/api/v1/task-graphs/{graph.graph.id}/start")
+
+        assert response.status_code == 503
+        assert "executor is not configured" in response.json()["detail"]
+
+    def test_start_runs_graph_and_persists_node_runs(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        daemon.create_work_item(WorkItem(id="wi-graph", title="Graph work"))
+        graph = daemon.create_task_graph(
+            "wi-graph",
+            graph_id="graph-run",
+            template=None,
+        )
+        executor = _FakeGraphExecutor()
+        daemon.set_task_graph_executor(executor)
+
+        response = client.post(f"/api/v1/task-graphs/{graph.graph.id}/start")
+        detail = client.get(f"/api/v1/task-graphs/{graph.graph.id}")
+
+        assert response.status_code == 200
+        assert response.json()["graph"]["status"] == "completed"
+        assert [run["status"] for run in response.json()["node_runs"]] == [
+            "completed",
+            "completed",
+            "completed",
+            "completed",
+        ]
+        assert len(executor.contexts) == 4
+        assert detail.json()["node_runs"][0]["artifact_ids"]
 
 
 class TestArtifactEndpoints:

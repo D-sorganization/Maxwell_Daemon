@@ -13,6 +13,8 @@ The first implementation is intentionally a service-layer foundation:
   `security-sensitive-delivery`.
 - `GraphRunner` executes nodes sequentially in dependency order and stores
   each node's output through the durable artifact store.
+- `TaskGraphStore` persists graph definitions and latest node run records so
+  the API can create, list, start, and inspect graph state.
 
 ## Built-In Templates
 
@@ -46,6 +48,23 @@ retry exhaustion.
 This keeps graph execution compatible with future parallel scheduling. The
 current runner is sequential, but the model already separates graph validation,
 node readiness, artifact dependencies, and node execution.
+
+## API Access
+
+The REST API exposes graph records as control-plane state:
+
+```text
+POST /api/v1/task-graphs
+GET /api/v1/task-graphs
+GET /api/v1/task-graphs/{graph_id}
+POST /api/v1/task-graphs/{graph_id}/start
+```
+
+`POST /api/v1/task-graphs` builds a graph from an existing work item and saves
+it. `POST /start` runs through the configured graph executor and stores node run
+records. Until backend-routed graph execution is configured, start requests
+return a typed service-unavailable error instead of pretending the graph can
+run autonomously.
 
 ## CLI Access
 
