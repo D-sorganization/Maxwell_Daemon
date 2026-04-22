@@ -15,12 +15,13 @@ import asyncio
 import contextlib
 import json
 import threading
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-__all__ = ["Event", "EventBus", "EventKind"]
+__all__ = ["Event", "EventBus", "EventKind", "attach_observability"]
 
 
 class EventKind(str, Enum):
@@ -54,6 +55,47 @@ class Event:
                 "payload": self.payload,
             }
         )
+
+
+def attach_observability(
+    payload: Mapping[str, Any],
+    *,
+    task_id: str | None = None,
+    work_item_id: str | None = None,
+    action_id: str | None = None,
+    artifact_ids: Sequence[str] | None = None,
+    backend: str | None = None,
+    model: str | None = None,
+    cost_usd: float | None = None,
+    duration_seconds: float | None = None,
+) -> dict[str, Any]:
+    """Return payload enriched with a normalized observability context.
+
+    The context is nested under ``payload["observability"]`` so downstream
+    subscribers can reliably parse IDs and cost/timing metadata without
+    scraping free-form payload keys.
+    """
+    out = dict(payload)
+    context: dict[str, Any] = {}
+    if task_id is not None:
+        context["task_id"] = task_id
+    if work_item_id is not None:
+        context["work_item_id"] = work_item_id
+    if action_id is not None:
+        context["action_id"] = action_id
+    if artifact_ids:
+        context["artifact_ids"] = list(artifact_ids)
+    if backend is not None:
+        context["backend"] = backend
+    if model is not None:
+        context["model"] = model
+    if cost_usd is not None:
+        context["cost_usd"] = cost_usd
+    if duration_seconds is not None:
+        context["duration_seconds"] = duration_seconds
+    if context:
+        out["observability"] = context
+    return out
 
 
 class EventBus:
