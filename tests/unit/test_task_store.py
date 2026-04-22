@@ -162,6 +162,26 @@ class TestPrune:
         assert store.get(recent_done.id) is not None
         assert store.get(queued.id) is not None
 
+    def test_deletes_terminal_tasks_with_null_completed_at_and_old_finished_at(
+        self, tmp_path: Path
+    ) -> None:
+        import sqlite3
+
+        db = tmp_path / "tasks.db"
+        store = TaskStore(db)
+        finished_at = datetime.now(timezone.utc) - timedelta(days=45)
+        old_done = _fresh_task(finished_at=finished_at)
+        store.save(old_done)
+        store.update_status(old_done.id, TaskStatus.COMPLETED, finished_at=finished_at)
+        with sqlite3.connect(db) as conn:
+            conn.execute("UPDATE tasks SET completed_at = NULL WHERE id = ?", (old_done.id,))
+            conn.commit()
+
+        removed = store.prune(older_than_days=30)
+
+        assert removed == 1
+        assert store.get(old_done.id) is None
+
 
 class TestIssueFields:
     def test_preserves_issue_metadata(self, store: TaskStore) -> None:

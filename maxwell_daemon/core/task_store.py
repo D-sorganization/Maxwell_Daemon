@@ -305,10 +305,12 @@ class TaskStore:
                 """
                 DELETE FROM tasks
                 WHERE status IN (?, ?, ?)
-                  AND completed_at IS NOT NULL
-                  AND completed_at < ?
+                  AND (
+                    completed_at < ?
+                    OR (completed_at IS NULL AND finished_at IS NOT NULL AND finished_at < ?)
+                  )
                 """,
-                (*_TERMINAL_STATUS_VALUES, cutoff.isoformat()),
+                (*_TERMINAL_STATUS_VALUES, cutoff.isoformat(), cutoff.isoformat()),
             )
         return int(cursor.rowcount)
 
