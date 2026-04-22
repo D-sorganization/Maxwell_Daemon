@@ -386,9 +386,10 @@ class Daemon:
         backend: str | None = None,
         model: str | None = None,
         priority: int = 100,
+        task_id: str | None = None,
     ) -> Task:
         task = Task(
-            id=uuid.uuid4().hex[:12],
+            id=task_id or uuid.uuid4().hex[:12],
             prompt=prompt,
             kind=TaskKind.PROMPT,
             repo=repo,
@@ -464,12 +465,13 @@ class Daemon:
         backend: str | None = None,
         model: str | None = None,
         priority: int = 100,
+        task_id: str | None = None,
     ) -> Task:
         """Queue a task that reads a GitHub issue and opens a draft PR for it."""
         if mode not in {"plan", "implement"}:
             raise ValueError(f"mode must be 'plan' or 'implement', got {mode!r}")
         task = Task(
-            id=uuid.uuid4().hex[:12],
+            id=task_id or uuid.uuid4().hex[:12],
             prompt=f"{repo}#{issue_number}",
             kind=TaskKind.ISSUE,
             repo=repo,

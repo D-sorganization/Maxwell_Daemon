@@ -66,9 +66,14 @@ def _mount_web_ui(app: FastAPI) -> None:
 
 class TaskSubmit(BaseModel):
     prompt: str = Field(..., min_length=1)
+    task_id: str | None = None
+    kind: str = "prompt"
     repo: str | None = None
     backend: str | None = None
     model: str | None = None
+    issue_repo: str | None = None
+    issue_number: int | None = None
+    issue_mode: str | None = None
     priority: int = Field(default=100, ge=0, le=200)
 
 
@@ -415,12 +420,25 @@ def create_app(
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def submit_task(payload: TaskSubmit) -> TaskView:
-        task = daemon.submit(
-            payload.prompt,
-            repo=payload.repo,
-            backend=payload.backend,
-            model=payload.model,
-        )
+        if payload.kind == "issue" and payload.issue_repo and payload.issue_number is not None:
+            task = daemon.submit_issue(
+                repo=payload.issue_repo,
+                issue_number=payload.issue_number,
+                mode=payload.issue_mode or "plan",
+                backend=payload.backend,
+                model=payload.model,
+                priority=payload.priority,
+                task_id=payload.task_id,
+            )
+        else:
+            task = daemon.submit(
+                payload.prompt,
+                repo=payload.repo,
+                backend=payload.backend,
+                model=payload.model,
+                priority=payload.priority,
+                task_id=payload.task_id,
+            )
         return TaskView.from_task(task)
 
     @app.get("/api/v1/tasks", dependencies=[Depends(_require_viewer())])
