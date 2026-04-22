@@ -110,6 +110,24 @@ class TestTaskSubmission:
         r = client.post("/api/v1/tasks", json={"prompt": ""})
         assert r.status_code == 422
 
+    def test_submit_duplicate_task_id_returns_conflict(
+        self, client: TestClient, daemon: Daemon
+    ) -> None:
+        first = client.post(
+            "/api/v1/tasks",
+            json={"prompt": "first", "task_id": "api-duplicate-id"},
+        )
+        assert first.status_code == 202
+
+        duplicate = client.post(
+            "/api/v1/tasks",
+            json={"prompt": "second", "task_id": "api-duplicate-id"},
+        )
+
+        assert duplicate.status_code == 409
+        assert "api-duplicate-id" in duplicate.json()["detail"]
+        assert daemon._task_store.get("api-duplicate-id").prompt == "first"
+
     def test_list_returns_all_tasks(self, client: TestClient) -> None:
         for i in range(3):
             client.post("/api/v1/tasks", json={"prompt": f"t{i}"})

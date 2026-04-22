@@ -64,6 +64,10 @@ class TaskKind(str, Enum):
     ISSUE = "issue"
 
 
+class DuplicateTaskIdError(ValueError):
+    """Raised when a caller supplies a task id that already exists."""
+
+
 @dataclass
 class Task:
     id: str
@@ -462,8 +466,9 @@ class Daemon:
         priority: int = 100,
         task_id: str | None = None,
     ) -> Task:
+        resolved_task_id = task_id or uuid.uuid4().hex[:12]
         task = Task(
-            id=task_id or uuid.uuid4().hex[:12],
+            id=resolved_task_id,
             prompt=prompt,
             kind=TaskKind.PROMPT,
             repo=repo,
@@ -476,8 +481,10 @@ class Daemon:
         # can corrupt the underlying heap list ("list changed size during
         # iteration"). Serializing via _tasks_lock makes the submit path safe
         # for sync callers; the async path uses submit_threadsafe() instead.
-        self._task_store.save(task)
         with self._tasks_lock:
+            if task_id is not None:
+                self._reject_duplicate_task_id(task.id)
+            self._task_store.save(task)
             self._tasks[task.id] = task
             self._queue.put_nowait((task.priority, task))
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
@@ -552,8 +559,9 @@ class Daemon:
         """Queue a task that reads a GitHub issue and opens a draft PR for it."""
         if mode not in {"plan", "implement"}:
             raise ValueError(f"mode must be 'plan' or 'implement', got {mode!r}")
+        resolved_task_id = task_id or uuid.uuid4().hex[:12]
         task = Task(
-            id=task_id or uuid.uuid4().hex[:12],
+            id=resolved_task_id,
             prompt=f"{repo}#{issue_number}",
             kind=TaskKind.ISSUE,
             repo=repo,
@@ -566,8 +574,10 @@ class Daemon:
         )
         # See note in submit(): queue put is serialized under _tasks_lock
         # because asyncio.PriorityQueue.put_nowait is not thread-safe.
-        self._task_store.save(task)
         with self._tasks_lock:
+            if task_id is not None:
+                self._reject_duplicate_task_id(task.id)
+            self._task_store.save(task)
             self._tasks[task.id] = task
             self._queue.put_nowait((task.priority, task))
         with contextlib.suppress(RuntimeError):
@@ -638,6 +648,10 @@ class Daemon:
     def get_task(self, task_id: str) -> Task | None:
         # dict.get is GIL-atomic; no lock needed on hot-path reads.
         return self._tasks.get(task_id)
+
+    def _reject_duplicate_task_id(self, task_id: str) -> None:
+        if task_id in self._tasks or self._task_store.get(task_id) is not None:
+            raise DuplicateTaskIdError(f"task id {task_id!r} already exists")
 
     def create_work_item(self, item: WorkItem) -> WorkItem:
         self._work_item_store.save(item)

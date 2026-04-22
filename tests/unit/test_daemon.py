@@ -11,10 +11,12 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, TypeVar
 
+import pytest
+
 from maxwell_daemon.backends import registry
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon
-from maxwell_daemon.daemon.runner import Task, TaskStatus
+from maxwell_daemon.daemon.runner import DuplicateTaskIdError, Task, TaskStatus
 
 T = TypeVar("T")
 
@@ -186,6 +188,64 @@ class TestTaskExecution:
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
 
 
+class TestTaskIdSubmission:
+    @staticmethod
+    def _daemon(config: MaxwellDaemonConfig, ledger_path: Path) -> Daemon:
+        return Daemon(
+            config,
+            ledger_path=ledger_path,
+            task_store_path=ledger_path.with_suffix(".tasks.db"),
+            work_item_store_path=ledger_path.with_suffix(".work-items.db"),
+            artifact_store_path=ledger_path.with_suffix(".artifacts.db"),
+            artifact_blob_root=ledger_path.parent / "artifacts",
+            action_store_path=ledger_path.with_suffix(".actions.db"),
+        )
+
+    def test_submit_rejects_duplicate_caller_supplied_task_id(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        d = self._daemon(minimal_config, isolated_ledger_path)
+        first = d.submit("first", task_id="caller-id")
+        queue_depth = d._queue.qsize()
+
+        with pytest.raises(DuplicateTaskIdError, match="caller-id"):
+            d.submit("second", task_id="caller-id")
+
+        assert d.get_task("caller-id") is first
+        assert d.get_task("caller-id").prompt == "first"
+        assert d._task_store.get("caller-id").prompt == "first"
+        assert d._queue.qsize() == queue_depth
+
+    def test_submit_rejects_duplicate_id_already_in_task_store(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        d = self._daemon(minimal_config, isolated_ledger_path)
+        first = d.submit("first", task_id="stored-id")
+        d._tasks.pop(first.id)
+        queue_depth = d._queue.qsize()
+
+        with pytest.raises(DuplicateTaskIdError, match="stored-id"):
+            d.submit("second", task_id="stored-id")
+
+        assert d._task_store.get("stored-id").prompt == "first"
+        assert d._queue.qsize() == queue_depth
+
+    def test_submit_issue_rejects_duplicate_caller_supplied_task_id(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        d = self._daemon(minimal_config, isolated_ledger_path)
+        first = d.submit_issue(repo="owner/repo", issue_number=1, task_id="issue-id")
+        queue_depth = d._queue.qsize()
+
+        with pytest.raises(DuplicateTaskIdError, match="issue-id"):
+            d.submit_issue(repo="owner/repo", issue_number=2, task_id="issue-id")
+
+        assert d.get_task("issue-id") is first
+        assert d.get_task("issue-id").issue_number == 1
+        assert d._task_store.get("issue-id").issue_number == 1
+        assert d._queue.qsize() == queue_depth
+
+
 class TestState:
     def test_state_exposes_backends(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
@@ -317,8 +377,6 @@ class TestRunningStatusResilience:
     ) -> None:
         """A failed RUNNING status update is logged at ERROR level."""
         import logging
-
-        import pytest
 
         class _FailFirstStore:
             def __init__(self) -> None:

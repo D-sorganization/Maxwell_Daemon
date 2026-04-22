@@ -47,7 +47,7 @@ from maxwell_daemon.core.work_items import (
     WorkItemStatus,
 )
 from maxwell_daemon.daemon import Daemon
-from maxwell_daemon.daemon.runner import Task
+from maxwell_daemon.daemon.runner import DuplicateTaskIdError, Task
 from maxwell_daemon.logging import bind_context
 from maxwell_daemon.metrics import mount_metrics_endpoint
 
@@ -605,25 +605,28 @@ def create_app(
         status_code=status.HTTP_202_ACCEPTED,
     )
     async def submit_task(payload: TaskSubmit) -> TaskView:
-        if payload.kind == "issue" and payload.issue_repo and payload.issue_number is not None:
-            task = daemon.submit_issue(
-                repo=payload.issue_repo,
-                issue_number=payload.issue_number,
-                mode=payload.issue_mode or "plan",
-                backend=payload.backend,
-                model=payload.model,
-                priority=payload.priority,
-                task_id=payload.task_id,
-            )
-        else:
-            task = daemon.submit(
-                payload.prompt,
-                repo=payload.repo,
-                backend=payload.backend,
-                model=payload.model,
-                priority=payload.priority,
-                task_id=payload.task_id,
-            )
+        try:
+            if payload.kind == "issue" and payload.issue_repo and payload.issue_number is not None:
+                task = daemon.submit_issue(
+                    repo=payload.issue_repo,
+                    issue_number=payload.issue_number,
+                    mode=payload.issue_mode or "plan",
+                    backend=payload.backend,
+                    model=payload.model,
+                    priority=payload.priority,
+                    task_id=payload.task_id,
+                )
+            else:
+                task = daemon.submit(
+                    payload.prompt,
+                    repo=payload.repo,
+                    backend=payload.backend,
+                    model=payload.model,
+                    priority=payload.priority,
+                    task_id=payload.task_id,
+                )
+        except DuplicateTaskIdError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         return TaskView.from_task(task)
 
     @app.get("/api/v1/tasks", dependencies=[Depends(_require_viewer())])
