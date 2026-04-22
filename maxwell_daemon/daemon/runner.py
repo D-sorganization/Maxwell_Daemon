@@ -1047,9 +1047,13 @@ class Daemon:
             if task is None:
                 log.info("worker %d received stop sentinel; exiting", worker_id)
                 break
-            # Tasks cancelled while queued should not be executed.
-            if task.status is TaskStatus.CANCELLED:
-                continue
+            # Reprioritization leaves stale queue entries behind. Only the first
+            # worker that atomically claims a still-queued task may execute it.
+            with self._tasks_lock:
+                if task.status is not TaskStatus.QUEUED:
+                    continue
+                task.status = TaskStatus.RUNNING
+                task.started_at = datetime.now(timezone.utc)
             with bind_context(task_id=task.id, worker_id=worker_id):
                 # Attempt to mark the task RUNNING in the durable store before
                 # executing.  If that write fails (disk full, lock contention),
@@ -1057,7 +1061,6 @@ class Daemon:
                 # Double-execution is still possible if the DB write succeeds but
                 # the worker crashes before execution completes; preventing that
                 # fully requires a lease/heartbeat mechanism (future work).
-                task.started_at = datetime.now(timezone.utc)
                 try:
                     self._task_store.update_status(
                         task.id, TaskStatus.RUNNING, started_at=task.started_at
@@ -1068,7 +1071,10 @@ class Daemon:
                         task.id,
                         exc,
                     )
-                    task.started_at = None
+                    with self._tasks_lock:
+                        if task.status is TaskStatus.RUNNING:
+                            task.status = TaskStatus.QUEUED
+                            task.started_at = None
                     await self._queue.put((task.priority, task))
                     continue
                 await self._execute(task)
