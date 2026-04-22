@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -12,6 +12,7 @@ from maxwell_daemon.memory.repo_memory import (
     MemoryEntry,
     MemoryProposal,
     RepoMemoryStore,
+    redact_secret_looking_values,
     select_memory_snapshot,
 )
 
@@ -30,6 +31,7 @@ def _entry(
     confidence: float = 0.8,
     supersedes: tuple[str, ...] = (),
     created_at: datetime = _CREATED_AT,
+    expires_at: datetime | None = None,
 ) -> MemoryEntry:
     return MemoryEntry(
         id=entry_id,
@@ -41,6 +43,7 @@ def _entry(
         source=source,
         confidence=confidence,
         created_at=created_at,
+        expires_at=expires_at,
         supersedes=supersedes,
     )
 
@@ -97,6 +100,33 @@ def test_proposals_stay_pending_until_reviewed(tmp_path: Path) -> None:
     assert store.list_entries(repo_id="D-sorganization/Maxwell-Daemon") == [_entry("m1")]
 
 
+def test_rejected_and_superseded_proposals_stay_out_of_accepted_memory(tmp_path: Path) -> None:
+    store = RepoMemoryStore(tmp_path)
+    store.propose(_proposal("p-reject", _entry("reject-me")))
+    store.propose(_proposal("p-supersede", _entry("supersede-me")))
+
+    rejected = store.reject_proposal("p-reject", reviewer="critic", reason="contradicted")
+    superseded = store.supersede_proposal(
+        "p-supersede", reviewer="critic", reason="replaced by newer proposal"
+    )
+
+    assert rejected.status == "rejected"
+    assert superseded.status == "superseded"
+    assert {proposal.id: proposal.status for proposal in store.latest_proposals()} == {
+        "p-reject": "rejected",
+        "p-supersede": "superseded",
+    }
+    assert store.list_entries(repo_id="D-sorganization/Maxwell-Daemon") == []
+
+
+def test_duplicate_proposal_ids_are_rejected(tmp_path: Path) -> None:
+    store = RepoMemoryStore(tmp_path)
+    store.propose(_proposal("p1", _entry("m1")))
+
+    with pytest.raises(PreconditionError, match="duplicate proposal id"):
+        store.propose(_proposal("p1", _entry("m2")))
+
+
 def test_rejects_secret_looking_values_before_writing(tmp_path: Path) -> None:
     store = RepoMemoryStore(tmp_path)
     secret = "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456"
@@ -119,6 +149,20 @@ def test_superseded_entries_remain_inspectable_but_inactive(tmp_path: Path) -> N
 
     assert [entry.id for entry in all_entries] == ["old", "new"]
     assert [entry.id for entry in active_entries] == ["new"]
+
+
+def test_expired_entries_are_filtered_from_active_memory(tmp_path: Path) -> None:
+    store = RepoMemoryStore(tmp_path)
+    expires_at = _CREATED_AT + timedelta(hours=1)
+    store.add_entry(_entry("expired", body="Old fact.", expires_at=expires_at))
+    store.add_entry(_entry("active", body="Current fact."))
+
+    active_entries = store.list_entries(
+        repo_id="D-sorganization/Maxwell-Daemon",
+        now=_CREATED_AT + timedelta(hours=2),
+    )
+
+    assert [entry.id for entry in active_entries] == ["active"]
 
 
 def test_conflicting_entries_are_detected_for_review(tmp_path: Path) -> None:
@@ -179,3 +223,25 @@ def test_snapshot_render_includes_selection_reasons(tmp_path: Path) -> None:
     assert "Repo memory snapshot" in rendered
     assert "repo-1" in rendered
     assert "work item" in rendered
+
+
+def test_snapshot_render_truncates_to_max_chars(tmp_path: Path) -> None:
+    store = RepoMemoryStore(tmp_path)
+    store.add_entry(_entry("repo-1", body="Repository fact " * 20))
+
+    rendered = store.render_snapshot(
+        repo_id="D-sorganization/Maxwell-Daemon",
+        token_budget=128,
+        max_chars=80,
+    )
+
+    assert rendered.endswith("... (truncated)")
+
+
+def test_secret_redaction_masks_values_for_display() -> None:
+    redacted = redact_secret_looking_values(
+        "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456 and ghp_abcdefghijklmnopqrstuv"
+    )
+
+    assert "[REDACTED]" in redacted
+    assert "sk-proj" not in redacted

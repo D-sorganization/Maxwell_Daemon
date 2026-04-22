@@ -112,6 +112,7 @@ def test_repo_memory_listing_and_review_commands(tmp_path: Path) -> None:
         ("old", "Use pytest."),
         ("new", "Use pytest tests/unit."),
         ("rejected", "Prefer unrelated old workflow."),
+        ("superseded", "Prefer a replaced workflow."),
     ):
         proposed = runner.invoke(
             app,
@@ -131,6 +132,10 @@ def test_repo_memory_listing_and_review_commands(tmp_path: Path) -> None:
                 "delegate-1",
                 "--reason",
                 "validated in CI triage",
+                "--scope",
+                "issue",
+                "--work-item-id",
+                "397",
             ],
         )
         assert proposed.exit_code == 0
@@ -205,6 +210,23 @@ def test_repo_memory_listing_and_review_commands(tmp_path: Path) -> None:
     assert rejected.exit_code == 0
     assert "rejected" in rejected.stdout
 
+    superseded = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "review",
+            str(repo_root),
+            "superseded",
+            "--reviewer",
+            "maintainer",
+            "--status",
+            "superseded",
+        ],
+    )
+    assert superseded.exit_code == 0
+    assert "superseded" in superseded.stdout
+
     active_list = runner.invoke(
         app,
         [
@@ -221,3 +243,41 @@ def test_repo_memory_listing_and_review_commands(tmp_path: Path) -> None:
     assert "old" in active_list.stdout
     assert "new" in active_list.stdout
     assert "rejected" not in active_list.stdout
+    assert "superseded" not in active_list.stdout
+
+
+def test_repo_memory_commands_report_invalid_review_and_empty_snapshot(tmp_path: Path) -> None:
+    runner = CliRunner()
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    invalid = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "review",
+            str(repo_root),
+            "missing",
+            "--reviewer",
+            "critic",
+            "--status",
+            "paused",
+        ],
+    )
+    assert invalid.exit_code == 2
+    assert "--status must be accepted, rejected, or superseded" in invalid.stdout
+
+    snapshot = runner.invoke(
+        app,
+        [
+            "memory",
+            "repo",
+            "snapshot",
+            str(repo_root),
+            "--repo-id",
+            "D-sorganization/Maxwell-Daemon",
+        ],
+    )
+    assert snapshot.exit_code == 0
+    assert "No memory selected" in snapshot.stdout
