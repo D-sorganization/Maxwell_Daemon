@@ -85,9 +85,7 @@ def list_entries(
     repo_root: Annotated[
         Path, typer.Argument(help="Path to the repository root that carries .maxwell/memory")
     ],
-    repo_id: Annotated[
-        str, typer.Option("--repo-id", help="owner/repo id used by memory entries")
-    ],
+    repo_id: Annotated[str, typer.Option("--repo-id", help="owner/repo id used by memory entries")],
     include_superseded: Annotated[
         bool, typer.Option("--include-superseded", help="Show superseded entries too")
     ] = False,
@@ -156,9 +154,7 @@ def propose_entry(
         Path, typer.Argument(help="Path to the repository root that carries .maxwell/memory")
     ],
     entry_id: Annotated[str, typer.Argument(help="Stable memory entry id")],
-    repo_id: Annotated[
-        str, typer.Option("--repo-id", help="owner/repo id used by memory entries")
-    ],
+    repo_id: Annotated[str, typer.Option("--repo-id", help="owner/repo id used by memory entries")],
     body: Annotated[str, typer.Option("--body", "-b", help="Memory body text")],
     source: Annotated[str, typer.Option("--source", help="Evidence source")],
     proposed_by: Annotated[str, typer.Option("--proposed-by", help="Delegate or reviewer id")],
@@ -168,9 +164,7 @@ def propose_entry(
     work_item_id: Annotated[
         str | None, typer.Option("--work-item-id", help="Issue/work-item id if scoped")
     ] = None,
-    confidence: Annotated[
-        float, typer.Option("--confidence")
-    ] = 0.8,
+    confidence: Annotated[float, typer.Option("--confidence")] = 0.8,
     supersedes: Annotated[
         list[str] | None, typer.Option("--supersedes", help="Entries superseded by this one")
     ] = None,
@@ -254,9 +248,7 @@ def snapshot(
     repo_root: Annotated[
         Path, typer.Argument(help="Path to the repository root that carries .maxwell/memory")
     ],
-    repo_id: Annotated[
-        str, typer.Option("--repo-id", help="owner/repo id used by memory entries")
-    ],
+    repo_id: Annotated[str, typer.Option("--repo-id", help="owner/repo id used by memory entries")],
     issue_number: Annotated[
         int | None, typer.Option("--issue-number", help="Issue/work item id for scoped matches")
     ] = None,
