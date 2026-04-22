@@ -138,6 +138,58 @@ class TestFleetStatus:
         assert "beta" in r.stdout
         assert "missing capability gpu" in r.stdout
 
+    def test_nodes_alias_renders_registry_status_table(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        payload: dict[str, object] = {
+            "repo": "acme/repo",
+            "tool": "dispatch",
+            "required_capabilities": ["gpu"],
+            "selected_node": {"node_id": "node-a", "hostname": "alpha"},
+            "nodes": [
+                {
+                    "node_id": "node-a",
+                    "hostname": "alpha",
+                    "eligible": True,
+                    "score": 100,
+                    "reasons": [],
+                    "active_sessions": 1,
+                    "tailscale_status": {"online": True},
+                }
+            ],
+            "explanation": "selected alpha",
+        }
+
+        class _Response:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict[str, object]:
+                return payload
+
+        class _Client:
+            def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+                return None
+
+            def __enter__(self) -> _Client:
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def get(self, url: str, *, params: object, headers: object) -> _Response:
+                return _Response()
+
+        monkeypatch.setattr("maxwell_daemon.cli.fleet.httpx.Client", _Client)
+
+        r = runner.invoke(app, ["fleet", "nodes", "--repo", "acme/repo", "--tool", "dispatch"])
+
+        assert r.exit_code == 0
+        assert "Repo:" in r.stdout
+        assert "alpha" in r.stdout
+
     def test_fetches_registry_status_and_redacts_private_fields(
         self,
         runner: CliRunner,

@@ -14,8 +14,7 @@ fleet_app = typer.Typer(help="Fleet capability registry commands.")
 console = Console()
 
 
-@fleet_app.command()
-def status(
+def _fetch_status(
     repo: Annotated[str, typer.Option("--repo", help="Repo to evaluate")],
     tool: Annotated[str, typer.Option("--tool", help="Tool to evaluate")],
     base_url: Annotated[
@@ -60,6 +59,80 @@ def status(
         return
 
     _render_status(payload)
+
+
+@fleet_app.command()
+def status(
+    repo: Annotated[str, typer.Option("--repo", help="Repo to evaluate")],
+    tool: Annotated[str, typer.Option("--tool", help="Tool to evaluate")],
+    base_url: Annotated[
+        str,
+        typer.Option("--base-url", help="Daemon API base URL"),
+    ] = "http://127.0.0.1:8080",
+    required_capability: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--required-capability",
+            "-r",
+            help="Repeat to add one required capability at a time.",
+        ),
+    ] = None,
+    token: Annotated[
+        str | None,
+        typer.Option("--token", help="Bearer token for the API, if enabled"),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit raw JSON instead of a table"),
+    ] = False,
+) -> None:
+    """Fetch a redacted capability snapshot from the daemon."""
+
+    _fetch_status(
+        repo=repo,
+        tool=tool,
+        base_url=base_url,
+        required_capability=required_capability,
+        token=token,
+        json_output=json_output,
+    )
+
+
+@fleet_app.command(name="nodes")
+def nodes(
+    repo: Annotated[str, typer.Option("--repo", help="Repo to evaluate")],
+    tool: Annotated[str, typer.Option("--tool", help="Tool to evaluate")],
+    base_url: Annotated[
+        str,
+        typer.Option("--base-url", help="Daemon API base URL"),
+    ] = "http://127.0.0.1:8080",
+    required_capability: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--required-capability",
+            "-r",
+            help="Repeat to add one required capability at a time.",
+        ),
+    ] = None,
+    token: Annotated[
+        str | None,
+        typer.Option("--token", help="Bearer token for the API, if enabled"),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit raw JSON instead of a table"),
+    ] = False,
+) -> None:
+    """Alias for `status` that matches the node-centric fleet vocabulary."""
+
+    _fetch_status(
+        repo=repo,
+        tool=tool,
+        base_url=base_url,
+        required_capability=required_capability,
+        token=token,
+        json_output=json_output,
+    )
 
 
 def _render_status(payload: dict[str, Any]) -> None:

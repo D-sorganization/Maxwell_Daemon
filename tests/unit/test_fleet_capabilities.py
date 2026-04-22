@@ -129,6 +129,34 @@ def test_tailscale_parser_handles_reachable_and_offline_peers() -> None:
     )
 
 
+def test_tailscale_parser_handles_peer_list_payloads() -> None:
+    raw = {
+        "Peers": [
+            {
+                "ID": "100.64.0.11",
+                "hostname": "beta",
+                "online": False,
+                "tailnet_ip": "100.64.0.11",
+                "current_address": "100.64.0.11:41641",
+                "last_seen": "2026-04-22T17:50:00Z",
+            },
+            {
+                "ID": "100.64.0.10",
+                "hostname": "alpha",
+                "online": True,
+                "tailnet_ip": "100.64.0.10",
+                "current_address": "100.64.0.10:41641",
+                "last_seen": "2026-04-22T17:58:00Z",
+            },
+        ]
+    }
+
+    peers = parse_tailscale_status_json(raw)
+    assert [peer.peer_id for peer in peers] == ["100.64.0.10", "100.64.0.11"]
+    assert peers[0].hostname == "alpha"
+    assert peers[1].online is False
+
+
 def test_registry_selects_best_node_and_explains_rejections() -> None:
     registry = InMemoryFleetCapabilityRegistry(
         (

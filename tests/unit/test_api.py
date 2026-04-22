@@ -1065,6 +1065,49 @@ class TestFleetCapabilityRegistryEndpoint:
         assert "tailnet_ip" not in body["nodes"][0]["tailscale_status"]
         assert "current_address" not in body["nodes"][0]["tailscale_status"]
 
+    def test_fleet_nodes_route_aliases_registry_snapshot(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        daemon.fleet_registry.register(
+            FleetNode(
+                node_id="node-a",
+                hostname="alpha",
+                capabilities=(NodeCapability(name="gpu", observed_at=datetime.now(timezone.utc)),),
+                resource_snapshot=NodeResourceSnapshot(
+                    captured_at=datetime.now(timezone.utc),
+                    heartbeat_at=datetime.now(timezone.utc),
+                    active_sessions=0,
+                ),
+                policy=NodePolicy(
+                    allowed_repos=frozenset({"acme/repo"}),
+                    allowed_tools=frozenset({"dispatch"}),
+                    max_concurrent_sessions=2,
+                    heartbeat_stale_after_seconds=600,
+                ),
+                tailscale_status=TailscalePeerStatus(
+                    peer_id="node-a",
+                    hostname="alpha",
+                    online=True,
+                    tailnet_ip="100.64.0.10",
+                    current_address="100.64.0.10:41641",
+                    last_seen_at=datetime.now(timezone.utc),
+                ),
+            )
+        )
+
+        response = client.get(
+            "/api/v1/fleet/nodes",
+            params={"repo": "acme/repo", "tool": "dispatch", "required_capability": ["gpu"]},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["selected_node"]["hostname"] == "alpha"
+        assert "tailnet_ip" not in body["nodes"][0]["tailscale_status"]
+        assert "current_address" not in body["nodes"][0]["tailscale_status"]
+
 
 class TestAuditEndpoint:
     def test_audit_log_reports_disabled_when_not_configured(self, client: TestClient) -> None:

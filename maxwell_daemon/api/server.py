@@ -1722,7 +1722,11 @@ def create_app(
             result["machines"] = machines_summary
         return result
 
-    @app.get("/api/v1/fleet/capabilities", dependencies=[Depends(_require_viewer())])
+    @app.get(
+        "/api/v1/fleet/capabilities",
+        dependencies=[Depends(_require_viewer())],
+    )
+    @app.get("/api/v1/fleet/nodes", dependencies=[Depends(_require_viewer())])
     async def fleet_capabilities(
         repo: str = Query(..., min_length=1),
         tool: str = Query(..., min_length=1),
