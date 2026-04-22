@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -27,8 +29,6 @@ class TestRecovery:
     def test_queued_task_requeued_on_start(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"
         # Simulate a previous daemon run by writing directly to the store.
-        from datetime import datetime, timezone
-
         store = TaskStore(task_store_path)
         pending = Task(
             id="previous-run",
@@ -40,7 +40,12 @@ class TestRecovery:
         del store
 
         # New Daemon instance — recovery should re-queue it.
-        d = Daemon(cfg, ledger_path=tmp_path / "l.db", task_store_path=task_store_path)
+        d = Daemon(
+            cfg,
+            ledger_path=tmp_path / "l.db",
+            task_store_path=task_store_path,
+            action_store_path=tmp_path / "actions.db",
+        )
         recovered = d.recover()
         assert len(recovered) == 1
         assert recovered[0].id == "previous-run"
@@ -49,8 +54,6 @@ class TestRecovery:
     def test_running_task_marked_failed_on_recovery(
         self, cfg: MaxwellDaemonConfig, tmp_path: Path
     ) -> None:
-        from datetime import datetime, timezone
-
         task_store_path = tmp_path / "tasks.db"
         store = TaskStore(task_store_path)
         running = Task(
@@ -63,7 +66,12 @@ class TestRecovery:
         store.update_status("crashed", TaskStatus.RUNNING)
         del store
 
-        d = Daemon(cfg, ledger_path=tmp_path / "l.db", task_store_path=task_store_path)
+        d = Daemon(
+            cfg,
+            ledger_path=tmp_path / "l.db",
+            task_store_path=task_store_path,
+            action_store_path=tmp_path / "actions.db",
+        )
         d.recover()
         # The in-memory view won't include it (only queued get re-queued),
         # but the persistent store reflects the failure.
@@ -76,7 +84,12 @@ class TestRecovery:
 
     def test_submit_persists_immediately(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"
-        d = Daemon(cfg, ledger_path=tmp_path / "l.db", task_store_path=task_store_path)
+        d = Daemon(
+            cfg,
+            ledger_path=tmp_path / "l.db",
+            task_store_path=task_store_path,
+            action_store_path=tmp_path / "actions.db",
+        )
         task = d.submit("hello")
         # Reopen the store in a fresh object — the task must already be there.
         store = TaskStore(task_store_path)
@@ -84,12 +97,110 @@ class TestRecovery:
 
     def test_cancel_persists_status(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"
-        d = Daemon(cfg, ledger_path=tmp_path / "l.db", task_store_path=task_store_path)
+        d = Daemon(
+            cfg,
+            ledger_path=tmp_path / "l.db",
+            task_store_path=task_store_path,
+            action_store_path=tmp_path / "actions.db",
+        )
         task = d.submit("hi")
         d.cancel_task(task.id)
         store = TaskStore(task_store_path)
         loaded = store.get(task.id)
+        assert loaded is not None
         assert loaded.status is TaskStatus.CANCELLED
+
+    def test_submit_does_not_enqueue_when_persistence_fails(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
+        class FailingStore:
+            def save(self, _task: Any) -> None:
+                raise RuntimeError("disk locked")
+
+        d = Daemon(
+            cfg,
+            ledger_path=tmp_path / "l.db",
+            task_store_path=tmp_path / "tasks.db",
+            action_store_path=tmp_path / "actions.db",
+        )
+        d._task_store = FailingStore()  # type: ignore[assignment]
+
+        with pytest.raises(RuntimeError, match="disk locked"):
+            d.submit("hello", task_id="persist-first")
+
+        assert d.get_task("persist-first") is None
+        assert d._queue.qsize() == 0
+
+    def test_submit_issue_does_not_enqueue_when_persistence_fails(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
+        class FailingStore:
+            def save(self, _task: Any) -> None:
+                raise RuntimeError("disk locked")
+
+        d = Daemon(
+            cfg,
+            ledger_path=tmp_path / "l.db",
+            task_store_path=tmp_path / "tasks.db",
+            action_store_path=tmp_path / "actions.db",
+        )
+        d._task_store = FailingStore()  # type: ignore[assignment]
+
+        with pytest.raises(RuntimeError, match="disk locked"):
+            d.submit_issue(
+                repo="owner/repo",
+                issue_number=350,
+                mode="plan",
+                task_id="issue-persist-first",
+            )
+
+        assert d.get_task("issue-persist-first") is None
+        assert d._queue.qsize() == 0
+
+    def test_async_retention_uses_non_blocking_prune_methods(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
+        class AsyncPruneStore:
+            def __init__(self, count: int) -> None:
+                self.count = count
+                self.days: int | None = None
+
+            def prune(self, _days: int) -> int:
+                raise AssertionError("sync prune should not run from async retention")
+
+            async def aprune(self, days: int) -> int:
+                self.days = days
+                return self.count
+
+        async def body() -> None:
+            d = Daemon(
+                cfg,
+                ledger_path=tmp_path / "l.db",
+                task_store_path=tmp_path / "tasks.db",
+                action_store_path=tmp_path / "actions.db",
+            )
+            task_store = AsyncPruneStore(2)
+            ledger = AsyncPruneStore(3)
+            d._task_store = task_store  # type: ignore[assignment]
+            d._ledger = ledger  # type: ignore[assignment]
+            old_done = Task(
+                id="old-done",
+                prompt="old",
+                kind=TaskKind.PROMPT,
+                status=TaskStatus.COMPLETED,
+                finished_at=datetime.now(timezone.utc) - timedelta(days=45),
+            )
+            with d._tasks_lock:
+                d._tasks[old_done.id] = old_done
+
+            result = await d.aprune_retained_history(30)
+
+            assert result == {"tasks": 2, "ledger_records": 3}
+            assert task_store.days == 30
+            assert ledger.days == 30
+            assert d.get_task(old_done.id) is None
+
+        asyncio.run(body())
 
 
 class TestExecutionPersistence:
@@ -110,6 +221,7 @@ class TestExecutionPersistence:
                 cfg2,
                 ledger_path=tmp_path / "l.db",
                 task_store_path=task_store_path,
+                action_store_path=tmp_path / "actions.db",
             )
 
             async def body() -> None:
@@ -118,6 +230,7 @@ class TestExecutionPersistence:
                 # wait for completion
                 for _ in range(100):
                     t = d.get_task(task.id)
+                    assert t is not None
                     if t.status in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
                         break
                     await asyncio.sleep(0.02)

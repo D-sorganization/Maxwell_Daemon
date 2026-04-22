@@ -372,11 +372,38 @@ class Daemon:
         pruned_ledger = self._ledger.prune(days)
         return {"tasks": pruned_tasks, "ledger_records": pruned_ledger}
 
+    async def aprune_retained_history(self, older_than_days: int | None = None) -> dict[str, int]:
+        """Prune retained history without blocking the event loop on SQLite work."""
+        days = (
+            self._config.agent.task_retention_days if older_than_days is None else older_than_days
+        )
+        if days <= 0:
+            return {"tasks": 0, "ledger_records": 0}
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        terminal = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}
+        with self._tasks_lock:
+            stale_ids = [
+                task_id
+                for task_id, task in self._tasks.items()
+                if task.status in terminal
+                and task.finished_at is not None
+                and task.finished_at < cutoff
+            ]
+            for task_id in stale_ids:
+                self._tasks.pop(task_id, None)
+
+        pruned_tasks, pruned_ledger = await asyncio.gather(
+            self._task_store.aprune(days),
+            self._ledger.aprune(days),
+        )
+        return {"tasks": pruned_tasks, "ledger_records": pruned_ledger}
+
     async def _retention_loop(self) -> None:
         interval = self._config.agent.task_prune_interval_seconds
         while self._running:
             try:
-                result = self.prune_retained_history()
+                result = await self.aprune_retained_history()
                 if result["tasks"] or result["ledger_records"]:
                     log.info("retention prune completed: %s", result)
             except asyncio.CancelledError:
@@ -449,10 +476,10 @@ class Daemon:
         # can corrupt the underlying heap list ("list changed size during
         # iteration"). Serializing via _tasks_lock makes the submit path safe
         # for sync callers; the async path uses submit_threadsafe() instead.
+        self._task_store.save(task)
         with self._tasks_lock:
             self._tasks[task.id] = task
             self._queue.put_nowait((task.priority, task))
-        self._task_store.save(task)
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
         # submits before start()), skip the event — the queued state is
         # observable via get_task().
@@ -503,9 +530,9 @@ class Daemon:
             backend=backend,
             model=model,
         )
+        self._task_store.save(task)
         with self._tasks_lock:
             self._tasks[task.id] = task
-        self._task_store.save(task)
         asyncio.run_coroutine_threadsafe(self._queue.put((task.priority, task)), self._loop).result(
             timeout=5.0
         )
@@ -539,10 +566,10 @@ class Daemon:
         )
         # See note in submit(): queue put is serialized under _tasks_lock
         # because asyncio.PriorityQueue.put_nowait is not thread-safe.
+        self._task_store.save(task)
         with self._tasks_lock:
             self._tasks[task.id] = task
             self._queue.put_nowait((task.priority, task))
-        self._task_store.save(task)
         with contextlib.suppress(RuntimeError):
             loop = asyncio.get_running_loop()
             bg = loop.create_task(
