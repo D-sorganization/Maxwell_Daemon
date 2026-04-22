@@ -96,11 +96,14 @@ class TestConfigLoad:
     def test_default_backend_config_returns_selected_backend(self) -> None:
         cfg = MaxwellDaemonConfig.model_validate(
             {
-                "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
-                "agent": {"default_backend": "nonexistent"},
+                "backends": {
+                    "claude": {"type": "claude", "model": "claude-sonnet-4-6"},
+                    "local": {"type": "ollama", "model": "llama3.1"},
+                },
+                "agent": {"default_backend": "local"},
             }
         )
-        assert cfg.default_backend_config().model == "claude-sonnet-4-6"
+        assert cfg.default_backend_config().model == "llama3.1"
 
     def test_rejects_unknown_top_level_keys(self) -> None:
         from pydantic import ValidationError
@@ -112,6 +115,26 @@ class TestConfigLoad:
                     "bogus_key": True,
                 }
             )
+
+    def test_memory_config_defaults_to_disabled_dream_cycle(self) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(
+            {"backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}}}
+        )
+        assert cfg.memory_dream_interval_seconds == 0
+        assert cfg.memory_workspace_path.name == "maxwell-daemon"
+
+    def test_memory_config_expands_workspace_path(self, tmp_path: Path) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}},
+                "memory": {
+                    "workspace_path": str(tmp_path),
+                    "dream_interval_seconds": 1800,
+                },
+            }
+        )
+        assert cfg.memory_workspace_path == tmp_path
+        assert cfg.memory_dream_interval_seconds == 1800
 
 
 class TestDefaultConfigPath:

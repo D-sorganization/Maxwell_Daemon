@@ -72,6 +72,36 @@ class TestStatus:
         assert r.exit_code == 1
 
 
+class TestMemory:
+    def test_memory_status_reports_store_state(
+        self, runner: CliRunner, tmp_path: Path, register_recording_backend: None
+    ) -> None:
+        from maxwell_daemon.config import MaxwellDaemonConfig, save_config
+
+        workspace = tmp_path / "memory-workspace"
+        raw_dir = workspace / ".maxwell" / "raw_logs"
+        raw_dir.mkdir(parents=True)
+        (raw_dir / "session.log").write_text("raw memory", encoding="utf-8")
+        cfg = MaxwellDaemonConfig.model_validate(
+            {
+                "backends": {"primary": {"type": "recording", "model": "test-model"}},
+                "agent": {"default_backend": "primary"},
+                "memory": {
+                    "workspace_path": str(workspace),
+                    "dream_interval_seconds": 900,
+                },
+            }
+        )
+        config_path = tmp_path / "c.yaml"
+        save_config(cfg, config_path)
+
+        r = runner.invoke(app, ["memory", "status", "--config", str(config_path)])
+
+        assert r.exit_code == 0
+        assert "Raw logs" in r.stdout
+        assert "900s" in r.stdout
+
+
 class TestBackendsCommand:
     def test_lists_registered_adapters(
         self, runner: CliRunner, register_recording_backend: None

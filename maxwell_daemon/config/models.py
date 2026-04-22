@@ -104,6 +104,29 @@ class AgentConfig(BaseModel):
     default_backend: str = "claude"
 
 
+class MemoryConfig(BaseModel):
+    """Local memory store and background dream-cycle settings."""
+
+    workspace_path: Path = Field(
+        default_factory=lambda: Path.home() / ".local/share/maxwell-daemon",
+        description="Workspace root that contains .maxwell/memory and .maxwell/raw_logs.",
+    )
+    dream_interval_seconds: int = Field(
+        0,
+        ge=0,
+        description="Seconds between background memory anneal cycles. 0 disables cycles.",
+    )
+
+    @field_validator("workspace_path", mode="before")
+    @classmethod
+    def _expand_workspace_path(cls, v: Any) -> Path:
+        if isinstance(v, str):
+            return Path(v).expanduser()
+        if not isinstance(v, Path):
+            raise ValueError(f"expected str or Path for 'workspace_path', got {type(v).__name__!r}")
+        return v
+
+
 class ToolConfig(BaseModel):
     approval_tier: Literal["suggest", "auto-edit", "full-auto"] = "full-auto"
 
@@ -218,6 +241,7 @@ class MaxwellDaemonConfig(BaseModel):
     role: Literal["standalone", "coordinator", "worker"] = "standalone"
     backends: dict[str, BackendConfig] = Field(default_factory=dict)
     agent: AgentConfig = Field(default_factory=lambda: AgentConfig())
+    memory: MemoryConfig = Field(default_factory=lambda: MemoryConfig())
     tools: ToolConfig = Field(default_factory=lambda: ToolConfig())
     repos: list[RepoConfig] = Field(default_factory=list)
     fleet: FleetConfig = Field(default_factory=lambda: FleetConfig())
@@ -235,6 +259,12 @@ class MaxwellDaemonConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_backend_references(self) -> MaxwellDaemonConfig:
         known = set(self.backends)
+
+        if self.agent.default_backend not in known:
+            raise ValueError(
+                f"agent.default_backend '{self.agent.default_backend}' not found in "
+                f"backends: {sorted(known)}"
+            )
 
         # Validate per-repo backend overrides
         for repo in self.repos:
@@ -259,11 +289,7 @@ class MaxwellDaemonConfig(BaseModel):
 
     def default_backend_config(self) -> BackendConfig:
         name = self.agent.default_backend
-        if name in self.backends:
-            return self.backends[name]
-        # Fall back to the first configured backend for backward compatibility
-        # with older configs/tests that set a non-existent default_backend.
-        return next(iter(self.backends.values()))
+        return self.backends[name]
 
     # ── Config boundary accessors (Law of Demeter) ────────────────────────────
     # Callers should prefer these over traversing sub-objects directly so that
@@ -293,6 +319,16 @@ class MaxwellDaemonConfig(BaseModel):
     def fleet_machines(self) -> list[MachineConfig]:
         """Shortcut for ``fleet.machines``."""
         return self.fleet.machines
+
+    @property
+    def memory_workspace_path(self) -> Path:
+        """Shortcut for ``memory.workspace_path``."""
+        return self.memory.workspace_path
+
+    @property
+    def memory_dream_interval_seconds(self) -> int:
+        """Shortcut for ``memory.dream_interval_seconds``."""
+        return self.memory.dream_interval_seconds
 
     @property
     def github_routes(self) -> list[WebhookRouteConfig]:

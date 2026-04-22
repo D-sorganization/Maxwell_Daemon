@@ -10,6 +10,7 @@ from maxwell_daemon.config.models import (
     GithubConfig,
     MachineConfig,
     MaxwellDaemonConfig,
+    MemoryConfig,
     RepoConfig,
     WebhookRouteConfig,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "GithubConfig",
     "MachineConfig",
     "MaxwellDaemonConfig",
+    "MemoryConfig",
     "RepoConfig",
     "WebhookRouteConfig",
     "load_config",

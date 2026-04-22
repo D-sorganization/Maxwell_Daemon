@@ -131,7 +131,7 @@ class Daemon:
             ScratchPad,
         )
 
-        default_memory = Path.home() / ".local/share/maxwell-daemon/memory.db"
+        default_memory = self._config.memory_workspace_path / "memory.db"
         self._memory = MemoryManager(
             scratchpad=ScratchPad(),
             profile=RepoProfile(default_memory),
@@ -244,6 +244,13 @@ class Daemon:
             prune_task = asyncio.create_task(self._retention_loop(), name="retention-pruner")
             self._bg_tasks.add(prune_task)
             prune_task.add_done_callback(self._bg_tasks.discard)
+        if self._config.memory_dream_interval_seconds > 0:
+            dream_task = asyncio.create_task(
+                self._dream_cycle_loop(),
+                name="memory-dream-cycle",
+            )
+            self._bg_tasks.add(dream_task)
+            dream_task.add_done_callback(self._bg_tasks.discard)
         log.info("daemon started with %d workers", self._worker_count)
 
     def recover(self) -> list[Task]:
@@ -330,6 +337,46 @@ class Daemon:
             except Exception:
                 log.warning("retention prune failed", exc_info=True)
             await asyncio.sleep(interval)
+
+    async def _dream_cycle_loop(self) -> None:
+        """Periodically consolidate raw markdown memory when explicitly enabled."""
+        while self._running:
+            interval = self._config.memory_dream_interval_seconds
+            if interval <= 0:
+                return
+            await asyncio.sleep(interval)
+            if not self._running:
+                return
+            try:
+                result = await self.run_memory_dream_cycle()
+                log.info("memory dream cycle completed: %s", result)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.warning("memory dream cycle failed", exc_info=True)
+
+    async def run_memory_dream_cycle(self) -> str:
+        """Run one memory anneal pass against the configured local markdown store."""
+        from maxwell_daemon.core.memory_annealer import MemoryAnnealer
+        from maxwell_daemon.core.roles import Role, RoleOrchestrator
+
+        annealer = MemoryAnnealer(workspace=self._config.memory_workspace_path)
+        if annealer.status().raw_log_count == 0:
+            return "No raw memory to anneal."
+
+        role = Role(
+            name="memory_summarizer",
+            system_prompt=(
+                "You consolidate raw Maxwell-Daemon execution logs into concise, durable "
+                "markdown memory. Preserve technical decisions, repository conventions, "
+                "and lessons learned. Drop transient chatter and secrets."
+            ),
+        )
+        summarizer = RoleOrchestrator(self._router).assign_player(role)
+        return await MemoryAnnealer(
+            workspace=self._config.memory_workspace_path,
+            summarizer_role=summarizer,
+        ).anneal()
 
     def submit(
         self,
