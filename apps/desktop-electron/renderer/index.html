@@ -48,8 +48,14 @@
     </section>
   </main>
   <dialog id="command-palette">
-    <form method="dialog">
+    <form method="dialog" id="command-form">
       <input id="command-input" placeholder="refresh, dispatch, updates">
+      <menu class="command-list">
+        <button type="button" data-command="refresh">Refresh</button>
+        <button type="button" data-command="dispatch">Dispatch</button>
+        <button type="button" data-command="updates">Updates</button>
+      </menu>
+      <p id="command-status" aria-live="polite"></p>
       <button value="cancel">Close</button>
     </form>
   </dialog>

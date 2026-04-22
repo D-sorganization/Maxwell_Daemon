@@ -134,6 +134,39 @@ function saveSettings() {
   });
 }
 
+function openCommandPalette() {
+  const palette = $("command-palette");
+  const input = $("command-input");
+  $("command-status").textContent = "";
+  if (!palette.open) palette.showModal();
+  input.focus();
+  input.select();
+}
+
+async function runCommand(rawCommand) {
+  const command = String(rawCommand || "").trim().toLowerCase();
+  const palette = $("command-palette");
+  const status = $("command-status");
+  if (command === "refresh" || command === "sync") {
+    palette.close();
+    await refresh();
+    return true;
+  }
+  if (command === "dispatch") {
+    palette.close();
+    $("issue-ref").focus();
+    return true;
+  }
+  if (command === "updates" || command === "update") {
+    const result = await window.maxwellDesktop.checkForUpdates();
+    renderUpdateStatus(result.status);
+    palette.close();
+    return true;
+  }
+  status.textContent = command ? `Unknown command: ${command}` : "Enter a command";
+  return false;
+}
+
 async function dispatchIssue() {
   const ref = parseIssueRef($("issue-ref").value);
   if (!ref) return;
@@ -168,10 +201,17 @@ document.addEventListener("DOMContentLoaded", () => {
     renderUpdateStatus(result.status);
   });
   $("install-update").addEventListener("click", () => window.maxwellDesktop.installUpdate());
-  $("command-button").addEventListener("click", () => $("command-palette").showModal());
+  $("command-button").addEventListener("click", openCommandPalette);
+  $("command-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    runCommand($("command-input").value);
+  });
+  document.querySelectorAll("[data-command]").forEach((button) => {
+    button.addEventListener("click", () => runCommand(button.dataset.command));
+  });
   window.maxwellDesktop.onRefresh(refresh);
   window.maxwellDesktop.onUpdateStatus(renderUpdateStatus);
-  window.maxwellDesktop.onCommandPalette(() => $("command-palette").showModal());
+  window.maxwellDesktop.onCommandPalette(openCommandPalette);
   wireDropZone();
   renderUpdateStatus();
   refresh();

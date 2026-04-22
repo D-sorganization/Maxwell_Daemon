@@ -91,3 +91,19 @@ def test_renderer_uses_event_based_notifications() -> None:
     assert "Delegate needs attention" in renderer
     assert "Maxwell-Daemon offline" in renderer
     assert "`${running} task(s) running`" not in renderer
+
+
+def test_renderer_command_palette_executes_common_desktop_actions() -> None:
+    renderer = (APP_DIR / "renderer" / "app.js").read_text(encoding="utf-8")
+    html = (APP_DIR / "renderer" / "index.html").read_text(encoding="utf-8")
+
+    assert "function openCommandPalette" in renderer
+    assert "async function runCommand" in renderer
+    assert 'command === "refresh" || command === "sync"' in renderer
+    assert 'command === "dispatch"' in renderer
+    assert 'command === "updates" || command === "update"' in renderer
+    assert "window.maxwellDesktop.onCommandPalette(openCommandPalette)" in renderer
+    assert 'id="command-form"' in html
+    assert 'data-command="refresh"' in html
+    assert 'data-command="dispatch"' in html
+    assert 'data-command="updates"' in html

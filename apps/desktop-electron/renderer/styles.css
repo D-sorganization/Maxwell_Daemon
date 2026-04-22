@@ -111,6 +111,19 @@ article,
   outline: 2px solid var(--accent);
 }
 
+.command-list {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0;
+}
+
+#command-status {
+  min-height: 20px;
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
 ul {
   margin: 0;
   padding: 0;

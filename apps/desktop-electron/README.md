@@ -11,6 +11,9 @@ useful when the main window is hidden.
 Update checks stream their lifecycle into the renderer. When an update is ready,
 the shell shows an install action and sends a native desktop notification.
 
+The command palette opens from the app button or Cmd/Ctrl+K and runs common
+desktop actions such as refresh, dispatch focus, and update checks.
+
 ## Commands
 
 ```bash
