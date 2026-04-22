@@ -92,9 +92,7 @@ class TestHTMLContent:
         assert "openCommandPalette" in js
         assert "terminal-log" in js
 
-    def test_deferred_test_output_keeps_selected_task_context(
-        self, client: TestClient
-    ) -> None:
+    def test_deferred_test_output_keeps_selected_task_context(self, client: TestClient) -> None:
         js = client.get("/ui/app.js").text
 
         assert "const selectedAtSchedule = p.task_id;" in js
