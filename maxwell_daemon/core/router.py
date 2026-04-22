@@ -14,7 +14,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from maxwell_daemon.backends import ILLMBackend, registry
+from maxwell_daemon.backends import ILLMBackend
+from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.config import BackendConfig, MaxwellDaemonConfig
 
 if TYPE_CHECKING:
