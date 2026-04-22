@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maxwell-Daemon Desktop</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header>
+    <h1>Maxwell-Daemon</h1>
+    <button id="command-button">Command</button>
+  </header>
+  <main>
+    <section class="toolbar">
+      <input id="daemon-url" type="url" placeholder="http://127.0.0.1:8080">
+      <input id="token" type="password" placeholder="Bearer token">
+      <button id="save-settings">Save</button>
+      <button id="refresh">Refresh</button>
+      <button id="updates">Check Updates</button>
+    </section>
+    <section class="drop-zone" id="drop-zone">Drop files here to attach paths to a prompt</section>
+    <section class="grid">
+      <article>
+        <h2>Fleet</h2>
+        <ul id="fleet"></ul>
+      </article>
+      <article>
+        <h2>Tasks</h2>
+        <ul id="tasks"></ul>
+      </article>
+      <article>
+        <h2>Dispatch Issue</h2>
+        <input id="issue-ref" placeholder="D-sorganization/Maxwell-Daemon#13">
+        <select id="issue-mode">
+          <option value="implement">implement</option>
+          <option value="plan">plan</option>
+        </select>
+        <button id="dispatch">Dispatch</button>
+      </article>
+    </section>
+  </main>
+  <dialog id="command-palette">
+    <form method="dialog">
+      <input id="command-input" placeholder="refresh, dispatch, updates">
+      <button value="cancel">Close</button>
+    </form>
+  </dialog>
+  <script src="./app.js"></script>
+</body>
+</html>

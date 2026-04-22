@@ -1,0 +1,47 @@
+{
+  "name": "maxwell-daemon-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop shell for Maxwell-Daemon.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "org.d-sorganization.maxwell-daemon",
+    "productName": "Maxwell-Daemon",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "target": [
+        "msi"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "snap"
+      ]
+    },
+    "publish": null
+  }
+}
