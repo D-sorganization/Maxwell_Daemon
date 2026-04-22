@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
@@ -18,10 +19,21 @@ from maxwell_daemon.daemon import Daemon
 
 
 @pytest.fixture
-def daemon(minimal_config: MaxwellDaemonConfig, isolated_ledger_path) -> Iterator[Daemon]:
+def daemon(
+    minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path, tmp_path: Path
+) -> Iterator[Daemon]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
+    d = Daemon(
+        minimal_config,
+        ledger_path=isolated_ledger_path,
+        workspace_root=tmp_path / "workspaces",
+        task_store_path=tmp_path / "tasks.db",
+        work_item_store_path=tmp_path / "work_items.db",
+        artifact_store_path=tmp_path / "artifacts.db",
+        artifact_blob_root=tmp_path / "artifacts",
+        action_store_path=tmp_path / "actions.db",
+    )
     loop.run_until_complete(d.start(worker_count=1))
     try:
         yield d
@@ -227,6 +239,65 @@ class TestAdminJWT:
     def test_admin_can_get_fleet(self, jwt_only_client: TestClient, jwt_cfg: JWTConfig) -> None:
         r = jwt_only_client.get("/api/v1/fleet", headers=_bearer(admin_token(jwt_cfg)))
         assert r.status_code == 200
+
+
+# ── JWT token issuance ────────────────────────────────────────────────────────
+
+
+class TestTokenIssuance:
+    """JWT minting is admin-gated so JWT mode does not bootstrap itself open."""
+
+    def test_jwt_only_rejects_unauthenticated_admin_token_request(
+        self, jwt_only_client: TestClient
+    ) -> None:
+        r = jwt_only_client.post(
+            "/api/v1/auth/token",
+            json={"subject": "eve", "role": "admin"},
+        )
+        assert r.status_code == 401
+
+    def test_viewer_cannot_mint_admin_token(
+        self, jwt_only_client: TestClient, jwt_cfg: JWTConfig
+    ) -> None:
+        r = jwt_only_client.post(
+            "/api/v1/auth/token",
+            json={"subject": "eve", "role": "admin"},
+            headers=_bearer(viewer_token(jwt_cfg)),
+        )
+        assert r.status_code == 403
+
+    def test_operator_cannot_mint_admin_token(
+        self, jwt_only_client: TestClient, jwt_cfg: JWTConfig
+    ) -> None:
+        r = jwt_only_client.post(
+            "/api/v1/auth/token",
+            json={"subject": "eve", "role": "admin"},
+            headers=_bearer(operator_token(jwt_cfg)),
+        )
+        assert r.status_code == 403
+
+    def test_admin_can_mint_token(self, jwt_only_client: TestClient, jwt_cfg: JWTConfig) -> None:
+        r = jwt_only_client.post(
+            "/api/v1/auth/token",
+            json={"subject": "alice", "role": "viewer", "expiry_seconds": 600},
+            headers=_bearer(admin_token(jwt_cfg)),
+        )
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body["token_type"] == "bearer"
+        assert body["expires_in"] == 600
+        assert body["role"] == "viewer"
+
+    def test_static_admin_can_mint_token_when_jwt_enabled(self, both_client: TestClient) -> None:
+        r = both_client.post(
+            "/api/v1/auth/token",
+            json={"subject": "alice", "role": "operator"},
+            headers=_bearer("admin-static-secret"),
+        )
+
+        assert r.status_code == 200
+        assert r.json()["role"] == "operator"
 
 
 # ── mixed static + JWT ────────────────────────────────────────────────────────

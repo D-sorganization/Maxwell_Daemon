@@ -21,6 +21,7 @@ from pathlib import Path as _Path
 from typing import Annotated, Any
 
 from fastapi import (
+    Body,
     Depends,
     FastAPI,
     Header,
@@ -364,6 +365,19 @@ class SSHRunRequest(BaseModel):
     timeout_seconds: float = 30.0
 
 
+class TokenRequest(BaseModel):
+    subject: str = Field(..., min_length=1, max_length=128)
+    role: str = Field(default="viewer", pattern=r"^(admin|operator|viewer|developer)$")
+    expiry_seconds: int | None = Field(default=None, ge=1, le=86400 * 30)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    role: str
+
+
 def _auth_dep(token: str | None) -> Any:
     async def _check(authorization: Annotated[str | None, Header()] = None) -> None:
         if token is None:
@@ -529,23 +543,12 @@ def create_app(
 
     # ── JWT auth endpoints ────────────────────────────────────────────────────
 
-    class TokenRequest(BaseModel):
-        subject: str = Field(..., min_length=1, max_length=128)
-        role: str = Field(default="viewer", pattern=r"^(admin|operator|viewer|developer)$")
-        expiry_seconds: int | None = Field(default=None, ge=1, le=86400 * 30)
-
-    class TokenResponse(BaseModel):
-        access_token: str
-        token_type: str = "bearer"
-        expires_in: int
-        role: str
-
-    @app.post("/api/v1/auth/token", dependencies=[Depends(auth)])
-    async def issue_token(payload: TokenRequest) -> TokenResponse:
+    @app.post("/api/v1/auth/token", dependencies=[Depends(_require_admin())])
+    async def issue_token(payload: Annotated[TokenRequest, Body()]) -> TokenResponse:
         """Issue a JWT with the requested role.
 
-        Requires the static bearer token (admin action).  The resulting JWT
-        can then be used in place of the static token for role-scoped access.
+        Requires an admin credential.  The resulting JWT can then be used in
+        place of the static token for role-scoped access.
         """
         if jwt_config is None:
             raise HTTPException(
