@@ -128,6 +128,20 @@ class TestTaskSubmission:
         assert "api-duplicate-id" in duplicate.json()["detail"]
         assert daemon._task_store.get("api-duplicate-id").prompt == "first"
 
+    def test_submit_rejects_invalid_issue_mode(self, client: TestClient) -> None:
+        r = client.post(
+            "/api/v1/tasks",
+            json={
+                "prompt": "owner/repo#123",
+                "kind": "issue",
+                "issue_repo": "owner/repo",
+                "issue_number": 123,
+                "issue_mode": "invalid",
+            },
+        )
+
+        assert r.status_code == 422
+
     def test_list_returns_all_tasks(self, client: TestClient) -> None:
         for i in range(3):
             client.post("/api/v1/tasks", json={"prompt": f"t{i}"})
