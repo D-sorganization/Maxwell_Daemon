@@ -37,6 +37,13 @@ from pydantic import BaseModel, Field, field_validator
 from maxwell_daemon import __version__
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
+from maxwell_daemon.core.work_items import (
+    REPO_PATTERN,
+    AcceptanceCriterion,
+    ScopeBoundary,
+    WorkItem,
+    WorkItemStatus,
+)
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task
 from maxwell_daemon.logging import bind_context
@@ -77,8 +84,78 @@ class TaskSubmit(BaseModel):
     priority: int = Field(default=100, ge=0, le=200)
 
 
+class WorkItemCreate(BaseModel):
+    id: str | None = Field(default=None, min_length=1)
+    title: str = Field(..., min_length=1)
+    body: str = ""
+    repo: str | None = Field(default=None, pattern=REPO_PATTERN)
+    source: str = Field(default="api", pattern=r"^(manual|github_issue|gaai|api)$")
+    source_url: str | None = None
+    acceptance_criteria: tuple[AcceptanceCriterion, ...] = ()
+    scope: ScopeBoundary = Field(default_factory=ScopeBoundary)
+    required_checks: tuple[str, ...] = ()
+    priority: int = Field(default=100, ge=0, le=1000)
+    task_ids: tuple[str, ...] = ()
+
+
+class WorkItemPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1)
+    body: str | None = None
+    repo: str | None = Field(default=None, pattern=REPO_PATTERN)
+    source_url: str | None = None
+    acceptance_criteria: tuple[AcceptanceCriterion, ...] | None = None
+    scope: ScopeBoundary | None = None
+    required_checks: tuple[str, ...] | None = None
+    priority: int | None = Field(default=None, ge=0, le=1000)
+    task_ids: tuple[str, ...] | None = None
+
+
+class WorkItemTransition(BaseModel):
+    status: WorkItemStatus
+
+
+class WorkItemView(BaseModel):
+    id: str
+    title: str
+    body: str
+    repo: str | None
+    source: str
+    source_url: str | None
+    status: str
+    acceptance_criteria: tuple[AcceptanceCriterion, ...]
+    scope: ScopeBoundary
+    required_checks: tuple[str, ...]
+    priority: int
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    task_ids: tuple[str, ...]
+
+    @classmethod
+    def from_item(cls, item: WorkItem) -> WorkItemView:
+        return cls(
+            id=item.id,
+            title=item.title,
+            body=item.body,
+            repo=item.repo,
+            source=item.source,
+            source_url=item.source_url,
+            status=item.status.value,
+            acceptance_criteria=item.acceptance_criteria,
+            scope=item.scope,
+            required_checks=item.required_checks,
+            priority=item.priority,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+            started_at=item.started_at,
+            completed_at=item.completed_at,
+            task_ids=item.task_ids,
+        )
+
+
 class IssueCreate(BaseModel):
-    repo: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
+    repo: str = Field(..., pattern=REPO_PATTERN)
     title: str = Field(..., min_length=1)
     body: str = ""
     labels: list[str] = Field(default_factory=list)
@@ -87,7 +164,7 @@ class IssueCreate(BaseModel):
 
 
 class IssueDispatch(BaseModel):
-    repo: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
+    repo: str = Field(..., pattern=REPO_PATTERN)
     number: int = Field(..., ge=1)
     mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
     backend: str | None = None
@@ -100,7 +177,7 @@ class IssueBatchDispatch(BaseModel):
 
 
 class IssueAbDispatch(BaseModel):
-    repo: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
+    repo: str = Field(..., pattern=REPO_PATTERN)
     number: int = Field(..., ge=1)
     backends: list[str] = Field(..., min_length=2, max_length=4)
     mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
@@ -489,6 +566,91 @@ def create_app(
         if t is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
         return TaskView.from_task(t)
+
+    @app.post(
+        "/api/v1/work-items",
+        dependencies=[Depends(auth), Depends(_require_operator())],
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def create_work_item(payload: WorkItemCreate) -> WorkItemView:
+        item = WorkItem(
+            id=payload.id or uuid.uuid4().hex[:12],
+            title=payload.title,
+            body=payload.body,
+            repo=payload.repo,
+            source=payload.source,  # type: ignore[arg-type]
+            source_url=payload.source_url,
+            acceptance_criteria=payload.acceptance_criteria,
+            scope=payload.scope,
+            required_checks=payload.required_checks,
+            priority=payload.priority,
+            task_ids=payload.task_ids,
+        )
+        try:
+            saved = daemon.create_work_item(item)
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        return WorkItemView.from_item(saved)
+
+    @app.get("/api/v1/work-items", dependencies=[Depends(_require_viewer())])
+    async def list_work_items(
+        status_filter: Annotated[WorkItemStatus | None, Query(alias="status")] = None,
+        repo: Annotated[str | None, Query(pattern=REPO_PATTERN)] = None,
+        source: Annotated[str | None, Query(pattern=r"^(manual|github_issue|gaai|api)$")] = None,
+        max_priority: Annotated[int | None, Query(ge=0, le=1000)] = None,
+        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    ) -> list[WorkItemView]:
+        items = daemon.list_work_items(
+            limit=limit,
+            status=status_filter,
+            repo=repo,
+            source=source,
+            max_priority=max_priority,
+        )
+        return [WorkItemView.from_item(item) for item in items]
+
+    @app.get("/api/v1/work-items/{item_id}", dependencies=[Depends(_require_viewer())])
+    async def get_work_item(item_id: str) -> WorkItemView:
+        item = daemon.get_work_item(item_id)
+        if item is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found")
+        return WorkItemView.from_item(item)
+
+    @app.patch(
+        "/api/v1/work-items/{item_id}",
+        dependencies=[Depends(auth), Depends(_require_operator())],
+    )
+    async def patch_work_item(item_id: str, payload: WorkItemPatch) -> WorkItemView:
+        item = daemon.get_work_item(item_id)
+        if item is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found")
+        updates = {
+            key: value
+            for key, value in payload.model_dump(exclude_unset=True).items()
+            if value is not None
+        }
+        updates["updated_at"] = datetime.now(timezone.utc)
+        try:
+            updated = daemon.update_work_item(WorkItem.model_validate(item.model_dump() | updates))
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        return WorkItemView.from_item(updated)
+
+    @app.post(
+        "/api/v1/work-items/{item_id}/transition",
+        dependencies=[Depends(auth), Depends(_require_operator())],
+    )
+    async def transition_work_item_endpoint(
+        item_id: str,
+        payload: WorkItemTransition,
+    ) -> WorkItemView:
+        try:
+            item = daemon.transition_work_item(item_id, payload.status)
+        except KeyError:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found") from None
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        return WorkItemView.from_item(item)
 
     @app.post(
         "/api/v1/tasks/{task_id}/cancel",

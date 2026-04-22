@@ -57,6 +57,7 @@ nav:
       - Overview: architecture/overview.md
       - Backend interface: architecture/backends.md
       - Design by Contract: architecture/contracts.md
+      - Governed work items: architecture/work-items.md
   - Operations:
       - Deployment guide: operations/deployment.md
       - Deployment (Ansible): operations/ansible.md

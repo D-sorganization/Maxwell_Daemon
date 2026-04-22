@@ -22,6 +22,7 @@ from maxwell_daemon.cli.memory import memory_app
 from maxwell_daemon.cli.session import session_app
 from maxwell_daemon.cli.spec import spec_app
 from maxwell_daemon.cli.tasks import tasks_app
+from maxwell_daemon.cli.work_items import work_item_app
 from maxwell_daemon.config import (
     MaxwellDaemonConfig,
     load_config,
@@ -43,6 +44,7 @@ app.add_typer(spec_app, name="spec")
 app.add_typer(session_app, name="session")
 app.add_typer(tasks_app, name="tasks")
 app.add_typer(memory_app, name="memory")
+app.add_typer(work_item_app, name="work-item")
 console = Console()
 
 

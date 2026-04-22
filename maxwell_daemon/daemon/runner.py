@@ -31,6 +31,8 @@ from maxwell_daemon.core import (
     CostRecord,
 )
 from maxwell_daemon.core.task_store import TaskStore
+from maxwell_daemon.core.work_item_store import WorkItemStore
+from maxwell_daemon.core.work_items import WorkItem, WorkItemStatus
 from maxwell_daemon.events import Event, EventBus, EventKind
 from maxwell_daemon.metrics import record_request
 
@@ -105,6 +107,7 @@ class Daemon:
         ledger_path: Path | None = None,
         workspace_root: Path | None = None,
         task_store_path: Path | None = None,
+        work_item_store_path: Path | None = None,
     ) -> None:
         self._config = config
         # Path used for hot-reload; populated by from_config_path.
@@ -123,6 +126,8 @@ class Daemon:
         # Durable task store lives next to the cost ledger by default.
         default_store = Path.home() / ".local/share/maxwell-daemon/tasks.db"
         self._task_store = TaskStore(task_store_path or default_store)
+        default_work_item_store = Path.home() / ".local/share/maxwell-daemon/work_items.db"
+        self._work_item_store = WorkItemStore(work_item_store_path or default_work_item_store)
         # Memory store — co-located with the ledger for easy backup.
         from maxwell_daemon.memory import (
             EpisodicStore,
@@ -566,6 +571,45 @@ class Daemon:
     def get_task(self, task_id: str) -> Task | None:
         # dict.get is GIL-atomic; no lock needed on hot-path reads.
         return self._tasks.get(task_id)
+
+    def create_work_item(self, item: WorkItem) -> WorkItem:
+        self._work_item_store.save(item)
+        loaded = self._work_item_store.get(item.id)
+        if loaded is None:
+            raise RuntimeError(f"work item {item.id} was not persisted")
+        return loaded
+
+    def update_work_item(self, item: WorkItem) -> WorkItem:
+        if self._work_item_store.get(item.id) is None:
+            raise KeyError(item.id)
+        self._work_item_store.save(item)
+        loaded = self._work_item_store.get(item.id)
+        if loaded is None:
+            raise RuntimeError(f"work item {item.id} was not persisted")
+        return loaded
+
+    def get_work_item(self, item_id: str) -> WorkItem | None:
+        return self._work_item_store.get(item_id)
+
+    def list_work_items(
+        self,
+        *,
+        limit: int = 100,
+        status: WorkItemStatus | None = None,
+        repo: str | None = None,
+        source: str | None = None,
+        max_priority: int | None = None,
+    ) -> list[WorkItem]:
+        return self._work_item_store.list_items(
+            limit=limit,
+            status=status,
+            repo=repo,
+            source=source,
+            max_priority=max_priority,
+        )
+
+    def transition_work_item(self, item_id: str, status: WorkItemStatus) -> WorkItem:
+        return self._work_item_store.transition(item_id, status)
 
     def cancel_task(self, task_id: str) -> Task:
         """Cancel a queued task. Raises ValueError if not found or not cancellable."""
