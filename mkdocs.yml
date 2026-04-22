@@ -59,6 +59,7 @@ nav:
       - Design by Contract: architecture/contracts.md
       - Governed work items: architecture/work-items.md
       - Durable artifacts: architecture/artifacts.md
+      - Task graphs: architecture/task-graphs.md
   - Operations:
       - Deployment guide: operations/deployment.md
       - Deployment (Ansible): operations/ansible.md
