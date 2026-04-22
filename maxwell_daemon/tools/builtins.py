@@ -22,7 +22,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from maxwell_daemon.browser import BrowserAction, BrowserRequest, BrowserService
+from maxwell_daemon.browser import BrowserAction, BrowserRequest, BrowserResult, BrowserService
 from maxwell_daemon.core.actions import ActionKind, ActionRiskLevel
 from maxwell_daemon.tools.mcp import (
     HookRunnerProtocol,
@@ -40,6 +40,7 @@ __all__ = [
     "BashRunner",
     "SandboxViolationError",
     "build_default_registry",
+    "make_browser_screenshot",
     "make_edit_file",
     "make_glob_files",
     "make_grep_files",
@@ -470,6 +471,30 @@ def make_grep_files(root: Path) -> Callable[..., str]:
 
 
 # ── open_browser_url ─────────────────────────────────────────────────────────
+def _format_browser_result(browser_result: BrowserResult) -> str:
+    parts: list[str] = [
+        f"url: {browser_result.url}",
+        f"action: {browser_result.action.value}",
+    ]
+    if browser_result.title:
+        parts.append(f"title: {browser_result.title}")
+    if browser_result.screenshot_artifact_id:
+        parts.append(f"screenshot_artifact_id: {browser_result.screenshot_artifact_id}")
+    if browser_result.console_artifact_id:
+        parts.append(f"console_artifact_id: {browser_result.console_artifact_id}")
+    if browser_result.page_error_artifact_id:
+        parts.append(f"page_error_artifact_id: {browser_result.page_error_artifact_id}")
+    if browser_result.metadata:
+        metadata = ", ".join(
+            f"{key}={value!r}" for key, value in sorted(browser_result.metadata.items())
+        )
+        parts.append(f"metadata: {metadata}")
+    if browser_result.text:
+        parts.append("")
+        parts.append(browser_result.text)
+    return "\n".join(parts)
+
+
 def make_open_browser_url(browser_service: BrowserService) -> Callable[..., Awaitable[str]]:
     @mcp_tool(
         name="open_browser_url",
@@ -508,22 +533,55 @@ def make_open_browser_url(browser_service: BrowserService) -> Callable[..., Awai
             timeout_seconds=float(timeout_seconds) if timeout_seconds is not None else 30.0,
         )
         result = await browser_service.run(request)
-        parts: list[str] = [f"url: {result.url}", f"action: {result.action.value}"]
-        if result.title:
-            parts.append(f"title: {result.title}")
-        if result.screenshot_artifact_id:
-            parts.append(f"screenshot_artifact_id: {result.screenshot_artifact_id}")
-        if result.metadata:
-            metadata = ", ".join(
-                f"{key}={value!r}" for key, value in sorted(result.metadata.items())
-            )
-            parts.append(f"metadata: {metadata}")
-        if result.text:
-            parts.append("")
-            parts.append(result.text)
-        return "\n".join(parts)
+        return _format_browser_result(result)
 
     return open_browser_url
+
+
+# ── browser_screenshot ──────────────────────────────────────────────────────
+def make_browser_screenshot(browser_service: BrowserService) -> Callable[..., Awaitable[str]]:
+    @mcp_tool(
+        name="browser_screenshot",
+        description=(
+            "Open an HTTP(S) URL through the configured browser automation runner, "
+            "capture a screenshot, and return the durable screenshot artifact id."
+        ),
+        capabilities=frozenset({"network", "artifact_write"}),
+        risk_level="network_write",
+        requires_approval=True,
+        params=[
+            ToolParam(name="url", type="string", description="HTTP(S) URL to visit"),
+            ToolParam(
+                name="allowed_hosts",
+                type="array",
+                description="Optional host allowlist, including '*.example.com' wildcards",
+                required=False,
+            ),
+            ToolParam(
+                name="timeout_seconds",
+                type="number",
+                description="Wall-clock browser action limit",
+                required=False,
+            ),
+        ],
+    )
+    async def browser_screenshot(
+        url: str,
+        allowed_hosts: list[str] | None = None,
+        timeout_seconds: int | float | None = None,
+    ) -> str:
+        request = BrowserRequest(
+            url=url,
+            action=BrowserAction.SCREENSHOT,
+            allowed_hosts=tuple(allowed_hosts or ()),
+            timeout_seconds=float(timeout_seconds) if timeout_seconds is not None else 30.0,
+        )
+        result = await browser_service.run(request)
+        if result.screenshot_artifact_id is None:
+            raise ValueError("browser screenshot did not produce a screenshot artifact")
+        return _format_browser_result(result)
+
+    return browser_screenshot
 
 
 # ── default registry ────────────────────────────────────────────────────────
@@ -538,7 +596,7 @@ def build_default_registry(
     invocation_store: ToolInvocationStore | None = None,
     browser_service: BrowserService | None = None,
 ) -> ToolRegistry:
-    """Return a ``ToolRegistry`` with all six built-in tools bound to ``root``.
+    """Return a ``ToolRegistry`` with built-in tools bound to ``root``.
 
     When ``hook_runner`` is supplied, every tool invocation passes through
     ``pre_tool`` and ``post_tool`` gates — deterministic, LLM-bypass-proof
@@ -569,4 +627,5 @@ def build_default_registry(
     )
     if browser_service is not None:
         reg.register_from_function(make_open_browser_url(browser_service))
+        reg.register_from_function(make_browser_screenshot(browser_service))
     return reg

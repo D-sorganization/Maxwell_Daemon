@@ -34,6 +34,8 @@ class ArtifactKind(str, Enum):
     TEST_RESULT = "test_result"
     CHECK_RESULT = "check_result"
     SCREENSHOT = "screenshot"
+    BROWSER_CONSOLE = "browser_console"
+    PAGE_ERROR = "page_error"
     TRANSCRIPT = "transcript"
     HANDOFF = "handoff"
     PR_BODY = "pr_body"

@@ -59,6 +59,7 @@ nav:
       - Design by Contract: architecture/contracts.md
       - Governed work items: architecture/work-items.md
       - Durable artifacts: architecture/artifacts.md
+      - Browser automation: architecture/browser-automation.md
       - Task graphs: architecture/task-graphs.md
       - Source-controlled checks: architecture/checks.md
   - Operations:

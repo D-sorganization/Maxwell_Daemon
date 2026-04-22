@@ -48,6 +48,7 @@ azure = ["azure-identity>=1.18.0"]
 grpc = ["grpcio>=1.66.0", "grpcio-tools>=1.66.0", "protobuf>=5.28.0"]
 ssh = ["asyncssh>=2.14.0"]
 desktop = ["PyQt6>=6.7.0"]
+browser = ["playwright>=1.45.0"]
 docs = [
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.5.0",
@@ -65,7 +66,7 @@ dev = [
     "tomli>=2.0.0",
     "types-pyyaml",
 ]
-all = ["maxwell-daemon[ollama,google,azure,grpc,ssh,desktop,dev]"]
+all = ["maxwell-daemon[ollama,google,azure,grpc,ssh,desktop,browser,dev]"]
 
 [project.scripts]
 maxwell-daemon = "maxwell_daemon.cli.main:app"
@@ -126,7 +127,7 @@ module = ["jwt", "jwt.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["asyncssh", "asyncssh.*"]
+module = ["asyncssh", "asyncssh.*", "playwright", "playwright.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

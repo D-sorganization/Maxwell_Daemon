@@ -2,7 +2,8 @@
 
 Maxwell stores task and work-item evidence as durable artifacts. Artifacts capture
 inspectable outputs such as plans, diffs, command logs, test results, check
-results, screenshots, transcripts, handoffs, PR bodies, and structured metadata.
+results, screenshots, browser console logs, page errors, transcripts, handoffs,
+PR bodies, and structured metadata.
 
 ## Storage layout
 
@@ -56,3 +57,10 @@ The GitHub issue executor writes artifacts for the initial plan, initial diff,
 applied diff, test result, and generated PR body when an artifact store is
 attached. These records make issue-to-PR runs resumable and reviewable without
 reconstructing transient logs.
+
+## Browser automation
+
+Browser automation writes screenshots as `image/png` artifacts, console logs as
+JSON `browser_console` artifacts, and page errors as JSON `page_error`
+artifacts. Browser runners never hand raw image bytes to text-only tools; the
+service stores bytes first and returns artifact ids.
