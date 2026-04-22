@@ -100,6 +100,17 @@ class TestHTMLContent:
         assert 'state.testOutput.get(selectedAtSchedule) || "(no streamed output)"' in js
         assert "state.testOutput.get(state.selected)" not in js
 
+    def test_service_worker_limits_shell_cache_fallback_to_navigations(
+        self, client: TestClient
+    ) -> None:
+        sw = client.get("/ui/sw.js").text
+
+        assert "request.mode === 'navigate'" in sw
+        assert "request.destination === 'document'" in sw
+        assert "url.pathname === '/ui/'" in sw
+        assert "url.pathname === '/ui/index.html'" in sw
+        assert "url.pathname.startsWith('/ui/')" not in sw
+
 
 class TestNewTaskDialog:
     def test_dialog_present(self, client: TestClient) -> None:
