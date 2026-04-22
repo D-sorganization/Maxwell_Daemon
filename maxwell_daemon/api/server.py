@@ -631,7 +631,7 @@ def create_app(
             if path:
                 p = _Path(path)
                 if p.is_file():
-                    with p.open() as fh:
+                    with p.open(encoding="utf-8") as fh:
                         raw = yaml.safe_load(fh) or {}
                     break
 

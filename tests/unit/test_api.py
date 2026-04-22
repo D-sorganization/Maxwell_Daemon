@@ -353,6 +353,31 @@ repos:
         assert other["active_tasks"] == 0
         assert other["total_cost_usd"] == 0.5
 
+    def test_reads_fleet_manifest_as_utf8(
+        self,
+        client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fleet_config = tmp_path / "fleet.yaml"
+        fleet_config.write_text(
+            """
+# UTF-8 marker: em dash — should parse on Windows and Linux
+fleet:
+  name: desktop-fleet
+repos:
+  - org: D-sorganization
+    name: Maxwell-Daemon
+""",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAXWELL_FLEET_CONFIG", str(fleet_config))
+
+        r = client.get("/api/v1/fleet")
+
+        assert r.status_code == 200
+        assert r.json()["fleet"]["name"] == "desktop-fleet"
+
 
 class TestAuditEndpoint:
     def test_audit_log_reports_disabled_when_not_configured(self, client: TestClient) -> None:
