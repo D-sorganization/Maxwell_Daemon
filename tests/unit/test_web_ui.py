@@ -92,6 +92,16 @@ class TestHTMLContent:
         assert "openCommandPalette" in js
         assert "terminal-log" in js
 
+    def test_deferred_test_output_keeps_selected_task_context(
+        self, client: TestClient
+    ) -> None:
+        js = client.get("/ui/app.js").text
+
+        assert "const selectedAtSchedule = p.task_id;" in js
+        assert "state.selected === selectedAtSchedule" in js
+        assert 'state.testOutput.get(selectedAtSchedule) || "(no streamed output)"' in js
+        assert "state.testOutput.get(state.selected)" not in js
+
 
 class TestNewTaskDialog:
     def test_dialog_present(self, client: TestClient) -> None:
