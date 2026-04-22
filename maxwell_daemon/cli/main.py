@@ -15,7 +15,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from maxwell_daemon import __version__
-from maxwell_daemon.backends import Message, MessageRole, registry
+from maxwell_daemon.backends import Message, MessageRole
+from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.cli.actions import action_app
 from maxwell_daemon.cli.evals import eval_app
 from maxwell_daemon.cli.issues import issue_app
