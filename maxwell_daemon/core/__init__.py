@@ -1,5 +1,6 @@
 """Core orchestration: cost ledger, backend router, task runner, budget enforcer."""
 
+from maxwell_daemon.core.artifacts import Artifact, ArtifactKind, ArtifactStore
 from maxwell_daemon.core.budget import BudgetCheck, BudgetEnforcer, BudgetExceededError
 from maxwell_daemon.core.cross_audit import (
     DEFAULT_CROSS_AUDIT_ROLES,
@@ -14,6 +15,9 @@ from maxwell_daemon.core.router import BackendRouter
 
 __all__ = [
     "DEFAULT_CROSS_AUDIT_ROLES",
+    "Artifact",
+    "ArtifactKind",
+    "ArtifactStore",
     "BackendRouter",
     "BudgetCheck",
     "BudgetEnforcer",

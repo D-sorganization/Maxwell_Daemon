@@ -13,15 +13,27 @@ from fastapi.testclient import TestClient
 
 from maxwell_daemon.api import create_app
 from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.core.artifacts import ArtifactKind
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
 
 
 @pytest.fixture
-def daemon(minimal_config: MaxwellDaemonConfig, isolated_ledger_path) -> Iterator[Daemon]:
+def daemon(
+    minimal_config: MaxwellDaemonConfig,
+    isolated_ledger_path,
+    tmp_path: Path,
+) -> Iterator[Daemon]:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
+    d = Daemon(
+        minimal_config,
+        ledger_path=isolated_ledger_path,
+        task_store_path=tmp_path / "tasks.db",
+        work_item_store_path=tmp_path / "work_items.db",
+        artifact_store_path=tmp_path / "artifacts.db",
+        artifact_blob_root=tmp_path / "artifacts",
+    )
     loop.run_until_complete(d.start(worker_count=1))
     try:
         yield d
@@ -193,6 +205,64 @@ class TestAdminPruneEndpoint:
         assert r.status_code == 200
         assert r.json()["tasks_pruned"] == 1
         assert daemon.get_task(old_done.id) is None
+
+
+class TestArtifactEndpoints:
+    def test_lists_task_artifacts_and_fetches_content(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        artifact = daemon._artifact_store.put_text(
+            task_id="task-artifact",
+            kind=ArtifactKind.PR_BODY,
+            name="PR body",
+            text="Closes #1",
+            media_type="text/markdown",
+        )
+
+        listed = client.get("/api/v1/tasks/task-artifact/artifacts")
+        assert listed.status_code == 200
+        assert [item["id"] for item in listed.json()] == [artifact.id]
+        assert listed.json()[0]["kind"] == "pr_body"
+
+        metadata = client.get(f"/api/v1/artifacts/{artifact.id}")
+        assert metadata.status_code == 200
+        assert metadata.json()["sha256"] == artifact.sha256
+
+        content = client.get(f"/api/v1/artifacts/{artifact.id}/content")
+        assert content.status_code == 200
+        assert content.text == "Closes #1"
+        assert content.headers["content-type"].startswith("text/markdown")
+
+    def test_lists_work_item_artifacts_by_kind(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        daemon._artifact_store.put_text(
+            work_item_id="wi-artifact",
+            kind=ArtifactKind.METADATA,
+            name="Metadata",
+            text="{}",
+            media_type="application/json",
+        )
+        diff = daemon._artifact_store.put_text(
+            work_item_id="wi-artifact",
+            kind=ArtifactKind.DIFF,
+            name="Diff",
+            text="diff --git a/x b/x",
+        )
+
+        listed = client.get("/api/v1/work-items/wi-artifact/artifacts?kind=diff")
+
+        assert listed.status_code == 200
+        assert [item["id"] for item in listed.json()] == [diff.id]
+
+    def test_missing_artifact_returns_404(self, client: TestClient) -> None:
+        response = client.get("/api/v1/artifacts/missing")
+
+        assert response.status_code == 404
 
 
 class TestJwtAuthEndpoint:

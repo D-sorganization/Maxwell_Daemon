@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field, field_validator
 from maxwell_daemon import __version__
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
+from maxwell_daemon.core.artifacts import Artifact, ArtifactIntegrityError, ArtifactKind
 from maxwell_daemon.core.work_items import (
     REPO_PATTERN,
     AcceptanceCriterion,
@@ -151,6 +152,36 @@ class WorkItemView(BaseModel):
             started_at=item.started_at,
             completed_at=item.completed_at,
             task_ids=item.task_ids,
+        )
+
+
+class ArtifactView(BaseModel):
+    id: str
+    task_id: str | None
+    work_item_id: str | None
+    kind: str
+    name: str
+    media_type: str
+    path: str
+    sha256: str
+    size_bytes: int
+    created_at: datetime
+    metadata: dict[str, Any]
+
+    @classmethod
+    def from_artifact(cls, artifact: Artifact) -> ArtifactView:
+        return cls(
+            id=artifact.id,
+            task_id=artifact.task_id,
+            work_item_id=artifact.work_item_id,
+            kind=artifact.kind.value,
+            name=artifact.name,
+            media_type=artifact.media_type,
+            path=artifact.path.as_posix(),
+            sha256=artifact.sha256,
+            size_bytes=artifact.size_bytes,
+            created_at=artifact.created_at,
+            metadata=artifact.metadata,
         )
 
 
@@ -567,6 +598,16 @@ def create_app(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
         return TaskView.from_task(t)
 
+    @app.get("/api/v1/tasks/{task_id}/artifacts", dependencies=[Depends(_require_viewer())])
+    async def list_task_artifacts(
+        task_id: str,
+        kind: Annotated[ArtifactKind | None, Query()] = None,
+    ) -> list[ArtifactView]:
+        return [
+            ArtifactView.from_artifact(artifact)
+            for artifact in daemon.list_task_artifacts(task_id, kind=kind)
+        ]
+
     @app.post(
         "/api/v1/work-items",
         dependencies=[Depends(auth), Depends(_require_operator())],
@@ -615,6 +656,16 @@ def create_app(
         if item is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found")
         return WorkItemView.from_item(item)
+
+    @app.get("/api/v1/work-items/{item_id}/artifacts", dependencies=[Depends(_require_viewer())])
+    async def list_work_item_artifacts(
+        item_id: str,
+        kind: Annotated[ArtifactKind | None, Query()] = None,
+    ) -> list[ArtifactView]:
+        return [
+            ArtifactView.from_artifact(artifact)
+            for artifact in daemon.list_work_item_artifacts(item_id, kind=kind)
+        ]
 
     @app.patch(
         "/api/v1/work-items/{item_id}",
@@ -747,6 +798,24 @@ def create_app(
             model=payload.model,
         )
         return TaskView.from_task(task)
+
+    @app.get("/api/v1/artifacts/{artifact_id}", dependencies=[Depends(_require_viewer())])
+    async def get_artifact(artifact_id: str) -> ArtifactView:
+        artifact = daemon.get_artifact(artifact_id)
+        if artifact is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "artifact not found")
+        return ArtifactView.from_artifact(artifact)
+
+    @app.get("/api/v1/artifacts/{artifact_id}/content", dependencies=[Depends(_require_viewer())])
+    async def get_artifact_content(artifact_id: str) -> Response:
+        artifact = daemon.get_artifact(artifact_id)
+        if artifact is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "artifact not found")
+        try:
+            content = daemon.read_artifact_bytes(artifact_id)
+        except ArtifactIntegrityError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        return Response(content=content, media_type=artifact.media_type)
 
     @app.post(
         "/api/v1/issues/ab-dispatch",

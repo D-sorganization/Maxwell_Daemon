@@ -24,6 +24,9 @@ from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.config import MaxwellDaemonConfig, load_config
 from maxwell_daemon.config.loader import default_config_path
 from maxwell_daemon.core import (
+    Artifact,
+    ArtifactKind,
+    ArtifactStore,
     BackendRouter,
     BudgetEnforcer,
     BudgetExceededError,
@@ -108,6 +111,8 @@ class Daemon:
         workspace_root: Path | None = None,
         task_store_path: Path | None = None,
         work_item_store_path: Path | None = None,
+        artifact_store_path: Path | None = None,
+        artifact_blob_root: Path | None = None,
     ) -> None:
         self._config = config
         # Path used for hot-reload; populated by from_config_path.
@@ -128,6 +133,12 @@ class Daemon:
         self._task_store = TaskStore(task_store_path or default_store)
         default_work_item_store = Path.home() / ".local/share/maxwell-daemon/work_items.db"
         self._work_item_store = WorkItemStore(work_item_store_path or default_work_item_store)
+        default_artifact_store = Path.home() / ".local/share/maxwell-daemon/artifacts.db"
+        default_artifact_root = Path.home() / ".local/share/maxwell-daemon/artifacts"
+        self._artifact_store = ArtifactStore(
+            artifact_store_path or default_artifact_store,
+            blob_root=artifact_blob_root or default_artifact_root,
+        )
         # Memory store — co-located with the ledger for easy backup.
         from maxwell_daemon.memory import (
             EpisodicStore,
@@ -246,15 +257,17 @@ class Daemon:
             log.info("daemon started (standalone) with %d workers", worker_count)
 
         # Install SIGUSR1 handler for config hot-reload (Unix only).
-        try:
-            loop = asyncio.get_running_loop()
-            loop.add_signal_handler(
-                signal.SIGUSR1,
-                lambda: asyncio.create_task(self._reload_config_signal()),
-            )
-        except (AttributeError, NotImplementedError, OSError):
-            # Windows or unsupported platform — skip signal handler.
-            pass
+        sigusr1 = getattr(signal, "SIGUSR1", None)
+        if sigusr1 is not None:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.add_signal_handler(
+                    sigusr1,
+                    lambda: asyncio.create_task(self._reload_config_signal()),
+                )
+            except (NotImplementedError, OSError):
+                # Windows or unsupported platform — skip signal handler.
+                pass
         if self._config.agent.task_retention_days > 0:
             prune_task = asyncio.create_task(self._retention_loop(), name="retention-pruner")
             self._bg_tasks.add(prune_task)
@@ -607,6 +620,28 @@ class Daemon:
             source=source,
             max_priority=max_priority,
         )
+
+    def get_artifact(self, artifact_id: str) -> Artifact | None:
+        return self._artifact_store.get(artifact_id)
+
+    def read_artifact_bytes(self, artifact_id: str) -> bytes:
+        return self._artifact_store.read_bytes(artifact_id)
+
+    def list_task_artifacts(
+        self,
+        task_id: str,
+        *,
+        kind: ArtifactKind | None = None,
+    ) -> list[Artifact]:
+        return self._artifact_store.list_for_task(task_id, kind=kind)
+
+    def list_work_item_artifacts(
+        self,
+        item_id: str,
+        *,
+        kind: ArtifactKind | None = None,
+    ) -> list[Artifact]:
+        return self._artifact_store.list_for_work_item(item_id, kind=kind)
 
     def transition_work_item(self, item_id: str, status: WorkItemStatus) -> WorkItem:
         return self._work_item_store.transition(item_id, status)
@@ -1053,6 +1088,7 @@ class Daemon:
                 workspace=workspace,
                 backend=decision.backend,
                 memory=self._memory,
+                artifact_store=self._artifact_store,
             )
         )
 

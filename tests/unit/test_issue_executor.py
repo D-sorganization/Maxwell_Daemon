@@ -22,6 +22,7 @@ from maxwell_daemon.backends.base import (
     Message,
     TokenUsage,
 )
+from maxwell_daemon.core.artifacts import ArtifactKind, ArtifactStore
 from maxwell_daemon.gh import Issue, PullRequest
 from maxwell_daemon.gh.executor import IssueExecutionError, IssueExecutor
 
@@ -139,6 +140,37 @@ class TestPlanMode:
         # Plan mode: no diff applied
         steps = [s[0] for s in ws.log]
         assert "apply" not in steps
+
+    def test_records_plan_diff_and_pr_body_artifacts(self, tmp_path: Path) -> None:
+        gh = FakeGitHub(issue=_issue())
+        ws = FakeWorkspace()
+        backend = ScriptedBackend(payload={"plan": "artifact plan", "diff": ""})
+        artifact_store = ArtifactStore(tmp_path / "artifacts.db", blob_root=tmp_path / "blobs")
+        executor = IssueExecutor(
+            github=gh,
+            workspace=ws,
+            backend=backend,
+            artifact_store=artifact_store,
+        )
+
+        asyncio.run(
+            executor.execute_issue(
+                repo="owner/repo",
+                issue_number=42,
+                model="fake-model",
+                mode="plan",
+                task_id="task-42",
+            )
+        )
+
+        artifacts = artifact_store.list_for_task("task-42")
+        assert [artifact.kind for artifact in artifacts] == [
+            ArtifactKind.PLAN,
+            ArtifactKind.DIFF,
+            ArtifactKind.PR_BODY,
+        ]
+        assert artifact_store.read_text(artifacts[0].id) == "artifact plan"
+        assert "Closes #42" in artifact_store.read_text(artifacts[2].id)
 
 
 class TestImplementMode:

@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from maxwell_daemon.backends.base import ILLMBackend, Message, MessageRole
+from maxwell_daemon.core.artifacts import ArtifactKind
 from maxwell_daemon.core.repo_overrides import RepoOverrides
 from maxwell_daemon.gh.context import ContextBuilder
 from maxwell_daemon.gh.test_runner import TestResult, TestRunner
@@ -83,6 +84,20 @@ class _WorkspaceProto(Protocol):
     ) -> None: ...
 
 
+class _ArtifactSinkProto(Protocol):
+    def put_text(
+        self,
+        *,
+        kind: ArtifactKind,
+        name: str,
+        text: str,
+        task_id: str | None = None,
+        work_item_id: str | None = None,
+        media_type: str = "text/plain; charset=utf-8",
+        metadata: dict[str, Any] | None = None,
+    ) -> Any: ...
+
+
 _SYSTEM_PROMPT = """You are a senior engineer drafting a pull request for a GitHub issue.
 
 Respond with a single JSON object on its own:
@@ -114,6 +129,7 @@ class IssueExecutor:
         test_timeout_seconds: float = 300.0,
         memory: MemoryBackend | None = None,
         memory_max_chars: int = 8000,
+        artifact_store: _ArtifactSinkProto | None = None,
     ) -> None:
         self._gh = github
         self._ws = workspace
@@ -126,6 +142,7 @@ class IssueExecutor:
         self._test_timeout = test_timeout_seconds
         self._memory = memory
         self._memory_max_chars = memory_max_chars
+        self._artifact_store = artifact_store
 
     @staticmethod
     def _build_system_prompt(
@@ -224,6 +241,33 @@ class IssueExecutor:
                 system_prompt=effective_system_prompt,
             )
 
+        self._record_artifact(
+            task_id=effective_task_id,
+            kind=ArtifactKind.PLAN,
+            name="Initial plan",
+            text=plan,
+            media_type="text/markdown",
+            metadata={
+                "repo": repo,
+                "issue_number": issue_number,
+                "mode": mode,
+                "model": model,
+            },
+        )
+        self._record_artifact(
+            task_id=effective_task_id,
+            kind=ArtifactKind.DIFF,
+            name="Initial diff",
+            text=diff,
+            media_type="text/x-diff",
+            metadata={
+                "repo": repo,
+                "issue_number": issue_number,
+                "mode": mode,
+                "model": model,
+            },
+        )
+
         # Record the initial plan to the scratchpad so retries see it.
         if self._memory is not None and plan:
             self._memory.scratchpad.append(effective_task_id, role="plan", content=plan)
@@ -251,6 +295,19 @@ class IssueExecutor:
                 task_id=effective_task_id,
                 system_prompt=effective_system_prompt,
             )
+            self._record_artifact(
+                task_id=effective_task_id,
+                kind=ArtifactKind.DIFF,
+                name="Applied diff",
+                text=diff,
+                media_type="text/x-diff",
+                metadata={
+                    "repo": repo,
+                    "issue_number": issue_number,
+                    "mode": mode,
+                    "model": model,
+                },
+            )
             if self._test_runner is not None:
                 plan, diff, test_result = await self._validate_with_tests(
                     repo=repo,
@@ -268,6 +325,28 @@ class IssueExecutor:
                     on_test_output=on_test_output,
                     system_prompt=effective_system_prompt,
                 )
+                self._record_artifact(
+                    task_id=effective_task_id,
+                    kind=ArtifactKind.TEST_RESULT,
+                    name="Test result",
+                    text=json.dumps(
+                        {
+                            "passed": test_result.passed,
+                            "command": test_result.command,
+                            "returncode": test_result.returncode,
+                            "duration_seconds": test_result.duration_seconds,
+                            "output_tail": test_result.output_tail,
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                    media_type="application/json",
+                    metadata={
+                        "repo": repo,
+                        "issue_number": issue_number,
+                        "mode": mode,
+                    },
+                )
             await self._ws.commit_and_push(
                 repo,
                 branch=branch,
@@ -281,6 +360,18 @@ class IssueExecutor:
             plan=plan,
             applied=applied,
             test_result=test_result,
+        )
+        self._record_artifact(
+            task_id=effective_task_id,
+            kind=ArtifactKind.PR_BODY,
+            name="PR body",
+            text=pr_body,
+            media_type="text/markdown",
+            metadata={
+                "repo": repo,
+                "issue_number": issue_number,
+                "mode": mode,
+            },
         )
         async with _trace_span(
             "maxwell_daemon.issue.open_pr",
@@ -317,6 +408,27 @@ class IssueExecutor:
             pr_number=pr.number,
             plan=plan,
             applied_diff=applied,
+        )
+
+    def _record_artifact(
+        self,
+        *,
+        task_id: str,
+        kind: ArtifactKind,
+        name: str,
+        text: str,
+        media_type: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        if self._artifact_store is None:
+            return
+        self._artifact_store.put_text(
+            task_id=task_id,
+            kind=kind,
+            name=name,
+            text=text,
+            media_type=media_type,
+            metadata=metadata,
         )
 
     async def _validate_with_tests(
