@@ -147,6 +147,20 @@ class TestTasksDictThreadSafety:
             loop_thread.join(timeout=5.0)
             loop.close()
 
+    def test_submit_before_daemon_loop_starts_queues_directly_and_skips_event(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
+        stub: Any = MagicMock()
+        d._task_store = stub
+        queue_stub: Any = _ThreadBoundQueue(threading.current_thread())
+        d._queue = queue_stub
+
+        task = d.submit("pre-start submit")
+
+        assert queue_stub.items == [(task.priority, task)]
+        assert d._tasks[task.id] is task
+
     def test_concurrent_submit_and_state_do_not_tear_tasks_dict(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
