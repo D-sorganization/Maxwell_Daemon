@@ -41,4 +41,4 @@ def test_documentation_coverage_tracks_resource_routing_remaining_gate() -> None
 
     assert "`resource-aware-routing.md`" in coverage
     assert "resource-aware routing walkthrough is shipped" in coverage
-    assert "add fleet issue queue walkthroughs" in coverage
+    assert "fleet issue queue walkthrough is shipped" in coverage

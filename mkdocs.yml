@@ -54,6 +54,7 @@ nav:
       - Examples: getting-started/examples.md
       - Fleet gauntlet walkthrough: getting-started/fleet-gauntlet-walkthrough.md
       - Resource-aware routing: getting-started/resource-aware-routing.md
+      - Fleet issue queue: getting-started/fleet-issue-queue.md
       - Troubleshooting: getting-started/troubleshooting.md
   - Architecture:
       - Overview: architecture/overview.md

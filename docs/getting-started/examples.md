@@ -105,35 +105,53 @@ Create a `fleet.yaml` when the same issue sweep should run across multiple
 repositories with shared defaults and per-repo overrides.
 
 ```yaml
+version: 1
 fleet:
-  default_backend: claude
+  name: home-lab
+  default_slots: 2
   default_budget_per_story: 0.75
   default_pr_target_branch: staging
   default_pr_fallback_to_default: true
+  default_watch_labels: [maxwell:ready]
 
 repos:
-  - name: example/api
+  - org: example
+    name: api
     enabled: true
-    labels: [bug, small]
+    watch_labels: [bug, small, maxwell:ready]
     budget_per_story: 0.50
-  - name: example/web
+  - org: example
+    name: web
     enabled: true
-    labels: [documentation]
+    watch_labels: [documentation]
 ```
 
 Preview the plan before creating tasks:
 
 ```bash
-maxwell-daemon issue dispatch-batch --fleet-manifest fleet.yaml --all --dry-run
+maxwell-daemon issue dispatch-batch \
+  --fleet-manifest fleet.yaml \
+  --all \
+  --label maxwell:ready \
+  --max-stories 1 \
+  --dry-run
 ```
 
-Dispatch only after the plan has the expected repositories, labels, budget, and
-target branch:
+Dispatch only after the plan has the expected repositories, label filter, cap,
+and mode:
 
 ```bash
-maxwell-daemon issue dispatch-batch --fleet-manifest fleet.yaml --all --mode plan
+maxwell-daemon issue dispatch-batch \
+  --fleet-manifest fleet.yaml \
+  --all \
+  --label maxwell:ready \
+  --max-stories 1 \
+  --mode plan
 maxwell-daemon tasks list --kind issue --status queued
 ```
+
+See the [fleet issue queue walkthrough](fleet-issue-queue.md) for the full
+operator flow, scheduler boundaries, and safety gates.
 
 ## Review Approval-Gated Actions
 
