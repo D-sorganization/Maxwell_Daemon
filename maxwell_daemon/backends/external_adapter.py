@@ -644,9 +644,7 @@ class BackendReadOnlyExternalAgentAdapter(ExternalAgentAdapterBase):
         quota_model: str | None = None,
         required_credentials: tuple[str, ...] = (),
         required_binaries: tuple[str, ...] = (),
-        workspace_requirements: tuple[str, ...] = (
-            "workspace optional for read-only runs",
-        ),
+        workspace_requirements: tuple[str, ...] = ("workspace optional for read-only runs",),
         safety_notes: tuple[str, ...] = (),
     ) -> None:
         if not adapter_id.strip():
@@ -821,9 +819,7 @@ class CodexCLIExternalAgentAdapter(BackendReadOnlyExternalAgentAdapter):
             required_credentials=("codex login or equivalent CLI authentication",),
             required_binaries=("codex",),
             workspace_requirements=("workspace optional for read-only suggest-mode runs",),
-            safety_notes=(
-                "Default wrapper uses Codex CLI suggest mode and must not edit files.",
-            ),
+            safety_notes=("Default wrapper uses Codex CLI suggest mode and must not edit files.",),
         )
 
 
@@ -881,7 +877,9 @@ class ClaudeCodeCLIExternalAgentAdapter(BackendReadOnlyExternalAgentAdapter):
             quota_model="delegated to Claude Code authentication and provider quota",
             required_credentials=("claude login or equivalent CLI authentication",),
             required_binaries=("claude",),
-            safety_notes=("Read-only wrapper uses prompt mode and must not grant write authority.",),
+            safety_notes=(
+                "Read-only wrapper uses prompt mode and must not grant write authority.",
+            ),
         )
 
 
