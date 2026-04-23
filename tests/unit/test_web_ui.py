@@ -146,6 +146,8 @@ class TestHTMLContent:
         assert "data-gate-action" in js
         assert "prompt(`Who is waiving" in js
         assert "confirm(`Retry" in js
+        assert 'action.kind === "cancel"' in js
+        assert "confirm(`Cancel" in js
         assert "Gate action denied: operator privileges are required." in js
 
     def test_gauntlet_view_ships_empty_and_error_states(self, client: TestClient) -> None:
