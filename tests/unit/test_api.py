@@ -16,6 +16,7 @@ from maxwell_daemon.api import create_app
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.core.actions import ActionKind
 from maxwell_daemon.core.artifacts import ArtifactKind
+from maxwell_daemon.core.delegate_lifecycle import DelegateSession, LeaseRecoveryPolicy
 from maxwell_daemon.core.work_items import AcceptanceCriterion, ScopeBoundary, WorkItem
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
@@ -355,6 +356,68 @@ class TestControlPlaneGauntlet:
         assert failed_gate["retry_allowed"] is True
         assert failed_gate["waiver_allowed"] is True
         assert by_id["queued"]["critic_findings"][0]["severity"] == "note"
+
+    def test_uses_delegate_session_snapshots_when_available(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        task = Task(
+            id="task-with-session",
+            prompt="owner/repo#91",
+            kind=TaskKind.ISSUE,
+            repo="owner/repo",
+            issue_repo="owner/repo",
+            issue_number=91,
+            status=TaskStatus.RUNNING,
+            backend="primary",
+            started_at=datetime.now(timezone.utc),
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[task.id] = task
+
+        work_item = daemon.create_work_item(
+            WorkItem(id="wi-91", title="Ship the gate dashboard slice")
+        )
+        service = daemon.delegate_lifecycle
+        service.create_session(
+            DelegateSession(
+                id="session-91",
+                delegate_id="implementer",
+                work_item_id=work_item.id,
+                task_id=task.id,
+                workspace_ref="worktree://task-with-session",
+                backend_ref="codex-cli",
+                machine_ref="worker-a",
+            )
+        )
+        service.acquire_lease(
+            "session-91",
+            owner_id="worker-a",
+            ttl=timedelta(minutes=5),
+            recovery_policy=LeaseRecoveryPolicy.RECOVERABLE,
+        )
+        service.mark_running("session-91", owner_id="worker-a")
+        service.record_checkpoint(
+            "session-91",
+            current_plan="Render the current gate and real delegate checkpoint.",
+            failures_and_learnings=("Keep blocker detail visible near the action controls.",),
+        )
+
+        r = client.get("/api/v1/control-plane/gauntlet", params={"task_id": task.id})
+
+        assert r.status_code == 200
+        item = r.json()[0]
+        assert item["work_item_id"] == "wi-91"
+        assert item["work_item_status"] == work_item.status.value
+        assert item["delegates"][0]["id"] == "session-91"
+        assert item["delegates"][0]["status"] == "running"
+        assert item["delegates"][0]["backend"] == "codex-cli"
+        assert item["delegates"][0]["machine"] == "worker-a"
+        assert item["delegates"][0]["role"] == "implementer"
+        assert item["delegates"][0]["latest_checkpoint"].startswith(
+            "Render the current gate and real delegate checkpoint."
+        )
 
     def test_filters_by_task_id(
         self,

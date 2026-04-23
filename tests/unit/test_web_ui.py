@@ -107,6 +107,8 @@ class TestHTMLContent:
             "view-artifacts",
             "view-graphs",
             "view-checks",
+            "gauntlet-focus-state",
+            "gauntlet-clear-focus-btn",
         ):
             assert expected in html
 
@@ -144,6 +146,7 @@ class TestHTMLContent:
         assert "data-gate-action" in js
         assert "prompt(`Who is waiving" in js
         assert "confirm(`Retry" in js
+        assert "Gate action denied: operator privileges are required." in js
 
     def test_gauntlet_view_ships_empty_and_error_states(self, client: TestClient) -> None:
         html = client.get("/ui/").text
@@ -152,9 +155,39 @@ class TestHTMLContent:
 
         assert "view-gauntlet" in html
         assert "No work items have reached the control plane yet." in js
+        assert "has not reached the gauntlet yet." in js
         assert "No delegate sessions recorded yet." in js
-        assert "Gate gauntlet unavailable" in js
+        assert "Gate gauntlet requires a viewer token" in js
         assert "gauntlet-error" in css
+
+    def test_gauntlet_and_queue_render_delegate_checkpoint_and_critic_detail(
+        self, client: TestClient
+    ) -> None:
+        js = client.get("/ui/app.js").text
+        css = client.get("/ui/style.css").text
+
+        for expected in (
+            "controlPlaneByTaskId",
+            "openGauntletForTask",
+            "delegate.latest_checkpoint",
+            "delegate.duration_seconds",
+            'data-review="${t.id}"',
+            "finding.detail || finding.message",
+            "finding.file || finding.line",
+            "evidence-list",
+        ):
+            assert expected in js
+
+        for expected in (
+            "delegate-entry",
+            "delegate-checkpoint",
+            "gauntlet-item-meta",
+            "gate-focus-pill",
+            "finding-detail",
+            "finding-meta",
+            "evidence-list",
+        ):
+            assert expected in css
 
     def test_deferred_test_output_keeps_selected_task_context(self, client: TestClient) -> None:
         js = client.get("/ui/app.js").text

@@ -462,6 +462,8 @@ class ControlPlaneActionView(BaseModel):
 
 
 class ControlPlaneWorkItemView(BaseModel):
+    work_item_id: str | None = None
+    work_item_status: str | None = None
     task_id: str
     title: str
     status: str
@@ -798,8 +800,94 @@ def _critic_findings_for_task(task: Task) -> tuple[CriticFindingView, ...]:
     return tuple(sorted(findings, key=lambda finding: priority[finding.severity]))
 
 
-def _control_plane_view_from_task(task: Task) -> ControlPlaneWorkItemView:
+def _delegate_snapshots_for_task(
+    daemon: Daemon, task: Task, *, limit: int = 20
+) -> tuple[DelegateSessionSnapshot, ...]:
+    snapshots = daemon.delegate_lifecycle.list_sessions(limit=limit, task_id=task.id)
+    ordered = sorted(
+        snapshots,
+        key=lambda snapshot: (
+            snapshot.session.updated_at,
+            snapshot.latest_checkpoint.created_at
+            if snapshot.latest_checkpoint
+            else snapshot.session.created_at,
+        ),
+        reverse=True,
+    )
+    return tuple(ordered)
+
+
+def _delegate_views_for_task(
+    daemon: Daemon, task: Task, snapshots: tuple[DelegateSessionSnapshot, ...]
+) -> tuple[DelegateSessionView, ...]:
+    if snapshots:
+        views: list[DelegateSessionView] = []
+        for snapshot in snapshots:
+            session = snapshot.session
+            checkpoint = snapshot.latest_checkpoint
+            latest_checkpoint = None
+            if checkpoint is not None:
+                latest_checkpoint = checkpoint.current_plan
+                if checkpoint.failures_and_learnings:
+                    latest_checkpoint = (
+                        f"{checkpoint.current_plan} | {checkpoint.failures_and_learnings[0]}"
+                    )
+            metadata_cost = session.metadata.get("cost_usd")
+            try:
+                cost_usd = float(metadata_cost) if metadata_cost is not None else 0.0
+            except (TypeError, ValueError):
+                cost_usd = 0.0
+            duration_seconds = max(0.0, (session.updated_at - session.created_at).total_seconds())
+            views.append(
+                DelegateSessionView(
+                    id=session.id,
+                    role=session.delegate_id,
+                    status=session.status.value,
+                    machine=session.machine_ref,
+                    backend=session.backend_ref,
+                    latest_checkpoint=latest_checkpoint,
+                    cost_usd=cost_usd,
+                    duration_seconds=duration_seconds,
+                )
+            )
+        return tuple(views)
+
+    backend = task.backend or task.model
+    return (
+        DelegateSessionView(
+            id=f"{task.id}:delegate",
+            role="implementer" if task.kind.value == "issue" else "operator",
+            status=task.status.value,
+            machine=task.dispatched_to,
+            backend=backend,
+            latest_checkpoint=task.result or task.error,
+            cost_usd=task.cost_usd,
+            duration_seconds=_duration_seconds(task),
+        ),
+    )
+
+
+def _work_item_context_for_task(
+    daemon: Daemon, snapshots: tuple[DelegateSessionSnapshot, ...]
+) -> tuple[str | None, str | None]:
+    work_item_id = next(
+        (
+            snapshot.session.work_item_id
+            for snapshot in snapshots
+            if snapshot.session.work_item_id is not None
+        ),
+        None,
+    )
+    if work_item_id is None:
+        return None, None
+    item = daemon.get_work_item(work_item_id)
+    return work_item_id, item.status.value if item is not None else None
+
+
+def _control_plane_view_from_task(daemon: Daemon, task: Task) -> ControlPlaneWorkItemView:
     gates = _gate_statuses_for_task(task)
+    snapshots = _delegate_snapshots_for_task(daemon, task)
+    work_item_id, work_item_status = _work_item_context_for_task(daemon, snapshots)
     current_gate = next(
         (gate.name for gate in gates if gate.status in {"failed", "blocked", "running", "pending"}),
         None,
@@ -828,6 +916,8 @@ def _control_plane_view_from_task(task: Task) -> ControlPlaneWorkItemView:
     }
     backend = task.backend or task.model
     return ControlPlaneWorkItemView(
+        work_item_id=work_item_id,
+        work_item_status=work_item_status,
         task_id=task.id,
         title=_task_title(task),
         status=task.status.value,
@@ -836,18 +926,7 @@ def _control_plane_view_from_task(task: Task) -> ControlPlaneWorkItemView:
         next_action=next_action_by_status.get(task.status.value, "Inspect task state"),
         gates=gates,
         critic_findings=_critic_findings_for_task(task),
-        delegates=(
-            DelegateSessionView(
-                id=f"{task.id}:delegate",
-                role="implementer" if task.kind.value == "issue" else "operator",
-                status=task.status.value,
-                machine=task.dispatched_to,
-                backend=backend,
-                latest_checkpoint=task.result or task.error,
-                cost_usd=task.cost_usd,
-                duration_seconds=_duration_seconds(task),
-            ),
-        ),
+        delegates=_delegate_views_for_task(daemon, task, snapshots),
         resource_routing=ResourceRoutingView(
             selected_backend=backend,
             alternatives_considered=(),
@@ -1108,7 +1187,7 @@ def create_app(
         if status_filter:
             tasks = [task for task in tasks if task.status.value == status_filter]
         tasks.sort(key=lambda task: task.created_at, reverse=True)
-        return tuple(_control_plane_view_from_task(task) for task in tasks[:limit])
+        return tuple(_control_plane_view_from_task(daemon, task) for task in tasks[:limit])
 
     @app.post(
         "/api/v1/control-plane/gauntlet/{task_id}/retry",
@@ -1137,7 +1216,7 @@ def create_app(
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         except KeyError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found") from exc
-        return _control_plane_view_from_task(task)
+        return _control_plane_view_from_task(daemon, task)
 
     @app.post(
         "/api/v1/control-plane/gauntlet/{task_id}/waive",
@@ -1172,7 +1251,7 @@ def create_app(
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         except KeyError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found") from exc
-        return _control_plane_view_from_task(task)
+        return _control_plane_view_from_task(daemon, task)
 
     @app.get("/api/v1/tasks/{task_id}/artifacts", dependencies=[Depends(_require_viewer())])
     async def list_task_artifacts(

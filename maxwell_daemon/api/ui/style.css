@@ -618,6 +618,21 @@ kbd {
 .decision-pending .decision-pill { color: var(--warn); }
 .decision-waived .decision-pill { color: var(--warn); }
 
+.gauntlet-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gate-focus-pill {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--accent);
+  font-size: 12px;
+}
+
 .gate-actions {
   display: flex;
   flex-wrap: wrap;
@@ -699,6 +714,35 @@ kbd {
 .finding-warning strong { color: var(--warn); }
 .finding-note strong { color: var(--muted); }
 
+.finding-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.finding-critic,
+.finding-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.finding-title {
+  font-weight: 600;
+}
+
+.finding-detail {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.evidence-list {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .empty-state {
   color: var(--muted);
   padding: 14px;
@@ -721,6 +765,37 @@ kbd {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.delegate-entry {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.delegate-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.delegate-head,
+.delegate-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.delegate-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.delegate-checkpoint {
+  margin: 6px 0 0;
+  color: var(--text);
+  font-size: 12px;
 }
 
 .split-pane {

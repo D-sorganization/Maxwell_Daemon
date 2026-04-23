@@ -91,9 +91,12 @@
             <th>Kind</th>
             <th>Status</th>
             <th>Target</th>
+            <th>Decision</th>
+            <th>Current Gate</th>
+            <th>Delegate</th>
             <th>Cost</th>
             <th>PR</th>
-            <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="tasks-body"></tbody>
@@ -224,7 +227,11 @@
     <section class="card full-width">
       <div class="card-head">
         <h2>Gate Gauntlet</h2>
-        <button id="gauntlet-refresh-btn">refresh</button>
+        <div class="filters">
+          <span id="gauntlet-focus-state" class="hint">All tasks</span>
+          <button id="gauntlet-clear-focus-btn" hidden>clear focus</button>
+          <button id="gauntlet-refresh-btn">refresh</button>
+        </div>
       </div>
       <div id="gauntlet-board" class="gauntlet-board"></div>
     </section>

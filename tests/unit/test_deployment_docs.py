@@ -49,6 +49,7 @@ def test_documentation_coverage_marks_deployment_guide_shipped() -> None:
 
     assert (
         "| Deployment guide | `operations/deployment.md`, `ansible.md`, `webhooks.md`, "
-        "`tailscale.md`, `tests/unit/test_deployment_docs.py` | Shipped | Keep the "
-        "launcher-based timed deploy proof current when bootstrap steps change. |"
+        "`tailscale.md`, `tests/unit/test_deployment_docs.py` | Shipped | "
+        "Tailscale-specific security guidance is shipped. Keep the launcher-based "
+        "timed deploy proof current when bootstrap steps change. |"
     ) in coverage

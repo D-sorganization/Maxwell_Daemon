@@ -11,6 +11,7 @@ const state = {
   allTasks: new Map(),        // id -> task object (always unfiltered, used for cost analytics)
   controlPlane: [],           // gate-aware work item snapshots
   controlPlaneError: "",      // visible gauntlet fetch failure message
+  gauntletTaskFocus: null,    // optional task filter for the gauntlet view
   selected: null,             // currently-shown task id
   testOutput: new Map(),      // task id -> accumulated text
   monitorLines: [],           // raw event lines (capped at 500)
@@ -70,6 +71,18 @@ function fmtBytes(n) {
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function fmtDurationSeconds(value) {
+  if (value === null || value === undefined) return "—";
+  const seconds = Math.max(0, Math.round(Number(value)));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  if (minutes < 60) return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const minuteRemainder = minutes % 60;
+  return minuteRemainder ? `${hours}h ${minuteRemainder}m` : `${hours}h`;
+}
+
 function setTableMessage(tbodyId, colspan, message) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
@@ -86,6 +99,30 @@ function setTableMessage(tbodyId, colspan, message) {
 function shortId(value) {
   const s = String(value || "");
   return s.length > 12 ? `${s.slice(0, 12)}…` : s;
+}
+
+function controlPlaneByTaskId(taskId) {
+  return state.controlPlane.find((item) => item.task_id === taskId) || null;
+}
+
+function setGauntletTaskFocus(taskId) {
+  state.gauntletTaskFocus = taskId || null;
+  const label = document.getElementById("gauntlet-focus-state");
+  const clear = document.getElementById("gauntlet-clear-focus-btn");
+  if (label) {
+    label.textContent = state.gauntletTaskFocus
+      ? `Focused on ${state.gauntletTaskFocus}`
+      : "All tasks";
+  }
+  if (clear) {
+    clear.hidden = !state.gauntletTaskFocus;
+  }
+}
+
+function openGauntletForTask(taskId) {
+  setGauntletTaskFocus(taskId);
+  switchView("gauntlet");
+  fetchGauntlet().catch(console.error);
 }
 
 // ---- tab navigation --------------------------------------------------------
@@ -349,12 +386,17 @@ function renderRepos() {
 
 async function fetchGauntlet() {
   state.controlPlaneError = "";
+  const params = new URLSearchParams({ limit: "100" });
+  if (state.gauntletTaskFocus) params.set("task_id", state.gauntletTaskFocus);
   try {
-    const r = await fetch("/api/v1/control-plane/gauntlet?limit=100", { headers: headers() });
+    const r = await fetch(`/api/v1/control-plane/gauntlet?${params}`, { headers: headers() });
     if (!r.ok) {
       state.controlPlane = [];
-      state.controlPlaneError = `Gate gauntlet unavailable (${r.status})`;
+      state.controlPlaneError = r.status === 401 || r.status === 403
+        ? "Gate gauntlet requires a viewer token; action controls stay hidden until access is granted."
+        : `Gate gauntlet unavailable (${r.status})`;
       renderGauntlet();
+      renderTasks();
       return;
     }
     state.controlPlane = await r.json();
@@ -362,21 +404,28 @@ async function fetchGauntlet() {
     state.controlPlane = [];
     state.controlPlaneError = "Gate gauntlet unavailable (network error)";
     renderGauntlet();
+    renderTasks();
     return;
   }
   renderGauntlet();
+  renderTasks();
 }
 
 function renderGauntlet() {
   const board = document.getElementById("gauntlet-board");
   if (!board) return;
   board.innerHTML = "";
+  setGauntletTaskFocus(state.gauntletTaskFocus);
   if (state.controlPlaneError) {
     board.innerHTML = `<div class="empty-state gauntlet-error">${escapeHtml(state.controlPlaneError)}</div>`;
     return;
   }
   if (state.controlPlane.length === 0) {
-    board.innerHTML = `<div class="empty-state">No work items have reached the control plane yet.</div>`;
+    board.innerHTML = `<div class="empty-state">${
+      state.gauntletTaskFocus
+        ? `Task ${escapeHtml(state.gauntletTaskFocus)} has not reached the gauntlet yet.`
+        : "No work items have reached the control plane yet."
+    }</div>`;
     return;
   }
   const fragment = document.createDocumentFragment();
@@ -393,16 +442,35 @@ function renderGauntlet() {
     `).join("");
     const findings = (item.critic_findings || []).map((finding) => `
       <li class="finding finding-${finding.severity}">
-        <strong>${escapeHtml(finding.severity)}</strong>
-        <span>${escapeHtml(finding.critic)}: ${escapeHtml(finding.message)}</span>
+        <div class="finding-head">
+          <strong>${escapeHtml(finding.severity)}</strong>
+          <span class="finding-critic">${escapeHtml(finding.critic || "critic")}</span>
+        </div>
+        <span class="finding-title">${escapeHtml(finding.title || finding.message || "Finding")}</span>
+        <span class="finding-detail">${escapeHtml(finding.detail || finding.message || "No detail recorded.")}</span>
+        ${(finding.file || finding.line)
+          ? `<span class="finding-meta">${escapeHtml(finding.file || "unknown file")}${finding.line ? `:${escapeHtml(String(finding.line))}` : ""}</span>`
+          : ""}
+        ${(((Array.isArray(finding.evidence) ? finding.evidence : (finding.evidence ? [finding.evidence] : []))).length)
+          ? `<ul class="evidence-list">${(Array.isArray(finding.evidence) ? finding.evidence : [finding.evidence]).map((entry) => `<li>${escapeHtml(entry)}</li>`).join("")}</ul>`
+          : ""}
       </li>
     `).join("") || `<li class="finding finding-note">No critic findings recorded.</li>`;
     const delegates = (item.delegates || []).map((delegate) => `
-      <li>
-        <span class="status-${delegate.status}">${escapeHtml(delegate.status)}</span>
-        ${escapeHtml(delegate.role)}
-        ${delegate.backend ? ` via ${escapeHtml(delegate.backend)}` : ""}
-        ${delegate.machine ? ` on ${escapeHtml(delegate.machine)}` : ""}
+      <li class="delegate-entry">
+        <div class="delegate-head">
+          <span class="status-${delegate.status}">${escapeHtml(delegate.status)}</span>
+          <span>${escapeHtml(delegate.role)}</span>
+        </div>
+        <div class="delegate-meta">
+          ${delegate.backend ? `<span>via ${escapeHtml(delegate.backend)}</span>` : ""}
+          ${delegate.machine ? `<span>on ${escapeHtml(delegate.machine)}</span>` : ""}
+          <span>${fmtUsd(delegate.cost_usd || 0)}</span>
+          <span>${escapeHtml(fmtDurationSeconds(delegate.duration_seconds))}</span>
+        </div>
+        ${delegate.latest_checkpoint
+          ? `<p class="delegate-checkpoint">${escapeHtml(delegate.latest_checkpoint)}</p>`
+          : ""}
       </li>
     `).join("") || `<li class="empty-state">No delegate sessions recorded yet.</li>`;
     const routing = item.resource_routing || {};
@@ -421,7 +489,10 @@ function renderGauntlet() {
           <h3>${escapeHtml(item.title)}</h3>
           <p>${escapeHtml(item.next_action)}</p>
         </div>
-        <span class="decision-pill">${escapeHtml(item.final_decision)}</span>
+        <div class="gauntlet-item-meta">
+          ${item.current_gate ? `<span class="gate-focus-pill">${escapeHtml(item.current_gate)}</span>` : ""}
+          <span class="decision-pill">${escapeHtml(item.final_decision)}</span>
+        </div>
       </div>
       ${actions ? `<div class="gate-actions">${actions}</div>` : ""}
       <div class="gauntlet-columns">
@@ -435,7 +506,7 @@ function renderGauntlet() {
         </section>
         <section>
           <h4>Delegate</h4>
-          <ul class="compact-list">${delegates}</ul>
+          <ul class="delegate-list">${delegates}</ul>
           <h4>Routing</h4>
           <p>${escapeHtml(routing.selected_backend || "No backend selected")}</p>
           ${routing.warning ? `<p class="routing-warning">${escapeHtml(routing.warning)}</p>` : ""}
@@ -761,7 +832,10 @@ async function submitGateAction(action, item) {
   });
   if (!r.ok) {
     const detail = await r.text();
-    alert(`Gate action failed (${r.status}): ${detail.slice(0, 200)}`);
+    const summary = r.status === 401 || r.status === 403
+      ? "Gate action denied: operator privileges are required."
+      : `Gate action failed (${r.status}): ${detail.slice(0, 200)}`;
+    alert(summary);
     return;
   }
   await Promise.all([
@@ -774,6 +848,7 @@ async function submitGateAction(action, item) {
 
 function renderTasks() {
   const tbody = document.getElementById("tasks-body");
+  if (!tbody) return;
   tbody.innerHTML = "";
   // ⚡ Bolt: Fast ISO 8601 sort. String operators are ~3x faster than localeCompare.
   const sorted = [...state.tasks.values()].sort(
@@ -784,6 +859,8 @@ function renderTasks() {
   for (const t of sorted) {
     const tr = document.createElement("tr");
     tr.dataset.id = t.id;
+    const controlPlane = controlPlaneByTaskId(t.id);
+    const delegate = controlPlane?.delegates?.[0] || null;
     const target = t.issue_repo
       ? `${t.issue_repo}#${t.issue_number}`
       : (t.prompt || "").slice(0, 40);
@@ -793,17 +870,21 @@ function renderTasks() {
     const cancel = t.status === "queued"
       ? `<button class="cancel" data-cancel="${t.id}">cancel</button>`
       : "";
+    const review = `<button data-review="${t.id}">review</button>`;
     tr.innerHTML = `
       <td>${t.id}</td>
       <td>${t.kind}</td>
       <td><span class="status-${t.status}">${t.status}</span></td>
       <td>${escapeHtml(target)}</td>
+      <td>${escapeHtml(controlPlane?.final_decision || "—")}</td>
+      <td>${escapeHtml(controlPlane?.current_gate || "—")}</td>
+      <td>${delegate ? `${escapeHtml(delegate.status)}${delegate.machine ? ` on ${escapeHtml(delegate.machine)}` : ""}` : "—"}</td>
       <td>${fmtUsd(t.cost_usd)}</td>
       <td>${pr}</td>
-      <td>${cancel}</td>
+      <td class="row-actions">${review}${cancel}</td>
     `;
     tr.addEventListener("click", (ev) => {
-      if (ev.target.dataset.cancel) return;
+      if (ev.target.dataset.cancel || ev.target.dataset.review) return;
       fetchTaskDetail(t.id);
     });
     fragment.appendChild(tr);
@@ -814,6 +895,12 @@ function renderTasks() {
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       cancelTask(btn.dataset.cancel);
+    });
+  });
+  tbody.querySelectorAll("[data-review]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      openGauntletForTask(btn.dataset.review);
     });
   });
 }
@@ -1057,6 +1144,7 @@ function openEventStream() {
 }
 
 let _fetchTasksTimer = null;
+let _fetchGauntletTimer = null;
 const _fetchTaskDetailTimers = new Map();
 
 // ⚡ Bolt: Batch DOM updates using requestAnimationFrame to prevent layout thrashing
@@ -1098,6 +1186,9 @@ function handleEvent(evt) {
     // Debounce global tasks list fetch
     clearTimeout(_fetchTasksTimer);
     _fetchTasksTimer = setTimeout(() => fetchTasks().catch(() => {}), 300);
+
+    clearTimeout(_fetchGauntletTimer);
+    _fetchGauntletTimer = setTimeout(() => fetchGauntlet().catch(() => {}), 300);
   }
 }
 
@@ -1125,6 +1216,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Gauntlet view
   document.getElementById("gauntlet-refresh-btn").addEventListener("click", () => fetchGauntlet().catch(console.error));
+  document.getElementById("gauntlet-clear-focus-btn").addEventListener("click", () => {
+    setGauntletTaskFocus(null);
+    fetchGauntlet().catch(console.error);
+  });
 
   // Control-plane views
   document.getElementById("work-items-refresh-btn").addEventListener("click", () => fetchWorkItems().catch(console.error));
@@ -1245,6 +1340,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initial load
   fetchTasks().catch(console.error);
   fetchBackends().catch(console.error);
+  fetchGauntlet().catch(console.error);
   fetchCost().catch(console.error);
   openEventStream();
 
