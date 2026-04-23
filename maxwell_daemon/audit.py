@@ -41,21 +41,26 @@ _SENSITIVE_KEYS = frozenset({"authorization", "x-api-key", "api_key", "token", "
 
 
 def _redact_details(details: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of *details* with sensitive values replaced by '***'.
+    """Return a copy of *details* with sensitive values redacted recursively."""
 
-    Only the top-level keys are checked; nested objects are left intact
-    (they are not present in any current audit call-sites).
-    """
-    redacted = {}
-    for k, v in details.items():
-        if k.lower() in _SENSITIVE_KEYS:
-            redacted[k] = "***"
-        elif isinstance(v, str) and v.lower().startswith("bearer "):
+    def _redact_value(value: Any, *, key: str | None = None) -> Any:
+        if key is not None and key.lower() in _SENSITIVE_KEYS:
+            return "***"
+        if isinstance(value, dict):
+            return {
+                nested_key: _redact_value(nested_value, key=nested_key)
+                for nested_key, nested_value in value.items()
+            }
+        if isinstance(value, list):
+            return [_redact_value(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(_redact_value(item) for item in value)
+        if isinstance(value, str) and value.lower().startswith("bearer "):
             # Catch inadvertent bearer token values regardless of key name.
-            redacted[k] = "Bearer ***"
-        else:
-            redacted[k] = v
-    return redacted
+            return "Bearer ***"
+        return value
+
+    return {key: _redact_value(value, key=key) for key, value in details.items()}
 
 
 def _rechain(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:

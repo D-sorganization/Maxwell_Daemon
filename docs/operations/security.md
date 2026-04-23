@@ -11,6 +11,9 @@ Current guarantees:
 - The working directory must resolve inside the configured workspace root.
 - Environment variables are filtered to an explicit allowlist.
 - Secret-looking environment values are redacted from summaries and artifacts.
+- Audit-log payloads are recursively redacted for common secret keys such as
+  `authorization`, `x-api-key`, `token`, and `password`, and bearer-looking
+  strings are masked even when they appear under arbitrary nested keys.
 - Commands have a timeout and recorded return code, duration, output summary, and policy evidence.
 
 Current non-guarantees:
@@ -20,6 +23,8 @@ Current non-guarantees:
 - No filesystem namespace, read-only root filesystem, or host path isolation is enforced.
 - No cgroup, seccomp, process, CPU, or memory limit is enforced.
 - A permitted interpreter or build tool can still open files, use the network, spawn child processes, or run arbitrary project code with the user's host permissions.
+- Audit redaction is heuristic rather than full DLP: values are masked by key
+  name and bearer-token shape, not by generic entropy scanning.
 
 ## Operational Guidance
 
@@ -33,3 +38,9 @@ but daemon task, memory, artifact, and SSH APIs still need least-privilege
 network policy plus Maxwell application auth.
 
 Docker-backed isolation is tracked in [issue #468](https://github.com/D-sorganization/Maxwell-Daemon/issues/468). README and architecture claims must not describe Docker isolation, `--network none`, or perfect security until the runtime actually enforces those guarantees.
+
+The broader security hardening backlog remains open in
+[issue #490](https://github.com/D-sorganization/Maxwell-Daemon/issues/490) and
+[issue #473](https://github.com/D-sorganization/Maxwell-Daemon/issues/473),
+including failed-auth backoff, JWT refresh and revocation, tighter path/ID
+validation, and shell-aware sandbox command restrictions.
