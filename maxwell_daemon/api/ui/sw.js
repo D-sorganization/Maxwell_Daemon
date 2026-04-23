@@ -18,6 +18,8 @@ const SHELL_ASSETS = [
   '/ui/style.css',
   '/ui/app.js',
   '/ui/manifest.json',
+  '/ui/icon-192.svg',
+  '/ui/icon-512.svg',
 ];
 
 // ── install ─────────────────────────────────────────────────────────────────
