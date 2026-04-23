@@ -174,7 +174,9 @@ class TestGauntletActions:
         self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
     ) -> None:
         holder = next(item["_holder"] for item in patch_httpx if "_holder" in item)
-        holder.response = _FakeResponse(payload={**_gauntlet_row(task_id="retry-me"), "status": "queued"})
+        holder.response = _FakeResponse(
+            payload={**_gauntlet_row(task_id="retry-me"), "status": "queued"}
+        )
 
         result = runner.invoke(app, ["gauntlet", "retry", "retry-me"])
 

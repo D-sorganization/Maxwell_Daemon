@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import httpx
 import typer
@@ -55,7 +55,7 @@ def _load_control_plane_rows(
     payload = response.json()
     if not isinstance(payload, list):
         _fail("unexpected gauntlet response shape")
-    return payload
+    return cast(list[dict[str, Any]], payload)
 
 
 @gauntlet_app.command("list")
@@ -105,7 +105,9 @@ def list_gauntlets(
 
 @gauntlet_app.command("status")
 def gauntlet_status(
-    task_id: Annotated[str, typer.Argument(help="Task id shown in the control-plane gauntlet view")],
+    task_id: Annotated[
+        str, typer.Argument(help="Task id shown in the control-plane gauntlet view")
+    ],
     daemon_url: Annotated[
         str, typer.Option("--daemon-url", envvar="MAXWELL_DAEMON_URL")
     ] = "http://127.0.0.1:8080",
@@ -203,9 +205,11 @@ def retry_gauntlet(
 
 @gauntlet_app.command("waive")
 def waive_gauntlet(
-    task_id: Annotated[str, typer.Argument(help="Task id to waive without rewriting failure state")],
-    actor: Annotated[str, typer.Option("--actor")] = ...,
-    reason: Annotated[str, typer.Option("--reason")] = ...,
+    task_id: Annotated[
+        str, typer.Argument(help="Task id to waive without rewriting failure state")
+    ],
+    actor: Annotated[str, typer.Option("--actor")],
+    reason: Annotated[str, typer.Option("--reason")],
     expected_status: Annotated[str, typer.Option("--expected-status")] = "failed",
     daemon_url: Annotated[
         str, typer.Option("--daemon-url", envvar="MAXWELL_DAEMON_URL")
