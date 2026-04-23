@@ -7,8 +7,6 @@ run through the registry so every backend uses the same implementations.
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from maxwell_daemon.tools.mcp import (
