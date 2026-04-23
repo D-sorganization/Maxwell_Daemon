@@ -10,13 +10,13 @@ future agents can advance the remaining gaps without duplicating shipped work.
 | Area | Current repo evidence | Status | Remaining gate |
 | --- | --- | --- | --- |
 | Getting started | `getting-started/quickstart.md`, `configuration.md`, `autonomous-workflow.md`, `examples.md`, `troubleshooting.md` | Shipped | Keep examples aligned with CLI/API changes. |
-| Architecture guide | `architecture/overview.md`, `backends.md`, `contracts.md` | Partial | Add a dedicated fleet architecture page for conductor/worker dispatch, shared memory, critic panels, and gauntlet gates. |
+| Architecture guide | `architecture/overview.md`, `backends.md`, `contracts.md`, `gate-runtime.md` | Partial | Add a dedicated fleet architecture page for conductor/worker dispatch. The gate runtime and critic panel foundation is documented, and the fleet gauntlet walkthrough links it to operator workflows. |
 | REST API reference | `reference/api.md`, `reference/openapi.md`, `tests/unit/test_docs_site_contract.py` | Shipped | Keep the OpenAPI route inventory test green whenever HTTP routes change. |
 | gRPC reference | `reference/grpc.md`, `pyproject.toml` exposes the optional `grpc` extra | Partial | Add protocol definitions and generated-client guidance before claiming supported gRPC. |
 | Deployment guide | `operations/deployment.md`, `ansible.md`, `webhooks.md`, `tailscale.md` | Partial | Tailscale-specific security guidance is shipped; still prove a fresh deploy path in under 30 minutes. |
 | Configuration reference | `getting-started/configuration.md`, `reference/configuration.md` | Shipped | Add a config drift test when new top-level config sections are introduced. |
 | Development guide | `contributing.md`, `architecture/backends.md`, `architecture/contracts.md` | Partial | Add extension/tool authoring docs, MCP status boundaries, and local test harness guidance. |
-| Examples | `getting-started/examples.md`, `troubleshooting.md` | Partial | Add resource-aware routing, critic gauntlet, fleet issue queue, and shared memory walkthroughs. |
+| Examples | `getting-started/examples.md`, `troubleshooting.md`, `fleet-gauntlet-walkthrough.md` | Partial | Fleet/shared-memory/critic-gauntlet walkthrough is shipped; add resource-aware routing and fleet issue queue walkthroughs. |
 | Video tutorials | None in repo | Not started | Publish 10 short tutorials or replace this requirement with a written tutorial acceptance gate. |
 | Docs publishing | `.github/workflows/docs.yml`, `mkdocs.yml` | Shipped | Keep `mkdocs build --strict` green on every docs PR. |
 
@@ -34,6 +34,9 @@ Do not close issue #19 until all of these gates are true:
   home-user path.
 - Tailscale fleet documentation includes least-privilege policy guidance,
   application-auth requirements, and validation commands.
+- The fleet/shared-memory/critic-gauntlet walkthrough is discoverable from
+  `mkdocs.yml`, links memory, artifacts, control-plane gauntlet actions, and
+  critic review into one operator flow.
 - The video tutorial requirement is either satisfied or replaced by an explicit,
   accepted written-docs alternative.
 
