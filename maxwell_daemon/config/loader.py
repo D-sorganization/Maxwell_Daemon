@@ -75,10 +75,10 @@ def _migrate_backend_api_keys(
         if not isinstance(backend_cfg, dict):
             continue
         plaintext = backend_cfg.get("api_key")
-        if not isinstance(plaintext, str) or plaintext == "" or _looks_like_env_reference(plaintext):
+        if not isinstance(plaintext, str) or not plaintext or _looks_like_env_reference(plaintext):
             continue
         secret_ref = backend_cfg.get("api_key_secret_ref")
-        if not isinstance(secret_ref, str) or secret_ref == "":
+        if not isinstance(secret_ref, str) or not secret_ref:
             secret_ref = backend_api_key_secret_ref(str(backend_name))
             backend_cfg["api_key_secret_ref"] = secret_ref
         secret_store.set(secret_ref, plaintext)
@@ -91,7 +91,9 @@ def _migrate_backend_api_keys(
     return raw, changed
 
 
-def _resolve_backend_api_keys(raw: dict[str, Any], secret_store: SecretStore | None) -> dict[str, Any]:
+def _resolve_backend_api_keys(
+    raw: dict[str, Any], secret_store: SecretStore | None
+) -> dict[str, Any]:
     backends = raw.get("backends")
     if not isinstance(backends, dict):
         return raw
@@ -100,7 +102,7 @@ def _resolve_backend_api_keys(raw: dict[str, Any], secret_store: SecretStore | N
         if not isinstance(backend_cfg, dict):
             continue
         secret_ref = backend_cfg.get("api_key_secret_ref")
-        if not isinstance(secret_ref, str) or secret_ref == "":
+        if not isinstance(secret_ref, str) or not secret_ref:
             continue
         if secret_store is None:
             raise RuntimeError(

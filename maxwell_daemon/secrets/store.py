@@ -25,7 +25,9 @@ def backend_api_key_secret_ref(backend_name: str) -> str:
 class KeyringSecretStore:
     """Thin wrapper around the keyring package."""
 
-    def __init__(self, service_name: str = DEFAULT_SERVICE_NAME, keyring_module: Any = None) -> None:
+    def __init__(
+        self, service_name: str = DEFAULT_SERVICE_NAME, keyring_module: Any = None
+    ) -> None:
         self._service_name = service_name
         if keyring_module is None:
             try:

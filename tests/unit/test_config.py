@@ -118,9 +118,7 @@ class TestConfigLoad:
 
         assert cfg.backends["claude"].api_key_value() == "sk-live-123"
         assert cfg.backends["claude"].api_key_secret_ref == "maxwell-daemon/backends/claude/api_key"
-        assert (
-            store.get("maxwell-daemon/backends/claude/api_key") == "sk-live-123"
-        )
+        assert store.get("maxwell-daemon/backends/claude/api_key") == "sk-live-123"
         rewritten = yaml.safe_load(path.read_text(encoding="utf-8"))
         assert rewritten["backends"]["claude"]["api_key_secret_ref"] == (
             "maxwell-daemon/backends/claude/api_key"
