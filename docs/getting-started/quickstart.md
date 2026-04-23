@@ -2,8 +2,28 @@
 
 ## Install
 
+For regular use, install the runtime package:
+
 ```bash
 pip install maxwell-daemon
+```
+
+If you are running from a source checkout, use the launcher for your platform:
+
+| Platform | Launcher |
+|----------|----------|
+| Windows | `Launch-Maxwell.bat` |
+| macOS | `Launch-Maxwell.command` |
+| Linux | `Launch-Maxwell.sh` |
+
+The launcher creates `.venv`, installs runtime dependencies without `[dev]`,
+initializes a starter config when needed, runs `maxwell-daemon doctor`, and then
+starts `maxwell-daemon serve`.
+
+Developer installs should stay limited to contributor workflows:
+
+```bash
+pip install -e ".[dev]"
 ```
 
 ## Initialise a config

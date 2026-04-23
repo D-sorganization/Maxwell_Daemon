@@ -1,20 +1,14 @@
 @echo off
-title Launching Maxwell-Daemon
-echo ==================================================
-echo   Booting Maxwell-Daemon Desktop Environment...
-echo ==================================================
-set PYTHONPATH=%cd%
-
-REM Check if virtual environment exists
-if not exist ".venv\Scripts\activate.bat" (
-    echo [ERROR] Virtual environment not found at .venv\Scripts\activate.bat
-    echo Please run setup first.
-    pause
-    exit /b 1
+setlocal
+set "ROOT=%~dp0"
+pushd "%ROOT%"
+py -3 -m maxwell_daemon.launcher --repo-root "%ROOT%" %*
+if errorlevel 1 (
+  echo.
+  echo Maxwell-Daemon could not start. Review the message above, then run:
+  echo   py -3 -m maxwell_daemon.launcher --repo-root "%ROOT%" --dry-run
+  pause
+  popd
+  exit /b 1
 )
-
-call .venv\Scripts\activate.bat
-
-REM Start the PyQt6 GUI as a background windowless process
-start pythonw -m maxwell_daemon.gui.app
-exit
+popd

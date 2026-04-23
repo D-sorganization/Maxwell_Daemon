@@ -10,7 +10,8 @@ Maxwell-Daemon has successfully evolved from a simple API routing abstraction in
 - **Context Provisioning**: `RepoSchematic` provides compressed AST-like context to limit token burn.
 - **Cognitive Pipeline**: A strict TDD state-machine (Strategist -> Implementer -> Validator/Crucible).
 - **Disk/Resource Governance**: `MemoryAnnealer` actively purges raw logs after compression. `ExecutionSandbox` currently provides command policy, environment filtering, timeouts, and evidence capture, but it does not yet enforce Docker or OS-level resource isolation.
-- **Consumer App Shell**: A native `PyQt6` app (`Launch-Maxwell.bat`) has been built to eliminate terminal dependency.
+- **Consumer App Shell**: Source checkout launchers exist for Windows, macOS, and
+  Linux and delegate to the daemon bootstrap flow.
 
 ## 2. Implementation Gaps & Execution Risks
 While the core libraries are flawless, several "glue" and edge-case execution gaps remain before a true `1.0.0` release:

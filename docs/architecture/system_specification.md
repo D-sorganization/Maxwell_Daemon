@@ -24,6 +24,7 @@ The pipeline is a state-machine orchestrating the workflow:
 - **Memory Annealer**: A background cycle that compresses gigabytes of raw logs into kilobytes of architectural markdown, purging the raw files to conserve disk space.
 
 ## 3. Deployment Constraints
-- Requires Python 3.13+
-- Windows environments must execute the Daemon via the `Launch-Maxwell.bat` entrypoint using the `PyQt6` event loop.
+- Requires Python 3.10+
+- Source checkout environments can bootstrap the daemon with `Launch-Maxwell.bat`
+  on Windows, `Launch-Maxwell.command` on macOS, or `Launch-Maxwell.sh` on Linux.
 - Background tasks (like the Memory Annealer) must yield via `asyncio` to prevent blocking the GUI thread.
