@@ -43,4 +43,5 @@ def test_documentation_coverage_tracks_walkthrough_remaining_gates() -> None:
 
     assert "`fleet-gauntlet-walkthrough.md`" in coverage
     assert "Fleet/shared-memory/critic-gauntlet walkthrough is shipped" in coverage
-    assert "resource-aware routing and fleet issue queue walkthroughs" in coverage
+    assert "resource-aware routing walkthrough is shipped" in coverage
+    assert "add fleet issue queue walkthroughs" in coverage

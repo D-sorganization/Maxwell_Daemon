@@ -16,7 +16,7 @@ future agents can advance the remaining gaps without duplicating shipped work.
 | Deployment guide | `operations/deployment.md`, `ansible.md`, `webhooks.md`, `tailscale.md` | Partial | Tailscale-specific security guidance is shipped; still prove a fresh deploy path in under 30 minutes. |
 | Configuration reference | `getting-started/configuration.md`, `reference/configuration.md` | Shipped | Add a config drift test when new top-level config sections are introduced. |
 | Development guide | `contributing.md`, `architecture/backends.md`, `architecture/contracts.md` | Partial | Add extension/tool authoring docs, MCP status boundaries, and local test harness guidance. |
-| Examples | `getting-started/examples.md`, `troubleshooting.md`, `fleet-gauntlet-walkthrough.md` | Partial | Fleet/shared-memory/critic-gauntlet walkthrough is shipped; add resource-aware routing and fleet issue queue walkthroughs. |
+| Examples | `getting-started/examples.md`, `troubleshooting.md`, `fleet-gauntlet-walkthrough.md`, `resource-aware-routing.md` | Partial | Fleet/shared-memory/critic-gauntlet walkthrough is shipped; resource-aware routing walkthrough is shipped; add fleet issue queue walkthroughs. |
 | Video tutorials | None in repo | Not started | Publish 10 short tutorials or replace this requirement with a written tutorial acceptance gate. |
 | Docs publishing | `.github/workflows/docs.yml`, `mkdocs.yml` | Shipped | Keep `mkdocs build --strict` green on every docs PR. |
 
@@ -37,6 +37,10 @@ Do not close issue #19 until all of these gates are true:
 - The fleet/shared-memory/critic-gauntlet walkthrough is discoverable from
   `mkdocs.yml`, links memory, artifacts, control-plane gauntlet actions, and
   critic review into one operator flow.
+- The resource-aware routing walkthrough is discoverable from `mkdocs.yml`,
+  covers repo overrides, explicit task overrides, budget gates, fallback
+  boundaries, and the `ResourceBroker` contract without claiming full automated
+  subscription juggling is already integrated.
 - The video tutorial requirement is either satisfied or replaced by an explicit,
   accepted written-docs alternative.
 
