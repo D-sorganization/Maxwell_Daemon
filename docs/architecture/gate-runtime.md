@@ -59,14 +59,31 @@ Critic profiles define:
 
 - stable critic id and display name;
 - adapter id;
+- scope;
+- required inputs and forbidden actions;
+- output schema version and minimum model capability tags;
+- default severity mapping;
 - whether the critic is required;
-- timeout policy;
+- timeout and retry policy;
 - metadata used by routing or prompt construction.
+
+The current built-in profile catalog ships:
+
+- `architecture-critic`
+- `test-critic`
+- `security-critic`
+- `maintainability-critic`
+- `product-critic`
+- `release-critic`
+
+These profiles are intentionally read-only. They give future routing and prompt
+construction code one stable contract for what each critic needs and what each
+critic must never do.
 
 Critic adapters return `CriticPanelRun` records with structured findings.
 Findings preserve critic id, severity, summary, optional file and line, and
-evidence strings. `p1` findings are blocking by default. `p2` findings are
-visible but non-blocking.
+evidence strings. `p0` and `p1` findings are blocking by default. `p2`, `p3`,
+and `note` findings remain visible but non-blocking.
 
 `CriticAggregatePolicy` sorts runs and findings deterministically before
 building a verdict. Required missing critics, required timeouts, and required

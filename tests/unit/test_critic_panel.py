@@ -14,6 +14,8 @@ from maxwell_daemon.core.critics import (
     CriticRunStatus,
     CriticVerdict,
     StaticCritic,
+    critic_profile_by_id,
+    default_critic_profiles,
 )
 from maxwell_daemon.core.gates import GateDefinition, GauntletRuntime, InMemoryGateStore
 
@@ -24,6 +26,7 @@ def _profile(
     required: bool = True,
     timeout_seconds: float | None = None,
     adapter: str = "static",
+    retry_limit: int = 0,
 ) -> CriticProfile:
     return CriticProfile(
         critic_id=critic_id,
@@ -31,6 +34,7 @@ def _profile(
         adapter=adapter,
         required=required,
         timeout_seconds=timeout_seconds,
+        retry_limit=retry_limit,
     )
 
 
@@ -55,8 +59,60 @@ class TestCriticProfileValidation:
         with pytest.raises(PreconditionError, match="timeout_seconds"):
             _profile("critic-1", timeout_seconds=0)
 
+    def test_rejects_negative_retry_limit(self) -> None:
+        with pytest.raises(PreconditionError, match="retry_limit"):
+            _profile("critic-1", retry_limit=-1)
+
+
+class TestBuiltInCriticProfiles:
+    def test_catalog_contains_expected_profiles_in_stable_order(self) -> None:
+        profiles = default_critic_profiles()
+
+        assert tuple(profile.critic_id for profile in profiles) == (
+            "architecture-critic",
+            "test-critic",
+            "security-critic",
+            "maintainability-critic",
+            "product-critic",
+            "release-critic",
+        )
+        assert critic_profile_by_id("security-critic") == profiles[2]
+        assert critic_profile_by_id("missing-critic") is None
+
+    def test_catalog_profiles_declare_contract_fields(self) -> None:
+        for profile in default_critic_profiles():
+            assert profile.title == profile.name
+            assert profile.scope
+            assert profile.required_inputs
+            assert profile.forbidden_actions
+            assert profile.output_schema_version == "critic.v1"
+            assert profile.minimum_model_capability_tags
+            assert profile.default_severity_mapping
+
 
 class TestCriticAggregation:
+    async def test_p0_finding_blocks_by_default_policy(self) -> None:
+        finding = CriticFinding(
+            critic_id="critic-0",
+            severity="p0",
+            summary="Critical security defect",
+            detail="public token leak",
+            evidence=("token printed in logs",),
+        )
+        profile = _profile("critic-0")
+        runner = CriticPanelRunner(
+            adapters={
+                "static": StaticCritic(
+                    result=CriticPanelRun(profile=profile, status="failed", findings=(finding,))
+                )
+            }
+        )
+
+        verdict = await runner.run([profile])
+
+        assert verdict.passed is False
+        assert verdict.blocking_findings == (finding,)
+
     async def test_p1_finding_blocks_and_preserves_evidence(self) -> None:
         finding = CriticFinding(
             critic_id="critic-1",

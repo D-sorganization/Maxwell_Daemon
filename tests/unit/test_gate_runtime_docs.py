@@ -21,3 +21,16 @@ def test_gate_runtime_doc_keeps_work_item_run_gap_explicit() -> None:
     doc = DOC.read_text(encoding="utf-8")
 
     assert "work-item-scoped gauntlet runs remain follow-up integration work" in doc
+
+
+def test_gate_runtime_doc_lists_built_in_critic_profiles() -> None:
+    doc = DOC.read_text(encoding="utf-8")
+
+    assert "architecture-critic" in doc
+    assert "test-critic" in doc
+    assert "security-critic" in doc
+    assert "maintainability-critic" in doc
+    assert "product-critic" in doc
+    assert "release-critic" in doc
+    assert "output schema version" in doc
+    assert "timeout and retry policy" in doc

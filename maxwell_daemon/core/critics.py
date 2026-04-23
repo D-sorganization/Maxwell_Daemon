@@ -26,10 +26,19 @@ __all__ = [
     "CriticProfile",
     "CriticVerdict",
     "StaticCritic",
+    "critic_profile_by_id",
+    "default_critic_profiles",
 ]
 
-CriticSeverity = Literal["p1", "p2"]
+CriticSeverity = Literal["p0", "p1", "p2", "p3", "note"]
 CriticRunStatus = Literal["passed", "failed", "timed_out", "missing", "error"]
+_CRITIC_SEVERITY_ORDER: Mapping[CriticSeverity, int] = {
+    "p0": 0,
+    "p1": 1,
+    "p2": 2,
+    "p3": 3,
+    "note": 4,
+}
 
 
 def _utc_now() -> datetime:
@@ -39,7 +48,7 @@ def _utc_now() -> datetime:
 def _finding_sort_key(finding: CriticFinding) -> tuple[object, ...]:
     return (
         finding.critic_id,
-        0 if finding.severity == "p1" else 1,
+        _CRITIC_SEVERITY_ORDER[finding.severity],
         finding.file_path or "",
         finding.line_number or 0,
         finding.summary,
@@ -55,16 +64,52 @@ class CriticProfile:
     critic_id: str
     name: str
     adapter: str
+    title: str | None = None
+    scope: str = "general"
+    required_inputs: tuple[str, ...] = ()
+    forbidden_actions: tuple[str, ...] = ()
+    output_schema_version: str = "critic.v1"
+    minimum_model_capability_tags: tuple[str, ...] = ()
+    default_severity_mapping: Mapping[str, CriticSeverity] = field(default_factory=dict)
     required: bool = True
     timeout_seconds: float | None = None
+    retry_limit: int = 0
     metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         require(bool(self.critic_id.strip()), "CriticProfile.critic_id must be non-empty")
         require(bool(self.name.strip()), "CriticProfile.name must be non-empty")
         require(bool(self.adapter.strip()), "CriticProfile.adapter must be non-empty")
+        title = self.title or self.name
+        require(bool(title.strip()), "CriticProfile.title must be non-empty")
+        object.__setattr__(self, "title", title)
+        require(bool(self.scope.strip()), "CriticProfile.scope must be non-empty")
+        require(
+            bool(self.output_schema_version.strip()),
+            "CriticProfile.output_schema_version must be non-empty",
+        )
         if self.timeout_seconds is not None:
             require(self.timeout_seconds > 0, "CriticProfile.timeout_seconds must be positive")
+        require(self.retry_limit >= 0, "CriticProfile.retry_limit must be non-negative")
+        for field_name, values in (
+            ("required_inputs", self.required_inputs),
+            ("forbidden_actions", self.forbidden_actions),
+            ("minimum_model_capability_tags", self.minimum_model_capability_tags),
+        ):
+            for value in values:
+                require(
+                    isinstance(value, str) and bool(value.strip()),
+                    f"CriticProfile.{field_name} values must be non-empty strings",
+                )
+        for key, value in self.default_severity_mapping.items():
+            require(
+                isinstance(key, str) and bool(key.strip()),
+                "CriticProfile.default_severity_mapping keys must be non-empty strings",
+            )
+            require(
+                value in _CRITIC_SEVERITY_ORDER,
+                "CriticProfile.default_severity_mapping values must be valid severities",
+            )
         for key, value in self.metadata.items():
             require(
                 isinstance(key, str) and bool(key.strip()),
@@ -88,7 +133,10 @@ class CriticFinding:
     def __post_init__(self) -> None:
         require(bool(self.critic_id.strip()), "CriticFinding.critic_id must be non-empty")
         require(bool(self.summary.strip()), "CriticFinding.summary must be non-empty")
-        require(self.severity in ("p1", "p2"), "CriticFinding.severity must be p1 or p2")
+        require(
+            self.severity in _CRITIC_SEVERITY_ORDER,
+            "CriticFinding.severity must be one of p0, p1, p2, p3, or note",
+        )
         if self.file_path is not None:
             require(
                 bool(self.file_path.strip()),
@@ -106,7 +154,7 @@ class CriticFinding:
 
     @property
     def is_blocking(self) -> bool:
-        return self.severity == "p1"
+        return self.severity in ("p0", "p1")
 
 
 @dataclass(slots=True, frozen=True)
@@ -191,7 +239,7 @@ class CriticAdapter(Protocol):
 class CriticAggregatePolicy:
     """Policy for converting panel runs into a verdict."""
 
-    blocking_severities: tuple[CriticSeverity, ...] = ("p1",)
+    blocking_severities: tuple[CriticSeverity, ...] = ("p0", "p1")
     optional_issue_is_blocking: bool = False
 
     def aggregate(self, runs: Sequence[CriticPanelRun]) -> CriticVerdict:
@@ -344,6 +392,127 @@ class StaticCritic:
             "StaticCritic.result.profile.adapter must match the requested critic",
         )
         return self.result
+
+
+_DEFAULT_CRITIC_PROFILES: tuple[CriticProfile, ...] = (
+    CriticProfile(
+        critic_id="architecture-critic",
+        name="Architecture Critic",
+        adapter="architecture-critic",
+        scope="Checks boundaries, dependency direction, design simplicity, and fit with local patterns.",
+        required_inputs=("goal", "diff", "changed-files", "repo-context"),
+        forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
+        minimum_model_capability_tags=("architecture-review", "reasoning-medium"),
+        default_severity_mapping={
+            "boundary-violation": "p1",
+            "unnecessary-abstraction": "p2",
+        },
+        timeout_seconds=120.0,
+        retry_limit=1,
+        metadata={"category": "architecture"},
+    ),
+    CriticProfile(
+        critic_id="test-critic",
+        name="Test Critic",
+        adapter="test-critic",
+        scope="Checks TDD evidence, regression coverage, and whether tests prove the fix.",
+        required_inputs=("goal", "diff", "changed-files", "test-results"),
+        forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
+        minimum_model_capability_tags=("test-review", "reasoning-medium"),
+        default_severity_mapping={
+            "missing-regression": "p1",
+            "shallow-assertion": "p2",
+        },
+        timeout_seconds=120.0,
+        retry_limit=1,
+        metadata={"category": "tests"},
+    ),
+    CriticProfile(
+        critic_id="security-critic",
+        name="Security Critic",
+        adapter="security-critic",
+        scope="Checks auth, secrets, sandbox escape, path traversal, and destructive-command risks.",
+        required_inputs=("goal", "diff", "changed-files", "test-results", "policy"),
+        forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
+        minimum_model_capability_tags=("security-review", "reasoning-high"),
+        default_severity_mapping={
+            "secret-exposure": "p0",
+            "unsafe-command": "p1",
+            "hardening-note": "p2",
+        },
+        timeout_seconds=180.0,
+        retry_limit=1,
+        metadata={"category": "security"},
+    ),
+    CriticProfile(
+        critic_id="maintainability-critic",
+        name="Maintainability Critic",
+        adapter="maintainability-critic",
+        scope="Checks readability, DRY boundaries, and long-term operability of the patch.",
+        required_inputs=("goal", "diff", "changed-files", "repo-context"),
+        forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
+        minimum_model_capability_tags=("maintainability-review", "reasoning-medium"),
+        default_severity_mapping={
+            "operability-regression": "p1",
+            "duplication": "p2",
+            "cleanup-note": "p3",
+        },
+        timeout_seconds=120.0,
+        retry_limit=1,
+        metadata={"category": "maintainability"},
+    ),
+    CriticProfile(
+        critic_id="product-critic",
+        name="Product Critic",
+        adapter="product-critic",
+        scope="Checks that the patch improves the home-user experience and avoids enterprise-only complexity.",
+        required_inputs=("goal", "diff", "changed-files", "issue-context"),
+        forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
+        minimum_model_capability_tags=("product-review", "reasoning-medium"),
+        default_severity_mapping={
+            "home-user-regression": "p1",
+            "workflow-friction": "p2",
+            "follow-up-idea": "note",
+        },
+        required=False,
+        timeout_seconds=90.0,
+        retry_limit=1,
+        metadata={"category": "product"},
+    ),
+    CriticProfile(
+        critic_id="release-critic",
+        name="Release Critic",
+        adapter="release-critic",
+        scope="Checks docs, migration notes, rollback considerations, and operator guidance when relevant.",
+        required_inputs=("goal", "diff", "changed-files", "docs", "release-context"),
+        forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
+        minimum_model_capability_tags=("release-review", "reasoning-medium"),
+        default_severity_mapping={
+            "missing-migration-note": "p1",
+            "missing-doc-link": "p2",
+            "release-note": "note",
+        },
+        required=False,
+        timeout_seconds=90.0,
+        retry_limit=1,
+        metadata={"category": "release"},
+    ),
+)
+
+
+def default_critic_profiles() -> tuple[CriticProfile, ...]:
+    """Return the built-in critic profile catalog in stable order."""
+
+    return _DEFAULT_CRITIC_PROFILES
+
+
+def critic_profile_by_id(critic_id: str) -> CriticProfile | None:
+    """Return one built-in critic profile by id when it exists."""
+
+    for profile in _DEFAULT_CRITIC_PROFILES:
+        if profile.critic_id == critic_id:
+            return profile
+    return None
 
 
 @dataclass(slots=True, frozen=True)
