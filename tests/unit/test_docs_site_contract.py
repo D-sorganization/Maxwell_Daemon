@@ -59,6 +59,9 @@ def test_grpc_reference_does_not_overstate_unimplemented_transport() -> None:
 
     assert "does not currently ship a public gRPC service contract" in doc
     assert "No stable `.proto` files are published." in doc
+    assert 'pip install "maxwell-daemon[grpc]"' in doc
+    assert "python -m grpc_tools.protoc" in doc
+    assert "git diff --exit-code" in doc
     assert "roadmap-only" in doc
 
 
