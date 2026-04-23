@@ -110,5 +110,6 @@ nav:
       - Maxwell-Daemon Assessment v2: assessments/maxwell_daemon_assessment_v2.md
   - Community:
       - Contributing: contributing.md
+      - Beta feedback operations: community/beta-feedback.md
       - Documentation Coverage: community/documentation-coverage.md
       - Roadmap and Governance: community/roadmap-governance.md
