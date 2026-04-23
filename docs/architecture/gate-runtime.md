@@ -106,19 +106,43 @@ Adapters should:
 This boundary lets Maxwell use many market tools without giving each tool its
 own incompatible definition of "done".
 
+## Current Operator Surface
+
+The current end-user surface is task-scoped control-plane gauntlet inspection
+and actioning. Operators can:
+
+```bash
+maxwell-daemon gauntlet list
+maxwell-daemon gauntlet status task-123
+maxwell-daemon gauntlet retry task-123
+maxwell-daemon gate waive task-123 --actor reviewer --reason "accepted risk"
+```
+
+Those commands read or act on the existing control-plane endpoints:
+
+- `GET /api/v1/control-plane/gauntlet`
+- `POST /api/v1/control-plane/gauntlet/{task_id}/retry`
+- `POST /api/v1/control-plane/gauntlet/{task_id}/waive`
+
+This is intentionally a task-scoped control-plane surface. It lets operators
+inspect the current gates, critic findings, and available retry/waive actions
+without introducing a second, parallel runtime contract.
+
 ## Current Implementation Boundaries
 
-The core runtime, gauntlet models, in-memory stores, critic aggregation, and
-critic-to-gate bridge are implemented and covered by focused unit tests.
+The core runtime, gauntlet models, in-memory stores, critic aggregation,
+critic-to-gate bridge, task-scoped control-plane API, and CLI inspection/action
+commands are implemented and covered by focused unit tests.
 
 Follow-up integration work should add:
 
 - durable store wiring for production gauntlet history;
-- CLI commands for listing, running, inspecting, and waiving gates;
-- REST endpoints for work-item gauntlets and gate waivers;
+- work-item-scoped gauntlet runs remain follow-up integration work;
+- REST endpoints that expose stored gauntlet runs and gate waivers directly
+  instead of only the task-scoped control-plane view;
 - adapters for source-controlled checks, CI status, sandbox validation, budget
   policy, and human approval;
 - dashboard views for live gauntlets and critic findings.
 
-Until those integrations exist, callers should treat the core modules as the
-contract-first foundation rather than a complete end-user gate console.
+Until those integrations exist, callers should treat the current surface as the
+first operator console for gate decisions, not the final stored-gauntlet API.

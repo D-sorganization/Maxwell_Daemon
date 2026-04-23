@@ -356,6 +356,38 @@ class TestControlPlaneGauntlet:
         assert failed_gate["waiver_allowed"] is True
         assert by_id["queued"]["critic_findings"][0]["severity"] == "note"
 
+    def test_filters_by_task_id(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        matching = Task(id="task-match", prompt="keep me", status=TaskStatus.RUNNING)
+        other = Task(id="task-other", prompt="skip me", status=TaskStatus.FAILED)
+        with daemon._tasks_lock:
+            daemon._tasks[matching.id] = matching
+            daemon._tasks[other.id] = other
+
+        r = client.get("/api/v1/control-plane/gauntlet", params={"task_id": "task-match"})
+
+        assert r.status_code == 200
+        assert [row["task_id"] for row in r.json()] == ["task-match"]
+
+    def test_filters_by_status(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        failed = Task(id="failed-only", prompt="broken", status=TaskStatus.FAILED)
+        queued = Task(id="queued-only", prompt="waiting", status=TaskStatus.QUEUED)
+        with daemon._tasks_lock:
+            daemon._tasks[failed.id] = failed
+            daemon._tasks[queued.id] = queued
+
+        r = client.get("/api/v1/control-plane/gauntlet", params={"status": "failed"})
+
+        assert r.status_code == 200
+        assert [row["task_id"] for row in r.json()] == ["failed-only"]
+
     def test_cancelled_task_surfaces_cancelled_decision_and_delegate_waived(
         self,
         client: TestClient,
