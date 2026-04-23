@@ -92,8 +92,7 @@ class TestIssueDispatch:
                 assert "#42" in final.result
                 assert final.backend == daemon_with_fake_executor._config.agent.default_backend
                 assert (
-                    final.model
-                    == daemon_with_fake_executor._config.backends[final.backend].model
+                    final.model == daemon_with_fake_executor._config.backends[final.backend].model
                 )
                 assert final.route_reason == "global default"
             finally:
