@@ -93,6 +93,36 @@ class TestHTMLContent:
         assert "openCommandPalette" in js
         assert "terminal-log" in js
 
+    def test_index_links_pwa_assets(self, client: TestClient) -> None:
+        html = client.get("/ui/").text
+
+        assert 'rel="manifest" href="/ui/manifest.json"' in html
+        assert 'rel="icon" href="/ui/icon-192.svg"' in html
+        assert "navigator.serviceWorker.register('/ui/sw.js'" in html
+
+    def test_manifest_ships_installability_metadata(self, client: TestClient) -> None:
+        manifest = client.get("/ui/manifest.json")
+        assert manifest.status_code == 200
+        body = manifest.json()
+
+        assert body["start_url"] == "/ui/"
+        assert body["scope"] == "/ui/"
+        assert body["display"] == "standalone"
+        assert body["icons"] == [
+            {
+                "src": "/ui/icon-192.svg",
+                "sizes": "192x192",
+                "type": "image/svg+xml",
+                "purpose": "any",
+            },
+            {
+                "src": "/ui/icon-512.svg",
+                "sizes": "512x512",
+                "type": "image/svg+xml",
+                "purpose": "any",
+            },
+        ]
+
     def test_has_control_plane_sections(self, client: TestClient) -> None:
         html = client.get("/ui/").text
 
@@ -222,6 +252,17 @@ class TestHTMLContent:
         assert "url.pathname === '/ui/'" in sw
         assert "url.pathname === '/ui/index.html'" in sw
         assert "url.pathname.startsWith('/ui/')" not in sw
+        assert "/ui/icon-192.svg" in sw
+        assert "/ui/icon-512.svg" in sw
+
+    def test_responsive_shell_collapses_below_900px(self, client: TestClient) -> None:
+        css = client.get("/ui/style.css").text
+
+        assert "@media (max-width: 900px)" in css
+        assert ".workbench-shell {" in css
+        assert "grid-template-columns: 48px minmax(0, 1fr);" in css
+        assert ".status-bar .hint {" in css
+        assert "display: none;" in css
 
 
 class TestNewTaskDialog:
