@@ -92,6 +92,7 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 | `/api/v1/auth/token` | `POST` | Auth |
 | `/api/v1/backends` | `GET` | Backends |
 | `/api/v1/control-plane/gauntlet` | `GET` | Gate runtime |
+| `/api/v1/control-plane/gauntlet/{task_id}/cancel` | `POST` | Gate runtime |
 | `/api/v1/control-plane/gauntlet/{task_id}/retry` | `POST` | Gate runtime |
 | `/api/v1/control-plane/gauntlet/{task_id}/waive` | `POST` | Gate runtime |
 | `/api/v1/cost` | `GET` | Cost |
