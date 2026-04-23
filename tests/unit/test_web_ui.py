@@ -169,9 +169,12 @@ class TestHTMLContent:
         for expected in (
             "controlPlaneByTaskId",
             "openGauntletForTask",
+            "openArtifactsForControlPlaneItem",
             "delegate.latest_checkpoint",
             "delegate.duration_seconds",
             'data-review="${t.id}"',
+            'data-open-artifacts="gate"',
+            'data-open-artifacts="finding"',
             "finding.detail || finding.message",
             "finding.file || finding.line",
             "evidence-list",
@@ -186,6 +189,8 @@ class TestHTMLContent:
             "finding-detail",
             "finding-meta",
             "evidence-list",
+            "evidence-actions",
+            "inline-artifact-btn",
         ):
             assert expected in css
 
