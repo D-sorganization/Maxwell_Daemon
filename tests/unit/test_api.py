@@ -496,6 +496,27 @@ class TestControlPlaneGauntlet:
 
 
 class TestControlPlaneActions:
+    def test_queued_task_exposes_cancel_action(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        task = Task(
+            id="cancelable",
+            prompt="queued task",
+            status=TaskStatus.QUEUED,
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[task.id] = task
+
+        r = client.get("/api/v1/control-plane/gauntlet")
+
+        assert r.status_code == 200
+        item = next(row for row in r.json() if row["task_id"] == "cancelable")
+        assert [action["kind"] for action in item["actions"]] == ["cancel"]
+        assert item["actions"][0]["path"].endswith("/cancel")
+        assert item["actions"][0]["expected_status"] == "queued"
+
     def test_failed_task_exposes_retry_and_waive_actions(
         self,
         client: TestClient,
@@ -563,12 +584,61 @@ class TestControlPlaneActions:
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "queued"
-        assert body["actions"] == []
+        assert [action["kind"] for action in body["actions"]] == ["cancel"]
         retried = daemon.get_task("retry-me")
         assert retried is not None
         assert retried.status is TaskStatus.QUEUED
         assert retried.error is None
         assert retried.result is None
+
+    def test_cancel_marks_queued_task_cancelled(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        task = Task(
+            id="cancel-me",
+            prompt="queued task",
+            status=TaskStatus.QUEUED,
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
+
+        r = client.post(
+            "/api/v1/control-plane/gauntlet/cancel-me/cancel",
+            json={"target_id": "cancel-me", "expected_status": "queued"},
+        )
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "cancelled"
+        assert body["final_decision"] == "cancelled"
+        assert body["actions"] == []
+        cancelled = daemon.get_task("cancel-me")
+        assert cancelled is not None
+        assert cancelled.status is TaskStatus.CANCELLED
+
+    def test_cancel_rejects_stale_expected_state(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+    ) -> None:
+        task = Task(
+            id="stale-cancel",
+            prompt="running task",
+            status=TaskStatus.RUNNING,
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[task.id] = task
+
+        r = client.post(
+            "/api/v1/control-plane/gauntlet/stale-cancel/cancel",
+            json={"target_id": "stale-cancel", "expected_status": "queued"},
+        )
+
+        assert r.status_code == 409
+        assert "expected queued" in r.json()["detail"]
 
     def test_retry_rejects_stale_expected_state(
         self,

@@ -849,7 +849,9 @@ async function submitGateAction(action, item) {
     if (!reason || !reason.trim()) return;
     body.actor = actor.trim();
     body.reason = reason.trim();
-  } else if (!confirm(`Retry ${item.title}?`)) {
+  } else if (action.kind === "retry" && !confirm(`Retry ${item.title}?`)) {
+    return;
+  } else if (action.kind === "cancel" && !confirm(`Cancel ${item.title}?`)) {
     return;
   }
 

@@ -320,6 +320,11 @@ class GateRetryRequest(BaseModel):
     expected_status: Literal["failed"] = "failed"
 
 
+class GateCancelRequest(BaseModel):
+    target_id: str = Field(..., min_length=1)
+    expected_status: Literal["queued"] = "queued"
+
+
 class GateWaiverRequest(BaseModel):
     target_id: str = Field(..., min_length=1)
     expected_status: Literal["failed"] = "failed"
@@ -452,11 +457,11 @@ class ResourceRoutingView(BaseModel):
 
 
 class ControlPlaneActionView(BaseModel):
-    kind: Literal["retry", "waive"]
+    kind: Literal["retry", "waive", "cancel"]
     label: str
     path: str
     target_id: str
-    expected_status: Literal["failed"]
+    expected_status: Literal["failed", "queued"]
     requires_reason: bool = False
     requires_actor: bool = False
 
@@ -643,6 +648,16 @@ def _task_is_waived(task: Task) -> bool:
 
 
 def _control_plane_actions_for_task(task: Task) -> tuple[ControlPlaneActionView, ...]:
+    if task.status.value == "queued":
+        return (
+            ControlPlaneActionView(
+                kind="cancel",
+                label="Cancel",
+                path=f"/api/v1/control-plane/gauntlet/{task.id}/cancel",
+                target_id=task.id,
+                expected_status="queued",
+            ),
+        )
     if task.status.value != "failed" or _task_is_waived(task):
         return ()
     return (
@@ -1212,6 +1227,33 @@ def create_app(
             raise HTTPException(status.HTTP_409_CONFLICT, f"task {task_id} is already waived")
         try:
             task = daemon.retry_task(task_id, expected_status=TaskStatus(payload.expected_status))
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found") from exc
+        return _control_plane_view_from_task(daemon, task)
+
+    @app.post(
+        "/api/v1/control-plane/gauntlet/{task_id}/cancel",
+        dependencies=[Depends(auth), Depends(_require_operator())],
+    )
+    async def cancel_control_plane_gate(
+        task_id: str, payload: GateCancelRequest
+    ) -> ControlPlaneWorkItemView:
+        if payload.target_id != task_id:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "target_id does not match the route task_id"
+            )
+        task = daemon.get_task(task_id)
+        if task is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
+        if task.status.value != payload.expected_status:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"task {task_id} is {task.status.value}; expected {payload.expected_status}",
+            )
+        try:
+            task = daemon.cancel_task(task_id)
         except ValueError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         except KeyError as exc:
