@@ -13,7 +13,7 @@ future agents can advance the remaining gaps without duplicating shipped work.
 | Architecture guide | `architecture/overview.md`, `backends.md`, `contracts.md` | Partial | Add a dedicated fleet architecture page for conductor/worker dispatch, shared memory, critic panels, and gauntlet gates. |
 | REST API reference | `reference/api.md`, `reference/openapi.md`, `tests/unit/test_docs_site_contract.py` | Shipped | Keep the OpenAPI route inventory test green whenever HTTP routes change. |
 | gRPC reference | `reference/grpc.md`, `pyproject.toml` exposes the optional `grpc` extra | Partial | Add protocol definitions and generated-client guidance before claiming supported gRPC. |
-| Deployment guide | `operations/deployment.md`, `ansible.md`, `webhooks.md` | Partial | Prove a fresh deploy path in under 30 minutes and add Tailscale-specific security guidance. |
+| Deployment guide | `operations/deployment.md`, `ansible.md`, `webhooks.md`, `tailscale.md` | Partial | Tailscale-specific security guidance is shipped; still prove a fresh deploy path in under 30 minutes. |
 | Configuration reference | `getting-started/configuration.md`, `reference/configuration.md` | Shipped | Add a config drift test when new top-level config sections are introduced. |
 | Development guide | `contributing.md`, `architecture/backends.md`, `architecture/contracts.md` | Partial | Add extension/tool authoring docs, MCP status boundaries, and local test harness guidance. |
 | Examples | `getting-started/examples.md`, `troubleshooting.md` | Partial | Add resource-aware routing, critic gauntlet, fleet issue queue, and shared memory walkthroughs. |
@@ -32,6 +32,8 @@ Do not close issue #19 until all of these gates are true:
   documents that gRPC is roadmap-only.
 - Deployment documentation includes a timed fresh-install proof for the target
   home-user path.
+- Tailscale fleet documentation includes least-privilege policy guidance,
+  application-auth requirements, and validation commands.
 - The video tutorial requirement is either satisfied or replaced by an explicit,
   accepted written-docs alternative.
 

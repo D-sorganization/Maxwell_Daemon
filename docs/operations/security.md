@@ -27,4 +27,9 @@ Run validation commands only for repositories and generated code you trust at th
 
 For higher-risk workloads, run Maxwell-Daemon inside an external boundary that you control, such as a disposable virtual machine, container, separate operating-system user, or locked-down CI runner. Keep secrets out of the process environment unless they are required for the specific task.
 
+For multi-machine home fleets, pair these host-level sandbox cautions with the
+[Tailscale fleet hardening guide](tailscale.md). Tailnet encryption is useful,
+but daemon task, memory, artifact, and SSH APIs still need least-privilege
+network policy plus Maxwell application auth.
+
 Docker-backed isolation is tracked in [issue #468](https://github.com/D-sorganization/Maxwell-Daemon/issues/468). README and architecture claims must not describe Docker isolation, `--network none`, or perfect security until the runtime actually enforces those guarantees.
