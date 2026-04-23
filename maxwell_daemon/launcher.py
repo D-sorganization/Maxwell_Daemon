@@ -91,7 +91,25 @@ def build_plan(
 
 
 def _run(args: Sequence[str], *, cwd: Path) -> None:
-    subprocess.run(args, cwd=cwd, check=True)
+    subprocess.run(args, cwd=cwd, check=True, env=_subprocess_env())
+
+
+def _subprocess_env() -> dict[str, str]:
+    """Return the environment for launcher-managed Python subprocesses.
+
+    The launcher shells out to ``maxwell_daemon.cli.main`` for ``init``,
+    ``doctor``, and ``serve``. On Windows, those commands may render Rich output
+    containing characters such as ``✓``. When stdout/stderr are redirected and no
+    UTF-8 mode is active, Python can fall back to a legacy code page like
+    CP1252 and fail before the daemon ever starts. Defaulting the subprocess
+    environment to UTF-8 keeps the first-run path stable while still allowing an
+    operator to override the encoding explicitly.
+    """
+
+    env = os.environ.copy()
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    return env
 
 
 def ensure_venv(plan: LauncherPlan) -> None:

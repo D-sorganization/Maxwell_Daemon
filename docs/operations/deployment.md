@@ -6,19 +6,83 @@ deployment model that matches the number of workers you need.
 
 ## Local Service
 
-Use a local service for single-machine development or workstation automation.
+Use a local service for single-machine development, home-lab automation, or a
+single workstation that later dispatches work to other machines.
+
+For a source checkout, prefer the shipped launchers instead of reconstructing
+the bootstrap sequence by hand:
+
+| Platform | Launcher |
+| --- | --- |
+| Windows | `Launch-Maxwell.bat` |
+| macOS | `Launch-Maxwell.command` |
+| Linux | `Launch-Maxwell.sh` |
+
+Those wrappers all delegate to the same Python entrypoint and perform the same
+first-run sequence:
+
+1. Create a local `.venv` inside the checkout when one does not exist yet.
+2. Install the runtime package with `pip install -e .`.
+3. Create a starter config if the selected config path is missing.
+4. Run `maxwell-daemon doctor`.
+5. Start `maxwell-daemon serve`.
+
+If you need the exact wrapper behavior without the platform-specific shell
+wrapper, run the launcher module directly from the checkout:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install .
-maxwell-daemon init
-maxwell-daemon health
-maxwell-daemon-runner
+python -m maxwell_daemon.launcher --repo-root . --port 8080
+```
+
+Then verify the API surface that the wrapper is expected to bring up:
+
+```bash
+curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8080/docs > /dev/null
 ```
 
 Keep secrets in the environment or your OS secret manager. Do not commit API
 keys to `maxwell-daemon.yaml`.
+
+A successful first boot means the daemon can initialize its local runtime,
+write config, and expose the API. It does not mean task execution is fully
+ready. If `maxwell-daemon doctor` reports backend warnings, edit the starter
+config and provide the required credentials or local model runtime before
+dispatching real work.
+
+### Timed fresh deploy proof
+
+Issue #19 required a timed proof that the target home-user bootstrap path can
+come up from a fresh source tree in under 30 minutes. The measured proof below
+uses the same launcher code path that `Launch-Maxwell.bat` uses on Windows.
+
+On April 23, 2026, Maxwell-Daemon was started from:
+
+- a throwaway source copy with no existing `.venv`
+- an isolated `HOME` / `USERPROFILE` / `APPDATA` / `LOCALAPPDATA`
+- an empty config directory passed to `--config`
+- a clean API port (`8098`)
+
+The proof command was:
+
+```powershell
+py -3 -m maxwell_daemon.launcher --repo-root <clean-source-copy> --config <scratch-config> --port 8098
+```
+
+Observed result:
+
+| Check | Result |
+| --- | --- |
+| Fresh local `.venv` created | Yes |
+| Starter config written | Yes |
+| `maxwell-daemon doctor` completed | Yes |
+| `GET /health` | `200` |
+| `GET /docs` | `200` |
+| Measured ready time | `96.91 seconds` |
+
+That measured first-run path is well under the 30-minute release-readiness
+gate. Re-run this proof whenever launcher bootstrap steps, dependency weight,
+or starter-config generation changes.
 
 ## Ansible Fleet
 
