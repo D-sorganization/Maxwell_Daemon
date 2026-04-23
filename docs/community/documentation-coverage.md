@@ -10,7 +10,7 @@ future agents can advance the remaining gaps without duplicating shipped work.
 | Area | Current repo evidence | Status | Remaining gate |
 | --- | --- | --- | --- |
 | Getting started | `getting-started/quickstart.md`, `configuration.md`, `autonomous-workflow.md`, `examples.md`, `fleet-issue-queue.md`, `troubleshooting.md` | Shipped | Keep examples aligned with CLI/API changes. |
-| Architecture guide | `architecture/overview.md`, `backends.md`, `contracts.md`, `gate-runtime.md` | Partial | Add a dedicated fleet architecture page for conductor/worker dispatch. The gate runtime and critic panel foundation is documented, and the fleet gauntlet walkthrough links it to operator workflows. |
+| Architecture guide | `architecture/overview.md`, `backends.md`, `contracts.md`, `gate-runtime.md`, `fleet-architecture.md` | Shipped | Keep the fleet architecture page aligned with worker capability, heartbeat, and gauntlet control-plane changes. |
 | REST API reference | `reference/api.md`, `reference/openapi.md`, `tests/unit/test_docs_site_contract.py` | Shipped | Keep the OpenAPI route inventory test green whenever HTTP routes change. |
 | gRPC reference | `reference/grpc.md`, `pyproject.toml` exposes the optional `grpc` extra, `tests/unit/test_docs_site_contract.py`, `tests/unit/test_grpc_status_docs.py` | Shipped | Keep the roadmap-only boundary explicit until versioned proto files, generated stubs, and a supported server contract exist. |
 | Deployment guide | `operations/deployment.md`, `ansible.md`, `webhooks.md`, `tailscale.md` | Partial | Tailscale-specific security guidance is shipped; still prove a fresh deploy path in under 30 minutes. |
@@ -37,6 +37,9 @@ Do not close issue #19 until all of these gates are true:
 - The fleet/shared-memory/critic-gauntlet walkthrough is discoverable from
   `mkdocs.yml`, links memory, artifacts, control-plane gauntlet actions, and
   critic review into one operator flow.
+- The architecture section includes a dedicated fleet architecture page that
+  separates queue intake, conductor state, worker execution, capability
+  discovery, and gate decisions.
 - The resource-aware routing walkthrough is discoverable from `mkdocs.yml`,
   covers repo overrides, explicit task overrides, budget gates, fallback
   boundaries, and the `ResourceBroker` contract without claiming full automated

@@ -58,6 +58,7 @@ nav:
       - Troubleshooting: getting-started/troubleshooting.md
   - Architecture:
       - Overview: architecture/overview.md
+      - Fleet architecture: architecture/fleet-architecture.md
       - System specification: architecture/system_specification.md
       - Gate runtime and critic panel: architecture/gate-runtime.md
       - Backend interface: architecture/backends.md
