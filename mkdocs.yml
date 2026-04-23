@@ -56,6 +56,7 @@ nav:
   - Architecture:
       - Overview: architecture/overview.md
       - System specification: architecture/system_specification.md
+      - Gate runtime and critic panel: architecture/gate-runtime.md
       - Backend interface: architecture/backends.md
       - Design by Contract: architecture/contracts.md
       - Governed work items: architecture/work-items.md

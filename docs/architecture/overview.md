@@ -40,6 +40,7 @@
 - `BackendRouter` picks a backend for each task based on repo/override/default precedence.
 - `CostLedger` is an append-only SQLite record of every request's token usage and USD cost.
 - `BudgetEnforcer` reads the ledger and enforces monthly caps — soft alert thresholds or hard-stop.
+- `GauntletRuntime`, gauntlet models, and critic panel primitives turn delegated work into evidence-backed gate decisions.
 
 **`maxwell_daemon.daemon`** — owns a task queue, a worker pool, and an `EventBus`. External callers go through `submit()` / `state()` / `events`. Never reaches into other modules for internal state.
 
