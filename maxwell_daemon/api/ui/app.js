@@ -1163,10 +1163,40 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("command-palette-input").addEventListener("input", (ev) => {
     renderCommandPalette(ev.target.value);
   });
+
+  document.getElementById("command-palette-input").addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      const first = document.querySelector("#command-palette-results button[data-command]");
+      if (first) first.focus();
+    }
+  });
+
+  document.getElementById("command-palette-results").addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      const next = ev.target.parentElement.nextElementSibling?.querySelector("button");
+      if (next) next.focus();
+    } else if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      const prev = ev.target.parentElement.previousElementSibling?.querySelector("button");
+      if (prev) {
+        prev.focus();
+      } else {
+        document.getElementById("command-palette-input").focus();
+      }
+    }
+  });
+
   document.getElementById("command-palette-form").addEventListener("submit", (ev) => {
     ev.preventDefault();
-    const first = document.querySelector("#command-palette-results button[data-command]");
-    if (first) runCommand(first.dataset.command);
+    const active = document.activeElement;
+    if (active && active.dataset.command) {
+        runCommand(active.dataset.command);
+    } else {
+        const first = document.querySelector("#command-palette-results button[data-command]");
+        if (first) runCommand(first.dataset.command);
+    }
   });
 
   // Keyboard shortcut: digit keys switch primary tabs

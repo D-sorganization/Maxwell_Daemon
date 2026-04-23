@@ -283,16 +283,25 @@ button {
   cursor: pointer;
 }
 button:hover { background: var(--border); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button.cancel { color: var(--err); }
 
 input,
-select {
+select,
+textarea {
   background: var(--panel-alt);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 4px 8px;
   font: inherit;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .status-bar {
