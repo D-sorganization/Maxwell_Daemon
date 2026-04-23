@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 from pydantic import ValidationError
 
@@ -152,6 +154,31 @@ def test_benchmark_gate_escalates_to_qualified_remote() -> None:
     assert decision.selected_profile_id == "remote.frontier"
     assert any(
         r.profile_id == "local.devstral" and r.reason == "benchmark_below_threshold"
+        for r in decision.rejections
+    )
+
+
+@pytest.mark.parametrize("bad_score", [math.nan, math.inf, -math.inf])
+def test_benchmark_gate_rejects_non_finite_scores(bad_score: float) -> None:
+    policy = ModelRoutingPolicy(
+        task_type=TaskType.ISSUE_TRIAGE,
+        required_benchmark_suite="maxwell.context_recall",
+        min_benchmark_score=0.80,
+    )
+    decision = select_profile(
+        profiles=[
+            _profile("local.bad", deployment=DeploymentKind.LOCAL, cost=CostClass.FREE_LOCAL),
+            _profile("remote.good", deployment=DeploymentKind.REMOTE, cost=CostClass.STANDARD),
+        ],
+        policy=policy,
+        benchmark_scores={
+            ("local.bad", "maxwell.context_recall"): bad_score,
+            ("remote.good", "maxwell.context_recall"): 0.92,
+        },
+    )
+    assert decision.selected_profile_id == "remote.good"
+    assert any(
+        r.profile_id == "local.bad" and r.reason == "benchmark_not_finite"
         for r in decision.rejections
     )
 
