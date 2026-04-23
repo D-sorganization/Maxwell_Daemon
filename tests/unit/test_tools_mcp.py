@@ -362,6 +362,7 @@ class TestMcpToolDecorator:
         with pytest.raises(ToolRegistryError, match="not decorated"):
             reg.register_from_function(plain)
 
+
 class TestUnclassifiedToolDenial:
     """Issue #537: unclassified tools should be denied under capability allowlists."""
 
