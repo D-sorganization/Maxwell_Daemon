@@ -81,7 +81,9 @@ def _iter_supported_files(root: Path) -> Iterable[Path]:
     paths = (
         path
         for path in root.rglob("*")
-        if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS
+        if path.is_file()
+        and path.suffix.lower() in SUPPORTED_EXTENSIONS
+        and _is_bulk_gaai_metadata_file(path)
     )
     return sorted(paths, key=lambda item: item.relative_to(root).as_posix())
 
@@ -108,3 +110,15 @@ def _load_markdown_metadata(path: Path) -> dict[str, Any]:
     body = "\n".join(lines[end_index + 1 :]).strip()
     raw.setdefault("body", body)
     return raw
+
+
+def _is_bulk_gaai_metadata_file(path: Path) -> bool:
+    if path.suffix.lower() not in {".md", ".markdown"}:
+        return True
+
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            first_line = handle.readline()
+    except OSError as exc:
+        raise GaaiLoadError(f"failed to inspect GAAI metadata file {path}: {exc}") from exc
+    return first_line.strip() == "---"

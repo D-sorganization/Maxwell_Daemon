@@ -105,6 +105,32 @@ def test_directory_loader_is_deterministic(tmp_path: Path) -> None:
     assert [item.id for item in items] == ["B", "A"]
 
 
+def test_directory_loader_skips_markdown_without_front_matter(tmp_path: Path) -> None:
+    (tmp_path / "story.md").write_text(
+        """
+---
+id: GAAI-MD
+title: Markdown item
+---
+Structured metadata body.
+""".lstrip(),
+        encoding="utf-8",
+    )
+    (tmp_path / "README.md").write_text("# Plain documentation\n", encoding="utf-8")
+
+    items = load_gaai_items(tmp_path)
+
+    assert [item.id for item in items] == ["GAAI-MD"]
+
+
+def test_single_markdown_load_requires_front_matter(tmp_path: Path) -> None:
+    item_path = tmp_path / "README.md"
+    item_path.write_text("# Plain documentation\n", encoding="utf-8")
+
+    with pytest.raises(GaaiLoadError, match="requires YAML front matter"):
+        load_gaai_item(item_path, root=tmp_path)
+
+
 def test_rejects_metadata_path_that_escapes_root(tmp_path: Path) -> None:
     item_path = tmp_path / "story.yaml"
     item_path.write_text("id: BAD\ntitle: Bad\nartifacts:\n  - ../outside.txt\n", encoding="utf-8")
