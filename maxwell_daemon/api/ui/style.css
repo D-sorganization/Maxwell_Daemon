@@ -743,6 +743,29 @@ kbd {
   font-size: 12px;
 }
 
+.evidence-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.inline-artifact-btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.inline-artifact-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .empty-state {
   color: var(--muted);
   padding: 14px;

@@ -432,12 +432,16 @@ function renderGauntlet() {
   for (const item of state.controlPlane) {
     const section = document.createElement("article");
     section.className = `gauntlet-item decision-${item.final_decision}`;
+    const canOpenArtifacts = Boolean(item.work_item_id || item.task_id);
     const gates = (item.gates || []).map((gate) => `
       <li class="gate-step gate-${gate.status}">
         <span class="gate-name">${escapeHtml(gate.name)}</span>
         <span class="gate-status">${escapeHtml(gate.status)}</span>
         ${gate.next_action ? `<span class="gate-action">${escapeHtml(gate.next_action)}</span>` : ""}
-        ${(gate.evidence_links || []).map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">evidence</a>`).join("")}
+        <span class="evidence-actions">
+          ${(gate.evidence_links || []).map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">evidence</a>`).join("")}
+          ${canOpenArtifacts ? `<button type="button" class="inline-artifact-btn" data-open-artifacts="gate">artifacts</button>` : ""}
+        </span>
       </li>
     `).join("");
     const findings = (item.critic_findings || []).map((finding) => `
@@ -454,6 +458,7 @@ function renderGauntlet() {
         ${(((Array.isArray(finding.evidence) ? finding.evidence : (finding.evidence ? [finding.evidence] : []))).length)
           ? `<ul class="evidence-list">${(Array.isArray(finding.evidence) ? finding.evidence : [finding.evidence]).map((entry) => `<li>${escapeHtml(entry)}</li>`).join("")}</ul>`
           : ""}
+        ${canOpenArtifacts ? `<button type="button" class="inline-artifact-btn" data-open-artifacts="finding">artifacts</button>` : ""}
       </li>
     `).join("") || `<li class="finding finding-note">No critic findings recorded.</li>`;
     const delegates = (item.delegates || []).map((delegate) => `
@@ -519,6 +524,12 @@ function renderGauntlet() {
       btn.addEventListener("click", () => submitGateAction(action, item).catch((error) => {
         alert(`Gate action failed: ${error.message}`);
       }));
+    });
+    section.querySelectorAll("[data-open-artifacts]").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        openArtifactsForControlPlaneItem(item);
+      });
     });
     fragment.appendChild(section);
   }
@@ -652,6 +663,23 @@ async function fetchArtifacts() {
     return;
   }
   renderArtifacts(await r.json());
+}
+
+function openArtifactsForOwner(ownerKind, ownerId) {
+  const normalizedOwnerId = String(ownerId || "").trim();
+  if (!normalizedOwnerId) return;
+  document.getElementById("artifact-owner-kind").value = ownerKind;
+  document.getElementById("artifact-owner-id").value = normalizedOwnerId;
+  switchView("artifacts");
+  fetchArtifacts().catch(console.error);
+}
+
+function openArtifactsForControlPlaneItem(item) {
+  if (item.work_item_id) {
+    openArtifactsForOwner("work-item", item.work_item_id);
+    return;
+  }
+  openArtifactsForOwner("task", item.task_id);
 }
 
 function renderArtifacts(artifacts) {
