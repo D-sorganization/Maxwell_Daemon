@@ -77,6 +77,7 @@
           <select id="status-filter" aria-label="Filter tasks by status">
             <option value="">all</option>
             <option value="queued">queued</option>
+            <option value="dispatched">dispatched</option>
             <option value="running">running</option>
             <option value="completed">completed</option>
             <option value="failed">failed</option>
@@ -109,7 +110,25 @@
         <h2 id="detail-title">Task detail</h2>
         <button id="detail-close" aria-label="Close task details" title="Close">×</button>
       </div>
-      <dl id="detail-fields"></dl>
+      <div id="detail-next-action" class="detail-banner" hidden></div>
+      <section class="detail-section">
+        <h3>Summary</h3>
+        <dl id="detail-fields"></dl>
+      </section>
+      <div class="detail-grid">
+        <section class="detail-section">
+          <h3>Gate Timeline</h3>
+          <ol id="detail-gates" class="detail-list"></ol>
+        </section>
+        <section class="detail-section">
+          <h3>Critic Findings</h3>
+          <ul id="detail-findings" class="detail-list"></ul>
+        </section>
+        <section class="detail-section">
+          <h3>Delegate Session</h3>
+          <ul id="detail-delegates" class="detail-list"></ul>
+        </section>
+      </div>
       <h3>Output</h3>
       <pre id="detail-output"></pre>
     </section>

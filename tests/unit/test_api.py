@@ -366,6 +366,28 @@ class TestTaskSubmission:
         assert r.status_code == 200
         assert r.json()["id"] == submitted["id"]
 
+    def test_get_task_includes_dispatched_worker_metadata(
+        self, client: TestClient, daemon: Daemon
+    ) -> None:
+        task = Task(
+            id="task-dispatched",
+            prompt="owner/repo#9",
+            kind=TaskKind.ISSUE,
+            repo="owner/repo",
+            issue_repo="owner/repo",
+            issue_number=9,
+            status=TaskStatus.DISPATCHED,
+            dispatched_to="worker-west",
+        )
+        with daemon._tasks_lock:
+            daemon._tasks[task.id] = task
+
+        r = client.get(f"/api/v1/tasks/{task.id}")
+
+        assert r.status_code == 200
+        assert r.json()["status"] == "dispatched"
+        assert r.json()["dispatched_to"] == "worker-west"
+
     def test_get_nonexistent_returns_404(self, client: TestClient) -> None:
         r = client.get("/api/v1/tasks/nonexistent-id")
         assert r.status_code == 404

@@ -71,7 +71,14 @@ class TestUIRoutes:
 class TestHTMLContent:
     def test_has_dashboard_sections(self, client: TestClient) -> None:
         html = client.get("/ui/").text
-        for expected in ("Tasks", "Cost", "Backends"):
+        for expected in (
+            "Tasks",
+            "Cost",
+            "Backends",
+            "Gate Timeline",
+            "Critic Findings",
+            "Delegate Session",
+        ):
             assert expected in html
 
     def test_has_vs_code_like_shell_regions(self, client: TestClient) -> None:
@@ -209,6 +216,10 @@ class TestHTMLContent:
             'data-review="${t.id}"',
             'data-open-artifacts="gate"',
             'data-open-artifacts="finding"',
+            "task.dispatched_to",
+            'Waiting on ${task.dispatched_to || "remote worker"} to start execution.',
+            "No gauntlet state recorded for this task yet.",
+            "No delegate session recorded for this task.",
             "finding.detail || finding.message",
             "finding.file || finding.line",
             "evidence-list",
@@ -216,6 +227,10 @@ class TestHTMLContent:
             assert expected in js
 
         for expected in (
+            "detail-banner",
+            "detail-grid",
+            "detail-list-item",
+            "detail-inline-meta",
             "delegate-entry",
             "delegate-checkpoint",
             "gauntlet-item-meta",
@@ -226,6 +241,7 @@ class TestHTMLContent:
             "evidence-actions",
             "inline-artifact-btn",
             "routing-detail",
+            "status-dispatched",
         ):
             assert expected in css
 

@@ -64,6 +64,27 @@ function fmtTsShort(iso) {
   return d.toLocaleString(undefined, { timeStyle: "short" });
 }
 
+function gateStatusRank(status) {
+  const order = {
+    failed: 0,
+    blocked: 1,
+    waived: 2,
+    running: 3,
+    pending: 4,
+    passed: 5,
+    skipped: 6,
+  };
+  return order[status] ?? 99;
+}
+
+function findingSeverityRank(severity) {
+  const normalized = String(severity || "").toLowerCase();
+  if (normalized === "blocker" || normalized === "p1") return 0;
+  if (normalized === "warning") return 1;
+  if (normalized === "note" || normalized === "p2") return 2;
+  return 3;
+}
+
 function fmtBytes(n) {
   const value = Number(n || 0);
   if (value < 1024) return `${value} B`;
@@ -941,14 +962,30 @@ function renderDetail(task) {
   state.selected = task.id;
   document.getElementById("detail-card").hidden = false;
   document.getElementById("detail-title").textContent = `Task ${task.id}`;
+  const controlPlane = controlPlaneByTaskId(task.id);
+  const detailBanner = document.getElementById("detail-next-action");
+  const nextAction = controlPlane?.next_action
+    || (task.status === "failed"
+      ? (task.error || "Inspect the failure details before retrying.")
+      : task.status === "dispatched"
+        ? `Waiting on ${task.dispatched_to || "remote worker"} to start execution.`
+        : task.status === "running"
+          ? "Execution is in progress."
+          : task.status === "completed"
+            ? "Review the result and linked PR."
+            : "No operator action is required right now.");
+  detailBanner.hidden = false;
+  detailBanner.textContent = nextAction;
+  detailBanner.className = `detail-banner status-${controlPlane?.final_decision || task.status}`;
   const dl = document.getElementById("detail-fields");
   dl.innerHTML = "";
   const fields = [
     "status", "kind", "repo", "backend", "model",
     "issue_repo", "issue_number", "issue_mode",
-    "pr_url", "cost_usd",
+    "pr_url", "dispatched_to", "cost_usd",
     "created_at", "started_at", "finished_at",
-    "result", "error",
+    "waived_by", "waiver_reason", "waived_at",
+    "error",
   ];
   for (const name of fields) {
     const value = task[name];
@@ -959,6 +996,100 @@ function renderDetail(task) {
     dd.textContent = String(value).slice(0, 500);
     dl.append(dt, dd);
   }
+
+  const gatesEl = document.getElementById("detail-gates");
+  gatesEl.innerHTML = "";
+  const gates = [...(controlPlane?.gates || [])].sort(
+    (a, b) => gateStatusRank(a.status) - gateStatusRank(b.status)
+  );
+  if (!gates.length) {
+    gatesEl.innerHTML = `<li class="empty-state">No gauntlet state recorded for this task yet.</li>`;
+  } else {
+    for (const gate of gates) {
+      const li = document.createElement("li");
+      li.className = `detail-list-item gate-${gate.status}`;
+      li.innerHTML = `
+        <div class="detail-list-head">
+          <span class="status-${gate.status}">${escapeHtml(gate.status)}</span>
+          <strong>${escapeHtml(gate.name)}</strong>
+        </div>
+        <p>${escapeHtml(gate.next_action || "No next action recorded.")}</p>
+      `;
+      gatesEl.appendChild(li);
+    }
+  }
+
+  const findingsEl = document.getElementById("detail-findings");
+  findingsEl.innerHTML = "";
+  const findings = [...(controlPlane?.critic_findings || [])].sort((a, b) => {
+    const severityCmp = findingSeverityRank(a.severity) - findingSeverityRank(b.severity);
+    if (severityCmp !== 0) return severityCmp;
+    return String(a.message || "").localeCompare(String(b.message || ""));
+  });
+  if (!findings.length) {
+    findingsEl.innerHTML = `<li class="empty-state">No critic findings recorded for this task.</li>`;
+  } else {
+    for (const finding of findings) {
+      const li = document.createElement("li");
+      li.className = `detail-list-item finding-${finding.severity || "note"}`;
+      const evidence = finding.evidence ? [finding.evidence] : [];
+      li.innerHTML = `
+        <div class="detail-list-head">
+          <span class="finding-severity">${escapeHtml(finding.severity || "note")}</span>
+          <strong>${escapeHtml(finding.critic || "critic")}</strong>
+        </div>
+        <p>${escapeHtml(finding.message || "No detail recorded.")}</p>
+        ${(finding.file || finding.line)
+          ? `<span class="detail-meta">${escapeHtml(finding.file || "unknown file")}${finding.line ? `:${escapeHtml(String(finding.line))}` : ""}</span>`
+          : ""}
+        ${evidence.length
+          ? `<ul class="detail-sublist">${evidence.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+          : ""}
+      `;
+      findingsEl.appendChild(li);
+    }
+  }
+
+  const delegatesEl = document.getElementById("detail-delegates");
+  delegatesEl.innerHTML = "";
+  const delegates = controlPlane?.delegates?.length
+    ? controlPlane.delegates
+    : (task.dispatched_to
+      ? [{
+        status: task.status,
+        role: "worker",
+        machine: task.dispatched_to,
+        backend: task.backend,
+        duration_seconds: null,
+        latest_checkpoint: task.result || "",
+        cost_usd: task.cost_usd,
+      }]
+      : []);
+  if (!delegates.length) {
+    delegatesEl.innerHTML = `<li class="empty-state">No delegate session recorded for this task.</li>`;
+  } else {
+    for (const delegate of delegates) {
+      const li = document.createElement("li");
+      li.className = "detail-list-item";
+      li.innerHTML = `
+        <div class="detail-list-head">
+          <span class="status-${delegate.status || task.status}">${escapeHtml(delegate.status || task.status)}</span>
+          <strong>${escapeHtml(delegate.role || "delegate")}</strong>
+        </div>
+        <p>${escapeHtml(delegate.machine ? `Machine: ${delegate.machine}` : "Machine not assigned yet.")}</p>
+        <div class="detail-inline-meta">
+          <span>${escapeHtml(delegate.backend || task.backend || "backend pending")}</span>
+          <span>${fmtUsd(delegate.cost_usd || 0)}</span>
+          <span>${escapeHtml(fmtDurationSeconds(delegate.duration_seconds))}</span>
+        </div>
+        ${(delegate.latest_checkpoint || task.result)
+          ? `<p class="detail-meta">${escapeHtml(String(delegate.latest_checkpoint || task.result).slice(0, 160))}</p>`
+          : ""}
+      `;
+      delegatesEl.appendChild(li);
+    }
+  }
+
   const out = document.getElementById("detail-output");
   out.textContent = state.testOutput.get(task.id) || "(no streamed output)";
 }

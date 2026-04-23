@@ -384,6 +384,7 @@ class TaskView(BaseModel):
     ab_group: str | None = None
     priority: int = 100
     pr_url: str | None = None
+    dispatched_to: str | None = None
     status: str
     result: str | None
     error: str | None
@@ -411,6 +412,7 @@ class TaskView(BaseModel):
             ab_group=t.ab_group,
             priority=getattr(t, "priority", 100),
             pr_url=t.pr_url,
+            dispatched_to=t.dispatched_to,
             status=t.status.value,
             result=t.result,
             error=t.error,
