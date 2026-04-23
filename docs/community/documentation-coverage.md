@@ -15,7 +15,7 @@ future agents can advance the remaining gaps without duplicating shipped work.
 | gRPC reference | `reference/grpc.md`, `pyproject.toml` exposes the optional `grpc` extra | Partial | Add protocol definitions and generated-client guidance before claiming supported gRPC. |
 | Deployment guide | `operations/deployment.md`, `ansible.md`, `webhooks.md`, `tailscale.md` | Partial | Tailscale-specific security guidance is shipped; still prove a fresh deploy path in under 30 minutes. |
 | Configuration reference | `getting-started/configuration.md`, `reference/configuration.md` | Shipped | Add a config drift test when new top-level config sections are introduced. |
-| Development guide | `contributing.md`, `architecture/backends.md`, `architecture/contracts.md` | Partial | Add extension/tool authoring docs, MCP status boundaries, and local test harness guidance. |
+| Development guide | `contributing.md`, `architecture/backends.md`, `architecture/contracts.md`, `development/backend-extension-guide.md`, `development/tool-authoring-guide.md`, `development/external-agent-adapters.md` | Shipped | Keep extension docs aligned with backend, external-agent, tool, and MCP transport changes. |
 | Examples | `getting-started/examples.md`, `troubleshooting.md`, `fleet-gauntlet-walkthrough.md`, `resource-aware-routing.md`, `fleet-issue-queue.md` | Shipped | Fleet/shared-memory/critic-gauntlet walkthrough is shipped; resource-aware routing walkthrough is shipped; fleet issue queue walkthrough is shipped. Keep examples aligned with CLI/API changes. |
 | Video tutorials | None in repo | Not started | Publish 10 short tutorials or replace this requirement with a written tutorial acceptance gate. |
 | Docs publishing | `.github/workflows/docs.yml`, `mkdocs.yml` | Shipped | Keep `mkdocs build --strict` green on every docs PR. |
@@ -45,6 +45,10 @@ Do not close issue #19 until all of these gates are true:
   dry-run batch dispatch, fleet manifest expansion, label filters, per-repo
   caps, task monitoring, scheduler dedup boundaries, and the current no
   auto-merge safety boundary.
+- The development guide is discoverable from `mkdocs.yml`, covers backend
+  extensions, external-agent adapters, deterministic tool authoring, current MCP
+  status boundaries, and the local test harness expected for new extension
+  surfaces.
 - The video tutorial requirement is either satisfied or replaced by an explicit,
   accepted written-docs alternative.
 

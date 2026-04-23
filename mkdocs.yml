@@ -90,6 +90,7 @@ nav:
   - Development:
       - Agentic orchestrator strategy: development/planning/orchestrator_market_comparison.md
       - Backend and extension guide: development/backend-extension-guide.md
+      - Tool authoring and MCP boundaries: development/tool-authoring-guide.md
       - External agent adapters: development/external-agent-adapters.md
       - Eval harness: development/eval-harness.md
       - Deep traversal hotspot review: development/deep-traversal-hotspots-20260422.md

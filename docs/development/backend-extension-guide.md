@@ -64,6 +64,9 @@ wrappers.
 Tools are the safest place to expose small deterministic capabilities to agent
 loops.
 
+See [Tool authoring and MCP boundaries](tool-authoring-guide.md) for the full
+tool runtime contract, current MCP status boundary, and local test harness.
+
 1. Define a focused function with typed inputs and explicit failure behavior.
 2. Register it through the existing tool registry path.
 3. Use schema-compatible parameter types so callers can validate before
