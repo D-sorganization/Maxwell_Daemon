@@ -7,11 +7,9 @@ const path = require("path");
 const budgetMs = Number(process.env.MAXWELL_DESKTOP_LAUNCH_BUDGET_MS || 2000);
 const timeoutMs = Math.max(5000, budgetMs * 3);
 const launchStartedAt = performance.now();
-const executable = process.platform === "win32"
-  ? path.join(__dirname, "node_modules", ".bin", "electron.cmd")
-  : path.join(__dirname, "node_modules", ".bin", "electron");
+const electronCli = path.join(__dirname, "node_modules", "electron", "cli.js");
 
-const child = spawn(executable, [__dirname], {
+const child = spawn(process.execPath, [electronCli, __dirname], {
   cwd: __dirname,
   env: {
     ...process.env,
