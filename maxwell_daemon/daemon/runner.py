@@ -8,6 +8,7 @@ External callers (CLI, REST API, gRPC) interact through `Daemon.submit()` and
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import signal
 import threading
@@ -348,7 +349,7 @@ class Daemon:
             for task in recovered:
                 self._tasks[task.id] = task
                 if task.status is TaskStatus.QUEUED:
-                    self._queue.put_nowait((task.priority, task))
+                    self._enqueue_task_entry(task.priority, task)
                     queued += 1
                 elif task.status is TaskStatus.DISPATCHED:
                     dispatched += 1
@@ -502,6 +503,33 @@ class Daemon:
             summarizer_role=summarizer,
         ).anneal()
 
+    def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:
+        """Insert a queue entry while respecting daemon loop thread affinity."""
+        item = (priority, task)
+        if self._loop is None or not self._loop.is_running():
+            self._queue.put_nowait(item)
+            return
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+        if running_loop is self._loop:
+            self._queue.put_nowait(item)
+            return
+
+        result: concurrent.futures.Future[None] = concurrent.futures.Future()
+
+        def _put() -> None:
+            try:
+                self._queue.put_nowait(item)
+            except BaseException as exc:  # pragma: no cover - surfaced via Future
+                result.set_exception(exc)
+            else:
+                result.set_result(None)
+
+        self._loop.call_soon_threadsafe(_put)
+        result.result(timeout=5.0)
+
     def submit(
         self,
         prompt: str,
@@ -522,17 +550,14 @@ class Daemon:
             model=model,
             priority=priority,
         )
-        # Write to self._tasks and enqueue under lock. asyncio.PriorityQueue
-        # is not thread-safe — concurrent put_nowait() from multiple threads
-        # can corrupt the underlying heap list ("list changed size during
-        # iteration"). Serializing via _tasks_lock makes the submit path safe
-        # for sync callers; the async path uses submit_threadsafe() instead.
+        # Persist and track the task under lock, then route the queue mutation
+        # through the daemon loop if this caller is on a foreign thread.
         with self._tasks_lock:
             if task_id is not None:
                 self._reject_duplicate_task_id(task.id)
             self._task_store.save(task)
             self._tasks[task.id] = task
-            self._queue.put_nowait((task.priority, task))
+            self._enqueue_task_entry(task.priority, task)
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
         # submits before start()), skip the event — the queued state is
         # observable via get_task().
@@ -590,9 +615,7 @@ class Daemon:
         self._task_store.save(task)
         with self._tasks_lock:
             self._tasks[task.id] = task
-        asyncio.run_coroutine_threadsafe(self._queue.put((task.priority, task)), self._loop).result(
-            timeout=5.0
-        )
+        self._enqueue_task_entry(task.priority, task)
         return task
 
     def submit_issue(
@@ -622,14 +645,14 @@ class Daemon:
             issue_mode=mode,
             priority=priority,
         )
-        # See note in submit(): queue put is serialized under _tasks_lock
-        # because asyncio.PriorityQueue.put_nowait is not thread-safe.
+        # See note in submit(): queue mutation must stay loop-affine once the
+        # daemon has started.
         with self._tasks_lock:
             if task_id is not None:
                 self._reject_duplicate_task_id(task.id)
             self._task_store.save(task)
             self._tasks[task.id] = task
-            self._queue.put_nowait((task.priority, task))
+            self._enqueue_task_entry(task.priority, task)
         try:
             loop = asyncio.get_running_loop()
             bg = loop.create_task(
@@ -1035,10 +1058,9 @@ class Daemon:
             # Enqueue a fresh entry with the new priority; the stale entry will
             # be skipped when dequeued because the task will no longer be
             # QUEUED by then (or the worker will simply execute it at the
-            # corrected priority). asyncio.PriorityQueue is not thread-safe, so
-            # the put_nowait stays inside _tasks_lock alongside the submit()
-            # path.
-            self._queue.put_nowait((new_priority, task))
+            # corrected priority). Cross-thread callers still need the queue
+            # mutation to bounce through the daemon loop.
+            self._enqueue_task_entry(new_priority, task)
         self._task_store.save(task)
         log.info("reprioritized task=%s old=%d new=%d", task_id, old_priority, new_priority)
         return task
@@ -1112,7 +1134,7 @@ class Daemon:
                     )
                     t.status = TaskStatus.QUEUED
                     t.dispatched_to = None
-                    self._queue.put_nowait((t.priority, t))
+                    self._enqueue_task_entry(t.priority, t)
 
         # Collect tasks still QUEUED after potential requeuing above.
         with self._tasks_lock:
