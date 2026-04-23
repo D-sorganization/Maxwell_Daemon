@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from maxwell_daemon.launcher import build_plan, default_config_path
+from maxwell_daemon.launcher import _subprocess_env, build_plan, default_config_path
 
 
 def test_runtime_install_is_default(tmp_path: Path) -> None:
@@ -53,3 +53,23 @@ def test_root_wrappers_delegate_to_python_launcher() -> None:
     assert "maxwell_daemon.launcher" in (repo / "Launch-Maxwell.bat").read_text()
     assert "maxwell_daemon.launcher" in (repo / "Launch-Maxwell.sh").read_text()
     assert "maxwell_daemon.launcher" in (repo / "Launch-Maxwell.command").read_text()
+
+
+def test_launcher_subprocess_env_defaults_to_utf8(monkeypatch) -> None:
+    monkeypatch.delenv("PYTHONUTF8", raising=False)
+    monkeypatch.delenv("PYTHONIOENCODING", raising=False)
+
+    env = _subprocess_env()
+
+    assert env["PYTHONUTF8"] == "1"
+    assert env["PYTHONIOENCODING"] == "utf-8"
+
+
+def test_launcher_subprocess_env_preserves_explicit_overrides(monkeypatch) -> None:
+    monkeypatch.setenv("PYTHONUTF8", "0")
+    monkeypatch.setenv("PYTHONIOENCODING", "utf-16")
+
+    env = _subprocess_env()
+
+    assert env["PYTHONUTF8"] == "0"
+    assert env["PYTHONIOENCODING"] == "utf-16"
