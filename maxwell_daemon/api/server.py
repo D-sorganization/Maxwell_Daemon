@@ -808,7 +808,9 @@ def _delegate_snapshots_for_task(
         snapshots,
         key=lambda snapshot: (
             snapshot.session.updated_at,
-            snapshot.latest_checkpoint.created_at if snapshot.latest_checkpoint else snapshot.session.created_at,
+            snapshot.latest_checkpoint.created_at
+            if snapshot.latest_checkpoint
+            else snapshot.session.created_at,
         ),
         reverse=True,
     )
@@ -835,9 +837,7 @@ def _delegate_views_for_task(
                 cost_usd = float(metadata_cost) if metadata_cost is not None else 0.0
             except (TypeError, ValueError):
                 cost_usd = 0.0
-            duration_seconds = max(
-                0.0, (session.updated_at - session.created_at).total_seconds()
-            )
+            duration_seconds = max(0.0, (session.updated_at - session.created_at).total_seconds())
             views.append(
                 DelegateSessionView(
                     id=session.id,
