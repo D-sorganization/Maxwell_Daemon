@@ -22,6 +22,7 @@ from maxwell_daemon.cli.checks import checks_app
 from maxwell_daemon.cli.delegates import delegate_app
 from maxwell_daemon.cli.evals import eval_app
 from maxwell_daemon.cli.fleet import fleet_app
+from maxwell_daemon.cli.gauntlet import gauntlet_app
 from maxwell_daemon.cli.issues import issue_app
 from maxwell_daemon.cli.memory import memory_app
 from maxwell_daemon.cli.session import session_app
@@ -53,6 +54,8 @@ app.add_typer(tasks_app, name="tasks")
 app.add_typer(task_graph_app, name="task-graph")
 app.add_typer(memory_app, name="memory")
 app.add_typer(work_item_app, name="work-item")
+app.add_typer(gauntlet_app, name="gauntlet")
+app.add_typer(gauntlet_app, name="gate")
 app.add_typer(action_app, name="action")
 app.add_typer(checks_app, name="checks")
 app.add_typer(fleet_app, name="fleet")

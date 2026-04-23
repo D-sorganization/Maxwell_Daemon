@@ -1098,9 +1098,15 @@ def create_app(
         dependencies=[Depends(_require_viewer())],
     )
     async def control_plane_gauntlet(
+        task_id: Annotated[str | None, Query()] = None,
+        status_filter: Annotated[str | None, Query(alias="status")] = None,
         limit: int = Query(50, ge=1, le=200),
     ) -> tuple[ControlPlaneWorkItemView, ...]:
         tasks = list(daemon.state().tasks.values())
+        if task_id:
+            tasks = [task for task in tasks if task.id == task_id]
+        if status_filter:
+            tasks = [task for task in tasks if task.status.value == status_filter]
         tasks.sort(key=lambda task: task.created_at, reverse=True)
         return tuple(_control_plane_view_from_task(task) for task in tasks[:limit])
 
