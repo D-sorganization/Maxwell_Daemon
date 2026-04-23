@@ -66,6 +66,7 @@ nav:
       - Source-controlled checks: architecture/checks.md
   - Operations:
       - Deployment guide: operations/deployment.md
+      - Security: operations/security.md
       - Deployment (Ansible): operations/ansible.md
       - Observability: operations/observability.md
       - Budgets: operations/budgets.md
