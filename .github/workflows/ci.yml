@@ -115,8 +115,7 @@ jobs:
       - name: Bandit (static analysis)
         run: .venv/bin/python -m bandit -r maxwell_daemon -c pyproject.toml
       - name: pip-audit (dependency vulnerabilities)
-        continue-on-error: true  # report but don't fail until we triage
-        run: .venv/bin/python -m pip_audit --desc --strict
+        run: .venv/bin/python -m pip_audit . --desc --strict
 
   build:
     name: Build distribution
