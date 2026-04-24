@@ -36,6 +36,7 @@ jobs:
 
   typecheck:
     name: Typecheck (mypy --strict)
+    needs: lint
     runs-on: d-sorg-fleet
     steps:
       - name: Clear stale checkout locks
@@ -56,11 +57,13 @@ jobs:
 
   test:
     name: Test (py${{ matrix.python-version }})
+    needs: typecheck
     runs-on: d-sorg-fleet
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.12", "3.10", "3.11"]
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -104,6 +107,7 @@ jobs:
 
   file-size-budget:
     name: File size budget
+    needs: coverage-floor
     runs-on: d-sorg-fleet
     steps:
       - name: Clear stale checkout locks
@@ -119,6 +123,7 @@ jobs:
 
   todo-fixme:
     name: No untracked TODO/FIXME
+    needs: file-size-budget
     runs-on: d-sorg-fleet
     steps:
       - name: Clear stale checkout locks
@@ -134,6 +139,7 @@ jobs:
 
   security:
     name: Security scans
+    needs: todo-fixme
     runs-on: d-sorg-fleet
     steps:
       - name: Clear stale checkout locks
@@ -154,6 +160,7 @@ jobs:
 
   dependency-locks:
     name: Dependency locks
+    needs: security
     runs-on: d-sorg-fleet
     steps:
       - name: Clear stale checkout locks
@@ -179,7 +186,7 @@ jobs:
 
   build:
     name: Build distribution
-    needs: [lint, typecheck, test]
+    needs: dependency-locks
     runs-on: d-sorg-fleet
     steps:
       - name: Clear stale checkout locks
