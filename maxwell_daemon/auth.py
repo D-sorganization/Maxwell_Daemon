@@ -34,6 +34,7 @@ __all__ = [
     "JWTConfig",
     "Role",
     "TokenClaims",
+    "is_jwt_auth_failure",
     "require_role",
 ]
 
@@ -189,6 +190,24 @@ class JWTConfig:
         return TokenClaims(sub=sub, role=role, exp=exp, iat=iat, jti=jti, typ=typ)
 
 
+def is_jwt_auth_failure(exc: BaseException) -> bool:
+    """Return True when *exc* came from PyJWT or a missing PyJWT dependency."""
+
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        module = type(current).__module__
+        if module == "jwt" or module.startswith("jwt."):
+            return True
+        if isinstance(current, ModuleNotFoundError) and current.name == "jwt":
+            return True
+        if isinstance(current, ImportError) and "PyJWT" in str(current):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
 def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:
     """FastAPI dependency factory that enforces a minimum role.
 
@@ -211,9 +230,7 @@ def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:
         try:
             claims = jwt_config.decode_token(raw)
         except Exception as exc:
-            import jwt
-
-            if isinstance(exc, jwt.PyJWTError):
+            if is_jwt_auth_failure(exc):
                 log.warning(
                     "Auth failure for endpoint %s: %s",
                     request.url.path,
