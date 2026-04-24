@@ -18,6 +18,7 @@ from maxwell_daemon import __version__
 from maxwell_daemon.backends import Message, MessageRole
 from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.cli.actions import action_app
+from maxwell_daemon.cli.backup import backup_app
 from maxwell_daemon.cli.checks import checks_app
 from maxwell_daemon.cli.delegates import delegate_app
 from maxwell_daemon.cli.evals import eval_app
@@ -45,6 +46,7 @@ app = typer.Typer(
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
+app.add_typer(backup_app, name="backup")
 app.add_typer(issue_app, name="issue")
 app.add_typer(eval_app, name="eval")
 app.add_typer(spec_app, name="spec")
