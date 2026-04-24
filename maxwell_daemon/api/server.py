@@ -60,7 +60,6 @@ from maxwell_daemon.core.work_items import (
     WorkItemStatus,
 )
 from maxwell_daemon.daemon import Daemon
-from maxwell_daemon.daemon.runner import Attachment as RunnerAttachment
 from maxwell_daemon.daemon.runner import DuplicateTaskIdError, Task, TaskStatus
 from maxwell_daemon.director import (
     GraphStatus,
@@ -114,14 +113,6 @@ def _parse_delegate_status(value: str | None) -> DelegateSessionStatus | None:
         ) from exc
 
 
-class Attachment(BaseModel):
-    kind: str
-    uri: str
-    content_type: str
-    size: int
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
 class TaskSubmit(BaseModel):
     prompt: PromptField
     task_id: TaskIdField | None = None
@@ -137,7 +128,6 @@ class TaskSubmit(BaseModel):
         default_factory=list,
         description="Task IDs that must reach COMPLETED before this task starts.",
     )
-    attachments: list[Attachment] = Field(default_factory=list)
 
 
 class WorkItemCreate(BaseModel):
@@ -438,7 +428,6 @@ class TaskView(BaseModel):
     ab_group: str | None = None
     depends_on: list[str] = Field(default_factory=list)
     priority: int = 100
-    attachments: list[Attachment] = Field(default_factory=list)
     pr_url: str | None = None
     dispatched_to: str | None = None
     status: str
@@ -480,16 +469,6 @@ class TaskView(BaseModel):
             created_at=t.created_at,
             started_at=t.started_at,
             finished_at=t.finished_at,
-            attachments=[
-                Attachment(
-                    kind=a.kind,
-                    uri=a.uri,
-                    content_type=a.content_type,
-                    size=a.size,
-                    metadata=a.metadata,
-                )
-                for a in t.attachments
-            ],
         )
 
 
@@ -1655,16 +1634,6 @@ def create_app(
                         model=payload.model,
                         priority=payload.priority,
                         task_id=payload.task_id,
-                        attachments=[
-                            RunnerAttachment(
-                                kind=a.kind,
-                                uri=a.uri,
-                                content_type=a.content_type,
-                                size=a.size,
-                                metadata=a.metadata,
-                            )
-                            for a in payload.attachments
-                        ],
                     )
                 except ValueError as exc:
                     raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
@@ -1677,16 +1646,6 @@ def create_app(
                     priority=payload.priority,
                     task_id=payload.task_id,
                     depends_on=payload.depends_on or [],
-                    attachments=[
-                        RunnerAttachment(
-                            kind=a.kind,
-                            uri=a.uri,
-                            content_type=a.content_type,
-                            size=a.size,
-                            metadata=a.metadata,
-                        )
-                        for a in payload.attachments
-                    ],
                 )
         except DuplicateTaskIdError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
@@ -1694,7 +1653,7 @@ def create_app(
 
     @app.get("/api/v1/tasks", dependencies=[Depends(_require_viewer())])
     async def list_tasks(
-        status_filter: Annotated[str | None, Query(alias="status")] = None,
+        status: Annotated[str | None, Query()] = None,
         kind: Annotated[str | None, Query()] = None,
         repo: Annotated[str | None, Query()] = None,
         cursor: Annotated[datetime | None, Query()] = None,
@@ -1709,15 +1668,12 @@ def create_app(
             cursor = _coerce_datetime_to_utc(cursor)
 
         task_status: TaskStatus | None = None
-        if status_filter is not None:
+        if status is not None:
             try:
-                task_status = TaskStatus(status_filter)
+                task_status = TaskStatus(status)
             except ValueError as exc:
-                from fastapi import status as http_status
-
                 raise HTTPException(
-                    http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    f"invalid task status: {status_filter}",
+                    status.HTTP_422_UNPROCESSABLE_ENTITY, f"invalid task status: {status}"
                 ) from exc
 
         tasks = await daemon._task_store.alist_tasks(
