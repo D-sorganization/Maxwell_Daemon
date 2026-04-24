@@ -249,6 +249,15 @@ class APIConfig(BaseModel):
         return self.jwt_secret.get_secret_value() if self.jwt_secret is not None else None
 
 
+class McpServerConfig(BaseModel):
+    name: str = Field(..., description="Unique name for the MCP server")
+    command: str = Field(..., description="Command to execute (e.g. 'npx', 'python')")
+    args: list[str] = Field(default_factory=list, description="Arguments for the command")
+    env: dict[str, str] = Field(default_factory=dict, description="Environment variables")
+    transport: Literal["stdio", "sse", "http"] = "stdio"
+    enabled: bool = True
+
+
 class MaxwellDaemonConfig(BaseModel):
     """Root configuration object."""
 
@@ -265,6 +274,7 @@ class MaxwellDaemonConfig(BaseModel):
     api: APIConfig = Field(default_factory=lambda: APIConfig())
     budget: BudgetConfig = Field(default_factory=lambda: BudgetConfig())
     github: GithubConfig = Field(default_factory=lambda: GithubConfig())
+    mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict)
     log_file: Path | None = Field(None, description="Path to write structured rotating logs")
 
     @field_validator("backends")

@@ -471,6 +471,23 @@ def serve(
         asyncio.run(daemon.stop())
 
 
+@app.command()
+def mcp(
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Run the Maxwell Daemon as an MCP server via stdio."""
+    # We configure minimal logging so stdio doesn't get corrupted by rich output.
+    import logging
+
+    from maxwell_daemon.mcp.server import run_mcp_server
+    logging.basicConfig(level=logging.WARNING)
+
+    try:
+        asyncio.run(run_mcp_server(config))
+    except KeyboardInterrupt:
+        sys.exit(130)
+
+
 def main() -> None:
     app()
 

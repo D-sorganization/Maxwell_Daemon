@@ -87,8 +87,10 @@ class OllamaAgentLoopBackend(ILLMBackend):
         timeout: float = 600.0,
         workspace_dir: str | None = None,
         wall_clock_timeout_seconds: float | None = None,
+        enable_prompt_caching: bool = False,
         registry_factory: Callable[[Path], ToolRegistry] | None = None,
         client: _PostClient | None = None,
+        mcp_manager: Any | None = None,
         condenser: Condenser | None = None,
     ) -> None:
         self.base_url = (base_url or os.environ.get("OLLAMA_BASE_URL") or DEFAULT_BASE_URL).rstrip(
@@ -98,8 +100,10 @@ class OllamaAgentLoopBackend(ILLMBackend):
         self._max_turns = max_turns
         self._workspace = workspace_dir
         self._wall_clock = wall_clock_timeout_seconds
+        self._enable_cache = enable_prompt_caching
         self._registry_factory = registry_factory or build_default_registry
         self._client: _PostClient = client or _default_httpx_client(timeout)
+        self._mcp_manager = mcp_manager
         self._condenser = condenser
 
     # ── ILLMBackend surface ──────────────────────────────────────────────────
@@ -121,6 +125,8 @@ class OllamaAgentLoopBackend(ILLMBackend):
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
         tool_registry = self._registry_factory(effective_workspace)
+        if self._mcp_manager is not None:
+            self._mcp_manager.attach_tools(tool_registry)
         tool_defs = tool_registry.to_openai()
 
         sdk_messages = self._build_messages(messages, workspace=effective_workspace)

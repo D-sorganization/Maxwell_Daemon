@@ -33,9 +33,10 @@ class RouteDecision:
 
 
 class BackendRouter:
-    def __init__(self, config: MaxwellDaemonConfig, budget: Any = None) -> None:
+    def __init__(self, config: MaxwellDaemonConfig, budget: Any = None, mcp_manager: Any = None) -> None:
         self._config = config
         self._budget = budget
+        self._mcp_manager = mcp_manager
         self._instances: dict[str, ILLMBackend] = {}
 
     def _get_or_create(self, name: str, cfg: BackendConfig) -> ILLMBackend:
@@ -56,6 +57,8 @@ class BackendRouter:
             )
             if (key := cfg.api_key_value()) is not None:
                 params["api_key"] = key
+            if self._mcp_manager is not None:
+                params["mcp_manager"] = self._mcp_manager
             self._instances[name] = registry.create(cfg.type, params)
         return self._instances[name]
 

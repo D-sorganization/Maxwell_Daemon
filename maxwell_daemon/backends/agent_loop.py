@@ -146,6 +146,7 @@ class AgentLoopBackend(ILLMBackend):
         registry_factory: Callable[[Path], ToolRegistry] | None = None,
         condenser: Condenser | None = None,
         budget_enforcer: Any | None = None,
+        mcp_manager: Any | None = None,
     ) -> None:
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
@@ -164,6 +165,7 @@ class AgentLoopBackend(ILLMBackend):
         self._registry_factory = registry_factory or build_default_registry
         self._condenser = condenser
         self._budget_enforcer = budget_enforcer
+        self._mcp_manager = mcp_manager
 
     # ── System prompt assembly ───────────────────────────────────────────────
 
@@ -305,6 +307,8 @@ class AgentLoopBackend(ILLMBackend):
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
         tool_registry = self._registry_factory(effective_workspace)
+        if self._mcp_manager is not None:
+            self._mcp_manager.attach_tools(tool_registry)
         tool_defs = tool_registry.to_anthropic()
 
         system_prompt = self._build_system_blocks(
@@ -478,6 +482,8 @@ class AgentLoopBackend(ILLMBackend):
             effective_max_turns = self._max_turns
 
         tool_registry = self._registry_factory(effective_workspace)
+        if self._mcp_manager is not None:
+            self._mcp_manager.attach_tools(tool_registry)
         tool_defs = tool_registry.to_anthropic()
 
         repo = kwargs.pop("repo", None)

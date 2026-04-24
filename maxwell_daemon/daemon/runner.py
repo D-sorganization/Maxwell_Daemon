@@ -162,7 +162,11 @@ class Daemon:
         self._config_path: Path | None = config_path
         # Protects atomic swap of _config and _router during reload.
         self._config_lock = threading.Lock()
-        self._router = BackendRouter(config)
+
+        from maxwell_daemon.mcp.client import McpClientManager
+        self._mcp_manager = McpClientManager(config.mcp_servers)
+
+        self._router = BackendRouter(config, mcp_manager=self._mcp_manager)
         self._fleet_registry = InMemoryFleetCapabilityRegistry()
         self._ledger = CostLedger(
             ledger_path or Path.home() / ".local/share/maxwell-daemon/ledger.db"
@@ -320,14 +324,18 @@ class Daemon:
         elif role == "worker":
             # Worker: accepts tasks via REST API and executes locally — no discovery.
             self._worker_count = worker_count
-            for i in range(worker_count):
-                self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
-            log.info("daemon started as worker with %d workers", worker_count)
+            self._workers = [
+                asyncio.create_task(self._worker_loop(i), name=f"AgentWorker-{i}")
+                for i in range(self._worker_count)
+            ]
+            await self._mcp_manager.start()
+            log.info("Daemon workers started", workers=self._worker_count)
         else:
             # Standalone (default): run local workers.
             self._worker_count = worker_count
             for i in range(worker_count):
                 self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
+            await self._mcp_manager.start()
             log.info("daemon started (standalone) with %d workers", worker_count)
 
         # Install SIGUSR1 handler for config hot-reload (Unix only).
@@ -416,7 +424,14 @@ class Daemon:
             await asyncio.gather(*self._bg_tasks, return_exceptions=True)
             self._bg_tasks.clear()
 
-        log.info("daemon stopped")
+        if getattr(self, "_memory", None) is not None:
+            close_method = getattr(self._memory, "aclose", None)
+            if close_method is not None:
+                await close_method()
+
+        await self._mcp_manager.stop()
+
+        log.info("Daemon shut down")
 
     def prune_retained_history(self, older_than_days: int | None = None) -> dict[str, int]:
         """Prune terminal tasks and ledger rows older than the retention window."""
