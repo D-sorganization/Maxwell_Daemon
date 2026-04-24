@@ -522,8 +522,8 @@ class Daemon:
         if self._loop is None or not self._loop.is_running():
             try:
                 self._queue.put_nowait(item)
-            except asyncio.QueueFull:
-                raise QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60)
+            except asyncio.QueueFull as exc:
+                raise QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60) from exc
             return
         try:
             running_loop = asyncio.get_running_loop()
