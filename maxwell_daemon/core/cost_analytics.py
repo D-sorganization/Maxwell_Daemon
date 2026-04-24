@@ -105,7 +105,7 @@ class CostAnalytics:
         """
         if since is None:
             since = datetime.min.replace(tzinfo=timezone.utc)
-        calls, cached, prompt, completion = self._ledger.cache_metrics_raw(since, end=end)
+        _calls, cached, prompt, _completion = self._ledger.cache_metrics_raw(since, end=end)
         if prompt > 0:
             return cached / prompt
         return 0.0

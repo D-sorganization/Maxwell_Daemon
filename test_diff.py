@@ -1,5 +1,6 @@
-import re
 from pathlib import Path
+import re
+
 from maxwell_daemon.api import create_app
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon
@@ -16,6 +17,8 @@ app = create_app(Daemon(config))
 schema_paths = set(app.openapi()['paths'])
 
 print('Missing in docs:')
-for p in sorted(schema_paths - documented_paths): print(p)
+for p in sorted(schema_paths - documented_paths):
+    print(p)
 print('Extra in docs:')
-for p in sorted(documented_paths - schema_paths): print(p)
+for p in sorted(documented_paths - schema_paths):
+    print(p)
