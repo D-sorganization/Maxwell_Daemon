@@ -5,7 +5,8 @@ from __future__ import annotations
 from contextlib import AsyncExitStack
 from typing import Any
 
-from mcp import ClientSession, StdioServerParameters
+from mcp.client.session import ClientSession
+from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
 
 from maxwell_daemon.config.models import McpServerConfig
@@ -31,24 +32,48 @@ class McpClientManager:
                 continue
 
             try:
-                if config.transport != "stdio":
-                    log.warning("Unsupported MCP transport %r for server %r", config.transport, name)
+                if config.transport == "stdio":
+                    if not config.command:
+                        log.warning("Command required for stdio transport: %r", name)
+                        continue
+                    import os
+
+                    from mcp import StdioServerParameters
+
+                    env = dict(os.environ)
+                    if config.env:
+                        env.update(config.env)
+                    server_params = StdioServerParameters(
+                        command=config.command, args=config.args, env=env
+                    )
+                    transport = await self._exit_stack.enter_async_context(
+                        stdio_client(server_params)
+                    )
+                elif config.transport == "sse":
+                    if not config.url:
+                        log.warning("URL required for sse transport: %r", name)
+                        continue
+                    transport = await self._exit_stack.enter_async_context(sse_client(config.url))
+                elif config.transport == "http":
+                    if not config.url:
+                        log.warning("URL required for http transport: %r", name)
+                        continue
+                    try:
+                        from mcp.client.streamable_http import streamable_http_client
+
+                        transport = await self._exit_stack.enter_async_context(
+                            streamable_http_client(config.url)
+                        )
+                    except ImportError:
+                        log.warning("streamable_http_client not available in this mcp version")
+                        continue
+                else:
+                    log.warning(
+                        "Unsupported MCP transport %r for server %r", config.transport, name
+                    )
                     continue
 
-                # Pass through the process env as well as any configured overrides
-                import os
-                env = dict(os.environ)
-                if config.env:
-                    env.update(config.env)
-
-                server_params = StdioServerParameters(
-                    command=config.command,
-                    args=config.args,
-                    env=env
-                )
-
-                stdio_transport = await self._exit_stack.enter_async_context(stdio_client(server_params))
-                read, write = stdio_transport
+                read, write = transport
                 session = await self._exit_stack.enter_async_context(ClientSession(read, write))
                 await session.initialize()
                 self._sessions[name] = session
@@ -62,7 +87,9 @@ class McpClientManager:
             except Exception as e:
                 log.exception("Failed to start MCP server %r: %s", name, e)
 
-    def _create_tool_spec(self, server_name: str, mcp_tool: Any, session: ClientSession) -> ToolSpec:
+    def _create_tool_spec(
+        self, server_name: str, mcp_tool: Any, session: ClientSession
+    ) -> ToolSpec:
         params = []
         if isinstance(mcp_tool.inputSchema, dict):
             props = mcp_tool.inputSchema.get("properties", {})
@@ -78,12 +105,17 @@ class McpClientManager:
                     type=p_schema.get("type", "string"),
                     description=p_schema.get("description", ""),
                     required=p_name in required,
-                    enum=p_schema.get("enum")
+                    enum=p_schema.get("enum"),
                 )
             )
 
         # Create closure for handler
-        async def handler(*args: Any, _session: ClientSession = session, _tool_name: str = mcp_tool.name, **kwargs: Any) -> str:
+        async def handler(
+            *args: Any,
+            _session: ClientSession = session,
+            _tool_name: str = mcp_tool.name,
+            **kwargs: Any,
+        ) -> str:
             try:
                 res = await _session.call_tool(_tool_name, arguments=kwargs)
                 if getattr(res, "isError", False):

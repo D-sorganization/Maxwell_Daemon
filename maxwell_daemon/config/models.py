@@ -251,10 +251,11 @@ class APIConfig(BaseModel):
 
 class McpServerConfig(BaseModel):
     name: str = Field(..., description="Unique name for the MCP server")
-    command: str = Field(..., description="Command to execute (e.g. 'npx', 'python')")
+    command: str | None = Field(None, description="Command to execute (e.g. 'npx', 'python')")
     args: list[str] = Field(default_factory=list, description="Arguments for the command")
     env: dict[str, str] = Field(default_factory=dict, description="Environment variables")
     transport: Literal["stdio", "sse", "http"] = "stdio"
+    url: str | None = Field(None, description="URL for sse or http transport")
     enabled: bool = True
 
 

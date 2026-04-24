@@ -1188,6 +1188,7 @@ def _control_plane_view_from_task(daemon: Daemon, task: Task) -> ControlPlaneWor
         actions=_control_plane_actions_for_task(task),
     )
 
+
 class WebhookTriggerRequest(BaseModel):
     """Body accepted by ``POST /api/webhooks/trigger``."""
 
@@ -1671,7 +1672,9 @@ def create_app(
             try:
                 task_status = TaskStatus(status)
             except ValueError as exc:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"invalid task status: {status}") from exc
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY, f"invalid task status: {status}"
+                ) from exc
 
         tasks = await daemon._task_store.alist_tasks(
             limit=limit,
@@ -2572,8 +2575,6 @@ def create_app(
         )
 
     # ── Generic webhook trigger ──────────────────────────────────────────────
-
-
 
     @app.post("/api/webhooks/trigger", dependencies=[Depends(_require_operator())])
     async def generic_webhook_trigger(
