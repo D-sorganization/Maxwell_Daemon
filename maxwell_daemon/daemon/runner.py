@@ -513,8 +513,14 @@ class Daemon:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
             running_loop = None
+            
         if running_loop is self._loop:
-            self._queue.put_nowait(item)
+            # If we are on the event loop thread, we might be inside a signal handler.
+            # Mutating the PriorityQueue inline can corrupt the heap if the signal
+            # interrupted a heapq operation. Use call_soon_threadsafe to defer safely.
+            def _put_inline() -> None:
+                self._queue.put_nowait(item)
+            self._loop.call_soon_threadsafe(_put_inline)
             return
 
         result: concurrent.futures.Future[None] = concurrent.futures.Future()
