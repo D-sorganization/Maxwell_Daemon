@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import Field
+from pydantic import Field, StringConstraints
 
 __all__ = [
     "MODEL_NAME_PATTERN",
@@ -35,28 +35,23 @@ MODEL_NAME_PATTERN = r"^[A-Za-z0-9_:.-]+$"
 # Reusable Pydantic Field configurations for consistent API input validation
 RepoField = Annotated[
     str,
-    Field(
+    StringConstraints(
         pattern=REPO_PATTERN,
         max_length=100,
-        description="Repository in owner/repo format (e.g., 'my-org/my-repo')",
     ),
+    Field(description="Repository in owner/repo format (e.g., 'my-org/my-repo')"),
 ]
 
 RoutingKeyField = Annotated[
     str,
-    Field(
-        max_length=100,
-        description="Generic routing key or repository identifier",
-    ),
+    StringConstraints(max_length=100),
+    Field(description="Generic routing key or repository identifier"),
 ]
 
 PromptField = Annotated[
     str,
-    Field(
-        min_length=1,
-        max_length=50000,
-        description="Prompt text must be between 1 and 50,000 characters",
-    ),
+    StringConstraints(min_length=1, max_length=500000),
+    Field(description="Prompt text must be between 1 and 500,000 characters"),
 ]
 
 PriorityField = Annotated[
@@ -70,17 +65,12 @@ PriorityField = Annotated[
 
 TaskIdField = Annotated[
     str,
-    Field(
-        pattern=TASK_ID_PATTERN,
-        description="Task ID: alphanumeric and dashes, max 256 chars",
-    ),
+    StringConstraints(pattern=TASK_ID_PATTERN),
+    Field(description="Task ID: alphanumeric and dashes, max 256 chars"),
 ]
 
 ModelField = Annotated[
     str,
-    Field(
-        pattern=MODEL_NAME_PATTERN,
-        max_length=128,
-        description="Model name (e.g., 'claude-opus-4-7', 'gpt-4o', 'ollama:llama2')",
-    ),
+    StringConstraints(pattern=MODEL_NAME_PATTERN, max_length=128),
+    Field(description="Model name (e.g., 'claude-opus-4-7', 'gpt-4o', 'ollama:llama2')"),
 ]

@@ -60,7 +60,7 @@ def test_invalid_prompt_field() -> None:
         SampleAPIModel(prompt="")  # empty string (min length is 1)
 
     with pytest.raises(ValidationError):
-        SampleAPIModel(prompt="a" * 50001)  # too long
+        SampleAPIModel(prompt="a" * 500001)  # too long
 
 
 def test_valid_priority_field() -> None:

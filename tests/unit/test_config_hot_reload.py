@@ -312,5 +312,3 @@ class TestReloadEndpoint:
         with TestClient(create_app(file_daemon)) as c:
             r = c.post("/api/reload")
         assert r.json()["config_path"] == str(config_file)
-
-

@@ -164,6 +164,7 @@ class Daemon:
         self._config_lock = threading.Lock()
 
         from maxwell_daemon.mcp.client import McpClientManager
+
         self._mcp_manager = McpClientManager(config.mcp_servers)
 
         self._router = BackendRouter(config, mcp_manager=self._mcp_manager)
