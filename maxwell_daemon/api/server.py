@@ -1247,6 +1247,12 @@ def create_app(
         else None
     )
 
+    # Correlation-ID middleware — attaches a UUID to every request, propagates
+    # it through structlog context-vars, and echoes it in X-Correlation-ID.
+    from maxwell_daemon.api.correlation import install_correlation_middleware
+
+    install_correlation_middleware(app)
+
     # Rate-limit middleware — installs only when config declares a default group.
     api_cfg = daemon._config.api
     if api_cfg.rate_limit_default is not None:
