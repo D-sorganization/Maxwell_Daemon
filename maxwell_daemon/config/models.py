@@ -106,6 +106,11 @@ class AgentConfig(BaseModel):
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
     temperature: float = Field(1.0, ge=0.0, le=2.0)
     default_backend: str = "claude"
+    max_queue_depth: int = Field(
+        1000,
+        ge=1,
+        description="Maximum number of tasks allowed in the queue before submissions are rejected with 429 Too Many Requests.",
+    )
 
 
 class MemoryConfig(BaseModel):
