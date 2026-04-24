@@ -68,26 +68,44 @@ class CostAnalytics:
         if end is None:
             end = now
 
-        total_cost = self._ledger.total_since(start)
-        cost_by_backend = self._ledger.by_backend(start)
+        total_cost = self._ledger.total_since(start, end=end)
+        cost_by_backend = self._ledger.by_backend(start, end=end)
+
+        calls, cached, prompt, completion = self._ledger.cache_metrics_raw(start, end=end)
+        cache_hit_rate = 0.0
+        if prompt > 0:
+            cache_hit_rate = cached / prompt
+
+        cache_metrics = CacheHitMetrics(
+            total_calls=calls,
+            cached_tokens=cached,
+            prompt_tokens=prompt,
+            completion_tokens=completion,
+            cache_hit_rate=cache_hit_rate,
+        )
 
         return CostSummary(
             period_start=start,
             period_end=end,
             total_cost_usd=total_cost,
-            call_count=0,  # Would require additional tracking
-            average_cost_per_call=0.0,
+            call_count=calls,  # Tracked by cache_metrics_raw
+            average_cost_per_call=(total_cost / calls) if calls > 0 else 0.0,
             cost_by_backend=cost_by_backend,
             cost_by_model={},  # Would require DB query
-            cache_metrics=None,
+            cache_metrics=cache_metrics,
         )
 
-    def get_cache_hit_rate(self, *, since: datetime | None = None) -> float:
+    def get_cache_hit_rate(
+        self, *, since: datetime | None = None, end: datetime | None = None
+    ) -> float:
         """Calculate cache hit rate over a period.
 
         Cache hit rate = cached_tokens / prompt_tokens.
         Returns a value between 0.0 and 1.0.
         """
-        # This is a placeholder - actual implementation would query cost ledger
-        # for cached_tokens and prompt_tokens and compute the ratio
+        if since is None:
+            since = datetime.min.replace(tzinfo=timezone.utc)
+        calls, cached, prompt, completion = self._ledger.cache_metrics_raw(since, end=end)
+        if prompt > 0:
+            return cached / prompt
         return 0.0

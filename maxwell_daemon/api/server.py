@@ -37,7 +37,13 @@ from fastapi import (
 from pydantic import BaseModel, Field, field_validator
 
 from maxwell_daemon import __version__
-from maxwell_daemon.api.validation import PriorityField, PromptField, RepoField, TaskIdField
+from maxwell_daemon.api.validation import (
+    PriorityField,
+    PromptField,
+    RepoField,
+    RoutingKeyField,
+    TaskIdField,
+)
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
 from maxwell_daemon.backends import BackendManifest, registry
@@ -111,7 +117,7 @@ class TaskSubmit(BaseModel):
     prompt: PromptField
     task_id: TaskIdField | None = None
     kind: str = "prompt"
-    repo: RepoField | None = None
+    repo: RoutingKeyField | None = None
     backend: str | None = None
     model: str | None = None
     issue_repo: RepoField | None = None
@@ -1527,8 +1533,8 @@ def create_app(
         try:
             save_config(daemon._config)
             # Make sure it's instantiated so the daemon can use it immediately
-            if payload.name not in daemon._router._instances:
-                daemon._router._instances[payload.name] = registry.create(payload.name, cfg_dict)
+            # The router handles param normalization and secret unwrapping
+            daemon._router._get_or_create(payload.name, daemon._config.backends[payload.name])
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to save config: {e}") from e
 
@@ -1545,22 +1551,7 @@ def create_app(
             if name not in daemon._config.backends:
                 raise HTTPException(status_code=404, detail=f"Backend '{name}' not configured")
             try:
-                backend = registry.create(
-                    daemon._config.backends[name].type,
-                    daemon._config.backends[name].model_dump(
-                        exclude={
-                            "type",
-                            "model",
-                            "fallback_backend",
-                            "fallback_threshold_percent",
-                            "cost_per_million_input_tokens",
-                            "cost_per_million_output_tokens",
-                            "tier_map",
-                            "enabled",
-                            "api_key_secret_ref",
-                        }
-                    ),
-                )
+                backend = daemon._router._get_or_create(name, daemon._config.backends[name])
             except Exception as e:
                 return BackendTestResponse(success=False, error=str(e))
 
@@ -1667,9 +1658,16 @@ def create_app(
         if cursor is not None:
             cursor = _coerce_datetime_to_utc(cursor)
 
+        task_status: TaskStatus | None = None
+        if status is not None:
+            try:
+                task_status = TaskStatus(status)
+            except ValueError as exc:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"invalid task status: {status}") from exc
+
         tasks = await daemon._task_store.alist_tasks(
             limit=limit,
-            status=status,
+            status=task_status,
             repo=repo,
             kind=kind,
             cursor=cursor,

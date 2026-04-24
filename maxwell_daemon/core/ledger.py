@@ -134,24 +134,45 @@ class CostLedger:
                 ),
             )
 
-    def _total_since_sync(self, since: datetime) -> float:
+    def _total_since_sync(self, since: datetime, end: datetime | None = None) -> float:
         with self._get_conn() as conn:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_records WHERE ts >= ?",
-                (since.isoformat(),),
-            ).fetchone()
+            query = "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_records WHERE ts >= ?"
+            params = [since.isoformat()]
+            if end is not None:
+                query += " AND ts < ?"
+                params.append(end.isoformat())
+            row = conn.execute(query, tuple(params)).fetchone()
         return float(row[0])
 
-    def _by_backend_sync(self, since: datetime) -> dict[str, float]:
+    def _by_backend_sync(self, since: datetime, end: datetime | None = None) -> dict[str, float]:
         with self._get_conn() as conn:
-            rows = conn.execute(
-                """
-                SELECT backend, COALESCE(SUM(cost_usd), 0)
-                FROM cost_records WHERE ts >= ? GROUP BY backend
-                """,
-                (since.isoformat(),),
-            ).fetchall()
+            query = "SELECT backend, COALESCE(SUM(cost_usd), 0) FROM cost_records WHERE ts >= ?"
+            params = [since.isoformat()]
+            if end is not None:
+                query += " AND ts < ?"
+                params.append(end.isoformat())
+            query += " GROUP BY backend"
+            rows = conn.execute(query, tuple(params)).fetchall()
         return {backend: float(cost) for backend, cost in rows}
+
+    def _cache_metrics_raw_sync(
+        self, since: datetime, end: datetime | None = None
+    ) -> tuple[int, int, int, int]:
+        with self._get_conn() as conn:
+            query = """
+                SELECT 
+                    COUNT(*), 
+                    COALESCE(SUM(cached_tokens), 0),
+                    COALESCE(SUM(prompt_tokens), 0),
+                    COALESCE(SUM(completion_tokens), 0)
+                FROM cost_records WHERE ts >= ?
+            """
+            params = [since.isoformat()]
+            if end is not None:
+                query += " AND ts < ?"
+                params.append(end.isoformat())
+            row = conn.execute(query, tuple(params)).fetchone()
+            return int(row[0]), int(row[1]), int(row[2]), int(row[3])
 
     def _prune_sync(self, older_than_days: int, *, now: datetime | None = None) -> int:
         if older_than_days < 0:
@@ -169,11 +190,16 @@ class CostLedger:
     def record(self, rec: CostRecord) -> None:
         self._record_sync(rec)
 
-    def total_since(self, since: datetime) -> float:
-        return self._total_since_sync(since)
+    def total_since(self, since: datetime, end: datetime | None = None) -> float:
+        return self._total_since_sync(since, end)
 
-    def by_backend(self, since: datetime) -> dict[str, float]:
-        return self._by_backend_sync(since)
+    def by_backend(self, since: datetime, end: datetime | None = None) -> dict[str, float]:
+        return self._by_backend_sync(since, end)
+
+    def cache_metrics_raw(
+        self, since: datetime, end: datetime | None = None
+    ) -> tuple[int, int, int, int]:
+        return self._cache_metrics_raw_sync(since, end)
 
     def prune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Delete ledger records older than the retention cutoff."""
@@ -186,15 +212,22 @@ class CostLedger:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self._record_sync, rec)
 
-    async def atotal_since(self, since: datetime) -> float:
+    async def atotal_since(self, since: datetime, end: datetime | None = None) -> float:
         """Non-blocking version of :meth:`total_since` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._total_since_sync, since)
+        return await loop.run_in_executor(None, self._total_since_sync, since, end)
 
-    async def aby_backend(self, since: datetime) -> dict[str, float]:
+    async def aby_backend(self, since: datetime, end: datetime | None = None) -> dict[str, float]:
         """Non-blocking version of :meth:`by_backend` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._by_backend_sync, since)
+        return await loop.run_in_executor(None, self._by_backend_sync, since, end)
+
+    async def acache_metrics_raw(
+        self, since: datetime, end: datetime | None = None
+    ) -> tuple[int, int, int, int]:
+        """Non-blocking version of :meth:`cache_metrics_raw` for use in async code."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._cache_metrics_raw_sync, since, end)
 
     async def aprune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Non-blocking version of :meth:`prune` for use in async code."""
