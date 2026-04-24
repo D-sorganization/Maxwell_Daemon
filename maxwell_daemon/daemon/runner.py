@@ -41,6 +41,7 @@ from maxwell_daemon.core import (
     CostRecord,
 )
 from maxwell_daemon.core.action_store import ActionStore
+from maxwell_daemon.core.auth_session_store import AuthSessionStore
 from maxwell_daemon.core.delegate_lifecycle import DelegateLifecycleService, DelegateSessionStore
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.core.work_item_store import WorkItemStore
@@ -151,6 +152,7 @@ class Daemon:
         artifact_blob_root: Path | None = None,
         action_store_path: Path | None = None,
         delegate_lifecycle_store_path: Path | None = None,
+        auth_store_path: Path | None = None,
     ) -> None:
         self._config = config
         # Path used for hot-reload; populated by from_config_path.
@@ -201,6 +203,11 @@ class Daemon:
         self._delegate_lifecycle = DelegateLifecycleService(
             DelegateSessionStore(default_delegate_store)
         )
+
+        default_auth_store = auth_store_path or (
+            Path.home() / ".local/share/maxwell-daemon/auth_sessions.db"
+        )
+        self._auth_store = AuthSessionStore(default_auth_store)
         # Memory store — co-located with the ledger for easy backup.
         from maxwell_daemon.memory import (
             EpisodicStore,

@@ -52,7 +52,9 @@ def test_period_summary_with_costs(ledger: CostLedger) -> None:
     ledger.record(record1)
     ledger.record(record2)
 
-    summary = analytics.summarize_period(start=now - timedelta(seconds=1), end=now + timedelta(seconds=1))
+    summary = analytics.summarize_period(
+        start=now - timedelta(seconds=1), end=now + timedelta(seconds=1)
+    )
 
     assert summary.total_cost_usd == pytest.approx(0.15)
     assert summary.cost_by_backend == {"anthropic": 0.05, "openai": 0.10}

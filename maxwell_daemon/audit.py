@@ -157,6 +157,24 @@ class AuditLogger:
             details=details or {},
         )
 
+    def log_auth_decision(
+        self,
+        *,
+        subject: str | None,
+        role: str,
+        endpoint: str,
+        outcome: str,
+    ) -> AuditEntry:
+        return self._append(
+            event_type="auth_decision",
+            method=None,
+            path=endpoint,
+            status=None,
+            user=subject,
+            request_id=None,
+            details={"role": role, "outcome": outcome},
+        )
+
     def log_agent_operation(
         self,
         *,

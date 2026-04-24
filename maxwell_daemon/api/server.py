@@ -61,10 +61,11 @@ from maxwell_daemon.director import (
     TaskGraphRecord,
     TaskGraphTemplate,
 )
-from maxwell_daemon.logging import bind_context
+from maxwell_daemon.logging import bind_context, get_logger
 from maxwell_daemon.metrics import mount_metrics_endpoint
 
 _UI_DIR = _Path(__file__).parent / "ui"
+log = get_logger(__name__)
 
 
 def _mount_web_ui(app: FastAPI) -> None:
@@ -587,6 +588,16 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     role: str
+    refresh_token: str | None = None
+
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class TokenRevokeRequest(BaseModel):
+    token: str | None = None
+    all_for_subject: str | None = None
 
 
 def _auth_dep(token: str | None) -> Any:
@@ -607,6 +618,8 @@ def _make_rbac_dep(
     minimum: Role,
     static_token: str | None,
     jwt_config: JWTConfig | None,
+    auth_store: Any | None = None,
+    audit: Any | None = None,
 ) -> Any:
     """Return a FastAPI dependency that enforces *minimum* role.
 
@@ -618,7 +631,7 @@ def _make_rbac_dep(
     (open/dev mode — same behaviour as the existing ``_auth_dep(None)``).
     """
 
-    async def _dep(authorization: Annotated[str | None, Header()] = None) -> None:
+    async def _dep(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:
         # Open mode — nothing to enforce.
         if static_token is None and jwt_config is None:
             return
@@ -630,21 +643,94 @@ def _make_rbac_dep(
 
         # Fast path: static admin token — always grants admin-level access.
         if static_token is not None and hmac.compare_digest(raw.encode(), static_token.encode()):
+            if audit:
+                audit.log_auth_decision(
+                    subject="static",
+                    role="admin",
+                    endpoint=request.url.path,
+                    outcome="pass",
+                )
             return  # admitted as admin
 
         # JWT path.
         if jwt_config is None:
+            if audit:
+                audit.log_auth_decision(
+                    subject="unknown",
+                    role="none",
+                    endpoint=request.url.path,
+                    outcome="fail_no_jwt",
+                )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token")
 
         try:
             claims = jwt_config.decode_token(raw)
         except Exception as exc:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"invalid token: {exc}") from exc
+            import jwt
+
+            if audit:
+                audit.log_auth_decision(
+                    subject="unknown",
+                    role="none",
+                    endpoint=request.url.path,
+                    outcome="fail_invalid_token",
+                )
+            if isinstance(exc, jwt.PyJWTError):
+                log.warning("Auth failure: %s", exc, exc_info=False)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication failed",
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication failed",
+            ) from exc
+
+        if (
+            auth_store is not None
+            and getattr(claims, "jti", None)
+            and auth_store.is_revoked(claims.jti)
+        ):
+            if audit:
+                audit.log_auth_decision(
+                    subject=claims.sub,
+                    role=claims.role.value,
+                    endpoint=request.url.path,
+                    outcome="fail_revoked",
+                )
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has been revoked")
+
+        if getattr(claims, "typ", "access") != "access":
+            if audit:
+                audit.log_auth_decision(
+                    subject=claims.sub,
+                    role=claims.role.value,
+                    endpoint=request.url.path,
+                    outcome="fail_wrong_type",
+                )
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "Refresh tokens cannot be used as access tokens"
+            )
 
         if not claims.has_role(minimum):
+            if audit:
+                audit.log_auth_decision(
+                    subject=claims.sub,
+                    role=claims.role.value,
+                    endpoint=request.url.path,
+                    outcome="fail_role_insufficient",
+                )
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 f"role {claims.role.value!r} lacks {minimum.value!r} privileges",
+            )
+
+        if audit:
+            audit.log_auth_decision(
+                subject=claims.sub,
+                role=claims.role.value,
+                endpoint=request.url.path,
+                outcome="pass",
             )
 
     return _dep
@@ -655,6 +741,8 @@ async def _websocket_auth_or_close(
     minimum: Role,
     static_token: str | None,
     jwt_config: JWTConfig | None,
+    auth_store: Any | None = None,
+    audit: Any | None = None,
 ) -> bool:
     """Authenticate a WebSocket query token against static/JWT auth policy."""
     if static_token is None and jwt_config is None:
@@ -675,12 +763,60 @@ async def _websocket_auth_or_close(
     try:
         claims = jwt_config.decode_token(presented)
     except Exception:  # nosec B110 - invalid WebSocket token, close below.
+        if audit:
+            audit.log_auth_decision(
+                subject="unknown",
+                role="none",
+                endpoint=ws.url.path,
+                outcome="fail_invalid_token",
+            )
         await ws.close(code=1008)
         return False
 
+    if (
+        auth_store is not None
+        and getattr(claims, "jti", None)
+        and auth_store.is_revoked(claims.jti)
+    ):
+        if audit:
+            audit.log_auth_decision(
+                subject=claims.sub,
+                role=claims.role.value,
+                endpoint=ws.url.path,
+                outcome="fail_revoked",
+            )
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="Token revoked")
+        return False
+
+    if getattr(claims, "typ", "access") != "access":
+        if audit:
+            audit.log_auth_decision(
+                subject=claims.sub,
+                role=claims.role.value,
+                endpoint=ws.url.path,
+                outcome="fail_wrong_type",
+            )
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="Refresh token not allowed")
+        return False
+
     if not claims.has_role(minimum):
+        if audit:
+            audit.log_auth_decision(
+                subject=claims.sub,
+                role=claims.role.value,
+                endpoint=ws.url.path,
+                outcome="fail_role_insufficient",
+            )
         await ws.close(code=1008)
         return False
+
+    if audit:
+        audit.log_auth_decision(
+            subject=claims.sub,
+            role=claims.role.value,
+            endpoint=ws.url.path,
+            outcome="pass",
+        )
     return True
 
 
@@ -1052,17 +1188,23 @@ def create_app(
     # (``auth`` dep above) and role enforcement is skipped.
     def _require_viewer() -> Any:
         if jwt_config is not None:
-            return _make_rbac_dep(Role.viewer, auth_token, jwt_config)
+            return _make_rbac_dep(
+                Role.viewer, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+            )
         return auth
 
     def _require_operator() -> Any:
         if jwt_config is not None:
-            return _make_rbac_dep(Role.operator, auth_token, jwt_config)
+            return _make_rbac_dep(
+                Role.operator, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+            )
         return auth
 
     def _require_admin() -> Any:
         if jwt_config is not None:
-            return _make_rbac_dep(Role.admin, auth_token, jwt_config)
+            return _make_rbac_dep(
+                Role.admin, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+            )
         return auth
 
     _audit: AuditLogger | None = (
@@ -1140,8 +1282,96 @@ def create_app(
             )
         ttl = payload.expiry_seconds or jwt_config.expiry_seconds
         role = Role(payload.role)
-        token = jwt_config.create_token(payload.subject, role, expiry_seconds=ttl)
-        return TokenResponse(access_token=token, expires_in=ttl, role=role.value)
+        token = jwt_config.create_token(
+            payload.subject, role, expiry_seconds=ttl, extra_claims={"typ": "access"}
+        )
+
+        refresh_ttl = 30 * 24 * 3600
+        refresh_token = jwt_config.create_token(
+            payload.subject, role, expiry_seconds=refresh_ttl, extra_claims={"typ": "refresh"}
+        )
+
+        claims = jwt_config.decode_token(token)
+        refresh_claims = jwt_config.decode_token(refresh_token)
+
+        auth_store = getattr(daemon, "_auth_store", None)
+        if auth_store is not None:
+            auth_store.record_session(claims.jti, payload.subject, claims.iat)
+            auth_store.record_session(refresh_claims.jti, payload.subject, refresh_claims.iat)
+
+        return TokenResponse(
+            access_token=token, expires_in=ttl, role=role.value, refresh_token=refresh_token
+        )
+
+    @app.post("/api/v1/auth/refresh")
+    async def refresh_access_token(
+        payload: Annotated[TokenRefreshRequest, Body()],
+    ) -> TokenResponse:
+        """Exchange a valid refresh token for a new access token."""
+        if jwt_config is None:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "JWT not configured",
+            )
+
+        try:
+            claims = jwt_config.decode_token(payload.refresh_token)
+        except Exception as exc:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token") from exc
+
+        if getattr(claims, "typ", "access") != "refresh":
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token is not a refresh token")
+
+        auth_store = getattr(daemon, "_auth_store", None)
+        if auth_store is not None and auth_store.is_revoked(claims.jti):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Refresh token is revoked")
+
+        ttl = jwt_config.expiry_seconds
+        new_token = jwt_config.create_token(
+            claims.sub, claims.role, expiry_seconds=ttl, extra_claims={"typ": "access"}
+        )
+        new_claims = jwt_config.decode_token(new_token)
+
+        if auth_store is not None:
+            auth_store.record_session(new_claims.jti, claims.sub, new_claims.iat)
+
+        return TokenResponse(
+            access_token=new_token,
+            expires_in=ttl,
+            role=claims.role.value,
+            refresh_token=payload.refresh_token,
+        )
+
+    @app.post("/api/v1/auth/revoke", dependencies=[Depends(_require_operator())])
+    async def revoke_token(payload: Annotated[TokenRevokeRequest, Body()]) -> dict[str, str]:
+        """Revoke a specific token or all tokens for a subject."""
+        auth_store = getattr(daemon, "_auth_store", None)
+        if auth_store is None:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Auth session store not configured",
+            )
+
+        if payload.all_for_subject:
+            auth_store.revoke_all_for_subject(payload.all_for_subject)
+            return {"status": f"Revoked all tokens for {payload.all_for_subject}"}
+
+        if not payload.token:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Must provide token or all_for_subject"
+            )
+
+        try:
+            # We skip validation here to allow revoking expired tokens if needed
+            import jwt
+
+            decoded = jwt.decode(payload.token, options={"verify_signature": False})
+            jti = decoded.get("jti")
+            if jti:
+                auth_store.revoke(jti)
+            return {"status": "Revoked"}
+        except Exception as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid token format") from exc
 
     @app.get("/api/v1/auth/me")
     async def whoami(
@@ -1265,7 +1495,7 @@ def create_app(
         if cursor is not None:
             cursor = _coerce_datetime_to_utc(cursor)
 
-        tasks = await daemon.alist_tasks(
+        tasks = await daemon._task_store.alist_tasks(
             limit=limit,
             status=status,
             repo=repo,
@@ -2312,7 +2542,9 @@ def create_app(
         """
         import json as _json_mod
 
-        if not await _websocket_auth_or_close(ws, Role.admin, auth_token, jwt_config):
+        if not await _websocket_auth_or_close(
+            ws, Role.admin, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+        ):
             return
 
         pool = _ssh_pool()
@@ -2384,7 +2616,9 @@ def create_app(
         APIs can't set headers. Static tokens grant admin; JWT tokens must have
         viewer-or-higher privileges. Terminate at a proxy for TLS.
         """
-        if not await _websocket_auth_or_close(ws, Role.viewer, auth_token, jwt_config):
+        if not await _websocket_auth_or_close(
+            ws, Role.viewer, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+        ):
             return
         await ws.accept()
         try:

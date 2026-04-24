@@ -66,12 +66,15 @@ class Role(str, Enum):
 class TokenClaims:
     """Decoded, validated JWT claims."""
 
-    def __init__(self, sub: str, role: Role, exp: datetime, *, iat: datetime, jti: str) -> None:
+    def __init__(
+        self, sub: str, role: Role, exp: datetime, *, iat: datetime, jti: str, typ: str = "access"
+    ) -> None:
         self.sub = sub
         self.role = role
         self.exp = exp
         self.iat = iat
         self.jti = jti
+        self.typ = typ
 
     def has_role(self, minimum: Role) -> bool:
         return self.role.can(minimum)
@@ -172,7 +175,8 @@ class JWTConfig:
         exp_ts: int | float = payload.get("exp", 0)
         iat = datetime.fromtimestamp(iat_ts, tz=timezone.utc)
         exp = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
-        return TokenClaims(sub=sub, role=role, exp=exp, iat=iat, jti=jti)
+        typ: str = payload.get("typ", "access")
+        return TokenClaims(sub=sub, role=role, exp=exp, iat=iat, jti=jti, typ=typ)
 
 
 def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:
