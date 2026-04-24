@@ -257,26 +257,29 @@ def test_example(mock_config: MaxwellDaemonConfig, cost_ledger: CostLedger) -> N
 
 ## Performance SLAs (Benchmarking)
 
-Critical operations have performance SLAs enforced via benchmarks:
+Critical operations have performance SLAs enforced via timing assertions:
 
 - **Task queue dequeue:** < 1ms
 - **TaskStore recovery (1000 tasks):** < 500ms
 - **Cost ledger append:** < 10ms
 
-Benchmark tests catch performance regressions:
+Performance tests catch regressions using direct timing:
 
 ```python
-import pytest
+import time
 
-@pytest.mark.benchmark
-def test_queue_dequeue_latency(benchmark) -> None:
+def test_queue_dequeue_latency() -> None:
     """Task dequeue must stay under 1ms SLA."""
     queue = TaskQueue(maxsize=1000)
     for i in range(1000):
         queue.put_nowait(Task(id=f"task-{i}"))
     
-    result = benchmark(queue.get_nowait)
+    start = time.perf_counter()
+    result = queue.get_nowait()
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    
     assert result is not None
+    assert elapsed_ms < 1.0, f"Dequeue took {elapsed_ms:.2f}ms, expected < 1ms"
 ```
 
 ## Coverage Exclusions
@@ -300,18 +303,28 @@ if TYPE_CHECKING:
 
 ## Flaky Test Detection
 
-Tests that fail intermittently must be fixed or marked:
+Tests that fail intermittently must be fixed or skipped:
+
+**Best Practice**: Fix the underlying race condition or use mocked time instead of real timing.
+
+**If skipping is necessary**, use `pytest.mark.skip` with a reason:
 
 ```python
-@pytest.mark.flaky(max_runs=5, min_passes=1)
+import pytest
+
+@pytest.mark.skip(reason="Timing-sensitive test; requires refactoring to use fixed time")
 def test_timing_sensitive_operation() -> None:
     """This test is sensitive to system load and timing jitter.
     
-    Allow up to 5 runs with min 1 pass. Fix the underlying race
-    condition or use fixed sleep/mock time instead of real timing.
+    Timing-based assertions are unreliable on CI. Either:
+    1. Use mocked time (pytest-freezegun) with fixed delays
+    2. Remove timing assertions and test behavior instead
+    3. Use synchronization primitives (events, locks) instead of sleep
     """
     # Implementation...
 ```
+
+**Better approach**: Refactor timing-sensitive code to use synchronization instead of sleep/timing.
 
 ## Test Execution
 
