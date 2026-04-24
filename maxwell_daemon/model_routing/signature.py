@@ -10,6 +10,7 @@ class ExpectedLatency(str, Enum):
     INTERACTIVE = "interactive"
     BATCH = "batch"
 
+
 @dataclass(slots=True, frozen=True)
 class TaskSignature:
     """Features extracted from a work item to guide model routing."""

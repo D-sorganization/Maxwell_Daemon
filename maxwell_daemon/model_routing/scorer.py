@@ -37,11 +37,18 @@ class RoutingScorer:
         est_cost_usd = 0.0
         if candidate.deployment.value == "remote":
             # Very coarse cost estimate based on cost_class
-            est_cost_usd = float(candidate.cost_class.value) * 0.001 * (task.estimated_input_tokens + task.estimated_output_tokens) / 1000.0
+            est_cost_usd = (
+                float(candidate.cost_class.value)
+                * 0.001
+                * (task.estimated_input_tokens + task.estimated_output_tokens)
+                / 1000.0
+            )
 
         # Simple heuristics for now
         speed_score = 1.0 if candidate.deployment.value == "local" else 0.5
-        quality_score = float(candidate.cost_class.value) / 3.0  # Assumes cost roughly maps to quality
+        quality_score = (
+            float(candidate.cost_class.value) / 3.0
+        )  # Assumes cost roughly maps to quality
         health_penalty = 0.0  # Placeholder for live health
 
         # Preset policy weights
@@ -55,7 +62,7 @@ class RoutingScorer:
                 w_cost, w_quality, w_speed = 0.0, 0.0, 10.0
             else:
                 w_cost, w_quality, w_speed = -1.0, 1.0, 0.0
-        else: # balanced
+        else:  # balanced
             w_cost, w_quality, w_speed = -5.0, 5.0, 2.0
 
         policy_fit = (w_cost * est_cost_usd) + (w_quality * quality_score) + (w_speed * speed_score)

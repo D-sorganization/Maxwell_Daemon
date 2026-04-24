@@ -122,7 +122,6 @@ class Attachment(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-
 class TaskSubmit(BaseModel):
     prompt: PromptField
     task_id: TaskIdField | None = None
@@ -481,13 +480,16 @@ class TaskView(BaseModel):
             created_at=t.created_at,
             started_at=t.started_at,
             finished_at=t.finished_at,
-            attachments=[Attachment(
-                kind=a.kind,
-                uri=a.uri,
-                content_type=a.content_type,
-                size=a.size,
-                metadata=a.metadata
-            ) for a in t.attachments]
+            attachments=[
+                Attachment(
+                    kind=a.kind,
+                    uri=a.uri,
+                    content_type=a.content_type,
+                    size=a.size,
+                    metadata=a.metadata,
+                )
+                for a in t.attachments
+            ],
         )
 
 
@@ -1711,8 +1713,9 @@ def create_app(
             try:
                 task_status = TaskStatus(status_filter)
             except ValueError as exc:
+                from fastapi import status as http_status
                 raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    http_status.HTTP_422_UNPROCESSABLE_ENTITY,
                     f"invalid task status: {status_filter}",
                 ) from exc
 
