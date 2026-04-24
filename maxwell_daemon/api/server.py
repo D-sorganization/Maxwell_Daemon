@@ -1254,27 +1254,26 @@ def create_app(
         status: Annotated[str | None, Query()] = None,
         kind: Annotated[str | None, Query()] = None,
         repo: Annotated[str | None, Query()] = None,
+        cursor: Annotated[datetime | None, Query()] = None,
         completed_before: Annotated[datetime | None, Query()] = None,
         completed_before_camel: Annotated[datetime | None, Query(alias="completedBefore")] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     ) -> list[TaskView]:
-        tasks = list(daemon.state().tasks.values())
-        if status:
-            tasks = [t for t in tasks if t.status.value == status]
-        if kind:
-            tasks = [t for t in tasks if t.kind.value == kind]
-        if repo:
-            tasks = [t for t in tasks if t.repo == repo or t.issue_repo == repo]
         completed_before_filter = completed_before or completed_before_camel
         if completed_before_filter is not None:
-            cutoff = _coerce_datetime_to_utc(completed_before_filter)
-            tasks = [
-                t
-                for t in tasks
-                if t.finished_at is not None and _coerce_datetime_to_utc(t.finished_at) < cutoff
-            ]
-        tasks.sort(key=lambda t: t.created_at, reverse=True)
-        return [TaskView.from_task(t) for t in tasks[:limit]]
+            completed_before_filter = _coerce_datetime_to_utc(completed_before_filter)
+        if cursor is not None:
+            cursor = _coerce_datetime_to_utc(cursor)
+
+        tasks = await daemon.alist_tasks(
+            limit=limit,
+            status=status,
+            repo=repo,
+            kind=kind,
+            cursor=cursor,
+            completed_before=completed_before_filter,
+        )
+        return [TaskView.from_task(t) for t in tasks]
 
     @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
     async def get_task(task_id: str) -> TaskView:

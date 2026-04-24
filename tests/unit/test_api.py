@@ -303,6 +303,8 @@ class TestTaskSubmission:
         with daemon._tasks_lock:
             daemon._tasks[matching.id] = matching
             daemon._tasks[other.id] = other
+        daemon._task_store.save(matching)
+        daemon._task_store.save(other)
 
         r = client.get("/api/v1/tasks?status=running&kind=issue&repo=owner/repo&limit=10")
 
@@ -326,6 +328,8 @@ class TestTaskSubmission:
         with daemon._tasks_lock:
             daemon._tasks[old_done.id] = old_done
             daemon._tasks[recent_done.id] = recent_done
+        daemon._task_store.save(old_done)
+        daemon._task_store.save(recent_done)
 
         cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
         r = client.get("/api/v1/tasks", params={"completed_before": cutoff})
@@ -355,6 +359,8 @@ class TestTaskSubmission:
         with daemon._tasks_lock:
             daemon._tasks[old_done.id] = old_done
             daemon._tasks[recent_done.id] = recent_done
+        daemon._task_store.save(old_done)
+        daemon._task_store.save(recent_done)
 
         r = client.get("/api/v1/tasks", params={query_name: "2026-04-20T00:00:00"})
 
@@ -382,6 +388,7 @@ class TestTaskSubmission:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         r = client.get(f"/api/v1/tasks/{task.id}")
 
@@ -415,6 +422,7 @@ class TestControlPlaneGauntlet:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         r = client.get("/api/v1/control-plane/gauntlet")
 
@@ -445,6 +453,8 @@ class TestControlPlaneGauntlet:
         with daemon._tasks_lock:
             daemon._tasks[failed.id] = failed
             daemon._tasks[queued.id] = queued
+        daemon._task_store.save(failed)
+        daemon._task_store.save(queued)
 
         r = client.get("/api/v1/control-plane/gauntlet?limit=10")
 
@@ -480,6 +490,7 @@ class TestControlPlaneGauntlet:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         work_item = daemon.create_work_item(
             WorkItem(id="wi-91", title="Ship the gate dashboard slice")
@@ -534,6 +545,8 @@ class TestControlPlaneGauntlet:
         with daemon._tasks_lock:
             daemon._tasks[matching.id] = matching
             daemon._tasks[other.id] = other
+        daemon._task_store.save(matching)
+        daemon._task_store.save(other)
 
         r = client.get("/api/v1/control-plane/gauntlet", params={"task_id": "task-match"})
 
@@ -550,6 +563,8 @@ class TestControlPlaneGauntlet:
         with daemon._tasks_lock:
             daemon._tasks[failed.id] = failed
             daemon._tasks[queued.id] = queued
+        daemon._task_store.save(failed)
+        daemon._task_store.save(queued)
 
         r = client.get("/api/v1/control-plane/gauntlet", params={"status": "failed"})
 
@@ -568,6 +583,7 @@ class TestControlPlaneGauntlet:
         )
         with daemon._tasks_lock:
             daemon._tasks[cancelled.id] = cancelled
+        daemon._task_store.save(cancelled)
 
         r = client.get("/api/v1/control-plane/gauntlet")
 
@@ -588,6 +604,7 @@ class TestControlPlaneGauntlet:
         unknown.status = SimpleNamespace(value="mystery")  # type: ignore[assignment]
         with daemon._tasks_lock:
             daemon._tasks[unknown.id] = unknown
+        daemon._task_store.save(unknown)
 
         r = client.get("/api/v1/control-plane/gauntlet")
 
@@ -613,6 +630,7 @@ class TestControlPlaneActions:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         r = client.get("/api/v1/control-plane/gauntlet")
 
@@ -635,6 +653,7 @@ class TestControlPlaneActions:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         r = client.get("/api/v1/control-plane/gauntlet")
 
@@ -658,6 +677,7 @@ class TestControlPlaneActions:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         r = client.get("/api/v1/control-plane/gauntlet")
 
@@ -736,6 +756,7 @@ class TestControlPlaneActions:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         r = client.post(
             "/api/v1/control-plane/gauntlet/stale-cancel/cancel",
@@ -757,6 +778,7 @@ class TestControlPlaneActions:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         r = client.post(
             "/api/v1/control-plane/gauntlet/stale-retry/retry",
@@ -779,6 +801,7 @@ class TestControlPlaneActions:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         r = client.post(
             "/api/v1/control-plane/gauntlet/needs-waiver/waive",
@@ -804,6 +827,7 @@ class TestControlPlaneActions:
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
+        daemon._task_store.save(task)
 
         r = client.post(
             "/api/v1/control-plane/gauntlet/waive-me/waive",

@@ -283,6 +283,9 @@ class TaskStore:
         *,
         limit: int = 100,
         status: TaskStatus | None = None,
+        repo: str | None = None,
+        kind: str | None = None,
+        cursor: datetime | None = None,
         completed_before: datetime | None = None,
     ) -> list[Task]:
         query = "SELECT * FROM tasks"
@@ -291,6 +294,15 @@ class TaskStore:
         if status is not None:
             clauses.append("status = ?")
             args.append(status.value)
+        if repo is not None:
+            clauses.append("(repo = ? OR issue_repo = ?)")
+            args.extend([repo, repo])
+        if kind is not None:
+            clauses.append("kind = ?")
+            args.append(kind)
+        if cursor is not None:
+            clauses.append("created_at < ?")
+            args.append(cursor.isoformat())
         if completed_before is not None:
             clauses.append("completed_at IS NOT NULL AND completed_at < ?")
             args.append(completed_before.isoformat())
@@ -403,9 +415,19 @@ class TaskStore:
         *,
         limit: int = 100,
         status: TaskStatus | None = None,
+        repo: str | None = None,
+        kind: str | None = None,
+        cursor: datetime | None = None,
         completed_before: datetime | None = None,
     ) -> list[Task]:
-        return self._list_sync(limit=limit, status=status, completed_before=completed_before)
+        return self._list_sync(
+            limit=limit,
+            status=status,
+            repo=repo,
+            kind=kind,
+            cursor=cursor,
+            completed_before=completed_before,
+        )
 
     def recover_pending(self) -> list[Task]:
         """Mark stale RUNNING tasks as FAILED; return anything still QUEUED."""
@@ -461,13 +483,23 @@ class TaskStore:
         *,
         limit: int = 100,
         status: TaskStatus | None = None,
+        repo: str | None = None,
+        kind: str | None = None,
+        cursor: datetime | None = None,
         completed_before: datetime | None = None,
     ) -> list[Task]:
         """Non-blocking version of :meth:`list_tasks` for use in async code."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
-            lambda: self._list_sync(limit=limit, status=status, completed_before=completed_before),
+            lambda: self._list_sync(
+                limit=limit,
+                status=status,
+                repo=repo,
+                kind=kind,
+                cursor=cursor,
+                completed_before=completed_before,
+            ),
         )
 
     async def aprune(self, older_than_days: int, *, now: datetime | None = None) -> int:

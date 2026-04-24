@@ -78,10 +78,15 @@ class TestLedger:
     def test_close_terminates_connection(self, ledger: CostLedger) -> None:
         """close() should not raise and should close the sqlite connection."""
         ledger.record(_record(cost=0.01))
+
+        # Get a connection to ensure it is in the pool, and keep a reference
+        conn = ledger._pool.get()
+        ledger._pool.put(conn)
+
         ledger.close()
-        # After close, attempting to use the connection should raise
+        # After close, attempting to use the previously pooled connection should raise
         with pytest.raises(sqlite3.ProgrammingError):
-            ledger._conn.execute("SELECT 1")
+            conn.execute("SELECT 1")
 
 
 class TestAsyncAPI:

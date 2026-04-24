@@ -28,9 +28,7 @@ def mock_ledger(tmp_path: Path) -> CostLedger:
     return CostLedger(tmp_path / "test_ledger.db")
 
 
-def test_estimate_cost_anthropic_models(
-    mock_config: Any, mock_ledger: CostLedger
-) -> None:
+def test_estimate_cost_anthropic_models(mock_config: Any, mock_ledger: CostLedger) -> None:
     """Test cost estimation for Anthropic models."""
     allocator = TokenBudgetAllocator(mock_config, mock_ledger)
 
@@ -56,9 +54,7 @@ def test_estimate_cost_anthropic_models(
     assert opus_cost.cost_usd > sonnet_cost.cost_usd
 
 
-def test_estimate_cost_unknown_model(
-    mock_config: Any, mock_ledger: CostLedger
-) -> None:
+def test_estimate_cost_unknown_model(mock_config: Any, mock_ledger: CostLedger) -> None:
     """Test that unknown models default to free (local)."""
     allocator = TokenBudgetAllocator(mock_config, mock_ledger)
 
@@ -68,9 +64,7 @@ def test_estimate_cost_unknown_model(
     assert unknown_cost.cost_usd == 0.0  # local/unknown models are free
 
 
-def test_check_budget_ok_status(
-    mock_config: Any, mock_ledger: CostLedger
-) -> None:
+def test_check_budget_ok_status(mock_config: Any, mock_ledger: CostLedger) -> None:
     """Test budget check when well under limit."""
     allocator = TokenBudgetAllocator(mock_config, mock_ledger)
 
@@ -83,9 +77,7 @@ def test_check_budget_ok_status(
     assert status.recommended_model == "claude-haiku-4-5"
 
 
-def test_check_budget_with_spending(
-    mock_config: Any, mock_ledger: CostLedger
-) -> None:
+def test_check_budget_with_spending(mock_config: Any, mock_ledger: CostLedger) -> None:
     """Test budget check when some money has been spent."""
     from maxwell_daemon.backends import TokenUsage
 
@@ -108,9 +100,7 @@ def test_check_budget_with_spending(
     assert status.utilization_percent == 50.0
 
 
-def test_check_budget_tight_status(
-    mock_config: Any, mock_ledger: CostLedger
-) -> None:
+def test_check_budget_tight_status(mock_config: Any, mock_ledger: CostLedger) -> None:
     """Test budget check when approaching limit."""
     from maxwell_daemon.backends import TokenUsage
 

@@ -103,6 +103,11 @@ class AgentConfig(BaseModel):
         ge=60,
         description="How often the daemon runs retention pruning while started.",
     )
+    live_retention_seconds: int = Field(
+        600,
+        ge=0,
+        description="How long terminal tasks are kept in the hot memory dict before eviction.",
+    )
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
     temperature: float = Field(1.0, ge=0.0, le=2.0)
     default_backend: str = "claude"

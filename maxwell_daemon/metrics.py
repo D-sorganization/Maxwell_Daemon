@@ -20,7 +20,10 @@ from prometheus_client import (
 
 __all__ = [
     "MAXWELL_COST_FORECAST_USD",
+    "MAXWELL_DAEMON_ACTIVE_TASKS",
+    "MAXWELL_DAEMON_LIVE_TASKS_DICT_SIZE",
     "MAXWELL_FREE_REQUESTS_TOTAL",
+    "MAXWELL_LEDGER_CONNECTIONS_IN_USE",
     "MAXWELL_REQUESTS_TOTAL",
     "MAXWELL_REQUEST_COST",
     "MAXWELL_REQUEST_DURATION",
@@ -65,6 +68,21 @@ MAXWELL_FREE_REQUESTS_TOTAL = Counter(
 MAXWELL_COST_FORECAST_USD = Gauge(
     "maxwell_daemon_cost_forecast_usd",
     "Linear month-end spend forecast from the cost ledger",
+)
+
+MAXWELL_DAEMON_ACTIVE_TASKS = Gauge(
+    "maxwell_daemon_active_tasks",
+    "Number of tasks currently in a non-terminal state",
+)
+
+MAXWELL_DAEMON_LIVE_TASKS_DICT_SIZE = Gauge(
+    "maxwell_daemon_live_tasks_dict_size",
+    "Number of tasks currently held in the hot memory dict",
+)
+
+MAXWELL_LEDGER_CONNECTIONS_IN_USE = Gauge(
+    "maxwell_ledger_connections_in_use",
+    "Number of active SQLite connections in the ledger pool",
 )
 
 

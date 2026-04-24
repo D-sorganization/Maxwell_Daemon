@@ -84,12 +84,11 @@ class TokenBudgetAllocator:
             key = "ollama:*"
 
         prompt_cost, completion_cost = _TOKEN_COST_ESTIMATES.get(
-            key, (0.0, 0.0)  # unknown model; assume free (local)
+            key,
+            (0.0, 0.0),  # unknown model; assume free (local)
         )
 
-        cost = (prompt_tokens * prompt_cost / 1000) + (
-            completion_tokens * completion_cost / 1000
-        )
+        cost = (prompt_tokens * prompt_cost / 1000) + (completion_tokens * completion_cost / 1000)
         return EstimatedCost(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -129,16 +128,17 @@ class TokenBudgetAllocator:
             est = self.estimate_cost(model=model, prompt_tokens=10000, completion_tokens=2000)
             can_afford[model] = est.cost_usd < remaining
 
+        status_val: Literal["ok", "tight", "exhausted"]
         # Recommend cheapest model that fits
         if can_afford.get("claude-haiku-4-5"):
             recommended = "claude-haiku-4-5"
-            status = "ok"
+            status_val = "ok"
         elif can_afford.get("claude-sonnet-4-6"):
             recommended = "claude-sonnet-4-6"
-            status = "tight"
+            status_val = "tight"
         else:
             recommended = "claude-opus-4-7"
-            status = "exhausted" if remaining < 1.0 else "tight"
+            status_val = "exhausted" if remaining < 1.0 else "tight"
 
         return TokenBudgetStatus(
             remaining_budget_usd=remaining,
@@ -147,5 +147,5 @@ class TokenBudgetAllocator:
             utilization_percent=utilization,
             can_afford_model=can_afford,
             recommended_model=recommended,
-            status=status,
+            status=status_val,
         )

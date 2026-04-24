@@ -23,8 +23,11 @@ async code directly, only from thread-pool workers.
 from __future__ import annotations
 
 import asyncio
+import queue
 import sqlite3
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -62,26 +65,56 @@ class CostRecord:
 
 
 class CostLedger:
-    def __init__(self, db_path: Path | str) -> None:
+    def __init__(self, db_path: Path | str, pool_size: int = 5) -> None:
         self._path = Path(db_path).expanduser()
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        # Persistent connection — avoids per-operation open/close overhead.
-        self._conn = sqlite3.connect(
+        self._pool_size = pool_size
+        self._pool: queue.Queue[sqlite3.Connection] = queue.Queue(maxsize=pool_size)
+
+        # Initialize the DB schema using a temporary connection
+        with self._create_conn() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.executescript(_SCHEMA)
+
+        for _ in range(pool_size):
+            self._pool.put_nowait(self._create_conn())
+
+        # threading.Lock guards writes; reads can happen concurrently.
+        self._write_lock = threading.Lock()
+
+        from maxwell_daemon.metrics import MAXWELL_LEDGER_CONNECTIONS_IN_USE
+
+        MAXWELL_LEDGER_CONNECTIONS_IN_USE.set_function(lambda: self._pool_size - self._pool.qsize())
+
+    def _create_conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(
             str(self._path),
             isolation_level=None,  # autocommit
             check_same_thread=False,
+            timeout=30.0,
         )
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.executescript(_SCHEMA)
-        # threading.Lock guards the connection itself; only used from thread-pool
-        # workers dispatched via run_in_executor, never held across await points.
-        self._lock = threading.Lock()
+        conn.execute("PRAGMA busy_timeout=30000")
+        return conn
+
+    @contextmanager
+    def _get_conn(self) -> Iterator[sqlite3.Connection]:
+        try:
+            conn = self._pool.get_nowait()
+        except queue.Empty:
+            conn = self._create_conn()
+        try:
+            yield conn
+        finally:
+            try:
+                self._pool.put_nowait(conn)
+            except queue.Full:
+                conn.close()
 
     # ── Sync helpers (called inside thread-pool workers) ─────────────────────
 
     def _record_sync(self, rec: CostRecord) -> None:
-        with self._lock:
-            self._conn.execute(
+        with self._write_lock, self._get_conn() as conn:
+            conn.execute(
                 """
                 INSERT INTO cost_records
                   (ts, backend, model, repo, agent_id,
@@ -102,16 +135,16 @@ class CostLedger:
             )
 
     def _total_since_sync(self, since: datetime) -> float:
-        with self._lock:
-            row = self._conn.execute(
+        with self._get_conn() as conn:
+            row = conn.execute(
                 "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_records WHERE ts >= ?",
                 (since.isoformat(),),
             ).fetchone()
         return float(row[0])
 
     def _by_backend_sync(self, since: datetime) -> dict[str, float]:
-        with self._lock:
-            rows = self._conn.execute(
+        with self._get_conn() as conn:
+            rows = conn.execute(
                 """
                 SELECT backend, COALESCE(SUM(cost_usd), 0)
                 FROM cost_records WHERE ts >= ? GROUP BY backend
@@ -124,8 +157,8 @@ class CostLedger:
         if older_than_days < 0:
             raise ValueError(f"older_than_days must be >= 0, got {older_than_days}")
         cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=older_than_days)
-        with self._lock:
-            cursor = self._conn.execute(
+        with self._write_lock, self._get_conn() as conn:
+            cursor = conn.execute(
                 "DELETE FROM cost_records WHERE ts < ?",
                 (cutoff.isoformat(),),
             )
@@ -200,5 +233,9 @@ class CostLedger:
 
     def close(self) -> None:
         """Close the persistent connection. Call on daemon shutdown."""
-        with self._lock:
-            self._conn.close()
+        while not self._pool.empty():
+            try:
+                conn = self._pool.get_nowait()
+                conn.close()
+            except queue.Empty:
+                break
