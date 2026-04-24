@@ -45,7 +45,7 @@ from maxwell_daemon.api.validation import (
     TaskIdField,
 )
 from maxwell_daemon.audit import AuditLogger
-from maxwell_daemon.auth import JWTConfig, Role
+from maxwell_daemon.auth import JWTConfig, Role, is_jwt_auth_failure
 from maxwell_daemon.backends import BackendManifest, registry
 from maxwell_daemon.config.loader import _default_secret_store, save_config
 from maxwell_daemon.config.models import BackendConfig
@@ -712,8 +712,6 @@ def _make_rbac_dep(
         try:
             claims = jwt_config.decode_token(raw)
         except Exception as exc:
-            import jwt
-
             if audit:
                 audit.log_auth_decision(
                     subject="unknown",
@@ -721,7 +719,7 @@ def _make_rbac_dep(
                     endpoint=request.url.path,
                     outcome="fail_invalid_token",
                 )
-            if isinstance(exc, jwt.PyJWTError):
+            if is_jwt_auth_failure(exc):
                 log.warning("Auth failure: %s", exc, exc_info=False)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
