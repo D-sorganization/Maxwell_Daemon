@@ -29,6 +29,11 @@ from maxwell_daemon.core.delegate_lifecycle import (
 )
 from maxwell_daemon.core.ledger import CostLedger, CostRecord
 from maxwell_daemon.core.repo_overrides import RepoOverrides, resolve_overrides
+from maxwell_daemon.core.token_budget import (
+    EstimatedCost,
+    TokenBudgetAllocator,
+    TokenBudgetStatus,
+)
 from maxwell_daemon.core.resource_broker import (
     CapabilityProfile,
     QuotaSnapshot,
@@ -81,6 +86,7 @@ __all__ = [
     "DelegateSessionSnapshot",
     "DelegateSessionStatus",
     "DelegateSessionStore",
+    "EstimatedCost",
     "HandoffArtifact",
     "LeaseRecoveryPolicy",
     "PolicyDecision",
@@ -92,6 +98,8 @@ __all__ = [
     "RoutingDecision",
     "RoutingPolicy",
     "TaskWorkspace",
+    "TokenBudgetAllocator",
+    "TokenBudgetStatus",
     "WorkspaceCheckpoint",
     "WorkspaceService",
     "WorkspaceStatus",
