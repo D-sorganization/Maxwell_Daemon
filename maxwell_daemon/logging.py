@@ -25,6 +25,7 @@ __all__ = ["bind_context", "configure_logging", "get_logger"]
 
 _REDACT_KEYS = {"api_key", "password", "token", "secret", "authorization"}
 
+
 def _redact_value(val: Any) -> Any:
     if not isinstance(val, str):
         return "***"
@@ -32,14 +33,13 @@ def _redact_value(val: Any) -> Any:
         return "***"
     return f"{val[:8]}...{val[-4:]}"
 
+
 def _redact_secrets_processor(
-    logger: structlog.types.WrappedLogger,
-    name: str,
-    event_dict: structlog.types.EventDict
+    logger: structlog.types.WrappedLogger, name: str, event_dict: structlog.types.EventDict
 ) -> structlog.types.EventDict:
     if os.environ.get("MAXWELL_REDACT_LOGS", "1") != "1":
         return event_dict
-    
+
     for key, value in event_dict.items():
         if any(redact_key in key.lower() for redact_key in _REDACT_KEYS):
             event_dict[key] = _redact_value(value)

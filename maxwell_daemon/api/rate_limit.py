@@ -196,11 +196,11 @@ def install_rate_limiter(
                 status_code=429,
                 headers={"Retry-After": str(retry)},
             )
-            
+
         response = await call_next(request)
         if response.status_code == 401:
             limiter.consume(key, group="auth_failures", amount=1.0)
-            
+
         return response
 
     return limiter

@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-import logging
-from maxwell_daemon.logging import get_logger
 import signal
 import threading
 import uuid
@@ -57,12 +55,15 @@ from maxwell_daemon.director import (
 )
 from maxwell_daemon.events import Event, EventBus, EventKind, attach_observability
 from maxwell_daemon.fleet.capabilities import InMemoryFleetCapabilityRegistry
+from maxwell_daemon.logging import get_logger
 from maxwell_daemon.metrics import record_request
 
 log = get_logger("maxwell_daemon.daemon")
 
+
 class QueueSaturationError(Exception):
     """Raised when the priority queue is full and cannot accept more tasks."""
+
     def __init__(self, message: str, backoff_seconds: int = 60) -> None:
         super().__init__(message)
         self.backoff_seconds = backoff_seconds
@@ -517,19 +518,23 @@ class Daemon:
         item = (priority, task)
         if self._queue.full():
             log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
-            raise QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60)
-        
+            raise QueueSaturationError(
+                "Task queue is full, please try again later", backoff_seconds=60
+            )
+
         if self._loop is None or not self._loop.is_running():
             try:
                 self._queue.put_nowait(item)
             except asyncio.QueueFull:
-                raise QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60)
+                raise QueueSaturationError(
+                    "Task queue is full, please try again later", backoff_seconds=60
+                ) from None
             return
         try:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
             running_loop = None
-            
+
         if running_loop is self._loop:
             # If we are on the event loop thread, we might be inside a signal handler.
             # Mutating the PriorityQueue inline can corrupt the heap if the signal
@@ -539,6 +544,7 @@ class Daemon:
                     self._queue.put_nowait(item)
                 except asyncio.QueueFull:
                     log.error("Queue saturated inline; dropped task %s", getattr(task, "id", None))
+
             self._loop.call_soon_threadsafe(_put_inline)
             return
 
@@ -548,7 +554,11 @@ class Daemon:
             try:
                 self._queue.put_nowait(item)
             except asyncio.QueueFull:
-                result.set_exception(QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60))
+                result.set_exception(
+                    QueueSaturationError(
+                        "Task queue is full, please try again later", backoff_seconds=60
+                    )
+                )
             except BaseException as exc:  # pragma: no cover - surfaced via Future
                 result.set_exception(exc)
             else:

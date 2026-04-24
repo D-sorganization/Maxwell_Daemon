@@ -235,9 +235,7 @@ class TestBearerTokenRedaction:
         obj = json.loads(log_path.read_text())
         assert obj["details"]["auth"] == "Bearer ***"
 
-    def test_audit_redacts_nested(
-        self, logger: AuditLogger, log_path: Path
-    ) -> None:
+    def test_audit_redacts_nested(self, logger: AuditLogger, log_path: Path) -> None:
         details = {
             "request": {
                 "headers": {
