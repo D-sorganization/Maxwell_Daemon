@@ -56,6 +56,7 @@ def daemon(
         artifact_store_path=tmp_path / "artifacts.db",
         artifact_blob_root=tmp_path / "artifacts",
         action_store_path=tmp_path / "actions.db",
+        delegate_lifecycle_store_path=tmp_path / "delegate_sessions.db",
     )
     loop.run_until_complete(d.start(worker_count=1))
     try:
