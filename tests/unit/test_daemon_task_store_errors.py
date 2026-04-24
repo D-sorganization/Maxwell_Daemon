@@ -74,6 +74,7 @@ class TestTaskStoreErrorLogging:
 
         import structlog
         from structlog.testing import LogCapture
+
         cap_structlog = LogCapture()
         structlog.configure(processors=[cap_structlog])
 
@@ -90,7 +91,9 @@ class TestTaskStoreErrorLogging:
 
         _run(body())
 
-        matched = [r for r in cap_structlog.entries if "task store write failed" in str(r.get("event", ""))]
+        matched = [
+            r for r in cap_structlog.entries if "task store write failed" in str(r.get("event", ""))
+        ]
         assert matched, "expected 'task store write failed' log"
 
 
