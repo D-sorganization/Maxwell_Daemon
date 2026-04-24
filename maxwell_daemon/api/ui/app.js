@@ -255,8 +255,19 @@ async function refreshAll() {
 
 function updateStatusResources(costOverride) {
   const taskCount = state.allTasks.size || state.tasks.size;
-  const running = [...state.allTasks.values()].filter((t) => t.status === "running").length;
-  const totalCost = costOverride ?? [...state.allTasks.values()].reduce((s, t) => s + (t.cost_usd || 0), 0);
+
+  // ⚡ Bolt: Use a single pass over Map.values() instead of spreading to arrays twice
+  // O(N) array allocation avoided, reducing GC pressure during rapid UI updates
+  let running = 0;
+  let totalCost = 0;
+  for (const t of state.allTasks.values()) {
+    if (t.status === "running") running++;
+    if (costOverride === undefined) totalCost += (t.cost_usd || 0);
+  }
+  if (costOverride !== undefined) {
+    totalCost = costOverride;
+  }
+
   const el = document.getElementById("status-resources");
   if (el) el.textContent = `Tasks ${taskCount} | Running ${running} | Cost ${fmtUsdShort(totalCost)}`;
 }
@@ -268,10 +279,17 @@ async function fetchCostDetail() {
   const detailEl = document.getElementById("cost-summary-detail");
   const byBackend = body.by_backend || {};
   const total = body.month_to_date_usd || 0;
-  const taskCount = [...state.allTasks.values()].length;
-  const avgCost = taskCount > 0
-    ? [...state.allTasks.values()].reduce((s, t) => s + (t.cost_usd || 0), 0) / taskCount
-    : 0;
+
+  // ⚡ Bolt: Use size instead of spreading to an array and getting length.
+  // Then use a for...of loop instead of spreading to an array for reduce.
+  const taskCount = state.allTasks.size;
+  let totalTasksCost = 0;
+  if (taskCount > 0) {
+    for (const t of state.allTasks.values()) {
+      totalTasksCost += (t.cost_usd || 0);
+    }
+  }
+  const avgCost = taskCount > 0 ? totalTasksCost / taskCount : 0;
 
   detailEl.innerHTML = `
     <div class="cost-stat">
@@ -907,12 +925,20 @@ function renderTasks() {
   const sorted = [...state.tasks.values()].sort(
     (a, b) => a.created_at < b.created_at ? 1 : (a.created_at > b.created_at ? -1 : 0)
   );
+
+  // ⚡ Bolt: Replace O(n²) nested loop lookup with O(n) hash map lookup.
+  // Pre-compute control plane map for O(1) lookups during rendering.
+  const controlPlaneMap = new Map();
+  for (const item of state.controlPlane) {
+    if (item.task_id) controlPlaneMap.set(item.task_id, item);
+  }
+
   // ⚡ Bolt: Batch DOM insertions using DocumentFragment to prevent layout thrashing.
   const fragment = document.createDocumentFragment();
   for (const t of sorted) {
     const tr = document.createElement("tr");
     tr.dataset.id = t.id;
-    const controlPlane = controlPlaneByTaskId(t.id);
+    const controlPlane = controlPlaneMap.get(t.id) || null;
     const delegate = controlPlane?.delegates?.[0] || null;
     const target = t.issue_repo
       ? `${t.issue_repo}#${t.issue_number}`
@@ -1552,6 +1578,7 @@ function wireKindSwitch() {
 async function submitNewTask(ev) {
   ev.preventDefault();
   const errEl = document.getElementById("new-task-error");
+  const submitBtn = document.getElementById("new-task-submit");
   errEl.hidden = true;
 
   const kind = document.querySelector('input[name="kind"]:checked').value;
@@ -1581,6 +1608,9 @@ async function submitNewTask(ev) {
     body = { prompt };
   }
 
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Dispatching...";
+
   try {
     const r = await fetch(url, {
       method: "POST",
@@ -1597,6 +1627,9 @@ async function submitNewTask(ev) {
     errEl.textContent = `Network error: ${e.message}`;
     errEl.hidden = false;
     return;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Dispatch";
   }
 
   closeNewTaskDialog();

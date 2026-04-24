@@ -78,7 +78,18 @@ class TestLedger:
     def test_close_is_noop(self, ledger: CostLedger) -> None:
         """close() should be a safe no-op in the new multi-connection model."""
         ledger.record(_record(cost=0.01))
+
+        # Get a connection to ensure it is in the pool, and keep a reference
+        conn = ledger._pool.get()
+        ledger._pool.put(conn)
+
         ledger.close()
+<<<<<<< HEAD
+=======
+        # After close, attempting to use the previously pooled connection should raise
+        with pytest.raises(sqlite3.ProgrammingError):
+            conn.execute("SELECT 1")
+>>>>>>> origin/main
 
 
 class TestAsyncAPI:

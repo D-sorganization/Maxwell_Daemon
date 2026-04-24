@@ -123,6 +123,15 @@ class OllamaBackend(ILLMBackend):
         except Exception:
             return False
 
+    async def list_models(self) -> list[str]:
+        try:
+            r = await self._client.get(f"{self._endpoint}/api/tags", timeout=5.0)
+            r.raise_for_status()
+            data = r.json()
+            return [m["name"] for m in data.get("models", [])]
+        except Exception:
+            return []
+
     def capabilities(self, model: str) -> BackendCapabilities:
         # Context varies per model; 8K is a conservative default. Users can override
         # via the model's Modelfile and query /api/show for the real value.

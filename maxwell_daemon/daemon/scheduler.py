@@ -23,8 +23,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import logging
-from maxwell_daemon.logging import get_logger
 import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,6 +30,7 @@ from typing import Any
 
 from maxwell_daemon.contracts import require
 from maxwell_daemon.gh.discovery import DiscoveryFilter, discover_issues
+from maxwell_daemon.logging import get_logger
 
 __all__ = [
     "DiscoveryRepoSpec",

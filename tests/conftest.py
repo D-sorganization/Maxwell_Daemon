@@ -6,6 +6,7 @@ behavior rather than scaffolding.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
@@ -155,3 +156,14 @@ def dual_backend_config(register_recording_backend: None) -> MaxwellDaemonConfig
 @pytest.fixture
 def isolated_ledger_path(tmp_path: Path) -> Path:
     return tmp_path / "ledger.db"
+
+
+@pytest.fixture(autouse=True)
+def _structlog_test_config() -> Iterator[None]:
+    structlog.configure(
+        wrapper_class=structlog.make_filtering_bound_logger(logging.DEBUG),
+        logger_factory=structlog.stdlib.LoggerFactory(),
+    )
+    yield
+    structlog.reset_defaults()
+    logging.getLogger().handlers.clear()

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import threading
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,9 @@ class _ThreadBoundQueue:
             raise RuntimeError("queue mutation happened off the daemon loop thread")
         self.items.append(item)
         self.put_event.set()
+
+    def full(self) -> bool:
+        return False
 
 
 class TestTasksDictThreadSafety:
@@ -178,6 +182,8 @@ class TestTasksDictThreadSafety:
         def _submit(_: int) -> None:
             try:
                 d.submit("hi")
+            except QueueSaturationError:
+                pass
             except BaseException as e:
                 errors.append(e)
 
@@ -219,6 +225,7 @@ class TestTasksDictThreadSafety:
 
         def _writer() -> None:
             nonlocal stop
+<<<<<<< HEAD
             while not stop:
                 try:
                     d.submit("hi")
@@ -228,6 +235,14 @@ class TestTasksDictThreadSafety:
                 except BaseException as e:
                     errors.append(e)
                     break
+=======
+            try:
+                while not stop:
+                    with contextlib.suppress(QueueSaturationError):
+                        d.submit("hi")
+            except BaseException as e:
+                errors.append(e)
+>>>>>>> origin/main
 
         def _reader() -> None:
             try:

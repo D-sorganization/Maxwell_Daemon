@@ -22,13 +22,13 @@ The module is intentionally decoupled from FastAPI: ``JWTConfig`` and
 
 from __future__ import annotations
 
-import logging
-from maxwell_daemon.logging import get_logger
 import secrets
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Annotated, Any
 from uuid import uuid4
+
+from maxwell_daemon.logging import get_logger
 
 __all__ = [
     "JWTConfig",
@@ -66,12 +66,15 @@ class Role(str, Enum):
 class TokenClaims:
     """Decoded, validated JWT claims."""
 
-    def __init__(self, sub: str, role: Role, exp: datetime, *, iat: datetime, jti: str) -> None:
+    def __init__(
+        self, sub: str, role: Role, exp: datetime, *, iat: datetime, jti: str, typ: str = "access"
+    ) -> None:
         self.sub = sub
         self.role = role
         self.exp = exp
         self.iat = iat
         self.jti = jti
+        self.typ = typ
 
     def has_role(self, minimum: Role) -> bool:
         return self.role.can(minimum)
@@ -125,7 +128,12 @@ class JWTConfig:
         extra_claims: dict[str, Any] | None = None,
     ) -> str:
         """Issue a signed JWT for *subject* with *role*."""
-        import jwt  # PyJWT
+        try:
+            import jwt  # PyJWT
+        except ImportError as exc:
+            raise ImportError(
+                "PyJWT is required to create tokens. Install maxwell-daemon[auth]."
+            ) from exc
 
         if extra_claims is not None:
             reserved = _RESERVED_CLAIMS.intersection(extra_claims)
@@ -152,7 +160,12 @@ class JWTConfig:
         Raises ``jwt.InvalidTokenError`` (or a subclass) on any failure:
         expired, bad signature, missing claims, unknown role, etc.
         """
-        import jwt  # PyJWT
+        try:
+            import jwt  # PyJWT
+        except ImportError as exc:
+            raise ImportError(
+                "PyJWT is required to decode tokens. Install maxwell-daemon[auth]."
+            ) from exc
 
         payload = jwt.decode(
             token,
@@ -172,7 +185,8 @@ class JWTConfig:
         exp_ts: int | float = payload.get("exp", 0)
         iat = datetime.fromtimestamp(iat_ts, tz=timezone.utc)
         exp = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
-        return TokenClaims(sub=sub, role=role, exp=exp, iat=iat, jti=jti)
+        typ: str = payload.get("typ", "access")
+        return TokenClaims(sub=sub, role=role, exp=exp, iat=iat, jti=jti, typ=typ)
 
 
 def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:

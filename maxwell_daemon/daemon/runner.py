@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-import logging
-from maxwell_daemon.logging import get_logger
 import signal
 import threading
 import uuid
@@ -43,6 +41,7 @@ from maxwell_daemon.core import (
     CostRecord,
 )
 from maxwell_daemon.core.action_store import ActionStore
+from maxwell_daemon.core.auth_session_store import AuthSessionStore
 from maxwell_daemon.core.delegate_lifecycle import DelegateLifecycleService, DelegateSessionStore
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.core.work_item_store import WorkItemStore
@@ -57,12 +56,15 @@ from maxwell_daemon.director import (
 )
 from maxwell_daemon.events import Event, EventBus, EventKind, attach_observability
 from maxwell_daemon.fleet.capabilities import InMemoryFleetCapabilityRegistry
+from maxwell_daemon.logging import get_logger
 from maxwell_daemon.metrics import record_request
 
 log = get_logger("maxwell_daemon.daemon")
 
+
 class QueueSaturationError(Exception):
     """Raised when the priority queue is full and cannot accept more tasks."""
+
     def __init__(self, message: str, backoff_seconds: int = 60) -> None:
         super().__init__(message)
         self.backoff_seconds = backoff_seconds
@@ -87,6 +89,15 @@ class DuplicateTaskIdError(ValueError):
 
 
 @dataclass
+class Attachment:
+    kind: str
+    uri: str
+    content_type: str
+    size: int
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class Task:
     id: str
     prompt: str
@@ -101,8 +112,12 @@ class Task:
     issue_mode: str | None = None  # "plan" | "implement"
     # A/B grouping: sibling tasks share an ab_group so the UI pairs them.
     ab_group: str | None = None
+    # DAG dependencies: list of task IDs that must reach COMPLETED before this
+    # task is allowed to start.  An empty list (the default) means "no deps".
+    depends_on: list[str] = field(default_factory=list)
     # Priority: lower number = higher priority. 0=emergency, 50=high, 100=normal, 200=batch.
     priority: int = 100
+    attachments: list[Attachment] = field(default_factory=list)
     status: TaskStatus = TaskStatus.QUEUED
     result: str | None = None
     error: str | None = None
@@ -124,6 +139,7 @@ class Task:
         return (self.priority, self.created_at) < (other.priority, other.created_at)
 
 
+<<<<<<< HEAD
 @dataclass(slots=True, frozen=True)
 class ConfigSnapshot:
     """Immutable view of the daemon configuration and its active collaborators.
@@ -135,6 +151,14 @@ class ConfigSnapshot:
     config: MaxwellDaemonConfig
     router: BackendRouter
     ledger: CostLedger
+=======
+@dataclass(frozen=True, slots=True)
+class ConfigSnapshot:
+    """Frozen execution collaborators captured when a worker claims a task."""
+
+    config: MaxwellDaemonConfig
+    router: BackendRouter
+>>>>>>> origin/main
     budget: BudgetEnforcer
 
 
@@ -166,18 +190,25 @@ class Daemon:
         artifact_blob_root: Path | None = None,
         action_store_path: Path | None = None,
         delegate_lifecycle_store_path: Path | None = None,
+        auth_store_path: Path | None = None,
     ) -> None:
         self._config = config
         # Path used for hot-reload; populated by from_config_path.
         self._config_path: Path | None = config_path
-        # Protects atomic swap of _config and _router during reload.
+        # Protects atomic swap of _config, _budget, and _router during reload.
         self._config_lock = threading.Lock()
-        self._router = BackendRouter(config)
+
+        from maxwell_daemon.mcp.client import McpClientManager
+
+        self._mcp_manager = McpClientManager(config.mcp_servers)
+
+
         self._fleet_registry = InMemoryFleetCapabilityRegistry()
         self._ledger = CostLedger(
             ledger_path or Path.home() / ".local/share/maxwell-daemon/ledger.db"
         )
         self._budget = BudgetEnforcer(config.budget, self._ledger)
+        self._router = BackendRouter(config, mcp_manager=self._mcp_manager, budget=self._budget)
         self._events = EventBus()
         self._workspace_root = (
             workspace_root or Path.home() / ".local/share/maxwell-daemon/workspaces"
@@ -216,6 +247,11 @@ class Daemon:
         self._delegate_lifecycle = DelegateLifecycleService(
             DelegateSessionStore(default_delegate_store)
         )
+
+        default_auth_store = auth_store_path or (
+            Path.home() / ".local/share/maxwell-daemon/auth_sessions.db"
+        )
+        self._auth_store = AuthSessionStore(default_auth_store)
         # Memory store — co-located with the ledger for easy backup.
         from maxwell_daemon.memory import (
             EpisodicStore,
@@ -287,10 +323,11 @@ class Daemon:
     def reload_config(self) -> Path:
         """Reload configuration from disk and swap atomically.
 
-        Thread-safe: acquires ``_config_lock`` before updating ``_config`` and
-        ``_router`` so in-flight workers always see a consistent pair. Running
-        workers are *not* interrupted — they complete with the old config and
-        new tasks pick up the new config automatically.
+        Thread-safe: acquires ``_config_lock`` before updating ``_config``,
+        ``_budget``, and ``_router`` so in-flight workers always see a
+        consistent snapshot. Running workers are *not* interrupted — they
+        complete with the old collaborators and new tasks pick up the new
+        config automatically.
 
         Returns the path that was reloaded.
 
@@ -301,6 +338,7 @@ class Daemon:
         path = self._config_path or default_config_path()
         # Validate first (outside the lock) so we never swap in a bad config.
         new_config = load_config(path)
+<<<<<<< HEAD
         new_router = BackendRouter(new_config)
 
         # Detect fields requiring restart
@@ -314,8 +352,13 @@ class Daemon:
         if new_config.memory.workspace_path != self._config.memory.workspace_path:
             reasons.append("memory.workspace_path changed")
 
+=======
+        new_budget = BudgetEnforcer(new_config.budget, self._ledger)
+        new_router = BackendRouter(new_config, budget=new_budget)
+>>>>>>> origin/main
         with self._config_lock:
             self._config = new_config
+            self._budget = new_budget
             self._router = new_router
             self._budget = BudgetEnforcer(new_config.budget, self._ledger)
             if hasattr(self, "_actions"):
@@ -328,6 +371,14 @@ class Daemon:
                 self._restart_required_reasons.extend(reasons)
         log.info("config reloaded from %s", path)
         return path
+
+    def _capture_config_snapshot(self) -> ConfigSnapshot:
+        with self._config_lock:
+            return ConfigSnapshot(
+                config=self._config,
+                router=self._router,
+                budget=self._budget,
+            )
 
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
@@ -348,14 +399,18 @@ class Daemon:
         elif role == "worker":
             # Worker: accepts tasks via REST API and executes locally — no discovery.
             self._worker_count = worker_count
-            for i in range(worker_count):
-                self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
-            log.info("daemon started as worker with %d workers", worker_count)
+            self._workers = [
+                asyncio.create_task(self._worker_loop(i), name=f"AgentWorker-{i}")
+                for i in range(self._worker_count)
+            ]
+            await self._mcp_manager.start()
+            log.info("Daemon workers started", workers=self._worker_count)
         else:
             # Standalone (default): run local workers.
             self._worker_count = worker_count
             for i in range(worker_count):
                 self._workers.append(asyncio.create_task(self._worker_loop(i), name=f"worker-{i}"))
+            await self._mcp_manager.start()
             log.info("daemon started (standalone) with %d workers", worker_count)
 
         # Install SIGUSR1 handler for config hot-reload (Unix only).
@@ -453,7 +508,14 @@ class Daemon:
             await asyncio.gather(*self._bg_tasks, return_exceptions=True)
             self._bg_tasks.clear()
 
-        log.info("daemon stopped")
+        if getattr(self, "_memory", None) is not None:
+            close_method = getattr(self._memory, "aclose", None)
+            if close_method is not None:
+                await close_method()
+
+        await self._mcp_manager.stop()
+
+        log.info("Daemon shut down")
 
     def prune_retained_history(self, older_than_days: int | None = None) -> dict[str, int]:
         """Prune terminal tasks and ledger rows older than the retention window."""
@@ -592,19 +654,23 @@ class Daemon:
         item = (priority, task)
         if self._queue.full():
             log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
-            raise QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60)
-        
+            raise QueueSaturationError(
+                "Task queue is full, please try again later", backoff_seconds=60
+            )
+
         if self._loop is None or not self._loop.is_running():
             try:
                 self._queue.put_nowait(item)
-            except asyncio.QueueFull:
-                raise QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60)
+            except asyncio.QueueFull as exc:
+                raise QueueSaturationError(
+                    "Task queue is full, please try again later", backoff_seconds=60
+                ) from exc
             return
         try:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
             running_loop = None
-            
+
         if running_loop is self._loop:
             # If we are on the event loop thread, we might be inside a signal handler.
             # Mutating the PriorityQueue inline can corrupt the heap if the signal
@@ -614,11 +680,15 @@ class Daemon:
                     self._queue.put_nowait(item)
                 except asyncio.QueueFull:
                     log.error("Queue saturated inline; dropped task %s", getattr(task, "id", None))
+<<<<<<< HEAD
                     if task is not None and getattr(task, "id", None):
                         with self._tasks_lock:
                             self._tasks.pop(task.id, None)
                         if hasattr(self._task_store, "delete"):
                             self._task_store.delete(task.id)
+=======
+
+>>>>>>> origin/main
             self._loop.call_soon_threadsafe(_put_inline)
             return
 
@@ -628,7 +698,11 @@ class Daemon:
             try:
                 self._queue.put_nowait(item)
             except asyncio.QueueFull:
-                result.set_exception(QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60))
+                result.set_exception(
+                    QueueSaturationError(
+                        "Task queue is full, please try again later", backoff_seconds=60
+                    )
+                )
             except BaseException as exc:  # pragma: no cover - surfaced via Future
                 result.set_exception(exc)
             else:
@@ -646,8 +720,22 @@ class Daemon:
         model: str | None = None,
         priority: int = 100,
         task_id: str | None = None,
+        depends_on: list[str] | None = None,
+        attachments: list[Attachment] | None = None,
     ) -> Task:
         resolved_task_id = task_id or uuid.uuid4().hex[:12]
+
+        if len(prompt) > 50000:
+            main_req = prompt[:10000]
+            remainder = prompt[10000:]
+            artifact = self._artifact_store.put_text(
+                kind=ArtifactKind.METADATA,
+                name="prompt_overflow.txt",
+                text=remainder,
+                task_id=resolved_task_id,
+            )
+            prompt = f"{main_req}\n\n[PROMPT TRUNCATED. Remainder stored in artifact_id:///{artifact.id}]"
+
         task = Task(
             id=resolved_task_id,
             prompt=self._offload_prompt_if_needed(resolved_task_id, prompt),
@@ -656,6 +744,8 @@ class Daemon:
             backend=backend,
             model=model,
             priority=priority,
+            depends_on=list(depends_on) if depends_on else [],
+            attachments=list(attachments) if attachments else [],
         )
         # Persist and track the task under lock, then route the queue mutation
         # through the daemon loop if this caller is on a foreign thread.
@@ -667,9 +757,14 @@ class Daemon:
             try:
                 self._enqueue_task_entry(task.priority, task)
             except QueueSaturationError:
+<<<<<<< HEAD
                 self._tasks.pop(task.id, None)
                 if hasattr(self._task_store, "delete"):
                     self._task_store.delete(task.id)
+=======
+                del self._tasks[task.id]
+                self._task_store.delete(task.id)
+>>>>>>> origin/main
                 raise
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
         # submits before start()), skip the event — the queued state is
@@ -703,6 +798,7 @@ class Daemon:
         repo: str | None = None,
         backend: str | None = None,
         model: str | None = None,
+        attachments: list[Attachment] | None = None,
     ) -> Task:
         """Enqueue a prompt task from any thread. **Cross-thread safe.**
 
@@ -717,18 +813,39 @@ class Daemon:
         """
         if self._loop is None:
             raise RuntimeError("daemon must be started before submit_threadsafe()")
+<<<<<<< HEAD
         task_id = uuid.uuid4().hex[:12]
         task = Task(
             id=task_id,
             prompt=self._offload_prompt_if_needed(task_id, prompt),
+=======
+
+        resolved_task_id = uuid.uuid4().hex[:12]
+        if len(prompt) > 50000:
+            main_req = prompt[:10000]
+            remainder = prompt[10000:]
+            artifact = self._artifact_store.put_text(
+                kind=ArtifactKind.METADATA,
+                name="prompt_overflow.txt",
+                text=remainder,
+                task_id=resolved_task_id,
+            )
+            prompt = f"{main_req}\n\n[PROMPT TRUNCATED. Remainder stored in artifact_id:///{artifact.id}]"
+
+        task = Task(
+            id=resolved_task_id,
+            prompt=prompt,
+>>>>>>> origin/main
             kind=TaskKind.PROMPT,
             repo=repo,
             backend=backend,
             model=model,
+            attachments=list(attachments) if attachments else [],
         )
         self._task_store.save(task)
         with self._tasks_lock:
             self._tasks[task.id] = task
+<<<<<<< HEAD
         try:
             self._enqueue_task_entry(task.priority, task)
         except QueueSaturationError:
@@ -737,6 +854,14 @@ class Daemon:
             if hasattr(self._task_store, "delete"):
                 self._task_store.delete(task.id)
             raise
+=======
+            try:
+                self._enqueue_task_entry(task.priority, task)
+            except QueueSaturationError:
+                del self._tasks[task.id]
+                self._task_store.delete(task.id)
+                raise
+>>>>>>> origin/main
         return task
 
     def _offload_prompt_if_needed(self, task_id: str, prompt: str) -> str:
@@ -776,6 +901,7 @@ class Daemon:
         model: str | None = None,
         priority: int = 100,
         task_id: str | None = None,
+        attachments: list[Attachment] | None = None,
     ) -> Task:
         """Queue a task that reads a GitHub issue and opens a draft PR for it."""
         if mode not in {"plan", "implement"}:
@@ -792,6 +918,7 @@ class Daemon:
             issue_number=issue_number,
             issue_mode=mode,
             priority=priority,
+            attachments=list(attachments) if attachments else [],
         )
         # See note in submit(): queue mutation must stay loop-affine once the
         # daemon has started.
@@ -803,9 +930,14 @@ class Daemon:
             try:
                 self._enqueue_task_entry(task.priority, task)
             except QueueSaturationError:
+<<<<<<< HEAD
                 self._tasks.pop(task.id, None)
                 if hasattr(self._task_store, "delete"):
                     self._task_store.delete(task.id)
+=======
+                del self._tasks[task.id]
+                self._task_store.delete(task.id)
+>>>>>>> origin/main
                 raise
         try:
             loop = asyncio.get_running_loop()
@@ -1461,6 +1593,26 @@ class Daemon:
             with self._tasks_lock:
                 if task.status is not TaskStatus.QUEUED:
                     continue
+                # DAG dependency check: if any upstream task is not yet in a
+                # terminal-success state, requeue and wait for the next tick.
+                if task.depends_on:
+                    unfinished = [
+                        dep
+                        for dep in task.depends_on
+                        if self._tasks.get(dep, None) is None
+                        or self._tasks[dep].status is not TaskStatus.COMPLETED
+                    ]
+                    if unfinished:
+                        log.debug(
+                            "task %s waiting for dependencies %s; re-queuing",
+                            task.id,
+                            unfinished,
+                        )
+                        # Re-enqueue without changing status so the task stays QUEUED
+                        # and will be retried once the dependencies finish.
+                        self._queue.put_nowait((task.priority, task))
+                        self._queue.task_done()
+                        continue
                 task.status = TaskStatus.RUNNING
                 task.started_at = datetime.now(timezone.utc)
             with bind_context(task_id=task.id, worker_id=worker_id):
@@ -1486,6 +1638,7 @@ class Daemon:
                             task.started_at = None
                     await self._queue.put((task.priority, task))
                     continue
+<<<<<<< HEAD
                 with self._config_lock:
                     snapshot = ConfigSnapshot(
                         config=self._config,
@@ -1493,6 +1646,9 @@ class Daemon:
                         ledger=self._ledger,
                         budget=self._budget,
                     )
+=======
+                snapshot = self._capture_config_snapshot()
+>>>>>>> origin/main
                 await self._execute(task, snapshot)
 
     async def _execute(self, task: Task, snapshot: ConfigSnapshot) -> None:
@@ -1515,10 +1671,13 @@ class Daemon:
                 )
             )
             snapshot.budget.require_under_budget()
+<<<<<<< HEAD
             from maxwell_daemon.core.cost_evaluator import CostEvaluator
             evaluator = CostEvaluator(snapshot)
             choice = evaluator.choose_model(task)
             
+=======
+>>>>>>> origin/main
             decision = snapshot.router.route(
                 repo=task.repo,
                 backend_override=task.backend,
@@ -1572,6 +1731,7 @@ class Daemon:
                 model=decision.model,
                 status="success",
                 tokens=resp.usage.total_tokens,
+                cached_tokens=resp.usage.cached_tokens,
                 cost_usd=task.cost_usd,
                 duration_seconds=(datetime.now(timezone.utc) - task.started_at).total_seconds(),
             )
@@ -1792,11 +1952,11 @@ class Daemon:
 
 def main() -> None:
     """Run the daemon standalone (systemd entrypoint)."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    from maxwell_daemon.logging import configure_logging
+
     daemon = Daemon.from_config_path()
+    log_file = getattr(daemon._config, "log_file", None)
+    configure_logging(level="INFO", log_file=log_file)
 
     async def _run() -> None:
         await daemon.start()

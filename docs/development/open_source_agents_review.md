@@ -43,7 +43,7 @@ To build the "best of all options" rendition of Maxwell-Daemon, we must look at 
 By synthesizing these features alongside the `ijfw` features (Phase-Gates, Multi-AI Trident, Markdown Memory), Maxwell-Daemon can be positioned as the ultimate enterprise-grade orchestrator.
 
 ### Recommendation 1: Adopt the Model Context Protocol (MCP)
-Instead of building custom tools for GitHub, AWS, or local file searching, Maxwell-Daemon should become an **MCP Client**. By supporting MCP, Maxwell-Daemon instantly gains access to the entire open-source ecosystem of tools. 
+Instead of building custom tools for GitHub, AWS, or local file searching, Maxwell-Daemon should become an **MCP Client**. By supporting MCP, Maxwell-Daemon instantly gains access to the entire open-source ecosystem of tools.
 
 ### Recommendation 2: AST Repo Mapping (The Aider Approach)
 Combine `ijfw`'s markdown memory with Aider's Tree-Sitter Repo Map. When Maxwell-Daemon boots up on a repo, it should generate an AST map of the codebase. This drastically reduces token consumption while completely preventing hallucinated function calls.

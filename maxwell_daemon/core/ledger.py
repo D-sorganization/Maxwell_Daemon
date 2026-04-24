@@ -23,8 +23,11 @@ async code directly, only from thread-pool workers.
 from __future__ import annotations
 
 import asyncio
+import queue
 import sqlite3
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -64,13 +67,57 @@ class CostRecord:
 
 
 class CostLedger:
-    def __init__(self, db_path: Path | str) -> None:
+    def __init__(self, db_path: Path | str, pool_size: int = 5) -> None:
         self._path = Path(db_path).expanduser()
         self._path.parent.mkdir(parents=True, exist_ok=True)
+<<<<<<< HEAD
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
         self._lock = threading.Lock()
+=======
+        self._pool_size = pool_size
+        self._pool: queue.Queue[sqlite3.Connection] = queue.Queue(maxsize=pool_size)
+
+        # Initialize the DB schema using a temporary connection
+        with self._create_conn() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.executescript(_SCHEMA)
+
+        for _ in range(pool_size):
+            self._pool.put_nowait(self._create_conn())
+
+        # threading.Lock guards writes; reads can happen concurrently.
+        self._write_lock = threading.Lock()
+
+        from maxwell_daemon.metrics import MAXWELL_LEDGER_CONNECTIONS_IN_USE
+
+        MAXWELL_LEDGER_CONNECTIONS_IN_USE.set_function(lambda: self._pool_size - self._pool.qsize())
+
+    def _create_conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(
+            str(self._path),
+            isolation_level=None,  # autocommit
+            check_same_thread=False,
+            timeout=30.0,
+        )
+        conn.execute("PRAGMA busy_timeout=30000")
+        return conn
+
+    @contextmanager
+    def _get_conn(self) -> Iterator[sqlite3.Connection]:
+        try:
+            conn = self._pool.get_nowait()
+        except queue.Empty:
+            conn = self._create_conn()
+        try:
+            yield conn
+        finally:
+            try:
+                self._pool.put_nowait(conn)
+            except queue.Full:
+                conn.close()
+>>>>>>> origin/main
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -84,7 +131,11 @@ class CostLedger:
     # ── Sync helpers (called inside thread-pool workers) ─────────────────────
 
     def _record_sync(self, rec: CostRecord) -> None:
+<<<<<<< HEAD
         with self._lock, self._connect() as conn:
+=======
+        with self._write_lock, self._get_conn() as conn:
+>>>>>>> origin/main
             conn.execute(
                 """
                 INSERT INTO cost_records
@@ -105,6 +156,7 @@ class CostLedger:
                 ),
             )
 
+<<<<<<< HEAD
     def _total_since_sync(self, since: datetime) -> float:
         # Reads don't strictly need the lock with WAL, but we keep it for simplicity
         # or remove it if parallel reads are desired. The issue says "reads can proceed in parallel".
@@ -124,13 +176,57 @@ class CostLedger:
                 """,
                 (since.isoformat(),),
             ).fetchall()
+=======
+    def _total_since_sync(self, since: datetime, end: datetime | None = None) -> float:
+        with self._get_conn() as conn:
+            query = "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_records WHERE ts >= ?"
+            params = [since.isoformat()]
+            if end is not None:
+                query += " AND ts < ?"
+                params.append(end.isoformat())
+            row = conn.execute(query, tuple(params)).fetchone()
+        return float(row[0])
+
+    def _by_backend_sync(self, since: datetime, end: datetime | None = None) -> dict[str, float]:
+        with self._get_conn() as conn:
+            query = "SELECT backend, COALESCE(SUM(cost_usd), 0) FROM cost_records WHERE ts >= ?"
+            params = [since.isoformat()]
+            if end is not None:
+                query += " AND ts < ?"
+                params.append(end.isoformat())
+            query += " GROUP BY backend"
+            rows = conn.execute(query, tuple(params)).fetchall()
+>>>>>>> origin/main
         return {backend: float(cost) for backend, cost in rows}
+
+    def _cache_metrics_raw_sync(
+        self, since: datetime, end: datetime | None = None
+    ) -> tuple[int, int, int, int]:
+        with self._get_conn() as conn:
+            query = """
+                SELECT
+                    COUNT(*),
+                    COALESCE(SUM(cached_tokens), 0),
+                    COALESCE(SUM(prompt_tokens), 0),
+                    COALESCE(SUM(completion_tokens), 0)
+                FROM cost_records WHERE ts >= ?
+            """
+            params = [since.isoformat()]
+            if end is not None:
+                query += " AND ts < ?"
+                params.append(end.isoformat())
+            row = conn.execute(query, tuple(params)).fetchone()
+            return int(row[0]), int(row[1]), int(row[2]), int(row[3])
 
     def _prune_sync(self, older_than_days: int, *, now: datetime | None = None) -> int:
         if older_than_days < 0:
             raise ValueError(f"older_than_days must be >= 0, got {older_than_days}")
         cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=older_than_days)
+<<<<<<< HEAD
         with self._lock, self._connect() as conn:
+=======
+        with self._write_lock, self._get_conn() as conn:
+>>>>>>> origin/main
             cursor = conn.execute(
                 "DELETE FROM cost_records WHERE ts < ?",
                 (cutoff.isoformat(),),
@@ -142,11 +238,16 @@ class CostLedger:
     def record(self, rec: CostRecord) -> None:
         self._record_sync(rec)
 
-    def total_since(self, since: datetime) -> float:
-        return self._total_since_sync(since)
+    def total_since(self, since: datetime, end: datetime | None = None) -> float:
+        return self._total_since_sync(since, end)
 
-    def by_backend(self, since: datetime) -> dict[str, float]:
-        return self._by_backend_sync(since)
+    def by_backend(self, since: datetime, end: datetime | None = None) -> dict[str, float]:
+        return self._by_backend_sync(since, end)
+
+    def cache_metrics_raw(
+        self, since: datetime, end: datetime | None = None
+    ) -> tuple[int, int, int, int]:
+        return self._cache_metrics_raw_sync(since, end)
 
     def prune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Delete ledger records older than the retention cutoff."""
@@ -159,15 +260,22 @@ class CostLedger:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self._record_sync, rec)
 
-    async def atotal_since(self, since: datetime) -> float:
+    async def atotal_since(self, since: datetime, end: datetime | None = None) -> float:
         """Non-blocking version of :meth:`total_since` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._total_since_sync, since)
+        return await loop.run_in_executor(None, self._total_since_sync, since, end)
 
-    async def aby_backend(self, since: datetime) -> dict[str, float]:
+    async def aby_backend(self, since: datetime, end: datetime | None = None) -> dict[str, float]:
         """Non-blocking version of :meth:`by_backend` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._by_backend_sync, since)
+        return await loop.run_in_executor(None, self._by_backend_sync, since, end)
+
+    async def acache_metrics_raw(
+        self, since: datetime, end: datetime | None = None
+    ) -> tuple[int, int, int, int]:
+        """Non-blocking version of :meth:`cache_metrics_raw` for use in async code."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._cache_metrics_raw_sync, since, end)
 
     async def aprune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Non-blocking version of :meth:`prune` for use in async code."""
@@ -205,5 +313,15 @@ class CostLedger:
         return spent / fraction
 
     def close(self) -> None:
+<<<<<<< HEAD
         """Compatibility hook for stores that do not keep an open connection."""
         return None
+=======
+        """Close the persistent connection. Call on daemon shutdown."""
+        while not self._pool.empty():
+            try:
+                conn = self._pool.get_nowait()
+                conn.close()
+            except queue.Empty:
+                break
+>>>>>>> origin/main

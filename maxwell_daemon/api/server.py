@@ -37,9 +37,18 @@ from fastapi import (
 from pydantic import BaseModel, Field, field_validator
 
 from maxwell_daemon import __version__
+from maxwell_daemon.api.validation import (
+    PriorityField,
+    PromptField,
+    RepoField,
+    RoutingKeyField,
+    TaskIdField,
+)
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
 from maxwell_daemon.backends import BackendManifest, registry
+from maxwell_daemon.config.loader import _default_secret_store, save_config
+from maxwell_daemon.config.models import BackendConfig
 from maxwell_daemon.core.actions import Action, ActionStatus
 from maxwell_daemon.core.artifacts import Artifact, ArtifactIntegrityError, ArtifactKind
 from maxwell_daemon.core.delegate_lifecycle import DelegateSessionSnapshot, DelegateSessionStatus
@@ -51,6 +60,7 @@ from maxwell_daemon.core.work_items import (
     WorkItemStatus,
 )
 from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.daemon.runner import Attachment as RunnerAttachment
 from maxwell_daemon.daemon.runner import DuplicateTaskIdError, Task, TaskStatus
 from maxwell_daemon.director import (
     GraphStatus,
@@ -60,11 +70,11 @@ from maxwell_daemon.director import (
     TaskGraphRecord,
     TaskGraphTemplate,
 )
-from maxwell_daemon.logging import bind_context
+from maxwell_daemon.logging import bind_context, get_logger
 from maxwell_daemon.metrics import mount_metrics_endpoint
-from maxwell_daemon.api.validation import PromptField, TaskIdField, RepoField, PriorityField
 
 _UI_DIR = _Path(__file__).parent / "ui"
+log = get_logger(__name__)
 
 
 def _mount_web_ui(app: FastAPI) -> None:
@@ -104,17 +114,30 @@ def _parse_delegate_status(value: str | None) -> DelegateSessionStatus | None:
         ) from exc
 
 
+class Attachment(BaseModel):
+    kind: str
+    uri: str
+    content_type: str
+    size: int
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class TaskSubmit(BaseModel):
     prompt: PromptField
     task_id: TaskIdField | None = None
     kind: str = "prompt"
-    repo: RepoField | None = None
+    repo: RoutingKeyField | None = None
     backend: str | None = None
     model: str | None = None
     issue_repo: RepoField | None = None
     issue_number: int | None = None
     issue_mode: Literal["plan", "implement"] | None = None
     priority: PriorityField = 100
+    depends_on: list[str] = Field(
+        default_factory=list,
+        description="Task IDs that must reach COMPLETED before this task starts.",
+    )
+    attachments: list[Attachment] = Field(default_factory=list)
 
 
 class WorkItemCreate(BaseModel):
@@ -234,6 +257,36 @@ class TaskGraphView(BaseModel):
             graph=record.graph,
             node_runs=tuple(NodeRunView.from_run(run) for run in record.node_runs),
         )
+
+
+class BackendConfigPayload(BaseModel):
+    name: str
+    api_key: str | None = None
+    endpoint: str | None = None
+    set_as_default: bool = False
+
+
+class AvailableBackendView(BaseModel):
+    name: str
+    display_name: str
+    description: str
+    requires_api_key: bool
+    local_only: bool
+    logo_key: str | None = None
+    default_endpoint: str | None = None
+    configured: bool = False
+
+
+class BackendTestResponse(BaseModel):
+    success: bool
+    latency_ms: float | None = None
+    models: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class OnboardingSmokeTestRequest(BaseModel):
+    backend_name: str
+    model: str
 
 
 class ArtifactView(BaseModel):
@@ -383,7 +436,9 @@ class TaskView(BaseModel):
     issue_number: int | None = None
     issue_mode: str | None = None
     ab_group: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
     priority: int = 100
+    attachments: list[Attachment] = Field(default_factory=list)
     pr_url: str | None = None
     dispatched_to: str | None = None
     status: str
@@ -411,6 +466,7 @@ class TaskView(BaseModel):
             issue_number=t.issue_number,
             issue_mode=t.issue_mode,
             ab_group=t.ab_group,
+            depends_on=list(getattr(t, "depends_on", [])),
             priority=getattr(t, "priority", 100),
             pr_url=t.pr_url,
             dispatched_to=t.dispatched_to,
@@ -424,6 +480,16 @@ class TaskView(BaseModel):
             created_at=t.created_at,
             started_at=t.started_at,
             finished_at=t.finished_at,
+            attachments=[
+                Attachment(
+                    kind=a.kind,
+                    uri=a.uri,
+                    content_type=a.content_type,
+                    size=a.size,
+                    metadata=a.metadata,
+                )
+                for a in t.attachments
+            ],
         )
 
 
@@ -433,6 +499,7 @@ class BackendCatalogEntryView(BaseModel):
     description: str
     requires_api_key: bool
     local_only: bool
+    logo_key: str | None = None
     default_endpoint: str | None = None
     api_key_env_var: str | None = None
     endpoint_env_var: str | None = None
@@ -457,6 +524,7 @@ class BackendCatalogEntryView(BaseModel):
             description=manifest.description,
             requires_api_key=manifest.requires_api_key,
             local_only=manifest.local_only,
+            logo_key=manifest.logo_key,
             default_endpoint=manifest.default_endpoint,
             api_key_env_var=manifest.api_key_env_var,
             endpoint_env_var=manifest.endpoint_env_var,
@@ -587,6 +655,16 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     role: str
+    refresh_token: str | None = None
+
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class TokenRevokeRequest(BaseModel):
+    token: str | None = None
+    all_for_subject: str | None = None
 
 
 def _auth_dep(token: str | None) -> Any:
@@ -607,6 +685,8 @@ def _make_rbac_dep(
     minimum: Role,
     static_token: str | None,
     jwt_config: JWTConfig | None,
+    auth_store: Any | None = None,
+    audit: Any | None = None,
 ) -> Any:
     """Return a FastAPI dependency that enforces *minimum* role.
 
@@ -618,7 +698,7 @@ def _make_rbac_dep(
     (open/dev mode — same behaviour as the existing ``_auth_dep(None)``).
     """
 
-    async def _dep(authorization: Annotated[str | None, Header()] = None) -> None:
+    async def _dep(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:
         # Open mode — nothing to enforce.
         if static_token is None and jwt_config is None:
             return
@@ -630,21 +710,94 @@ def _make_rbac_dep(
 
         # Fast path: static admin token — always grants admin-level access.
         if static_token is not None and hmac.compare_digest(raw.encode(), static_token.encode()):
+            if audit:
+                audit.log_auth_decision(
+                    subject="static",
+                    role="admin",
+                    endpoint=request.url.path,
+                    outcome="pass",
+                )
             return  # admitted as admin
 
         # JWT path.
         if jwt_config is None:
+            if audit:
+                audit.log_auth_decision(
+                    subject="unknown",
+                    role="none",
+                    endpoint=request.url.path,
+                    outcome="fail_no_jwt",
+                )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token")
 
         try:
             claims = jwt_config.decode_token(raw)
         except Exception as exc:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"invalid token: {exc}") from exc
+            import jwt
+
+            if audit:
+                audit.log_auth_decision(
+                    subject="unknown",
+                    role="none",
+                    endpoint=request.url.path,
+                    outcome="fail_invalid_token",
+                )
+            if isinstance(exc, jwt.PyJWTError):
+                log.warning("Auth failure: %s", exc, exc_info=False)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication failed",
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication failed",
+            ) from exc
+
+        if (
+            auth_store is not None
+            and getattr(claims, "jti", None)
+            and auth_store.is_revoked(claims.jti)
+        ):
+            if audit:
+                audit.log_auth_decision(
+                    subject=claims.sub,
+                    role=claims.role.value,
+                    endpoint=request.url.path,
+                    outcome="fail_revoked",
+                )
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has been revoked")
+
+        if getattr(claims, "typ", "access") != "access":
+            if audit:
+                audit.log_auth_decision(
+                    subject=claims.sub,
+                    role=claims.role.value,
+                    endpoint=request.url.path,
+                    outcome="fail_wrong_type",
+                )
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "Refresh tokens cannot be used as access tokens"
+            )
 
         if not claims.has_role(minimum):
+            if audit:
+                audit.log_auth_decision(
+                    subject=claims.sub,
+                    role=claims.role.value,
+                    endpoint=request.url.path,
+                    outcome="fail_role_insufficient",
+                )
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 f"role {claims.role.value!r} lacks {minimum.value!r} privileges",
+            )
+
+        if audit:
+            audit.log_auth_decision(
+                subject=claims.sub,
+                role=claims.role.value,
+                endpoint=request.url.path,
+                outcome="pass",
             )
 
     return _dep
@@ -655,6 +808,8 @@ async def _websocket_auth_or_close(
     minimum: Role,
     static_token: str | None,
     jwt_config: JWTConfig | None,
+    auth_store: Any | None = None,
+    audit: Any | None = None,
 ) -> bool:
     """Authenticate a WebSocket query token against static/JWT auth policy."""
     if static_token is None and jwt_config is None:
@@ -675,12 +830,60 @@ async def _websocket_auth_or_close(
     try:
         claims = jwt_config.decode_token(presented)
     except Exception:  # nosec B110 - invalid WebSocket token, close below.
+        if audit:
+            audit.log_auth_decision(
+                subject="unknown",
+                role="none",
+                endpoint=ws.url.path,
+                outcome="fail_invalid_token",
+            )
         await ws.close(code=1008)
         return False
 
+    if (
+        auth_store is not None
+        and getattr(claims, "jti", None)
+        and auth_store.is_revoked(claims.jti)
+    ):
+        if audit:
+            audit.log_auth_decision(
+                subject=claims.sub,
+                role=claims.role.value,
+                endpoint=ws.url.path,
+                outcome="fail_revoked",
+            )
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="Token revoked")
+        return False
+
+    if getattr(claims, "typ", "access") != "access":
+        if audit:
+            audit.log_auth_decision(
+                subject=claims.sub,
+                role=claims.role.value,
+                endpoint=ws.url.path,
+                outcome="fail_wrong_type",
+            )
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="Refresh token not allowed")
+        return False
+
     if not claims.has_role(minimum):
+        if audit:
+            audit.log_auth_decision(
+                subject=claims.sub,
+                role=claims.role.value,
+                endpoint=ws.url.path,
+                outcome="fail_role_insufficient",
+            )
         await ws.close(code=1008)
         return False
+
+    if audit:
+        audit.log_auth_decision(
+            subject=claims.sub,
+            role=claims.role.value,
+            endpoint=ws.url.path,
+            outcome="pass",
+        )
     return True
 
 
@@ -1007,6 +1210,15 @@ def _control_plane_view_from_task(daemon: Daemon, task: Task) -> ControlPlaneWor
     )
 
 
+class WebhookTriggerRequest(BaseModel):
+    """Body accepted by ``POST /api/webhooks/trigger``."""
+
+    prompt: str = Field(..., min_length=1)
+    repo: str | None = None
+    backend: str | None = None
+    priority: int = Field(default=100, ge=0, le=1000)
+
+
 def create_app(
     daemon: Daemon,
     *,
@@ -1027,12 +1239,15 @@ def create_app(
     )
     mount_metrics_endpoint(app)
     _mount_web_ui(app)
-    
-    from maxwell_daemon.daemon.runner import QueueSaturationError
+
     from fastapi.responses import JSONResponse
-    
+
+    from maxwell_daemon.daemon.runner import QueueSaturationError
+
     @app.exception_handler(QueueSaturationError)
-    async def queue_saturation_exception_handler(request: Request, exc: QueueSaturationError) -> JSONResponse:
+    async def queue_saturation_exception_handler(
+        request: Request, exc: QueueSaturationError
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": str(exc)},
@@ -1049,17 +1264,23 @@ def create_app(
     # (``auth`` dep above) and role enforcement is skipped.
     def _require_viewer() -> Any:
         if jwt_config is not None:
-            return _make_rbac_dep(Role.viewer, auth_token, jwt_config)
+            return _make_rbac_dep(
+                Role.viewer, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+            )
         return auth
 
     def _require_operator() -> Any:
         if jwt_config is not None:
-            return _make_rbac_dep(Role.operator, auth_token, jwt_config)
+            return _make_rbac_dep(
+                Role.operator, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+            )
         return auth
 
     def _require_admin() -> Any:
         if jwt_config is not None:
-            return _make_rbac_dep(Role.admin, auth_token, jwt_config)
+            return _make_rbac_dep(
+                Role.admin, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+            )
         return auth
 
     _audit: AuditLogger | None = (
@@ -1067,6 +1288,12 @@ def create_app(
         if audit_log_path is not None
         else None
     )
+
+    # Correlation-ID middleware — attaches a UUID to every request, propagates
+    # it through structlog context-vars, and echoes it in X-Correlation-ID.
+    from maxwell_daemon.api.correlation import install_correlation_middleware
+
+    install_correlation_middleware(app)
 
     # Rate-limit middleware — installs only when config declares a default group.
     api_cfg = daemon._config.api
@@ -1137,8 +1364,96 @@ def create_app(
             )
         ttl = payload.expiry_seconds or jwt_config.expiry_seconds
         role = Role(payload.role)
-        token = jwt_config.create_token(payload.subject, role, expiry_seconds=ttl)
-        return TokenResponse(access_token=token, expires_in=ttl, role=role.value)
+        token = jwt_config.create_token(
+            payload.subject, role, expiry_seconds=ttl, extra_claims={"typ": "access"}
+        )
+
+        refresh_ttl = 30 * 24 * 3600
+        refresh_token = jwt_config.create_token(
+            payload.subject, role, expiry_seconds=refresh_ttl, extra_claims={"typ": "refresh"}
+        )
+
+        claims = jwt_config.decode_token(token)
+        refresh_claims = jwt_config.decode_token(refresh_token)
+
+        auth_store = getattr(daemon, "_auth_store", None)
+        if auth_store is not None:
+            auth_store.record_session(claims.jti, payload.subject, claims.iat)
+            auth_store.record_session(refresh_claims.jti, payload.subject, refresh_claims.iat)
+
+        return TokenResponse(
+            access_token=token, expires_in=ttl, role=role.value, refresh_token=refresh_token
+        )
+
+    @app.post("/api/v1/auth/refresh")
+    async def refresh_access_token(
+        payload: Annotated[TokenRefreshRequest, Body()],
+    ) -> TokenResponse:
+        """Exchange a valid refresh token for a new access token."""
+        if jwt_config is None:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "JWT not configured",
+            )
+
+        try:
+            claims = jwt_config.decode_token(payload.refresh_token)
+        except Exception as exc:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token") from exc
+
+        if getattr(claims, "typ", "access") != "refresh":
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token is not a refresh token")
+
+        auth_store = getattr(daemon, "_auth_store", None)
+        if auth_store is not None and auth_store.is_revoked(claims.jti):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Refresh token is revoked")
+
+        ttl = jwt_config.expiry_seconds
+        new_token = jwt_config.create_token(
+            claims.sub, claims.role, expiry_seconds=ttl, extra_claims={"typ": "access"}
+        )
+        new_claims = jwt_config.decode_token(new_token)
+
+        if auth_store is not None:
+            auth_store.record_session(new_claims.jti, claims.sub, new_claims.iat)
+
+        return TokenResponse(
+            access_token=new_token,
+            expires_in=ttl,
+            role=claims.role.value,
+            refresh_token=payload.refresh_token,
+        )
+
+    @app.post("/api/v1/auth/revoke", dependencies=[Depends(_require_operator())])
+    async def revoke_token(payload: Annotated[TokenRevokeRequest, Body()]) -> dict[str, str]:
+        """Revoke a specific token or all tokens for a subject."""
+        auth_store = getattr(daemon, "_auth_store", None)
+        if auth_store is None:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Auth session store not configured",
+            )
+
+        if payload.all_for_subject:
+            auth_store.revoke_all_for_subject(payload.all_for_subject)
+            return {"status": f"Revoked all tokens for {payload.all_for_subject}"}
+
+        if not payload.token:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Must provide token or all_for_subject"
+            )
+
+        try:
+            # We skip validation here to allow revoking expired tokens if needed
+            import jwt
+
+            decoded = jwt.decode(payload.token, options={"verify_signature": False})
+            jti = decoded.get("jti")
+            if jti:
+                auth_store.revoke(jti)
+            return {"status": "Revoked"}
+        except Exception as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid token format") from exc
 
     @app.get("/api/v1/auth/me")
     async def whoami(
@@ -1208,6 +1523,116 @@ def create_app(
         )
         return BackendCatalogResponse(backends=catalog)
 
+    @app.post("/api/v1/backends", dependencies=[Depends(_require_admin())])
+    async def configure_backend(payload: BackendConfigPayload) -> dict[str, Any]:
+        from maxwell_daemon.secrets import backend_api_key_secret_ref
+
+        manifest = next((m for m in registry.catalog() if m.name == payload.name), None)
+        if not manifest:
+            raise HTTPException(
+                status_code=404, detail=f"Backend '{payload.name}' not found in registry"
+            )
+
+        store = _default_secret_store()
+        secret_ref = backend_api_key_secret_ref(payload.name)
+        if payload.api_key and store:
+            store.set(secret_ref, payload.api_key)
+
+        cfg_dict: dict[str, Any] = {
+            "type": payload.name,
+            "model": "",  # To be set or default
+            "base_url": payload.endpoint or manifest.default_endpoint,
+            "api_key_secret_ref": secret_ref if (payload.api_key and store) else None,
+        }
+
+        # Give it a default model so it passes validation if possible
+        if payload.name == "ollama":
+            cfg_dict["model"] = "llama3"
+        elif payload.name == "openai":
+            cfg_dict["model"] = "gpt-4o-mini"
+        elif payload.name == "claude":
+            cfg_dict["model"] = "claude-haiku-4-5"
+        else:
+            cfg_dict["model"] = "default"
+
+        daemon._config.backends[payload.name] = BackendConfig(**cfg_dict)
+
+        if payload.set_as_default:
+            daemon._config.agent.default_backend = payload.name
+
+        try:
+            save_config(daemon._config)
+            # Make sure it's instantiated so the daemon can use it immediately
+            # The router handles param normalization and secret unwrapping
+            daemon._router._get_or_create(payload.name, daemon._config.backends[payload.name])
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save config: {e}") from e
+
+        return {"status": "success"}
+
+    @app.post("/api/v1/backends/{name}/test", dependencies=[Depends(_require_admin())])
+    async def test_backend(name: str) -> BackendTestResponse:
+        from time import monotonic
+
+        if name in daemon._router._instances:
+            backend = daemon._router._instances[name]
+        else:
+            # Maybe it's registered but not loaded due to config
+            if name not in daemon._config.backends:
+                raise HTTPException(status_code=404, detail=f"Backend '{name}' not configured")
+            try:
+                backend = daemon._router._get_or_create(name, daemon._config.backends[name])
+            except Exception as e:
+                return BackendTestResponse(success=False, error=str(e))
+
+        start = monotonic()
+        try:
+            is_healthy = await backend.health_check()
+        except Exception as e:
+            return BackendTestResponse(success=False, error=str(e))
+
+        latency = (monotonic() - start) * 1000
+
+        models = []
+        if is_healthy and hasattr(backend, "list_models"):
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                models = await backend.list_models()
+
+        return BackendTestResponse(
+            success=is_healthy,
+            latency_ms=latency,
+            models=models,
+            error=None if is_healthy else "Health check returned false",
+        )
+
+    @app.post("/api/v1/onboarding/smoke-test", dependencies=[Depends(_require_admin())])
+    async def onboarding_smoke_test(payload: OnboardingSmokeTestRequest) -> dict[str, Any]:
+        from maxwell_daemon.backends.base import Message, MessageRole
+
+        if payload.backend_name not in daemon._router._instances:
+            raise HTTPException(
+                status_code=404, detail=f"Backend '{payload.backend_name}' not loaded"
+            )
+
+        backend = daemon._router._instances[payload.backend_name]
+        try:
+            resp = await backend.complete(
+                messages=[
+                    Message(
+                        role=MessageRole.USER,
+                        content="Hello! Please reply with exactly 'Hello world'.",
+                    )
+                ],
+                model=payload.model,
+                temperature=0.0,
+                max_tokens=10,
+            )
+            return {"status": "success", "response": resp.content}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
     @app.post(
         "/api/v1/tasks",
         dependencies=[Depends(auth), Depends(_require_operator())],
@@ -1230,6 +1655,16 @@ def create_app(
                         model=payload.model,
                         priority=payload.priority,
                         task_id=payload.task_id,
+                        attachments=[
+                            RunnerAttachment(
+                                kind=a.kind,
+                                uri=a.uri,
+                                content_type=a.content_type,
+                                size=a.size,
+                                metadata=a.metadata,
+                            )
+                            for a in payload.attachments
+                        ],
                     )
                 except ValueError as exc:
                     raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
@@ -1241,6 +1676,17 @@ def create_app(
                     model=payload.model,
                     priority=payload.priority,
                     task_id=payload.task_id,
+                    depends_on=payload.depends_on or [],
+                    attachments=[
+                        RunnerAttachment(
+                            kind=a.kind,
+                            uri=a.uri,
+                            content_type=a.content_type,
+                            size=a.size,
+                            metadata=a.metadata,
+                        )
+                        for a in payload.attachments
+                    ],
                 )
         except DuplicateTaskIdError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
@@ -1248,30 +1694,41 @@ def create_app(
 
     @app.get("/api/v1/tasks", dependencies=[Depends(_require_viewer())])
     async def list_tasks(
-        status: Annotated[str | None, Query()] = None,
+        status_filter: Annotated[str | None, Query(alias="status")] = None,
         kind: Annotated[str | None, Query()] = None,
         repo: Annotated[str | None, Query()] = None,
+        cursor: Annotated[datetime | None, Query()] = None,
         completed_before: Annotated[datetime | None, Query()] = None,
         completed_before_camel: Annotated[datetime | None, Query(alias="completedBefore")] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     ) -> list[TaskView]:
-        tasks = list(daemon.state().tasks.values())
-        if status:
-            tasks = [t for t in tasks if t.status.value == status]
-        if kind:
-            tasks = [t for t in tasks if t.kind.value == kind]
-        if repo:
-            tasks = [t for t in tasks if t.repo == repo or t.issue_repo == repo]
         completed_before_filter = completed_before or completed_before_camel
         if completed_before_filter is not None:
-            cutoff = _coerce_datetime_to_utc(completed_before_filter)
-            tasks = [
-                t
-                for t in tasks
-                if t.finished_at is not None and _coerce_datetime_to_utc(t.finished_at) < cutoff
-            ]
-        tasks.sort(key=lambda t: t.created_at, reverse=True)
-        return [TaskView.from_task(t) for t in tasks[:limit]]
+            completed_before_filter = _coerce_datetime_to_utc(completed_before_filter)
+        if cursor is not None:
+            cursor = _coerce_datetime_to_utc(cursor)
+
+        task_status: TaskStatus | None = None
+        if status_filter is not None:
+            try:
+                task_status = TaskStatus(status_filter)
+            except ValueError as exc:
+                from fastapi import status as http_status
+
+                raise HTTPException(
+                    http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"invalid task status: {status_filter}",
+                ) from exc
+
+        tasks = await daemon._task_store.alist_tasks(
+            limit=limit,
+            status=task_status,
+            repo=repo,
+            kind=kind,
+            cursor=cursor,
+            completed_before=completed_before_filter,
+        )
+        return [TaskView.from_task(t) for t in tasks]
 
     @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
     async def get_task(task_id: str) -> TaskView:
@@ -2161,6 +2618,66 @@ def create_app(
             status_code=status.HTTP_200_OK,
         )
 
+    # ── Generic webhook trigger ──────────────────────────────────────────────
+
+    @app.post("/api/webhooks/trigger", dependencies=[Depends(_require_operator())])
+    async def generic_webhook_trigger(
+        request: Request,
+        body: Annotated[WebhookTriggerRequest, Body()],
+    ) -> Response:
+        """Trigger a task from any external source via a generic HTTP webhook.
+
+        Unlike the GitHub endpoint this route is bearer-token authenticated
+        (operator role).  Optionally supply ``X-Maxwell-Signature: sha256=<hex>``
+        for an additional HMAC-SHA256 layer using the daemon's
+        ``webhook_secret`` config value, and ``X-Idempotency-Key`` to prevent
+        duplicate task creation on webhook retries.
+        """
+        from fastapi.responses import JSONResponse
+
+        from maxwell_daemon.triggers.webhook import (
+            WebhookTriggerPayload,
+            enqueue_webhook_task,
+            verify_webhook_signature,
+        )
+
+        # Optional extra HMAC layer — only enforced when a secret is configured.
+        webhook_secret: str | None = getattr(daemon._config, "webhook_secret", None)
+        if webhook_secret:
+            raw_body = await request.body()
+            sig_header = request.headers.get("x-maxwell-signature", "")
+            if not verify_webhook_signature(webhook_secret, raw_body, sig_header):
+                return JSONResponse(
+                    {"detail": "invalid signature"},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
+        idempotency_key: str | None = request.headers.get("x-idempotency-key")
+
+        payload = WebhookTriggerPayload(
+            prompt=body.prompt,
+            repo=body.repo,
+            backend=body.backend,
+            priority=body.priority,
+            idempotency_key=idempotency_key,
+        )
+        result = enqueue_webhook_task(payload, daemon=daemon)
+
+        if result.error:
+            return JSONResponse(
+                {"detail": result.error},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if result.duplicate:
+            return JSONResponse(
+                {"duplicate": True, "task_id": None},
+                status_code=status.HTTP_200_OK,
+            )
+        return JSONResponse(
+            {"task_id": result.task_id, "duplicate": False},
+            status_code=status.HTTP_202_ACCEPTED,
+        )
+
     # ── SSH endpoints ────────────────────────────────────────────────────────
     # asyncssh is optional (pip install maxwell-daemon[ssh]).  All SSH routes
     # return 503 if it is not installed.
@@ -2310,7 +2827,9 @@ def create_app(
         """
         import json as _json_mod
 
-        if not await _websocket_auth_or_close(ws, Role.admin, auth_token, jwt_config):
+        if not await _websocket_auth_or_close(
+            ws, Role.admin, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+        ):
             return
 
         pool = _ssh_pool()
@@ -2382,7 +2901,9 @@ def create_app(
         APIs can't set headers. Static tokens grant admin; JWT tokens must have
         viewer-or-higher privileges. Terminate at a proxy for TLS.
         """
-        if not await _websocket_auth_or_close(ws, Role.viewer, auth_token, jwt_config):
+        if not await _websocket_auth_or_close(
+            ws, Role.viewer, auth_token, jwt_config, getattr(daemon, "_auth_store", None), _audit
+        ):
             return
         await ws.accept()
         try:

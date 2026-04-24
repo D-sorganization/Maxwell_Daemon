@@ -8,12 +8,11 @@ people install only the extras they need (e.g., `pip install maxwell-daemon[olla
 from __future__ import annotations
 
 import importlib
-import logging
-from maxwell_daemon.logging import get_logger
 from dataclasses import dataclass
 from typing import Any
 
 from maxwell_daemon.backends.base import BackendError, ILLMBackend
+from maxwell_daemon.logging import get_logger
 
 log = get_logger(__name__)
 
@@ -26,6 +25,7 @@ class BackendManifest:
     description: str
     requires_api_key: bool
     local_only: bool
+    logo_key: str | None = None
     default_endpoint: str | None = None
     api_key_env_var: str | None = None
     endpoint_env_var: str | None = None
@@ -118,6 +118,80 @@ _BUILTIN_MANIFESTS = (
         requires_api_key=True,
         local_only=False,
         api_key_env_var="ANTHROPIC_API_KEY",
+    ),
+    BackendManifest(
+        module_name="gemini",
+        name="gemini",
+        display_name="Google Gemini",
+        description="Google Gemini models via the google-generativeai SDK.",
+        requires_api_key=True,
+        local_only=False,
+        api_key_env_var="GOOGLE_API_KEY",
+        install_extra="gemini",
+    ),
+    BackendManifest(
+        module_name="groq",
+        name="groq",
+        display_name="Groq",
+        description="Ultra-fast Llama and Mixtral inference via Groq's LPU API.",
+        requires_api_key=True,
+        local_only=False,
+        api_key_env_var="GROQ_API_KEY",
+        install_extra="groq",
+    ),
+    BackendManifest(
+        module_name="mistral",
+        name="mistral",
+        display_name="Mistral AI",
+        description="Mistral Large, Small, and Codestral via La Plateforme.",
+        requires_api_key=True,
+        local_only=False,
+        api_key_env_var="MISTRAL_API_KEY",
+        install_extra="mistral",
+    ),
+    BackendManifest(
+        module_name="openrouter",
+        name="openrouter",
+        display_name="OpenRouter",
+        description="One API key for ~200 models via OpenRouter's OpenAI-compatible API.",
+        requires_api_key=True,
+        local_only=False,
+        api_key_env_var="OPENROUTER_API_KEY",
+        default_endpoint="https://openrouter.ai/api/v1",
+        install_extra="openrouter",
+    ),
+    BackendManifest(
+        module_name="deepseek",
+        name="deepseek",
+        display_name="DeepSeek",
+        description="DeepSeek-V3 and DeepSeek-R1 at ~1/20th of Claude pricing.",
+        requires_api_key=True,
+        local_only=False,
+        api_key_env_var="DEEPSEEK_API_KEY",
+        default_endpoint="https://api.deepseek.com/v1",
+        install_extra="deepseek",
+    ),
+    BackendManifest(
+        module_name="together",
+        name="together",
+        display_name="Together AI",
+        description="Open-weight models with competitive pricing via Together AI.",
+        requires_api_key=True,
+        local_only=False,
+        api_key_env_var="TOGETHER_API_KEY",
+        default_endpoint="https://api.together.xyz/v1",
+        install_extra="together",
+    ),
+    BackendManifest(
+        module_name="huggingface",
+        name="huggingface",
+        display_name="HuggingFace Inference",
+        description="HuggingFace serverless inference API and private TGI deployments.",
+        requires_api_key=True,
+        local_only=False,
+        api_key_env_var="HUGGINGFACE_API_KEY",
+        default_endpoint="https://api-inference.huggingface.co/v1",
+        install_extra="huggingface",
     ),
 )
 _BUILTIN_MANIFESTS_BY_NAME = {manifest.name: manifest for manifest in _BUILTIN_MANIFESTS}

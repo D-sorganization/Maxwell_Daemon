@@ -162,10 +162,16 @@ class TestRunnerAcceptsOnChunk:
 
 class TestDefaultRunnerGhTestRunner:
     async def test_runs_real_command(self, tmp_path: Path) -> None:
+        import sys
+
         from maxwell_daemon.gh.test_runner import _default_runner
 
         rc, out, _err = await _default_runner(
+<<<<<<< HEAD
             "python", "-c", "print('hello')", cwd=str(tmp_path)
+=======
+            sys.executable, "-c", "print('hello')", cwd=str(tmp_path)
+>>>>>>> origin/main
         )
         assert rc == 0
         assert b"hello" in out

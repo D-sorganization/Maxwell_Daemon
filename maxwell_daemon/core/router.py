@@ -10,14 +10,13 @@ Routing rules (in priority order):
 
 from __future__ import annotations
 
-import logging
-from maxwell_daemon.logging import get_logger
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from maxwell_daemon.backends import ILLMBackend
 from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.config import BackendConfig, MaxwellDaemonConfig
+from maxwell_daemon.logging import get_logger
 
 if TYPE_CHECKING:
     pass
@@ -34,9 +33,12 @@ class RouteDecision:
 
 
 class BackendRouter:
-    def __init__(self, config: MaxwellDaemonConfig, budget: Any = None) -> None:
+    def __init__(
+        self, config: MaxwellDaemonConfig, budget: Any = None, mcp_manager: Any = None
+    ) -> None:
         self._config = config
         self._budget = budget
+        self._mcp_manager = mcp_manager
         self._instances: dict[str, ILLMBackend] = {}
 
     def _get_or_create(self, name: str, cfg: BackendConfig) -> ILLMBackend:
@@ -57,6 +59,8 @@ class BackendRouter:
             )
             if (key := cfg.api_key_value()) is not None:
                 params["api_key"] = key
+            if self._mcp_manager is not None:
+                params["mcp_manager"] = self._mcp_manager
             self._instances[name] = registry.create(cfg.type, params)
         return self._instances[name]
 

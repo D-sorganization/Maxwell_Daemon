@@ -44,3 +44,18 @@ the root contribution guide.
 
 Roadmap and governance details live in
 [Roadmap and Governance](community/roadmap-governance.md).
+
+## Dependency Management and Review Policy
+
+We use `uv` and commit our lockfile (`uv.lock`) to ensure reproducible builds and a secure supply chain. If you are adding or updating dependencies:
+
+1. Update `pyproject.toml`.
+2. Run `uv lock` to update `uv.lock`.
+3. Commit both files.
+
+### Dependabot Auto-merge Policy
+
+Dependabot runs weekly to keep dependencies fresh. We apply the following review policy:
+
+- **Critical Dependencies**: Bumps to critical packages (`anthropic`, `openai`, `pydantic`, `cryptography`, `PyJWT`) **always** require manual review before merging, regardless of the version change. We do not blindly trust upstream releases for these foundational security and capability drivers.
+- **Non-Critical Dependencies**: Dependabot is allowed to auto-merge **patch** bumps (e.g. `1.2.3` -> `1.2.4`) for non-critical dependencies. Minor and major bumps require manual review.

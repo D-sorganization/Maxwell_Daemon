@@ -15,6 +15,8 @@ import os
 import re
 import sys
 from collections.abc import Iterator
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -24,6 +26,7 @@ __all__ = ["bind_context", "configure_logging", "get_logger"]
 
 _REDACT_KEYS = {"api_key", "password", "token", "secret", "authorization"}
 
+
 def _redact_value(val: Any) -> Any:
     if not isinstance(val, str):
         return "***"
@@ -31,16 +34,17 @@ def _redact_value(val: Any) -> Any:
         return "***"
     return f"{val[:8]}...{val[-4:]}"
 
+<<<<<<< HEAD
 _SECRET_PATTERN = re.compile(r"(?:sk-|ant-|key-|ghp_)[a-zA-Z0-9_-]{20,}")
+=======
+>>>>>>> origin/main
 
 def _redact_secrets_processor(
-    logger: structlog.types.WrappedLogger,
-    name: str,
-    event_dict: structlog.types.EventDict
+    logger: structlog.types.WrappedLogger, name: str, event_dict: structlog.types.EventDict
 ) -> structlog.types.EventDict:
     if os.environ.get("MAXWELL_REDACT_LOGS", "1") != "1":
         return event_dict
-    
+
     for key, value in event_dict.items():
         if any(redact_key in key.lower() for redact_key in _REDACT_KEYS):
             event_dict[key] = _redact_value(value)
@@ -54,6 +58,7 @@ def configure_logging(
     *,
     level: str = "INFO",
     json_format: bool | None = None,
+    log_file: str | Path | None = None,
 ) -> None:
     """Configure root logging handlers and structlog processors.
 
@@ -63,6 +68,9 @@ def configure_logging(
     """
     if json_format is None:
         json_format = not sys.stderr.isatty()
+
+    is_test = bool(os.environ.get("PYTEST_CURRENT_TEST"))
+    cache_logger = not is_test
 
     shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
@@ -78,21 +86,56 @@ def configure_logging(
         else structlog.dev.ConsoleRenderer(colors=True)
     )
 
-    structlog.configure(
-        processors=[*shared_processors, renderer],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level.upper())),
-        context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
-        cache_logger_on_first_use=True,
-    )
+    if log_file:
+        path = Path(log_file)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handler: logging.Handler = RotatingFileHandler(
+            path, maxBytes=100 * 1024 * 1024, backupCount=7, encoding="utf-8"
+        )
+        handler.setLevel(level.upper())
+        # We need a stdlib formatter that bridges to structlog
+        formatter = structlog.stdlib.ProcessorFormatter(
+            processor=renderer, foreign_pre_chain=shared_processors
+        )
+        handler.setFormatter(formatter)
 
-    # Bridge stdlib logging through structlog so library logs pick up our format.
-    logging.basicConfig(
-        level=level.upper(),
-        format="%(message)s",
-        stream=sys.stderr,
-        force=True,
-    )
+        logging.basicConfig(
+            level=level.upper(),
+            handlers=[handler, logging.StreamHandler(sys.stderr)],
+            force=True,
+        )
+
+        structlog.configure(
+            processors=[
+                structlog.stdlib.filter_by_level,
+                *shared_processors,
+                structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+            ],
+            wrapper_class=structlog.make_filtering_bound_logger(
+                logging.getLevelName(level.upper())
+            ),
+            context_class=dict,
+            logger_factory=structlog.stdlib.LoggerFactory(),
+            cache_logger_on_first_use=cache_logger,
+        )
+    else:
+        structlog.configure(
+            processors=[*shared_processors, renderer],
+            wrapper_class=structlog.make_filtering_bound_logger(
+                logging.getLevelName(level.upper())
+            ),
+            context_class=dict,
+            logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+            cache_logger_on_first_use=cache_logger,
+        )
+
+        # Bridge stdlib logging through structlog so library logs pick up our format.
+        logging.basicConfig(
+            level=level.upper(),
+            format="%(message)s",
+            stream=sys.stderr,
+            force=True,
+        )
 
 
 def get_logger(name: str | None = None) -> Any:

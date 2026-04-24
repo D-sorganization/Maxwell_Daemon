@@ -22,9 +22,9 @@ Adding new providers
 
 from __future__ import annotations
 
-import logging
-from maxwell_daemon.logging import get_logger
 from typing import TYPE_CHECKING
+
+from maxwell_daemon.logging import get_logger
 
 if TYPE_CHECKING:
     from maxwell_daemon.backends.base import TokenUsage
@@ -81,6 +81,44 @@ _PROVIDER_PRICING: dict[str, dict[str, tuple[float, float]]] = {
     # Any model name is valid and costs nothing.
     "ollama": {},
     "ollama-agent-loop": {},
+    # ── Google Gemini ─────────────────────────────────────────────────────
+    "gemini": {
+        "gemini-1.5-pro": (1.25, 5.0),
+        "gemini-1.5-flash": (0.075, 0.30),
+        "gemini-2.0-flash": (0.10, 0.40),
+        "gemini-2.5-pro": (1.25, 10.0),
+        "gemini-2.5-flash": (0.15, 0.60),
+        "gemini-2.5-flash-lite": (0.075, 0.30),
+    },
+    # ── Groq ──────────────────────────────────────────────────────────────
+    "groq": {
+        "llama-3.3-70b-versatile": (0.59, 0.79),
+        "llama-3.1-8b-instant": (0.05, 0.08),
+        "mixtral-8x7b-32768": (0.24, 0.24),
+        "gemma2-9b-it": (0.20, 0.20),
+    },
+    # ── Mistral AI ────────────────────────────────────────────────────────
+    "mistral": {
+        "mistral-large-latest": (2.0, 6.0),
+        "mistral-large": (2.0, 6.0),
+        "mistral-small-latest": (0.20, 0.60),
+        "mistral-small": (0.20, 0.60),
+        "codestral-latest": (0.20, 0.60),
+        "open-mistral-nemo": (0.15, 0.15),
+        "open-mixtral-8x22b": (2.0, 6.0),
+    },
+    # ── DeepSeek ──────────────────────────────────────────────────────────
+    "deepseek": {
+        "deepseek-chat": (0.27, 1.10),
+        "deepseek-reasoner": (0.55, 2.19),
+    },
+    # ── Together AI ───────────────────────────────────────────────────────
+    "together": {
+        "meta-llama/Llama-3.3-70B-Instruct-Turbo": (0.88, 0.88),
+        "meta-llama/Llama-3.1-8B-Instruct-Turbo": (0.18, 0.18),
+        "mistralai/Mixtral-8x7B-Instruct-v0.1": (0.60, 0.60),
+        "Qwen/Qwen2.5-72B-Instruct-Turbo": (1.20, 1.20),
+    },
 }
 
 #: Providers whose per-token cost is always zero regardless of model.
@@ -137,6 +175,30 @@ def cost_for(provider: str, model: str, usage: TokenUsage) -> float:
         Token counts from the API response.
     """
     price_in, price_out = get_rates(provider, model)
-    return (
-        usage.prompt_tokens * price_in / 1_000_000 + usage.completion_tokens * price_out / 1_000_000
+
+    # Provider-specific cache read discounts
+    # Anthropic charges ~10% for cache reads (90% discount)
+    # OpenAI charges ~50% for cache reads (50% discount)
+    cache_discount = 1.0
+    if usage.cached_tokens > 0:
+        if provider in ("claude", "agent-loop"):
+            cache_discount = 0.10
+        elif provider in ("openai", "azure"):
+            cache_discount = 0.50
+
+    # usage.prompt_tokens usually includes the cached tokens in OpenAI/Anthropic APIs,
+    # or the caller adds them. Assuming prompt_tokens is the total input tokens:
+    billed_input_tokens = usage.prompt_tokens - usage.cached_tokens
+    billed_cached_tokens = usage.cached_tokens
+
+    # Fallback if prompt_tokens didn't include cached_tokens:
+    if billed_input_tokens < 0:
+        billed_input_tokens = usage.prompt_tokens
+        billed_cached_tokens = 0
+
+    input_cost = (billed_input_tokens * price_in / 1_000_000) + (
+        billed_cached_tokens * price_in * cache_discount / 1_000_000
     )
+    output_cost = usage.completion_tokens * price_out / 1_000_000
+
+    return input_cost + output_cost

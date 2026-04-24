@@ -108,7 +108,11 @@ class TestOpenMode:
 
     def test_post_tasks_no_auth_required(self, daemon: Daemon) -> None:
         with TestClient(create_app(daemon)) as c:
+<<<<<<< HEAD
             r = c.post("/api/v1/tasks", json={"prompt": "fix all bugs in the codebase"})
+=======
+            r = c.post("/api/v1/tasks", json={"prompt": "hello world"})
+>>>>>>> origin/main
             assert r.status_code == 202
 
 
@@ -125,7 +129,11 @@ class TestStaticTokenBackwardCompat:
     def test_static_token_post_tasks(self, static_only_client: TestClient) -> None:
         r = static_only_client.post(
             "/api/v1/tasks",
+<<<<<<< HEAD
             json={"prompt": "test prompt text for rbac"},
+=======
+            json={"prompt": "hello world"},
+>>>>>>> origin/main
             headers=_bearer("admin-static-secret"),
         )
         assert r.status_code == 202
@@ -202,7 +210,11 @@ class TestViewerJWT:
     ) -> None:
         r = jwt_only_client.post(
             "/api/v1/tasks",
+<<<<<<< HEAD
             json={"prompt": "test prompt text for rbac"},
+=======
+            json={"prompt": "hello world"},
+>>>>>>> origin/main
             headers=_bearer(viewer_token(jwt_cfg)),
         )
         assert r.status_code == 403
@@ -453,7 +465,11 @@ class TestMixedAuth:
     ) -> None:
         r = both_client.post(
             "/api/v1/tasks",
+<<<<<<< HEAD
             json={"prompt": "x" * 10},
+=======
+            json={"prompt": "hello world"},
+>>>>>>> origin/main
             headers=_bearer(viewer_token(jwt_cfg)),
         )
         assert r.status_code == 403
@@ -467,7 +483,11 @@ class TestMixedAuth:
     ) -> None:
         r = both_client.post(
             "/api/v1/tasks",
+<<<<<<< HEAD
             json={"prompt": "operator task prompt"},
+=======
+            json={"prompt": "operator task 123"},
+>>>>>>> origin/main
             headers=_bearer(operator_token(jwt_cfg)),
         )
         assert r.status_code == 202

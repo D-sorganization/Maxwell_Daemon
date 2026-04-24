@@ -9,3 +9,7 @@
 ## 2024-10-25 - Redundant Data Fetching on Event Streams
 **Learning:** Fetching heavy detailed state for a resource (e.g. `fetchTaskDetail`) on every background event for that resource—regardless of whether it's currently visible in the UI—causes redundant API requests and wasteful re-renders. A global list fetch often handles the high-level status updates needed for hidden resources.
 **Action:** Always verify if a resource is actively being viewed (e.g. `state.selected === id`) before firing off detailed fetch operations in response to background event streams.
+
+## 2024-10-26 - O(N) Array Allocations for Map Aggregates
+**Learning:** Spreading `Map.values()` into arrays repeatedly (e.g., `[...state.allTasks.values()].filter(...).length` or `.reduce(...)`) just to compute aggregates causes unnecessary O(N) memory allocations and garbage collection pressure, leading to UI frame drops when updates happen rapidly (like via WebSockets).
+**Action:** Always compute aggregate values over Map or Set structures using a single `for...of` loop or iterator instead of creating intermediate arrays.

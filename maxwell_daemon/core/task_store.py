@@ -282,13 +282,23 @@ class TaskStore:
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _row_to_task(row) if row else None
 
+    def _delete_sync(self, task_id: str) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
     def _list_sync(
         self,
         *,
         limit: int = 100,
         status: TaskStatus | None = None,
+<<<<<<< HEAD
         kind: str | None = None,
         repo: str | None = None,
+=======
+        repo: str | None = None,
+        kind: str | None = None,
+        cursor: datetime | None = None,
+>>>>>>> origin/main
         completed_before: datetime | None = None,
         created_before: datetime | None = None,
     ) -> list[Task]:
@@ -298,12 +308,24 @@ class TaskStore:
         if status is not None:
             clauses.append("status = ?")
             args.append(status.value)
+<<<<<<< HEAD
         if kind is not None:
             clauses.append("kind = ?")
             args.append(kind)
         if repo is not None:
             clauses.append("(repo = ? OR issue_repo = ?)")
             args.extend([repo, repo])
+=======
+        if repo is not None:
+            clauses.append("(repo = ? OR issue_repo = ?)")
+            args.extend([repo, repo])
+        if kind is not None:
+            clauses.append("kind = ?")
+            args.append(kind)
+        if cursor is not None:
+            clauses.append("created_at < ?")
+            args.append(cursor.isoformat())
+>>>>>>> origin/main
         if completed_before is not None:
             clauses.append("completed_at IS NOT NULL AND completed_at < ?")
             args.append(completed_before.isoformat())
@@ -418,23 +440,39 @@ class TaskStore:
     def get(self, task_id: str) -> Task | None:
         return self._get_sync(task_id)
 
+    def delete(self, task_id: str) -> None:
+        self._delete_sync(task_id)
+
     def list_tasks(
         self,
         *,
         limit: int = 100,
         status: TaskStatus | None = None,
+<<<<<<< HEAD
         kind: str | None = None,
         repo: str | None = None,
+=======
+        repo: str | None = None,
+        kind: str | None = None,
+        cursor: datetime | None = None,
+>>>>>>> origin/main
         completed_before: datetime | None = None,
         created_before: datetime | None = None,
     ) -> list[Task]:
         return self._list_sync(
             limit=limit,
             status=status,
+<<<<<<< HEAD
             kind=kind,
             repo=repo,
             completed_before=completed_before,
             created_before=created_before,
+=======
+            repo=repo,
+            kind=kind,
+            cursor=cursor,
+            completed_before=completed_before,
+>>>>>>> origin/main
         )
 
     def recover_pending(self) -> list[Task]:
@@ -486,13 +524,24 @@ class TaskStore:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._get_sync, task_id)
 
+    async def adelete(self, task_id: str) -> None:
+        """Non-blocking version of :meth:`delete` for use in async code."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._delete_sync, task_id)
+
     async def alist_tasks(
         self,
         *,
         limit: int = 100,
         status: TaskStatus | None = None,
+<<<<<<< HEAD
         kind: str | None = None,
         repo: str | None = None,
+=======
+        repo: str | None = None,
+        kind: str | None = None,
+        cursor: datetime | None = None,
+>>>>>>> origin/main
         completed_before: datetime | None = None,
         created_before: datetime | None = None,
     ) -> list[Task]:
@@ -503,10 +552,17 @@ class TaskStore:
             lambda: self._list_sync(
                 limit=limit,
                 status=status,
+<<<<<<< HEAD
                 kind=kind,
                 repo=repo,
                 completed_before=completed_before,
                 created_before=created_before,
+=======
+                repo=repo,
+                kind=kind,
+                cursor=cursor,
+                completed_before=completed_before,
+>>>>>>> origin/main
             ),
         )
 
