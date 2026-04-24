@@ -66,8 +66,9 @@ def test_selects_cheapest_eligible_profile() -> None:
         ],
         policy=policy,
     )
-    assert decision.selected_profile_id == "local.cheap"
-    assert decision.candidate_profile_ids == ("local.cheap", "remote.expensive")
+    assert decision.plan is not None
+    assert decision.plan.primary == "local.cheap"
+    assert "remote.expensive" in decision.plan.fallbacks
 
 
 def test_disabled_profiles_are_never_selected() -> None:
@@ -79,7 +80,8 @@ def test_disabled_profiles_are_never_selected() -> None:
         ],
         policy=policy,
     )
-    assert decision.selected_profile_id == "remote.enabled"
+    assert decision.plan is not None
+    assert decision.plan.primary == "remote.enabled"
     assert any(r.profile_id == "local.disabled" for r in decision.rejections)
 
 
@@ -120,8 +122,8 @@ def test_policy_rejections_report_each_failed_gate() -> None:
         policy=capability_policy,
     )
 
-    assert deployment_decision.selected_profile_id is None
-    assert capability_decision.selected_profile_id is None
+    assert deployment_decision.plan is None
+    assert capability_decision.plan is None
     rejections = {
         r.profile_id: r.reason
         for r in (*deployment_decision.rejections, *capability_decision.rejections)
@@ -151,7 +153,8 @@ def test_benchmark_gate_escalates_to_qualified_remote() -> None:
             ("remote.frontier", "maxwell.context_recall"): 0.92,
         },
     )
-    assert decision.selected_profile_id == "remote.frontier"
+    assert decision.plan is not None
+    assert decision.plan.primary == "remote.frontier"
     assert any(
         r.profile_id == "local.devstral" and r.reason == "benchmark_below_threshold"
         for r in decision.rejections
@@ -176,7 +179,8 @@ def test_benchmark_gate_rejects_non_finite_scores(bad_score: float) -> None:
             ("remote.good", "maxwell.context_recall"): 0.92,
         },
     )
-    assert decision.selected_profile_id == "remote.good"
+    assert decision.plan is not None
+    assert decision.plan.primary == "remote.good"
     assert any(
         r.profile_id == "local.bad" and r.reason == "benchmark_not_finite"
         for r in decision.rejections
@@ -199,7 +203,8 @@ def test_rejects_profiles_that_cannot_handle_required_risk() -> None:
         ],
         policy=policy,
     )
-    assert decision.selected_profile_id == "remote.exec"
+    assert decision.plan is not None
+    assert decision.plan.primary == "remote.exec"
     assert any(
         r.profile_id == "local.safe-only" and r.reason == "action_risk_too_high_for_profile"
         for r in decision.rejections

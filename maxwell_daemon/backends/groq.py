@@ -6,17 +6,11 @@ Set ``GROQ_API_KEY`` (or pass ``api_key``) to authenticate.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import AsyncIterator
-from typing import Any
-
-from groq import APIConnectionError, AsyncGroq, RateLimitError
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
+from importlib import import_module
+from typing import Any, cast
 
 from maxwell_daemon.backends.base import (
     BackendCapabilities,
@@ -57,14 +51,18 @@ class GroqBackend(ILLMBackend):
         key = api_key or os.environ.get("GROQ_API_KEY")
         if not key:
             raise BackendUnavailableError("GROQ_API_KEY not set and no api_key passed")
-        self._client = AsyncGroq(api_key=key, timeout=timeout)
+        try:
+            groq_sdk = cast(Any, import_module("groq"))
+        except ModuleNotFoundError as exc:
+            raise BackendUnavailableError(
+                "groq SDK not installed; install maxwell-daemon[groq]"
+            ) from exc
+        self._client = groq_sdk.AsyncGroq(api_key=key, timeout=timeout)
+        self._retryable_errors: tuple[type[BaseException], ...] = (
+            cast(type[BaseException], groq_sdk.APIConnectionError),
+            cast(type[BaseException], groq_sdk.RateLimitError),
+        )
 
-    @retry(
-        retry=retry_if_exception_type((APIConnectionError, RateLimitError)),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        reraise=True,
-    )
     async def complete(
         self,
         messages: list[Message],
@@ -86,7 +84,16 @@ class GroqBackend(ILLMBackend):
             params["tools"] = tools
         params.update(kwargs)
 
-        resp = await self._client.chat.completions.create(**params)
+        delay_seconds = 1.0
+        for attempt in range(3):
+            try:
+                resp = await self._client.chat.completions.create(**params)
+                break
+            except Exception as exc:
+                if not isinstance(exc, self._retryable_errors) or attempt == 2:
+                    raise
+                await asyncio.sleep(delay_seconds)
+                delay_seconds = min(delay_seconds * 2, 10.0)
         choice = resp.choices[0]
         usage = resp.usage
         return BackendResponse(

@@ -175,6 +175,30 @@ def cost_for(provider: str, model: str, usage: TokenUsage) -> float:
         Token counts from the API response.
     """
     price_in, price_out = get_rates(provider, model)
-    return (
-        usage.prompt_tokens * price_in / 1_000_000 + usage.completion_tokens * price_out / 1_000_000
+
+    # Provider-specific cache read discounts
+    # Anthropic charges ~10% for cache reads (90% discount)
+    # OpenAI charges ~50% for cache reads (50% discount)
+    cache_discount = 1.0
+    if usage.cached_tokens > 0:
+        if provider in ("claude", "agent-loop"):
+            cache_discount = 0.10
+        elif provider in ("openai", "azure"):
+            cache_discount = 0.50
+
+    # usage.prompt_tokens usually includes the cached tokens in OpenAI/Anthropic APIs,
+    # or the caller adds them. Assuming prompt_tokens is the total input tokens:
+    billed_input_tokens = usage.prompt_tokens - usage.cached_tokens
+    billed_cached_tokens = usage.cached_tokens
+
+    # Fallback if prompt_tokens didn't include cached_tokens:
+    if billed_input_tokens < 0:
+        billed_input_tokens = usage.prompt_tokens
+        billed_cached_tokens = 0
+
+    input_cost = (billed_input_tokens * price_in / 1_000_000) + (
+        billed_cached_tokens * price_in * cache_discount / 1_000_000
     )
+    output_cost = usage.completion_tokens * price_out / 1_000_000
+
+    return input_cost + output_cost

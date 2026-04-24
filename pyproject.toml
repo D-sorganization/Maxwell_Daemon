@@ -132,6 +132,18 @@ module = ["asyncssh", "asyncssh.*", "playwright", "playwright.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = [
+    "google",
+    "google.*",
+    "google.generativeai",
+    "groq",
+    "groq.*",
+    "mistralai",
+    "mistralai.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = ["keyring", "keyring.*"]
 ignore_missing_imports = true
 

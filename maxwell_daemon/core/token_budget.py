@@ -15,9 +15,21 @@ from maxwell_daemon.core.ledger import CostLedger
 
 __all__ = [
     "EstimatedCost",
+    "TaskTokenBudget",
     "TokenBudgetAllocator",
     "TokenBudgetStatus",
 ]
+
+
+@dataclass(slots=True, frozen=True)
+class TaskTokenBudget:
+    """Detailed token budget for a specific task."""
+
+    remaining_monthly_usd: float
+    context_cost_usd: float
+    call_cost_usd: float
+    safe_allocation_usd: float
+    recommended_model: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -128,17 +140,25 @@ class TokenBudgetAllocator:
             est = self.estimate_cost(model=model, prompt_tokens=10000, completion_tokens=2000)
             can_afford[model] = est.cost_usd < remaining
 
-        status_val: Literal["ok", "tight", "exhausted"]
-        # Recommend cheapest model that fits
-        if can_afford.get("claude-haiku-4-5"):
+        tight_budget = utilization >= 75.0
+
+        # Recommend a lower-cost model that still fits the current budget state.
+        if tight_budget and can_afford.get("claude-sonnet-4-6"):
+            recommended = "claude-sonnet-4-6"
+        elif can_afford.get("claude-haiku-4-5"):
             recommended = "claude-haiku-4-5"
-            status_val = "ok"
         elif can_afford.get("claude-sonnet-4-6"):
             recommended = "claude-sonnet-4-6"
-            status_val = "tight"
         else:
             recommended = "claude-opus-4-7"
-            status_val = "exhausted" if remaining < 1.0 else "tight"
+
+        status_val: Literal["ok", "tight", "exhausted"]
+        if remaining <= 0.0:
+            status_val = "exhausted"
+        elif tight_budget:
+            status_val = "tight"
+        else:
+            status_val = "ok"
 
         return TokenBudgetStatus(
             remaining_budget_usd=remaining,
@@ -148,4 +168,53 @@ class TokenBudgetAllocator:
             can_afford_model=can_afford,
             recommended_model=recommended,
             status=status_val,
+        )
+
+    def token_budget_for_task(
+        self,
+        *,
+        context_tokens: int,
+        expected_completion_tokens: int = 2000,
+        now: datetime | None = None,
+    ) -> TaskTokenBudget:
+        """Compute the safe budget allocation and model recommendation for a task.
+
+        Factors in the current context size (repo schema, history) and remaining budget.
+        """
+        status = self.check_budget(now=now)
+
+        # Calculate cost for context using Haiku as the baseline
+        base_est = self.estimate_cost(
+            model="claude-haiku-4-5",
+            prompt_tokens=context_tokens,
+            completion_tokens=0,
+        )
+        context_cost = base_est.cost_usd
+
+        # Decide on safe allocation: min(remaining, 5% of monthly limit, or $1.00)
+        safe_alloc = 1.0
+        if status.monthly_limit_usd:
+            safe_alloc = min(status.remaining_budget_usd, status.monthly_limit_usd * 0.05)
+
+        # Estimate the call cost with the recommended model
+        call_est = self.estimate_cost(
+            model=status.recommended_model,
+            prompt_tokens=context_tokens,
+            completion_tokens=expected_completion_tokens,
+        )
+
+        # If call cost exceeds safe allocation, downgrade model if possible
+        recommended = status.recommended_model
+        if call_est.cost_usd > safe_alloc:
+            if recommended == "claude-opus-4-7":
+                recommended = "claude-sonnet-4-6"
+            elif recommended == "claude-sonnet-4-6":
+                recommended = "claude-haiku-4-5"
+
+        return TaskTokenBudget(
+            remaining_monthly_usd=status.remaining_budget_usd,
+            context_cost_usd=context_cost,
+            call_cost_usd=call_est.cost_usd,
+            safe_allocation_usd=safe_alloc,
+            recommended_model=recommended,
         )
