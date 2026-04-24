@@ -181,9 +181,11 @@ class Daemon:
         self._config_path: Path | None = config_path
         # Protects atomic swap of _config, _budget, and _router during reload.
         self._config_lock = threading.Lock()
+
         from maxwell_daemon.mcp.client import McpClientManager
 
         self._mcp_manager = McpClientManager(config.mcp_servers)
+
 
         self._fleet_registry = InMemoryFleetCapabilityRegistry()
         self._ledger = CostLedger(
