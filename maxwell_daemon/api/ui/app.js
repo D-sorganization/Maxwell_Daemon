@@ -1321,13 +1321,12 @@ function handleEvent(evt) {
     state.testOutput.set(p.task_id, (prev + (p.chunk || "")).slice(-64_000));
     if (p.task_id === state.selected) {
       if (!_testOutputRaf) {
-        const selectedAtSchedule = p.task_id;
         _testOutputRaf = requestAnimationFrame(() => {
           _testOutputRaf = null;
           const outEl = document.getElementById("detail-output");
-          if (outEl && state.selected === selectedAtSchedule) {
+          if (outEl && state.selected) {
             outEl.textContent =
-              state.testOutput.get(selectedAtSchedule) || "(no streamed output)";
+              state.testOutput.get(state.selected) || "(no streamed output)";
           }
         });
       }

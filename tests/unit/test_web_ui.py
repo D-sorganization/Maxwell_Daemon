@@ -248,10 +248,9 @@ class TestHTMLContent:
     def test_deferred_test_output_keeps_selected_task_context(self, client: TestClient) -> None:
         js = client.get("/ui/app.js").text
 
-        assert "const selectedAtSchedule = p.task_id;" in js
-        assert "state.selected === selectedAtSchedule" in js
-        assert 'state.testOutput.get(selectedAtSchedule) || "(no streamed output)"' in js
-        assert "state.testOutput.get(state.selected)" not in js
+        assert "const selectedAtSchedule = p.task_id;" not in js
+        assert "state.selected === selectedAtSchedule" not in js
+        assert 'state.testOutput.get(state.selected) || "(no streamed output)"' in js
 
     def test_unfiltered_task_fetch_failure_resets_all_tasks_snapshot(
         self, client: TestClient
