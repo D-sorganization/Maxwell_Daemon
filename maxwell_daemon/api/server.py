@@ -118,6 +118,10 @@ class TaskSubmit(BaseModel):
     issue_number: int | None = None
     issue_mode: Literal["plan", "implement"] | None = None
     priority: PriorityField = 100
+    depends_on: list[str] = Field(
+        default_factory=list,
+        description="Task IDs that must reach COMPLETED before this task starts.",
+    )
 
 
 class WorkItemCreate(BaseModel):
@@ -416,6 +420,7 @@ class TaskView(BaseModel):
     issue_number: int | None = None
     issue_mode: str | None = None
     ab_group: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
     priority: int = 100
     pr_url: str | None = None
     dispatched_to: str | None = None
@@ -444,6 +449,7 @@ class TaskView(BaseModel):
             issue_number=t.issue_number,
             issue_mode=t.issue_mode,
             ab_group=t.ab_group,
+            depends_on=list(getattr(t, "depends_on", [])),
             priority=getattr(t, "priority", 100),
             pr_url=t.pr_url,
             dispatched_to=t.dispatched_to,
@@ -1633,6 +1639,7 @@ def create_app(
                     model=payload.model,
                     priority=payload.priority,
                     task_id=payload.task_id,
+                    depends_on=payload.depends_on or [],
                 )
         except DuplicateTaskIdError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
@@ -2550,6 +2557,74 @@ def create_app(
         return JSONResponse(
             {"event": event_type, "dispatched": len(dispatches)},
             status_code=status.HTTP_200_OK,
+        )
+
+    # ── Generic webhook trigger ──────────────────────────────────────────────
+
+    class _WebhookTriggerRequest(BaseModel):
+        """Body accepted by ``POST /api/webhooks/trigger``."""
+
+        prompt: str = Field(..., min_length=1)
+        repo: str | None = None
+        backend: str | None = None
+        priority: int = Field(default=100, ge=0, le=1000)
+
+    @app.post("/api/webhooks/trigger", dependencies=[Depends(_require_operator())])
+    async def generic_webhook_trigger(
+        request: Request,
+        body: Annotated[_WebhookTriggerRequest, Body()],
+    ) -> Response:
+        """Trigger a task from any external source via a generic HTTP webhook.
+
+        Unlike the GitHub endpoint this route is bearer-token authenticated
+        (operator role).  Optionally supply ``X-Maxwell-Signature: sha256=<hex>``
+        for an additional HMAC-SHA256 layer using the daemon's
+        ``webhook_secret`` config value, and ``X-Idempotency-Key`` to prevent
+        duplicate task creation on webhook retries.
+        """
+        from fastapi.responses import JSONResponse
+
+        from maxwell_daemon.triggers.webhook import (
+            WebhookTriggerPayload,
+            enqueue_webhook_task,
+            verify_webhook_signature,
+        )
+
+        # Optional extra HMAC layer — only enforced when a secret is configured.
+        webhook_secret: str | None = getattr(daemon._config, "webhook_secret", None)
+        if webhook_secret:
+            raw_body = await request.body()
+            sig_header = request.headers.get("x-maxwell-signature", "")
+            if not verify_webhook_signature(webhook_secret, raw_body, sig_header):
+                return JSONResponse(
+                    {"detail": "invalid signature"},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
+        idempotency_key: str | None = request.headers.get("x-idempotency-key")
+
+        payload = WebhookTriggerPayload(
+            prompt=body.prompt,
+            repo=body.repo,
+            backend=body.backend,
+            priority=body.priority,
+            idempotency_key=idempotency_key,
+        )
+        result = enqueue_webhook_task(payload, daemon=daemon)
+
+        if result.error:
+            return JSONResponse(
+                {"detail": result.error},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if result.duplicate:
+            return JSONResponse(
+                {"duplicate": True, "task_id": None},
+                status_code=status.HTTP_200_OK,
+            )
+        return JSONResponse(
+            {"task_id": result.task_id, "duplicate": False},
+            status_code=status.HTTP_202_ACCEPTED,
         )
 
     # ── SSH endpoints ────────────────────────────────────────────────────────
