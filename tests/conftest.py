@@ -126,6 +126,8 @@ def isolated_ledger_path(tmp_path: Path) -> Path:
     return tmp_path / "ledger.db"
 
 
+
+
 @pytest.fixture(autouse=True)
 def _structlog_test_config() -> Iterator[None]:
     structlog.configure(

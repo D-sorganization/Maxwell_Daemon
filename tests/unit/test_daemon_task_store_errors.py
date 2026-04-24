@@ -74,7 +74,6 @@ class TestTaskStoreErrorLogging:
 
         import structlog
         from structlog.testing import LogCapture
-
         cap_structlog = LogCapture()
         structlog.configure(processors=[cap_structlog])
 
@@ -91,9 +90,7 @@ class TestTaskStoreErrorLogging:
 
         _run(body())
 
-        matched = [
-            r for r in cap_structlog.entries if "task store write failed" in str(r.get("event", ""))
-        ]
+        matched = [r for r in cap_structlog.entries if "task store write failed" in str(r.get("event", ""))]
         assert matched, "expected 'task store write failed' log"
 
 
@@ -136,9 +133,9 @@ class TestEventPublishFailure:
                 t = d.get_task(task.id)
                 assert t is not None
                 assert t.status is TaskStatus.FAILED
-                assert (
-                    t.finished_at is not None
-                ), "task must have finished_at set even on publish failure"
+                assert t.finished_at is not None, (
+                    "task must have finished_at set even on publish failure"
+                )
             finally:
                 await d.stop()
 

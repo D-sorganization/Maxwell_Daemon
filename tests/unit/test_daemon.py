@@ -429,7 +429,6 @@ class TestRunningStatusResilience:
         async def body() -> None:
             import structlog
             from structlog.testing import LogCapture
-
             cap_structlog = LogCapture()
             structlog.configure(processors=[cap_structlog])
 
@@ -439,9 +438,7 @@ class TestRunningStatusResilience:
             try:
                 task = d.submit("log test")
                 await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
-                matched = [
-                    r for r in cap_structlog.entries if "re-queuing" in str(r.get("event", ""))
-                ]
+                matched = [r for r in cap_structlog.entries if "re-queuing" in str(r.get("event", ""))]
                 assert matched, "expected re-queuing log message"
             finally:
                 await d.stop()

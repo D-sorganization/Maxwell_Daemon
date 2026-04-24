@@ -240,9 +240,9 @@ class TestRunBash:
         monkeypatch.setenv("MAXWELL_ALLOW_ENV", "SECRET_KEY")
         env = _build_run_bash_env()
         assert os.environ.get("SECRET_KEY") == "hunter2"
-        assert (
-            env.get("SECRET_KEY") == "hunter2"
-        ), f"expected SECRET_KEY in run_bash env; got keys: {sorted(env)}"
+        assert env.get("SECRET_KEY") == "hunter2", (
+            f"expected SECRET_KEY in run_bash env; got keys: {sorted(env)}"
+        )
 
 
 # ── glob_files ───────────────────────────────────────────────────────────────
