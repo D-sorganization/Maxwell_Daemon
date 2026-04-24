@@ -103,6 +103,9 @@ class Task:
     issue_mode: str | None = None  # "plan" | "implement"
     # A/B grouping: sibling tasks share an ab_group so the UI pairs them.
     ab_group: str | None = None
+    # DAG dependencies: list of task IDs that must reach COMPLETED before this
+    # task is allowed to start.  An empty list (the default) means "no deps".
+    depends_on: list[str] = field(default_factory=list)
     # Priority: lower number = higher priority. 0=emergency, 50=high, 100=normal, 200=batch.
     priority: int = 100
     status: TaskStatus = TaskStatus.QUEUED
@@ -583,6 +586,7 @@ class Daemon:
         model: str | None = None,
         priority: int = 100,
         task_id: str | None = None,
+        depends_on: list[str] | None = None,
     ) -> Task:
         resolved_task_id = task_id or uuid.uuid4().hex[:12]
         task = Task(
@@ -593,6 +597,7 @@ class Daemon:
             backend=backend,
             model=model,
             priority=priority,
+            depends_on=list(depends_on) if depends_on else [],
         )
         # Persist and track the task under lock, then route the queue mutation
         # through the daemon loop if this caller is on a foreign thread.
@@ -1322,6 +1327,26 @@ class Daemon:
             with self._tasks_lock:
                 if task.status is not TaskStatus.QUEUED:
                     continue
+                # DAG dependency check: if any upstream task is not yet in a
+                # terminal-success state, requeue and wait for the next tick.
+                if task.depends_on:
+                    unfinished = [
+                        dep
+                        for dep in task.depends_on
+                        if self._tasks.get(dep, None) is None
+                        or self._tasks[dep].status is not TaskStatus.COMPLETED
+                    ]
+                    if unfinished:
+                        log.debug(
+                            "task %s waiting for dependencies %s; re-queuing",
+                            task.id,
+                            unfinished,
+                        )
+                        # Re-enqueue without changing status so the task stays QUEUED
+                        # and will be retried once the dependencies finish.
+                        self._queue.put_nowait((task.priority, task))
+                        self._queue.task_done()
+                        continue
                 task.status = TaskStatus.RUNNING
                 task.started_at = datetime.now(timezone.utc)
             with bind_context(task_id=task.id, worker_id=worker_id):
