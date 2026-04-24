@@ -174,19 +174,19 @@ def mount_metrics_endpoint(app: FastAPI, *, path: str = "/metrics") -> None:
 
 def record_cache_hit(hit_rate: float) -> None:
     """Record the current prompt cache hit rate (0.0 to 1.0)."""
-    MAXWELL_CACHE_HIT_RATE.set(hit_rate)
+    MAXWELL_CACHE_HIT_RATE.set(hit_rate)  # type: ignore[no-untyped-call]
 
 
 def record_gate_verdict(verdict: str, severity: str) -> None:
     """Record a gate verdict with outcome and severity."""
-    MAXWELL_GATE_VERDICTS_TOTAL.labels(verdict=verdict, severity=severity).inc()
+    MAXWELL_GATE_VERDICTS_TOTAL.labels(verdict=verdict, severity=severity).inc()  # type: ignore[no-untyped-call]
 
 
 def record_queue_depth(depth: int) -> None:
     """Record the current task queue depth."""
-    MAXWELL_QUEUE_DEPTH.set(depth)
+    MAXWELL_QUEUE_DEPTH.set(depth)  # type: ignore[no-untyped-call]
 
 
 def record_queue_latency(latency_ms: float) -> None:
     """Record latency to dequeue a task in milliseconds."""
-    MAXWELL_QUEUE_LATENCY_MS.observe(latency_ms)
+    MAXWELL_QUEUE_LATENCY_MS.observe(latency_ms)  # type: ignore[no-untyped-call]
