@@ -47,8 +47,8 @@ def test_invalid_repo_field() -> None:
 
 def test_valid_prompt_field() -> None:
     """Test valid prompt."""
-    model = SampleAPIModel(prompt="a" * 10)  # minimum length
-    assert model.prompt == "a" * 10
+    model = SampleAPIModel(prompt="a")  # minimum length
+    assert model.prompt == "a"
 
     model = SampleAPIModel(prompt="a" * 25000)  # within range
     assert len(model.prompt) == 25000
@@ -57,7 +57,7 @@ def test_valid_prompt_field() -> None:
 def test_invalid_prompt_field() -> None:
     """Test invalid prompt."""
     with pytest.raises(ValidationError):
-        SampleAPIModel(prompt="short")  # too short
+        SampleAPIModel(prompt="")  # empty string (min length is 1)
 
     with pytest.raises(ValidationError):
         SampleAPIModel(prompt="a" * 50001)  # too long

@@ -1188,6 +1188,14 @@ def _control_plane_view_from_task(daemon: Daemon, task: Task) -> ControlPlaneWor
         actions=_control_plane_actions_for_task(task),
     )
 
+class WebhookTriggerRequest(BaseModel):
+    """Body accepted by ``POST /api/webhooks/trigger``."""
+
+    prompt: str = Field(..., min_length=1)
+    repo: str | None = None
+    backend: str | None = None
+    priority: int = Field(default=100, ge=0, le=1000)
+
 
 def create_app(
     daemon: Daemon,
@@ -2565,18 +2573,12 @@ def create_app(
 
     # ── Generic webhook trigger ──────────────────────────────────────────────
 
-    class _WebhookTriggerRequest(BaseModel):
-        """Body accepted by ``POST /api/webhooks/trigger``."""
 
-        prompt: str = Field(..., min_length=1)
-        repo: str | None = None
-        backend: str | None = None
-        priority: int = Field(default=100, ge=0, le=1000)
 
     @app.post("/api/webhooks/trigger", dependencies=[Depends(_require_operator())])
     async def generic_webhook_trigger(
         request: Request,
-        body: Annotated[_WebhookTriggerRequest, Body()],
+        body: Annotated[WebhookTriggerRequest, Body()],
     ) -> Response:
         """Trigger a task from any external source via a generic HTTP webhook.
 
