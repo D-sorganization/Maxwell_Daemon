@@ -615,6 +615,18 @@ class Daemon:
         attachments: list[Attachment] | None = None,
     ) -> Task:
         resolved_task_id = task_id or uuid.uuid4().hex[:12]
+
+        if len(prompt) > 50000:
+            main_req = prompt[:10000]
+            remainder = prompt[10000:]
+            artifact = self._artifact_store.put_text(
+                kind=ArtifactKind.METADATA,
+                name="prompt_overflow.txt",
+                text=remainder,
+                task_id=resolved_task_id,
+            )
+            prompt = f"{main_req}\n\n[PROMPT TRUNCATED. Remainder stored in artifact_id:///{artifact.id}]"
+
         task = Task(
             id=resolved_task_id,
             prompt=prompt,
@@ -686,8 +698,21 @@ class Daemon:
         """
         if self._loop is None:
             raise RuntimeError("daemon must be started before submit_threadsafe()")
+
+        resolved_task_id = uuid.uuid4().hex[:12]
+        if len(prompt) > 50000:
+            main_req = prompt[:10000]
+            remainder = prompt[10000:]
+            artifact = self._artifact_store.put_text(
+                kind=ArtifactKind.METADATA,
+                name="prompt_overflow.txt",
+                text=remainder,
+                task_id=resolved_task_id,
+            )
+            prompt = f"{main_req}\n\n[PROMPT TRUNCATED. Remainder stored in artifact_id:///{artifact.id}]"
+
         task = Task(
-            id=uuid.uuid4().hex[:12],
+            id=resolved_task_id,
             prompt=prompt,
             kind=TaskKind.PROMPT,
             repo=repo,
@@ -1484,6 +1509,7 @@ class Daemon:
                 model=decision.model,
                 status="success",
                 tokens=resp.usage.total_tokens,
+                cached_tokens=resp.usage.cached_tokens,
                 cost_usd=task.cost_usd,
                 duration_seconds=(datetime.now(timezone.utc) - task.started_at).total_seconds(),
             )

@@ -54,8 +54,8 @@ PromptField = Annotated[
     str,
     Field(
         min_length=1,
-        max_length=50000,
-        description="Prompt text must be between 1 and 50,000 characters",
+        max_length=500000,
+        description="Prompt text must be between 1 and 500,000 characters",
     ),
 ]
 
