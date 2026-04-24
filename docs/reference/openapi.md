@@ -128,6 +128,7 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 | `/api/v1/tasks/{task_id}/actions` | `GET` | Tasks |
 | `/api/v1/tasks/{task_id}/artifacts` | `GET` | Tasks |
 | `/api/v1/tasks/{task_id}/cancel` | `POST` | Tasks |
+| `/api/webhooks/trigger` | `POST` | Webhooks |
 | `/api/v1/webhooks/github` | `POST` | Webhooks |
 | `/api/v1/work-items` | `POST, GET` | Work items |
 | `/api/v1/work-items/{item_id}` | `GET, PATCH` | Work items |

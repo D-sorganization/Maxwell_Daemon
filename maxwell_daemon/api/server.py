@@ -113,6 +113,18 @@ def _parse_delegate_status(value: str | None) -> DelegateSessionStatus | None:
         ) from exc
 
 
+def _parse_task_status(value: str | None) -> TaskStatus | None:
+    if value is None:
+        return None
+    try:
+        return TaskStatus(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"invalid task status: {value}",
+        ) from exc
+
+
 class TaskSubmit(BaseModel):
     prompt: PromptField
     task_id: TaskIdField | None = None
@@ -142,6 +154,15 @@ class WorkItemCreate(BaseModel):
     required_checks: tuple[str, ...] = ()
     priority: int = Field(default=100, ge=0, le=1000)
     task_ids: tuple[str, ...] = ()
+
+
+class WebhookTriggerRequest(BaseModel):
+    """Body accepted by ``POST /api/webhooks/trigger``."""
+
+    prompt: str = Field(..., min_length=1)
+    repo: str | None = None
+    backend: str | None = None
+    priority: int = Field(default=100, ge=0, le=1000)
 
 
 class WorkItemPatch(BaseModel):
@@ -1665,17 +1686,11 @@ def create_app(
             completed_before_filter = _coerce_datetime_to_utc(completed_before_filter)
         if cursor is not None:
             cursor = _coerce_datetime_to_utc(cursor)
-
-        task_status: TaskStatus | None = None
-        if status is not None:
-            try:
-                task_status = TaskStatus(status)
-            except ValueError as exc:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"invalid task status: {status}") from exc
+        status_filter = _parse_task_status(status)
 
         tasks = await daemon._task_store.alist_tasks(
             limit=limit,
-            status=task_status,
+            status=status_filter,
             repo=repo,
             kind=kind,
             cursor=cursor,
@@ -2572,8 +2587,6 @@ def create_app(
         )
 
     # ── Generic webhook trigger ──────────────────────────────────────────────
-
-
 
     @app.post("/api/webhooks/trigger", dependencies=[Depends(_require_operator())])
     async def generic_webhook_trigger(

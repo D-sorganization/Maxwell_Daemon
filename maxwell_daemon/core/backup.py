@@ -66,6 +66,33 @@ _SQLITE_COMPONENTS: dict[str, str] = {
 }
 
 
+def _validated_tar_members(archive: tarfile.TarFile, destination: Path) -> list[tarfile.TarInfo]:
+    """Return tar members that are safe to unpack into ``destination``."""
+
+    root = destination.resolve()
+    validated: list[tarfile.TarInfo] = []
+    for member in archive.getmembers():
+        member_path = Path(member.name)
+        if member_path.is_absolute():
+            raise RestoreError(f"archive member has absolute path: {member.name}")
+        if any(part == ".." for part in member_path.parts):
+            raise RestoreError(f"archive member escapes destination: {member.name}")
+        if member.issym() or member.islnk() or member.ischr() or member.isblk() or member.isfifo():
+            raise RestoreError(f"archive member type is not supported: {member.name}")
+        if not (root / member_path).resolve().is_relative_to(root):
+            raise RestoreError(f"archive member escapes destination: {member.name}")
+        validated.append(member)
+    return validated
+
+
+def _quote_sqlite_identifier(identifier: str) -> str:
+    """Safely quote a SQLite identifier after rejecting NUL bytes."""
+
+    if "\x00" in identifier:
+        raise ValueError("sqlite identifier contains a NUL byte")
+    return '"' + identifier.replace('"', '""') + '"'
+
+
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as fh:
@@ -246,7 +273,8 @@ class BackupManager:
 
             # Unpack
             with tarfile.open(archive, "r:gz") as tar:
-                tar.extractall(tmp)
+                for member in _validated_tar_members(tar, tmp):
+                    tar.extract(member, tmp)
 
             root = tmp / "maxwell-backup"
 
@@ -428,7 +456,10 @@ class BackupManager:
         try:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             for (table_name,) in cursor.fetchall():
-                rows = conn.execute(f"SELECT * FROM {table_name}").fetchall()
+                quoted_table_name = _quote_sqlite_identifier(table_name)
+                rows = conn.execute(
+                    f"SELECT * FROM {quoted_table_name}"  # nosec B608
+                ).fetchall()
                 tables[table_name] = [dict(r) for r in rows]
         finally:
             conn.close()

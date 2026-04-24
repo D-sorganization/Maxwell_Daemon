@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
-from typing import Any
-
-import google.generativeai as genai
+from importlib import import_module
+from typing import Any, cast
 
 from maxwell_daemon.backends.base import (
     BackendCapabilities,
@@ -51,7 +50,13 @@ class GeminiBackend(ILLMBackend):
         key = api_key or os.environ.get("GOOGLE_API_KEY")
         if not key:
             raise BackendUnavailableError("GOOGLE_API_KEY not set and no api_key passed")
-        genai.configure(api_key=key)
+        try:
+            self._genai = cast(Any, import_module("google.generativeai"))
+        except ModuleNotFoundError as exc:
+            raise BackendUnavailableError(
+                "google-generativeai SDK not installed; install maxwell-daemon[gemini]"
+            ) from exc
+        self._genai.configure(api_key=key)
         self._timeout = timeout
 
     def _build_contents(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
@@ -79,10 +84,10 @@ class GeminiBackend(ILLMBackend):
         if max_tokens is not None:
             gen_config["max_output_tokens"] = max_tokens
 
-        gmodel = genai.GenerativeModel(
+        gmodel = self._genai.GenerativeModel(
             model_name=model,
             system_instruction=system_instruction,
-            generation_config=genai.types.GenerationConfig(**gen_config),
+            generation_config=self._genai.types.GenerationConfig(**gen_config),
         )
         resp = await gmodel.generate_content_async(contents, **kwargs)
         usage_meta = getattr(resp, "usage_metadata", None)
@@ -116,10 +121,10 @@ class GeminiBackend(ILLMBackend):
         if max_tokens is not None:
             gen_config["max_output_tokens"] = max_tokens
 
-        gmodel = genai.GenerativeModel(
+        gmodel = self._genai.GenerativeModel(
             model_name=model,
             system_instruction=system_instruction,
-            generation_config=genai.types.GenerationConfig(**gen_config),
+            generation_config=self._genai.types.GenerationConfig(**gen_config),
         )
         async for chunk in await gmodel.generate_content_async(contents, stream=True, **kwargs):
             if chunk.text:
@@ -127,7 +132,7 @@ class GeminiBackend(ILLMBackend):
 
     async def health_check(self) -> bool:
         try:
-            gmodel = genai.GenerativeModel(model_name="gemini-1.5-flash")
+            gmodel = self._genai.GenerativeModel(model_name="gemini-1.5-flash")
             await gmodel.generate_content_async("ping")
             return True
         except Exception:
@@ -135,7 +140,7 @@ class GeminiBackend(ILLMBackend):
 
     async def list_models(self) -> list[str]:
         try:
-            return [m.name for m in genai.list_models()]
+            return [m.name for m in self._genai.list_models()]
         except Exception:
             return []
 

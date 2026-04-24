@@ -129,6 +129,15 @@ class Task:
         return (self.priority, self.created_at) < (other.priority, other.created_at)
 
 
+@dataclass(frozen=True, slots=True)
+class ConfigSnapshot:
+    """Frozen execution collaborators captured when a worker claims a task."""
+
+    config: MaxwellDaemonConfig
+    router: BackendRouter
+    budget: BudgetEnforcer
+
+
 @dataclass
 class DaemonState:
     version: str
@@ -160,14 +169,14 @@ class Daemon:
         self._config = config
         # Path used for hot-reload; populated by from_config_path.
         self._config_path: Path | None = config_path
-        # Protects atomic swap of _config and _router during reload.
+        # Protects atomic swap of _config, _budget, and _router during reload.
         self._config_lock = threading.Lock()
-        self._router = BackendRouter(config)
         self._fleet_registry = InMemoryFleetCapabilityRegistry()
         self._ledger = CostLedger(
             ledger_path or Path.home() / ".local/share/maxwell-daemon/ledger.db"
         )
         self._budget = BudgetEnforcer(config.budget, self._ledger)
+        self._router = BackendRouter(config, budget=self._budget)
         self._events = EventBus()
         self._workspace_root = (
             workspace_root or Path.home() / ".local/share/maxwell-daemon/workspaces"
@@ -280,10 +289,11 @@ class Daemon:
     def reload_config(self) -> Path:
         """Reload configuration from disk and swap atomically.
 
-        Thread-safe: acquires ``_config_lock`` before updating ``_config`` and
-        ``_router`` so in-flight workers always see a consistent pair. Running
-        workers are *not* interrupted — they complete with the old config and
-        new tasks pick up the new config automatically.
+        Thread-safe: acquires ``_config_lock`` before updating ``_config``,
+        ``_budget``, and ``_router`` so in-flight workers always see a
+        consistent snapshot. Running workers are *not* interrupted — they
+        complete with the old collaborators and new tasks pick up the new
+        config automatically.
 
         Returns the path that was reloaded.
 
@@ -294,12 +304,22 @@ class Daemon:
         path = self._config_path or default_config_path()
         # Validate first (outside the lock) so we never swap in a bad config.
         new_config = load_config(path)
-        new_router = BackendRouter(new_config)
+        new_budget = BudgetEnforcer(new_config.budget, self._ledger)
+        new_router = BackendRouter(new_config, budget=new_budget)
         with self._config_lock:
             self._config = new_config
+            self._budget = new_budget
             self._router = new_router
         log.info("config reloaded from %s", path)
         return path
+
+    def _capture_config_snapshot(self) -> ConfigSnapshot:
+        with self._config_lock:
+            return ConfigSnapshot(
+                config=self._config,
+                router=self._router,
+                budget=self._budget,
+            )
 
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
@@ -1387,9 +1407,10 @@ class Daemon:
                             task.started_at = None
                     await self._queue.put((task.priority, task))
                     continue
-                await self._execute(task)
+                snapshot = self._capture_config_snapshot()
+                await self._execute(task, snapshot)
 
-    async def _execute(self, task: Task) -> None:
+    async def _execute(self, task: Task, snapshot: ConfigSnapshot) -> None:
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now(timezone.utc)
         try:
@@ -1408,8 +1429,8 @@ class Daemon:
                     ),
                 )
             )
-            self._budget.require_under_budget()
-            decision = self._router.route(
+            snapshot.budget.require_under_budget()
+            decision = snapshot.router.route(
                 repo=task.repo,
                 backend_override=task.backend,
                 model_override=task.model,
@@ -1426,7 +1447,7 @@ class Daemon:
                 log.exception("task store write failed while recording route for task=%s", task.id)
 
             if task.kind is TaskKind.ISSUE:
-                await self._execute_issue(task, decision)
+                await self._execute_issue(task, decision, snapshot)
                 return
 
             resp = await decision.backend.complete(
@@ -1542,7 +1563,7 @@ class Daemon:
                     # Scratchpad API mismatch — log but don't crash the task.
                     log.warning("scratchpad.clear API not available for task %s", task.id)
 
-    async def _execute_issue(self, task: Task, decision: Any) -> None:
+    async def _execute_issue(self, task: Task, decision: Any, snapshot: ConfigSnapshot) -> None:
         """Run the issue → PR flow. Called with status already RUNNING."""
         from maxwell_daemon.core.repo_overrides import resolve_overrides
         from maxwell_daemon.gh import GitHubClient
@@ -1569,13 +1590,13 @@ class Daemon:
         )
 
         mode = task.issue_mode if task.issue_mode in {"plan", "implement"} else "plan"
-        overrides = resolve_overrides(self._config, repo=task.issue_repo)
+        overrides = resolve_overrides(snapshot.config, repo=task.issue_repo)
 
         # Smart model selection: if the task didn't specify a model AND the
         # backend has a tier_map, pick by issue complexity. Otherwise fall back
         # to whatever the router resolved.
         effective_model = decision.model
-        backend_cfg = self._router._backend_config(decision.backend_name)
+        backend_cfg = snapshot.router._backend_config(decision.backend_name)
         if not task.model and backend_cfg is not None and backend_cfg.tier_map:
             from maxwell_daemon.core.model_selector import pick_model_for_issue
 
