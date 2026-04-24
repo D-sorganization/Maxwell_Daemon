@@ -408,7 +408,6 @@ class TestRunningStatusResilience:
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
         """A failed RUNNING status update is logged at ERROR level."""
-        import logging
 
         class _FailFirstStore:
             def __init__(self) -> None:

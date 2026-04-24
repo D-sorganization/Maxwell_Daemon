@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 import json
-import logging
 
 import pytest
 
 from maxwell_daemon.logging import bind_context, configure_logging, get_logger
-
-
-
 
 
 class TestConfigureLogging:

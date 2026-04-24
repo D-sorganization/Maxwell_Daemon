@@ -9,12 +9,9 @@ and the worker coroutine stays alive.
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Awaitable
 from pathlib import Path
 from typing import Any, TypeVar
-
-import pytest
 
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon

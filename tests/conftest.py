@@ -6,11 +6,13 @@ behavior rather than scaffolding.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
+import structlog
 
 from maxwell_daemon.backends import (
     BackendCapabilities,
@@ -125,11 +127,6 @@ def isolated_ledger_path(tmp_path: Path) -> Path:
 
 
 
-
-import structlog
-import logging
-from collections.abc import Iterator
-import pytest
 
 @pytest.fixture(autouse=True)
 def _structlog_test_config() -> Iterator[None]:

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import threading
 from pathlib import Path
 from typing import Any
@@ -223,10 +224,8 @@ class TestTasksDictThreadSafety:
             nonlocal stop
             try:
                 while not stop:
-                    try:
+                    with contextlib.suppress(QueueSaturationError):
                         d.submit("hi")
-                    except QueueSaturationError:
-                        pass
             except BaseException as e:
                 errors.append(e)
 
