@@ -1653,7 +1653,7 @@ def create_app(
 
     @app.get("/api/v1/tasks", dependencies=[Depends(_require_viewer())])
     async def list_tasks(
-        status: Annotated[str | None, Query()] = None,
+        status_filter: Annotated[str | None, Query(alias="status")] = None,
         kind: Annotated[str | None, Query()] = None,
         repo: Annotated[str | None, Query()] = None,
         cursor: Annotated[datetime | None, Query()] = None,
@@ -1668,12 +1668,13 @@ def create_app(
             cursor = _coerce_datetime_to_utc(cursor)
 
         task_status: TaskStatus | None = None
-        if status is not None:
+        if status_filter is not None:
             try:
-                task_status = TaskStatus(status)
+                task_status = TaskStatus(status_filter)
             except ValueError as exc:
                 raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY, f"invalid task status: {status}"
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"invalid task status: {status_filter}",
                 ) from exc
 
         tasks = await daemon._task_store.alist_tasks(
