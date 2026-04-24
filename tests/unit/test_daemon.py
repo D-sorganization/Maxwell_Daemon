@@ -206,7 +206,7 @@ class TestTaskExecution:
             d.reprioritize_task(task.id, 10)
             calls: list[str] = []
 
-            async def fake_execute(executed: Task) -> None:
+            async def fake_execute(executed: Task, snapshot: object) -> None:
                 calls.append(executed.id)
                 executed.status = TaskStatus.COMPLETED
 
