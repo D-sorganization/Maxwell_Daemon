@@ -395,9 +395,7 @@ _RUST_TRAIT_RE = re.compile(
 )
 # `impl [<...>] [Trait for] Type` — capture the inherent/target type name.
 _RUST_IMPL_RE = re.compile(
-    r"impl\b(?:\s*<[^>]*>)?\s+"
-    r"(?:[A-Za-z_][\w:]*(?:<[^>]*>)?\s+for\s+)?"
-    r"([A-Za-z_][\w]*)",
+    r"impl\b(?:\s*<[^>]*>)?\s+" r"(?:[A-Za-z_][\w:]*(?:<[^>]*>)?\s+for\s+)?" r"([A-Za-z_][\w]*)",
 )
 _RUST_METHOD_RE = re.compile(
     r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:const\s+)?(?:unsafe\s+)?"

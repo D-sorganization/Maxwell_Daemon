@@ -925,12 +925,20 @@ function renderTasks() {
   const sorted = [...state.tasks.values()].sort(
     (a, b) => a.created_at < b.created_at ? 1 : (a.created_at > b.created_at ? -1 : 0)
   );
+
+  // ⚡ Bolt: Replace O(n²) nested loop lookup with O(n) hash map lookup.
+  // Pre-compute control plane map for O(1) lookups during rendering.
+  const controlPlaneMap = new Map();
+  for (const item of state.controlPlane) {
+    if (item.task_id) controlPlaneMap.set(item.task_id, item);
+  }
+
   // ⚡ Bolt: Batch DOM insertions using DocumentFragment to prevent layout thrashing.
   const fragment = document.createDocumentFragment();
   for (const t of sorted) {
     const tr = document.createElement("tr");
     tr.dataset.id = t.id;
-    const controlPlane = controlPlaneByTaskId(t.id);
+    const controlPlane = controlPlaneMap.get(t.id) || null;
     const delegate = controlPlane?.delegates?.[0] || null;
     const target = t.issue_repo
       ? `${t.issue_repo}#${t.issue_number}`

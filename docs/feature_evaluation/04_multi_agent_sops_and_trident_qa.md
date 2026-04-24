@@ -12,7 +12,7 @@ Maxwell-Daemon's core strength is its multi-backend router. This feature exploit
 *   **Costs:** Can increase API costs if not managed, though routing bulk work to local models offsets this.
 
 ## Impact on Target User (The Hobbyist)
-Provides a literal "development team in a box." The hobbyist doesn't just get a coding assistant; they get a manager, a senior dev, and a QA tester working in synergy. It forces the iterative process—the QA agent rejects bad code before the user even has to review it. 
+Provides a literal "development team in a box." The hobbyist doesn't just get a coding assistant; they get a manager, a senior dev, and a QA tester working in synergy. It forces the iterative process—the QA agent rejects bad code before the user even has to review it.
 
 ## Engineering Principles Enforced
 *   **DbC (Design by Contract):** The SOP inherently enforces contracts. The Architect defines the contract (the plan/interfaces), the Coder fulfills it, and the QA agent aggressively verifies the contract was met.

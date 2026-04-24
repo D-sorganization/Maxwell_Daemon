@@ -192,4 +192,3 @@ Operational boundaries:
 - Require source-controlled checks, critic review, and human or CI gates before
   work passes.
 - Record dispatch evidence in the PR or task artifacts when an issue advances.
-
