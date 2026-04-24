@@ -23,6 +23,11 @@ jobs:
     name: Build MkDocs site
     runs-on: d-sorg-fleet
     steps:
+      - name: Clear stale checkout locks
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
