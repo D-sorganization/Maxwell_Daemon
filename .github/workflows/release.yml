@@ -24,14 +24,31 @@ jobs:
           pip install build twine
           python -m build
           twine check dist/*
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          pip install cyclonedx-bom
+          cyclonedx-py environment --outfile dist/sbom.json
+
+      - name: Sign distributions with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: >-
+            dist/*.tar.gz
+            dist/*.whl
+            dist/sbom.json
+
       - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/*
+          files: |
+            dist/*
+            dist/*.sigstore
           generate_release_notes: true

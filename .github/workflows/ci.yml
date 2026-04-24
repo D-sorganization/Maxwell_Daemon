@@ -22,8 +22,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python -m venv .venv
-      - run: .venv/bin/python -m pip install -e ".[dev]"
+      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - run: uv venv .venv
+      - run: uv sync --all-extras
       - name: Ruff check
         run: .venv/bin/python -m ruff check . --output-format=github
       - name: Ruff format check
@@ -37,8 +38,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python -m venv .venv
-      - run: .venv/bin/python -m pip install -e ".[dev]"
+      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - run: uv venv .venv
+      - run: uv sync --all-extras
       - run: .venv/bin/python -m mypy maxwell_daemon
       - name: Mypy on tests
         run: .venv/bin/python -m mypy tests --no-strict-optional
@@ -56,8 +58,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m venv .venv
-      - run: .venv/bin/python -m pip install -e ".[ssh,dev]"
+      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - run: uv venv .venv
+      - run: uv sync --all-extras
       - name: Run tests
         run: .venv/bin/python -m pytest -p no:xvfb --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
       - name: Upload coverage artifact
@@ -110,8 +113,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python -m venv .venv
-      - run: .venv/bin/python -m pip install bandit pip-audit
+      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - run: uv venv .venv
+      - run: uv pip install bandit pip-audit
       - name: Bandit (static analysis)
         run: .venv/bin/python -m bandit -r maxwell_daemon -c pyproject.toml
       - name: pip-audit (dependency vulnerabilities)
@@ -146,8 +150,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python -m venv .venv
-      - run: .venv/bin/python -m pip install build
+      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - run: uv venv .venv
+      - run: uv pip install build
       - run: .venv/bin/python -m build
       - uses: actions/upload-artifact@v7
         with:
