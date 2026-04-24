@@ -1186,6 +1186,7 @@ def _control_plane_view_from_task(daemon: Daemon, task: Task) -> ControlPlaneWor
         actions=_control_plane_actions_for_task(task),
     )
 
+
 class WebhookTriggerRequest(BaseModel):
     """Body accepted by ``POST /api/webhooks/trigger``."""
 
