@@ -22,7 +22,6 @@ class TestJWTEdgeCases:
     def test_create_token_with_extra_claims(self) -> None:
         cfg = JWTConfig(secret="sec")
         token = cfg.create_token("alice", Role.developer, extra_claims={"custom": "value"})
-        claims = cfg.decode_token(token)
         import jwt
         payload = jwt.decode(token, cfg.secret, algorithms=[cfg.algorithm])
         assert payload["custom"] == "value"
@@ -40,7 +39,6 @@ class TestJWTEdgeCases:
             cfg.decode_token(token)
 
     def test_decode_token_missing_claims_handled(self) -> None:
-        cfg = JWTConfig(secret="sec")
         # PyJWT checks required claims, but let's test if we can cover the exception mapping in require_role.
         # Actually require_role tests might be harder without FastAPI test client, but we already have those gaps.
         pass
