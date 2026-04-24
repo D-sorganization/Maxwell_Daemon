@@ -20,6 +20,7 @@ __all__ = [
     "TokenBudgetStatus",
 ]
 
+
 @dataclass(slots=True, frozen=True)
 class TaskTokenBudget:
     """Detailed token budget for a specific task."""

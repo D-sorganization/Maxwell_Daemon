@@ -196,7 +196,9 @@ def cost_for(provider: str, model: str, usage: TokenUsage) -> float:
         billed_input_tokens = usage.prompt_tokens
         billed_cached_tokens = 0
 
-    input_cost = (billed_input_tokens * price_in / 1_000_000) + (billed_cached_tokens * price_in * cache_discount / 1_000_000)
+    input_cost = (billed_input_tokens * price_in / 1_000_000) + (
+        billed_cached_tokens * price_in * cache_discount / 1_000_000
+    )
     output_cost = usage.completion_tokens * price_out / 1_000_000
 
     return input_cost + output_cost
