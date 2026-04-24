@@ -7,12 +7,6 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import anthropic
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from maxwell_daemon.backends.base import (
     BackendCapabilities,
@@ -23,8 +17,15 @@ from maxwell_daemon.backends.base import (
     MessageRole,
     TokenUsage,
 )
+from maxwell_daemon.backends.concurrency import (
+    BackendConcurrencyLimiter,
+    retry_on_rate_limit,
+    with_concurrency_limit,
+)
 from maxwell_daemon.backends.pricing import get_rates
 from maxwell_daemon.backends.registry import registry
+
+_limiter = BackendConcurrencyLimiter.get_global()
 
 # Per-model context-window sizes (tokens).  Pricing lives in the central table
 # at :mod:`maxwell_daemon.backends.pricing`.
@@ -61,12 +62,8 @@ class ClaudeBackend(ILLMBackend):
             out.append({"role": m.role.value, "content": m.content})
         return system, out
 
-    @retry(
-        retry=retry_if_exception_type((anthropic.APIConnectionError, anthropic.RateLimitError)),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        reraise=True,
-    )
+    @with_concurrency_limit(_limiter, "claude")
+    @retry_on_rate_limit(max_attempts=5, base_delay=1.0, max_delay=60.0)
     async def complete(
         self,
         messages: list[Message],
