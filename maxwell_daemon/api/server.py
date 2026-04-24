@@ -62,6 +62,7 @@ from maxwell_daemon.director import (
 )
 from maxwell_daemon.logging import bind_context
 from maxwell_daemon.metrics import mount_metrics_endpoint
+from maxwell_daemon.api.validation import PromptField, TaskIdField, RepoField, PriorityField
 
 _UI_DIR = _Path(__file__).parent / "ui"
 
@@ -104,23 +105,23 @@ def _parse_delegate_status(value: str | None) -> DelegateSessionStatus | None:
 
 
 class TaskSubmit(BaseModel):
-    prompt: str = Field(..., min_length=1)
-    task_id: str | None = None
+    prompt: PromptField
+    task_id: TaskIdField | None = None
     kind: str = "prompt"
-    repo: str | None = None
+    repo: RepoField | None = None
     backend: str | None = None
     model: str | None = None
-    issue_repo: str | None = None
+    issue_repo: RepoField | None = None
     issue_number: int | None = None
     issue_mode: Literal["plan", "implement"] | None = None
-    priority: int = Field(default=100, ge=0, le=200)
+    priority: PriorityField = 100
 
 
 class WorkItemCreate(BaseModel):
     id: str | None = Field(default=None, min_length=1)
     title: str = Field(..., min_length=1)
     body: str = ""
-    repo: str | None = Field(default=None, pattern=REPO_PATTERN)
+    repo: RepoField | None = None
     source: str = Field(default="api", pattern=r"^(manual|github_issue|gaai|api)$")
     source_url: str | None = None
     acceptance_criteria: tuple[AcceptanceCriterion, ...] = ()
@@ -133,7 +134,7 @@ class WorkItemCreate(BaseModel):
 class WorkItemPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1)
     body: str | None = None
-    repo: str | None = Field(default=None, pattern=REPO_PATTERN)
+    repo: RepoField | None = None
     source_url: str | None = None
     acceptance_criteria: tuple[AcceptanceCriterion, ...] | None = None
     scope: ScopeBoundary | None = None
@@ -335,7 +336,7 @@ class GateWaiverRequest(BaseModel):
 
 
 class IssueCreate(BaseModel):
-    repo: str = Field(..., pattern=REPO_PATTERN)
+    repo: RepoField
     title: str = Field(..., min_length=1)
     body: str = ""
     labels: list[str] = Field(default_factory=list)
@@ -344,12 +345,12 @@ class IssueCreate(BaseModel):
 
 
 class IssueDispatch(BaseModel):
-    repo: str = Field(..., pattern=REPO_PATTERN)
+    repo: RepoField
     number: int = Field(..., ge=1)
     mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
     backend: str | None = None
     model: str | None = None
-    priority: int = Field(default=100, ge=0, le=200)
+    priority: PriorityField = 100
 
 
 class IssueBatchDispatch(BaseModel):
@@ -357,7 +358,7 @@ class IssueBatchDispatch(BaseModel):
 
 
 class IssueAbDispatch(BaseModel):
-    repo: str = Field(..., pattern=REPO_PATTERN)
+    repo: RepoField
     number: int = Field(..., ge=1)
     backends: list[str] = Field(..., min_length=2, max_length=4)
     mode: str = Field(default="plan", pattern=r"^(plan|implement)$")

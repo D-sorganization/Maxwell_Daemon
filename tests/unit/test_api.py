@@ -190,10 +190,10 @@ class TestBackends:
 
 class TestTaskSubmission:
     def test_submit_returns_202_and_queued_task(self, client: TestClient) -> None:
-        r = client.post("/api/v1/tasks", json={"prompt": "hi"})
+        r = client.post("/api/v1/tasks", json={"prompt": "hello world"})
         assert r.status_code == 202
         body = r.json()
-        assert body["prompt"] == "hi"
+        assert body["prompt"] == "hello world"
         assert body["status"] in {"queued", "running", "completed"}
         assert body["id"]
 
@@ -206,20 +206,20 @@ class TestTaskSubmission:
     ) -> None:
         first = client.post(
             "/api/v1/tasks",
-            json={"prompt": "first", "task_id": "api-duplicate-id"},
+            json={"prompt": "first prompt", "task_id": "api-duplicate-id"},
         )
         assert first.status_code == 202
 
         duplicate = client.post(
             "/api/v1/tasks",
-            json={"prompt": "second", "task_id": "api-duplicate-id"},
+            json={"prompt": "second prompt", "task_id": "api-duplicate-id"},
         )
 
         assert duplicate.status_code == 409
         assert "api-duplicate-id" in duplicate.json()["detail"]
         task = daemon._task_store.get("api-duplicate-id")
         assert task is not None
-        assert task.prompt == "first"
+        assert task.prompt == "first prompt"
 
     def test_submit_rejects_invalid_issue_mode(self, client: TestClient) -> None:
         r = client.post(
@@ -276,7 +276,7 @@ class TestTaskSubmission:
 
     def test_list_returns_all_tasks(self, client: TestClient) -> None:
         for i in range(3):
-            client.post("/api/v1/tasks", json={"prompt": f"t{i}"})
+            client.post("/api/v1/tasks", json={"prompt": f"test prompt {i}"})
         r = client.get("/api/v1/tasks")
         assert r.status_code == 200
         assert len(r.json()) >= 3
@@ -362,7 +362,7 @@ class TestTaskSubmission:
         assert [task["id"] for task in r.json()] == [old_done.id]
 
     def test_get_task_by_id(self, client: TestClient) -> None:
-        submitted = client.post("/api/v1/tasks", json={"prompt": "x"}).json()
+        submitted = client.post("/api/v1/tasks", json={"prompt": "test-prompt-fetch"}).json()
         r = client.get(f"/api/v1/tasks/{submitted['id']}")
         assert r.status_code == 200
         assert r.json()["id"] == submitted["id"]
