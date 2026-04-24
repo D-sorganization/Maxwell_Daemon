@@ -174,4 +174,3 @@ A tool-authoring PR should not pass review until it provides:
 The critic panel should reject tools that smuggle orchestration decisions into
 handlers, run without workspace isolation, expose unredacted secrets, or require
 live provider credentials for unit tests.
-
