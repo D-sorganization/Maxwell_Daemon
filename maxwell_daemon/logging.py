@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 import sys
 from collections.abc import Iterator
 from typing import Any
@@ -19,6 +20,28 @@ import structlog
 from structlog.contextvars import bind_contextvars, unbind_contextvars
 
 __all__ = ["bind_context", "configure_logging", "get_logger"]
+
+_REDACT_KEYS = {"api_key", "password", "token", "secret", "authorization"}
+
+def _redact_value(val: Any) -> Any:
+    if not isinstance(val, str):
+        return "***"
+    if len(val) <= 12:
+        return "***"
+    return f"{val[:8]}...{val[-4:]}"
+
+def _redact_secrets_processor(
+    logger: structlog.types.WrappedLogger,
+    name: str,
+    event_dict: structlog.types.EventDict
+) -> structlog.types.EventDict:
+    if os.environ.get("MAXWELL_REDACT_LOGS", "1") != "1":
+        return event_dict
+    
+    for key, value in event_dict.items():
+        if any(redact_key in key.lower() for redact_key in _REDACT_KEYS):
+            event_dict[key] = _redact_value(value)
+    return event_dict
 
 
 def configure_logging(
@@ -40,6 +63,7 @@ def configure_logging(
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
+        _redact_secrets_processor,
     ]
 
     renderer: Any = (

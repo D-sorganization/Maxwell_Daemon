@@ -11,6 +11,7 @@ Routing rules (in priority order):
 from __future__ import annotations
 
 import logging
+from maxwell_daemon.logging import get_logger
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -21,7 +22,7 @@ from maxwell_daemon.config import BackendConfig, MaxwellDaemonConfig
 if TYPE_CHECKING:
     pass
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 @dataclass(slots=True)

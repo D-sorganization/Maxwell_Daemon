@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+from maxwell_daemon.logging import get_logger
 import signal
 import threading
 import uuid
@@ -58,7 +59,7 @@ from maxwell_daemon.events import Event, EventBus, EventKind, attach_observabili
 from maxwell_daemon.fleet.capabilities import InMemoryFleetCapabilityRegistry
 from maxwell_daemon.metrics import record_request
 
-log = logging.getLogger("maxwell_daemon.daemon")
+log = get_logger("maxwell_daemon.daemon")
 
 class QueueSaturationError(Exception):
     """Raised when the priority queue is full and cannot accept more tasks."""

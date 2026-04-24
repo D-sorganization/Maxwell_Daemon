@@ -21,6 +21,7 @@ can assume clean, fully-populated parameter dicts.
 from __future__ import annotations
 
 import logging
+from maxwell_daemon.logging import get_logger
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +43,7 @@ __all__ = [
     "render_instructions",
 ]
 
-_LOG = logging.getLogger(__name__)
+_LOG = get_logger(__name__)
 
 _SUPPORTED_VERSIONS: frozenset[int] = frozenset({1})
 _PARAM_TYPES: frozenset[str] = frozenset({"string", "integer", "number", "boolean"})

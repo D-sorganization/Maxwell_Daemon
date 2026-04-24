@@ -23,12 +23,13 @@ Adding new providers
 from __future__ import annotations
 
 import logging
+from maxwell_daemon.logging import get_logger
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from maxwell_daemon.backends.base import TokenUsage
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # USD per 1,000,000 tokens (input, output).
 # Last updated: 2026-04 — published public list prices for each provider.

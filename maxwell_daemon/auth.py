@@ -23,6 +23,7 @@ The module is intentionally decoupled from FastAPI: ``JWTConfig`` and
 from __future__ import annotations
 
 import logging
+from maxwell_daemon.logging import get_logger
 import secrets
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -36,7 +37,7 @@ __all__ = [
     "require_role",
 ]
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # Only HMAC-based symmetric algorithms are permitted.  Asymmetric or "none"
 # algorithms open the door to algorithm-confusion attacks.

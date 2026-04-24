@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+from maxwell_daemon.logging import get_logger
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -15,7 +16,7 @@ from maxwell_daemon.core.action_store import ActionStore
 from maxwell_daemon.core.actions import Action, ActionKind, ActionRiskLevel, ActionStatus
 from maxwell_daemon.events import Event, EventBus, EventKind, attach_observability
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 _ACTION_EXECUTOR_TIMEOUT_SECONDS = 120.0
 

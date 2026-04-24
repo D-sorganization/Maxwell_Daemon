@@ -24,6 +24,7 @@ import asyncio
 import contextlib
 import json
 import logging
+from maxwell_daemon.logging import get_logger
 import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -38,7 +39,7 @@ __all__ = [
     "DiscoveryTick",
 ]
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 @dataclass(slots=True, frozen=True)

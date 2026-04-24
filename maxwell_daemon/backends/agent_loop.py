@@ -23,6 +23,7 @@ turns before returning the final text response.
 from __future__ import annotations
 
 import logging
+from maxwell_daemon.logging import get_logger
 import os
 import time
 from collections.abc import AsyncIterator, Callable
@@ -56,7 +57,7 @@ __all__ = [
     "WallClockTimeoutError",
 ]
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # ── Module-level config ───────────────────────────────────────────────────────

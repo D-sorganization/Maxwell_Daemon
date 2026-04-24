@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from maxwell_daemon.logging import get_logger
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -29,7 +30,7 @@ __all__ = [
     "RateLimitError",
 ]
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # Patterns in gh CLI stderr that indicate GitHub API rate limiting.
 _RATE_LIMIT_PATTERNS = re.compile(

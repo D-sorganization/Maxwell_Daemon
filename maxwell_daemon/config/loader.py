@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 from copy import deepcopy
-from logging import getLogger
+from maxwell_daemon.logging import get_logger
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ from maxwell_daemon.config.models import MaxwellDaemonConfig
 from maxwell_daemon.secrets import KeyringSecretStore, SecretStore, backend_api_key_secret_ref
 
 _ENV_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}")
-_LOGGER = getLogger(__name__)
+_LOGGER = get_logger(__name__)
 
 
 def _substitute_env(value: Any) -> Any:

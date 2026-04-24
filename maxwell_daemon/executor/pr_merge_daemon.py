@@ -27,6 +27,7 @@ satisfies the protocol. No reach-through into the real GitHubClient.
 from __future__ import annotations
 
 import logging
+from maxwell_daemon.logging import get_logger
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
@@ -39,7 +40,7 @@ __all__ = [
     "PrShepherdResult",
 ]
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 _TERMINAL_UNSUCCESSFUL_CONCLUSIONS = frozenset(
     {
