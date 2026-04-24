@@ -26,12 +26,12 @@ satisfies the protocol. No reach-through into the real GitHubClient.
 
 from __future__ import annotations
 
-import logging
-from maxwell_daemon.logging import get_logger
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
+
+from maxwell_daemon.logging import get_logger
 
 __all__ = [
     "PrMergeConfig",

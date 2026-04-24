@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class TestTokenBucketEdgeCases:
     def test_try_consume_multi(self) -> None:
         from maxwell_daemon.api.rate_limit import TokenBucket
@@ -22,6 +23,7 @@ class TestLimiterEdgeCases:
 class TestClientKeyEdgeCases:
     def test_missing_client(self) -> None:
         from unittest.mock import MagicMock
+
         from maxwell_daemon.api.rate_limit import _client_key
         req = MagicMock()
         req.headers.get.return_value = ""

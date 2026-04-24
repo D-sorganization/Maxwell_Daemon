@@ -37,6 +37,7 @@ from fastapi import (
 from pydantic import BaseModel, Field, field_validator
 
 from maxwell_daemon import __version__
+from maxwell_daemon.api.validation import PriorityField, PromptField, RepoField, TaskIdField
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
 from maxwell_daemon.backends import BackendManifest, registry
@@ -62,7 +63,6 @@ from maxwell_daemon.director import (
 )
 from maxwell_daemon.logging import bind_context
 from maxwell_daemon.metrics import mount_metrics_endpoint
-from maxwell_daemon.api.validation import PromptField, TaskIdField, RepoField, PriorityField
 
 _UI_DIR = _Path(__file__).parent / "ui"
 
@@ -1027,10 +1027,11 @@ def create_app(
     )
     mount_metrics_endpoint(app)
     _mount_web_ui(app)
-    
-    from maxwell_daemon.daemon.runner import QueueSaturationError
+
     from fastapi.responses import JSONResponse
-    
+
+    from maxwell_daemon.daemon.runner import QueueSaturationError
+
     @app.exception_handler(QueueSaturationError)
     async def queue_saturation_exception_handler(request: Request, exc: QueueSaturationError) -> JSONResponse:
         return JSONResponse(

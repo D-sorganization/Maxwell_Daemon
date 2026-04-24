@@ -22,9 +22,9 @@ Adding new providers
 
 from __future__ import annotations
 
-import logging
-from maxwell_daemon.logging import get_logger
 from typing import TYPE_CHECKING
+
+from maxwell_daemon.logging import get_logger
 
 if TYPE_CHECKING:
     from maxwell_daemon.backends.base import TokenUsage

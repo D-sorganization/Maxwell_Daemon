@@ -5,13 +5,13 @@ from __future__ import annotations
 import os
 import re
 from copy import deepcopy
-from maxwell_daemon.logging import get_logger
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from maxwell_daemon.config.models import MaxwellDaemonConfig
+from maxwell_daemon.logging import get_logger
 from maxwell_daemon.secrets import KeyringSecretStore, SecretStore, backend_api_key_secret_ref
 
 _ENV_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}")

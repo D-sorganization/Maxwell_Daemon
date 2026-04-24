@@ -22,13 +22,13 @@ The module is intentionally decoupled from FastAPI: ``JWTConfig`` and
 
 from __future__ import annotations
 
-import logging
-from maxwell_daemon.logging import get_logger
 import secrets
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Annotated, Any
 from uuid import uuid4
+
+from maxwell_daemon.logging import get_logger
 
 __all__ = [
     "JWTConfig",

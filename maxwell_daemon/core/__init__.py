@@ -6,6 +6,11 @@ from maxwell_daemon.core.action_store import ActionStore
 from maxwell_daemon.core.actions import Action, ActionKind, ActionRiskLevel, ActionStatus
 from maxwell_daemon.core.artifacts import Artifact, ArtifactKind, ArtifactStore
 from maxwell_daemon.core.budget import BudgetCheck, BudgetEnforcer, BudgetExceededError
+from maxwell_daemon.core.cost_analytics import (
+    CacheHitMetrics,
+    CostAnalytics,
+    CostSummary,
+)
 from maxwell_daemon.core.cross_audit import (
     DEFAULT_CROSS_AUDIT_ROLES,
     CrossAuditReport,
@@ -66,10 +71,13 @@ __all__ = [
     "BudgetCheck",
     "BudgetEnforcer",
     "BudgetExceededError",
+    "CacheHitMetrics",
     "CapabilityProfile",
     "Checkpoint",
+    "CostAnalytics",
     "CostLedger",
     "CostRecord",
+    "CostSummary",
     "CrossAuditReport",
     "CrossAuditResult",
     "CrossAuditService",

@@ -20,8 +20,6 @@ can assume clean, fully-populated parameter dicts.
 
 from __future__ import annotations
 
-import logging
-from maxwell_daemon.logging import get_logger
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +28,7 @@ from typing import Any, Literal
 import yaml
 
 from maxwell_daemon.contracts import require
+from maxwell_daemon.logging import get_logger
 
 __all__ = [
     "Recipe",

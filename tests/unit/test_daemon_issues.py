@@ -13,6 +13,7 @@ from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import TaskKind, TaskStatus
 from maxwell_daemon.events import EventKind
 
+
 class FakeIssue:
     def __init__(self, title: str = "Fix", body: str = "Fix", labels: list[str] | None = None) -> None:
         self.title = title
@@ -134,7 +135,7 @@ class TestIssueDispatch:
             backend_cfg.tier_map = {"complex": "override-model"}
 
             events = []
-            
+
             async def drain_events() -> None:
                 sub = daemon_with_fake_executor._events.subscribe()
                 try:
@@ -143,7 +144,7 @@ class TestIssueDispatch:
                             events.append(ev)
                 except asyncio.CancelledError:
                     pass
-            
+
             drain_task = asyncio.create_task(drain_events())
 
             await daemon_with_fake_executor.start(worker_count=1)
@@ -154,10 +155,10 @@ class TestIssueDispatch:
                 await _run_to_completion(daemon_with_fake_executor, task.id)
                 final = daemon_with_fake_executor.get_task(task.id)
                 assert final.status is TaskStatus.COMPLETED
-                
+
                 # Give the event loop a chance to propagate events
                 await asyncio.sleep(0.1)
-                
+
                 assert len(events) == 1
                 payload = events[0].payload
                 assert payload.get("observability", {}).get("model") == "override-model"

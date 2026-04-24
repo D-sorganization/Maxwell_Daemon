@@ -8,12 +8,11 @@ people install only the extras they need (e.g., `pip install maxwell-daemon[olla
 from __future__ import annotations
 
 import importlib
-import logging
-from maxwell_daemon.logging import get_logger
 from dataclasses import dataclass
 from typing import Any
 
 from maxwell_daemon.backends.base import BackendError, ILLMBackend
+from maxwell_daemon.logging import get_logger
 
 log = get_logger(__name__)
 
