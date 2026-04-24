@@ -62,6 +62,11 @@ class TokenBucket:
             self._refill()
             self._tokens = max(0.0, self._tokens - amount)
 
+    def refund(self, amount: float = 1.0) -> None:
+        with self._lock:
+            self._refill()
+            self._tokens = min(float(self.capacity), self._tokens + amount)
+
     def retry_after_seconds(self) -> float:
         """Seconds until at least 1 token is available."""
         with self._lock:
@@ -124,6 +129,9 @@ class TokenBucketLimiter:
     def consume(self, key: str, *, group: str = "default", amount: float = 1.0) -> None:
         self._bucket(key, group).consume(amount)
 
+    def refund(self, key: str, *, group: str = "default", amount: float = 1.0) -> None:
+        self._bucket(key, group).refund(amount)
+
     def retry_after(self, key: str, *, group: str = "default") -> float:
         return self._bucket(key, group).retry_after_seconds()
 
@@ -180,7 +188,7 @@ def install_rate_limiter(
             return await call_next(request)
         key = _client_key(request)
 
-        if not limiter.has_capacity(key, group="auth_failures"):
+        if not limiter.check(key, group="auth_failures"):
             retry = max(1, round(limiter.retry_after(key, group="auth_failures")))
             return JSONResponse(
                 {"detail": "too many authentication failures"},
@@ -190,6 +198,7 @@ def install_rate_limiter(
 
         group = _classify(request.method, request.url.path)
         if not limiter.check(key, group=group):
+            limiter.refund(key, group="auth_failures", amount=1.0)
             retry = max(1, round(limiter.retry_after(key, group=group)))
             return JSONResponse(
                 {"detail": "rate limit exceeded"},
@@ -198,8 +207,8 @@ def install_rate_limiter(
             )
 
         response = await call_next(request)
-        if response.status_code == 401:
-            limiter.consume(key, group="auth_failures", amount=1.0)
+        if response.status_code != 401:
+            limiter.refund(key, group="auth_failures", amount=1.0)
 
         return response
 

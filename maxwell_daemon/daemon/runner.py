@@ -606,7 +606,12 @@ class Daemon:
                 self._reject_duplicate_task_id(task.id)
             self._task_store.save(task)
             self._tasks[task.id] = task
-            self._enqueue_task_entry(task.priority, task)
+            try:
+                self._enqueue_task_entry(task.priority, task)
+            except QueueSaturationError:
+                del self._tasks[task.id]
+                self._task_store.delete(task.id)
+                raise
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
         # submits before start()), skip the event — the queued state is
         # observable via get_task().
@@ -664,7 +669,12 @@ class Daemon:
         self._task_store.save(task)
         with self._tasks_lock:
             self._tasks[task.id] = task
-        self._enqueue_task_entry(task.priority, task)
+            try:
+                self._enqueue_task_entry(task.priority, task)
+            except QueueSaturationError:
+                del self._tasks[task.id]
+                self._task_store.delete(task.id)
+                raise
         return task
 
     def submit_issue(
@@ -701,7 +711,12 @@ class Daemon:
                 self._reject_duplicate_task_id(task.id)
             self._task_store.save(task)
             self._tasks[task.id] = task
-            self._enqueue_task_entry(task.priority, task)
+            try:
+                self._enqueue_task_entry(task.priority, task)
+            except QueueSaturationError:
+                del self._tasks[task.id]
+                self._task_store.delete(task.id)
+                raise
         try:
             loop = asyncio.get_running_loop()
             bg = loop.create_task(

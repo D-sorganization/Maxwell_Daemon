@@ -89,9 +89,12 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 | `/api/v1/audit` | `GET` | Audit |
 | `/api/v1/audit/verify` | `GET` | Audit |
 | `/api/v1/auth/me` | `GET` | Auth |
+| `/api/v1/auth/refresh` | `POST` | Auth |
+| `/api/v1/auth/revoke` | `POST` | Auth |
 | `/api/v1/auth/token` | `POST` | Auth |
 | `/api/v1/backends` | `GET` | Backends |
 | `/api/v1/backends/available` | `GET` | Backends |
+| `/api/v1/backends/{name}/test` | `POST` | Backends |
 | `/api/v1/control-plane/gauntlet` | `GET` | Gate runtime |
 | `/api/v1/control-plane/gauntlet/{task_id}/cancel` | `POST` | Gate runtime |
 | `/api/v1/control-plane/gauntlet/{task_id}/retry` | `POST` | Gate runtime |
@@ -110,6 +113,7 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 | `/api/v1/issues/{owner}/{name}` | `GET` | Issues |
 | `/api/v1/memory/assemble` | `POST` | Memory |
 | `/api/v1/memory/record` | `POST` | Memory |
+| `/api/v1/onboarding/smoke-test` | `POST` | Onboarding |
 | `/api/v1/ssh/connect` | `POST` | SSH |
 | `/api/v1/ssh/files` | `GET` | SSH |
 | `/api/v1/ssh/keys` | `GET` | SSH |
@@ -130,5 +134,6 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 | `/api/v1/work-items/{item_id}/artifacts` | `GET` | Work items |
 | `/api/v1/work-items/{item_id}/transition` | `POST` | Work items |
 | `/api/v1/workers` | `GET, PUT` | Workers |
+| `/api/webhooks/trigger` | `POST` | Webhooks |
 | `/health` | `GET` | Health |
 | `/readyz` | `GET` | Health |

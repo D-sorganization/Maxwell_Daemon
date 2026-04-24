@@ -28,7 +28,7 @@ __all__ = [
 ]
 
 # Reusable regex patterns for validation
-REPO_PATTERN = r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+REPO_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"
 TASK_ID_PATTERN = r"^[A-Za-z0-9-]{1,256}$"
 MODEL_NAME_PATTERN = r"^[A-Za-z0-9_:.-]+$"
 
@@ -42,12 +42,20 @@ RepoField = Annotated[
     ),
 ]
 
+RoutingKeyField = Annotated[
+    str,
+    Field(
+        max_length=100,
+        description="Generic routing key or repository identifier",
+    ),
+]
+
 PromptField = Annotated[
     str,
     Field(
-        min_length=10,
+        min_length=1,
         max_length=50000,
-        description="Prompt text must be between 10 and 50,000 characters",
+        description="Prompt text must be between 1 and 50,000 characters",
     ),
 ]
 

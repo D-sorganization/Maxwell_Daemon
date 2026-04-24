@@ -128,7 +128,12 @@ class JWTConfig:
         extra_claims: dict[str, Any] | None = None,
     ) -> str:
         """Issue a signed JWT for *subject* with *role*."""
-        import jwt  # PyJWT
+        try:
+            import jwt  # PyJWT
+        except ImportError as exc:
+            raise ImportError(
+                "PyJWT is required to create tokens. Install maxwell-daemon[auth]."
+            ) from exc
 
         if extra_claims is not None:
             reserved = _RESERVED_CLAIMS.intersection(extra_claims)
@@ -155,7 +160,12 @@ class JWTConfig:
         Raises ``jwt.InvalidTokenError`` (or a subclass) on any failure:
         expired, bad signature, missing claims, unknown role, etc.
         """
-        import jwt  # PyJWT
+        try:
+            import jwt  # PyJWT
+        except ImportError as exc:
+            raise ImportError(
+                "PyJWT is required to decode tokens. Install maxwell-daemon[auth]."
+            ) from exc
 
         payload = jwt.decode(
             token,
