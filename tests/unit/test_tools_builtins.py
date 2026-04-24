@@ -30,8 +30,11 @@ from maxwell_daemon.tools.builtins import (
     make_read_file,
     make_run_bash,
     make_write_file,
+    make_open_browser_url,
+    make_browser_screenshot,
 )
 from maxwell_daemon.tools.mcp import ToolInvocationStore, ToolPolicy
+from maxwell_daemon.browser import BrowserResult, BrowserAction, BrowserRequest
 
 
 # ── read_file ────────────────────────────────────────────────────────────────
@@ -143,6 +146,51 @@ class TestEditFile:
         with pytest.raises(SandboxViolationError):
             edit(path="../x", old_string="a", new_string="b")
 
+    def test_edit_file_skip_action(self, tmp_path: Path) -> None:
+        (tmp_path / "f").write_text("a")
+        service = ActionService(
+            ActionStore(tmp_path / "actions.db"),
+            policy=ActionPolicy(mode=ApprovalMode.SUGGEST, workspace_root=tmp_path),
+        )
+        # Force the action to be denied by hacking the policy
+        service._policy = ActionPolicy(mode=ApprovalMode.SUGGEST, workspace_root=tmp_path, denied_command_names=frozenset({"denied"}))
+        def mock_propose(*args, **kwargs):
+            from maxwell_daemon.core.actions import Action, ActionStatus, ActionKind, ActionRiskLevel
+            from maxwell_daemon.core.action_policy import PolicyDecision
+            action = Action(id="action-edit", task_id="task-1", kind=ActionKind.FILE_EDIT, summary="edit", payload={}, status=ActionStatus.PROPOSED, risk_level=ActionRiskLevel.MEDIUM)
+            service._store.save(action)
+            return action, PolicyDecision(allowed=False, requires_approval=True, reason="disallowed")
+        service.propose = mock_propose
+        edit = make_edit_file(tmp_path, action_service=service, task_id="task-1")
+        res = edit(path="f", old_string="a", new_string="b")
+        assert "skipped" in res
+
+    def test_edit_file_fails_with_exception(self, tmp_path: Path) -> None:
+        (tmp_path / "f").write_text("a")
+        service = ActionService(
+            ActionStore(tmp_path / "actions.db"),
+            policy=ActionPolicy(mode=ApprovalMode.FULL_AUTO, workspace_root=tmp_path),
+        )
+        edit = make_edit_file(tmp_path, action_service=service, task_id="task-1")
+        # Trigger an exception by replacing os.replace locally or similar?
+        # A simpler way is to pass a directory instead of a file? No, is_file() checks first.
+        # How about making the file readonly?
+        # We can just mock os.replace in builtins.py for a moment during this test.
+        import maxwell_daemon.tools.builtins as builtins
+        import os
+        orig = os.replace
+        def broken_replace(*args, **kwargs):
+            raise OSError("broken replace")
+        os.replace = broken_replace
+        try:
+            with pytest.raises(OSError):
+                edit(path="f", old_string="a", new_string="b")
+        finally:
+            os.replace = orig
+        actions = service.list_for_task("task-1")
+        assert len(actions) == 1
+        assert actions[0].status.value == "failed"
+
 
 # ── run_bash ─────────────────────────────────────────────────────────────────
 class TestRunBash:
@@ -216,6 +264,35 @@ class TestRunBash:
         actions = service.list_for_task("task-1")
         assert "exit 2" in out
         assert actions[0].status.value == "failed"
+
+    async def test_run_bash_skip_action(self, tmp_path: Path) -> None:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
+            return 0, b"", b""
+        service = ActionService(
+            ActionStore(tmp_path / "actions.db"),
+            policy=ActionPolicy(mode=ApprovalMode.SUGGEST, workspace_root=tmp_path),
+        )
+        def mock_propose(*args, **kwargs):
+            from maxwell_daemon.core.actions import Action, ActionStatus, ActionKind, ActionRiskLevel
+            from maxwell_daemon.core.action_policy import PolicyDecision
+            action = Action(id="action-bash", task_id="task-1", kind=ActionKind.COMMAND, summary="cmd", payload={}, status=ActionStatus.PROPOSED, risk_level=ActionRiskLevel.HIGH)
+            service._store.save(action)
+            return action, PolicyDecision(allowed=False, requires_approval=True, reason="disallowed bash")
+        service.propose = mock_propose
+        bash = make_run_bash(tmp_path, runner=runner, action_service=service, task_id="task-1")
+        res = await bash(command="echo hi")
+        assert "skipped" in res
+
+    async def test_run_bash_pending_action(self, tmp_path: Path) -> None:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
+            return 0, b"", b""
+        service = ActionService(
+            ActionStore(tmp_path / "actions.db"),
+            policy=ActionPolicy(mode=ApprovalMode.SUGGEST, workspace_root=tmp_path),
+        )
+        bash = make_run_bash(tmp_path, runner=runner, action_service=service, task_id="task-1")
+        res = await bash(command="echo hi")
+        assert "pending approval" in res
 
     async def test_default_runner_strips_unexpected_env_vars(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -319,6 +396,21 @@ class TestGrepFiles:
         assert "no match" in result.lower()
         assert "needle-from-outside" not in result
         assert "leak.txt" not in result
+
+    def test_grep_unreadable_file_skipped(self, tmp_path: Path) -> None:
+        (tmp_path / "f.py").write_text("needle")
+        # Mock Path.read_text to raise OSError
+        import pathlib
+        orig_read_text = pathlib.Path.read_text
+        def broken_read(self, *args, **kwargs):
+            raise OSError("unreadable")
+        pathlib.Path.read_text = broken_read
+        try:
+            grep = make_grep_files(tmp_path)
+            result = grep(pattern="needle")
+        finally:
+            pathlib.Path.read_text = orig_read_text
+        assert "no match" in result.lower()
 
 
 # ── registry assembly ───────────────────────────────────────────────────────
@@ -431,3 +523,48 @@ class TestBuildDefaultRegistry:
         assert "no match" in result.content.lower()
         assert "registry-secret" not in result.content
         assert "leak.txt" not in result.content
+
+class MockBrowserService:
+    async def run(self, request: BrowserRequest) -> BrowserResult:
+        if request.action == BrowserAction.SCREENSHOT and request.url == "http://fail":
+            return BrowserResult(
+                url=request.url,
+                action=request.action,
+                title="",
+                screenshot_artifact_id=None,
+                console_artifact_id=None,
+                page_error_artifact_id=None,
+                metadata={},
+                text=""
+            )
+        return BrowserResult(
+            url=request.url,
+            action=request.action,
+            title="Mock Title",
+            screenshot_artifact_id="screenshot-123" if request.action == BrowserAction.SCREENSHOT else None,
+            console_artifact_id="console-123",
+            page_error_artifact_id=None,
+            metadata={"status": "200"},
+            text="hello world"
+        )
+
+class TestBrowserTools:
+    async def test_open_browser_url(self) -> None:
+        service = MockBrowserService()
+        tool = make_open_browser_url(service) # type: ignore
+        res = await tool("http://example.com")
+        assert "url: http://example.com" in res
+        assert "title: Mock Title" in res
+        assert "hello world" in res
+
+    async def test_browser_screenshot(self) -> None:
+        service = MockBrowserService()
+        tool = make_browser_screenshot(service) # type: ignore
+        res = await tool("http://example.com")
+        assert "screenshot_artifact_id: screenshot-123" in res
+
+    async def test_browser_screenshot_fails_without_artifact(self) -> None:
+        service = MockBrowserService()
+        tool = make_browser_screenshot(service) # type: ignore
+        with pytest.raises(ValueError, match="did not produce a screenshot artifact"):
+            await tool("http://fail")

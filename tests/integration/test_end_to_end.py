@@ -30,7 +30,7 @@ def e2e_config_path(tmp_path: Path, register_recording_backend: None) -> Path:
             "agent": {"default_backend": "primary"},
             "repos": [
                 {
-                    "name": "cheap-repo",
+                    "name": "org/cheap-repo",
                     "path": str(tmp_path / "cheap"),
                     "backend": "local",
                 },
@@ -107,8 +107,8 @@ class TestEndToEnd:
     ) -> None:
         _, client, loop = live_system
 
-        r = client.post("/api/v1/tasks", json={"prompt": "hi", "repo": "cheap-repo"})
-        assert r.status_code == 202
+        r = client.post("/api/v1/tasks", json={"prompt": "please fix this issue in cheap-repo", "repo": "org/cheap-repo"})
+        assert r.status_code == 202, r.text
         _wait_for_completion(client, loop, r.json()["id"])
 
         cost = client.get("/api/v1/cost").json()
