@@ -480,6 +480,7 @@ def mcp(
     import logging
 
     from maxwell_daemon.mcp.server import run_mcp_server
+
     logging.basicConfig(level=logging.WARNING)
 
     try:

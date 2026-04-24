@@ -32,26 +32,18 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
             spec = registry.get(name)
 
             # Map ToolParam to JSON Schema
-            schema: dict[str, Any] = {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
+            schema: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
             for param in spec.params:
                 schema["properties"][param.name] = {
                     "type": param.type,
-                    "description": param.description
+                    "description": param.description,
                 }
                 if param.enum:
                     schema["properties"][param.name]["enum"] = param.enum
                 if param.required:
                     schema["required"].append(param.name)
 
-            mcp_tools.append(Tool(
-                name=spec.name,
-                description=spec.description,
-                inputSchema=schema
-            ))
+            mcp_tools.append(Tool(name=spec.name, description=spec.description, inputSchema=schema))
         return mcp_tools
 
     @server.call_tool()  # type: ignore[untyped-decorator]

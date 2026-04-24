@@ -33,7 +33,9 @@ class RouteDecision:
 
 
 class BackendRouter:
-    def __init__(self, config: MaxwellDaemonConfig, budget: Any = None, mcp_manager: Any = None) -> None:
+    def __init__(
+        self, config: MaxwellDaemonConfig, budget: Any = None, mcp_manager: Any = None
+    ) -> None:
         self._config = config
         self._budget = budget
         self._mcp_manager = mcp_manager

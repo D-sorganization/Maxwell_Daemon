@@ -32,22 +32,25 @@ class McpClientManager:
 
             try:
                 if config.transport != "stdio":
-                    log.warning("Unsupported MCP transport %r for server %r", config.transport, name)
+                    log.warning(
+                        "Unsupported MCP transport %r for server %r", config.transport, name
+                    )
                     continue
 
                 # Pass through the process env as well as any configured overrides
                 import os
+
                 env = dict(os.environ)
                 if config.env:
                     env.update(config.env)
 
                 server_params = StdioServerParameters(
-                    command=config.command,
-                    args=config.args,
-                    env=env
+                    command=config.command, args=config.args, env=env
                 )
 
-                stdio_transport = await self._exit_stack.enter_async_context(stdio_client(server_params))
+                stdio_transport = await self._exit_stack.enter_async_context(
+                    stdio_client(server_params)
+                )
                 read, write = stdio_transport
                 session = await self._exit_stack.enter_async_context(ClientSession(read, write))
                 await session.initialize()
@@ -62,7 +65,9 @@ class McpClientManager:
             except Exception as e:
                 log.exception("Failed to start MCP server %r: %s", name, e)
 
-    def _create_tool_spec(self, server_name: str, mcp_tool: Any, session: ClientSession) -> ToolSpec:
+    def _create_tool_spec(
+        self, server_name: str, mcp_tool: Any, session: ClientSession
+    ) -> ToolSpec:
         params = []
         if isinstance(mcp_tool.inputSchema, dict):
             props = mcp_tool.inputSchema.get("properties", {})
@@ -78,12 +83,17 @@ class McpClientManager:
                     type=p_schema.get("type", "string"),
                     description=p_schema.get("description", ""),
                     required=p_name in required,
-                    enum=p_schema.get("enum")
+                    enum=p_schema.get("enum"),
                 )
             )
 
         # Create closure for handler
-        async def handler(*args: Any, _session: ClientSession = session, _tool_name: str = mcp_tool.name, **kwargs: Any) -> str:
+        async def handler(
+            *args: Any,
+            _session: ClientSession = session,
+            _tool_name: str = mcp_tool.name,
+            **kwargs: Any,
+        ) -> str:
             try:
                 res = await _session.call_tool(_tool_name, arguments=kwargs)
                 if getattr(res, "isError", False):

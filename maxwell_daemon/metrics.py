@@ -20,6 +20,7 @@ from prometheus_client import (
 
 __all__ = [
     "MAXWELL_CACHE_HIT_RATE",
+    "MAXWELL_CACHE_HIT_TOKENS_TOTAL",
     "MAXWELL_COST_FORECAST_USD",
     "MAXWELL_DAEMON_ACTIVE_TASKS",
     "MAXWELL_DAEMON_LIVE_TASKS_DICT_SIZE",
@@ -59,6 +60,12 @@ MAXWELL_TOKENS_TOTAL = Counter(
 MAXWELL_REQUEST_COST = Counter(
     "maxwell_daemon_request_cost_usd_total",
     "Cumulative request cost in USD",
+    labelnames=("backend", "model"),
+)
+
+MAXWELL_CACHE_HIT_TOKENS_TOTAL = Counter(
+    "maxwell_daemon_cache_hit_tokens_total",
+    "Total tokens served from prompt cache",
     labelnames=("backend", "model"),
 )
 
@@ -130,6 +137,7 @@ def record_request(
     model: str,
     status: RequestStatus,
     tokens: int = 0,
+    cached_tokens: int = 0,
     cost_usd: float | None = None,
     duration_seconds: float = 0.0,
 ) -> None:
@@ -147,6 +155,8 @@ def record_request(
     if status == "success":
         if tokens > 0:
             MAXWELL_TOKENS_TOTAL.labels(backend=backend, model=model).inc(tokens)
+        if cached_tokens > 0:
+            MAXWELL_CACHE_HIT_TOKENS_TOTAL.labels(backend=backend, model=model).inc(cached_tokens)
         if cost_usd is not None:
             if cost_usd > 0:
                 MAXWELL_REQUEST_COST.labels(backend=backend, model=model).inc(cost_usd)
@@ -174,20 +184,20 @@ def mount_metrics_endpoint(app: FastAPI, *, path: str = "/metrics") -> None:
 
 def record_cache_hit(hit_rate: float) -> None:
     """Record the current prompt cache hit rate (0.0 to 1.0)."""
-    MAXWELL_CACHE_HIT_RATE.set(hit_rate)  # type: ignore[no-untyped-call]
+    MAXWELL_CACHE_HIT_RATE.set(hit_rate)
 
 
 def record_gate_verdict(verdict: str, severity: str) -> None:
     """Record a gate verdict with outcome and severity."""
-    labels = MAXWELL_GATE_VERDICTS_TOTAL.labels(verdict=verdict, severity=severity)  # type: ignore[no-untyped-call]
-    labels.inc()  # type: ignore[no-untyped-call]
+    labels = MAXWELL_GATE_VERDICTS_TOTAL.labels(verdict=verdict, severity=severity)
+    labels.inc()
 
 
 def record_queue_depth(depth: int) -> None:
     """Record the current task queue depth."""
-    MAXWELL_QUEUE_DEPTH.set(depth)  # type: ignore[no-untyped-call]
+    MAXWELL_QUEUE_DEPTH.set(depth)
 
 
 def record_queue_latency(latency_ms: float) -> None:
     """Record latency to dequeue a task in milliseconds."""
-    MAXWELL_QUEUE_LATENCY_MS.observe(latency_ms)  # type: ignore[no-untyped-call]
+    MAXWELL_QUEUE_LATENCY_MS.observe(latency_ms)
