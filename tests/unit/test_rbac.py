@@ -287,7 +287,7 @@ class TestAdminJWT:
     def test_admin_can_post_tasks(self, jwt_only_client: TestClient, jwt_cfg: JWTConfig) -> None:
         r = jwt_only_client.post(
             "/api/v1/tasks",
-            json={"prompt": "admin work"},
+            json={"prompt": "admin work item"},
             headers=_bearer(admin_token(jwt_cfg)),
         )
         assert r.status_code == 202

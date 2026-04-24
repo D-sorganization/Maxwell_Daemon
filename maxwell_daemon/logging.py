@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+import re
 import sys
 from collections.abc import Iterator
 from logging.handlers import RotatingFileHandler
@@ -33,6 +34,8 @@ def _redact_value(val: Any) -> Any:
         return "***"
     return f"{val[:8]}...{val[-4:]}"
 
+_SECRET_PATTERN = re.compile(r"(?:sk-|ant-|key-|ghp_)[a-zA-Z0-9_-]{20,}")
+
 
 def _redact_secrets_processor(
     logger: structlog.types.WrappedLogger, name: str, event_dict: structlog.types.EventDict
@@ -43,6 +46,9 @@ def _redact_secrets_processor(
     for key, value in event_dict.items():
         if any(redact_key in key.lower() for redact_key in _REDACT_KEYS):
             event_dict[key] = _redact_value(value)
+        elif isinstance(value, str):
+            # Redact known key patterns even if the field name is innocent.
+            event_dict[key] = _SECRET_PATTERN.sub("[REDACTED]", value)
     return event_dict
 
 

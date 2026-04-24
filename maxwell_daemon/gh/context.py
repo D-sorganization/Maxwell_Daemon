@@ -92,6 +92,7 @@ class RepoContext:
     memory: str = ""
     relevant_files: dict[str, str] = field(default_factory=dict)
     recent_commits: list[str] = field(default_factory=list)
+    schematic: str = ""
     #: CI contract inferred from workspace files — see ``maxwell_daemon.gh.ci_patterns``.
     #: ``None`` for backwards-compatible callers that build a RepoContext by hand.
     ci_profile: CIProfile | None = None
@@ -111,6 +112,7 @@ class RepoContext:
         budget_snippets = max(500, int(max_chars * 0.30))
         budget_commits = max(200, int(max_chars * 0.10))
         budget_ci = max(400, int(max_chars * 0.05))
+        budget_schematic = max(1000, int(max_chars * 0.15))
 
         parts: list[str] = []
         parts.append(f"Language: {self.language or 'unknown'}")
@@ -143,6 +145,9 @@ class RepoContext:
             parts.append("\n## Recent commits\n")
             joined = "\n".join(f"- {c}" for c in self.recent_commits)
             parts.append(_truncate(joined, budget_commits))
+
+        if self.schematic:
+            parts.append("\n" + _truncate(self.schematic, budget_schematic))
 
         return "\n".join(parts)
 
@@ -208,6 +213,8 @@ class ContextBuilder:
         )
         # Detect CI contract synchronously — file-system only, fast.
         ci_profile = detect_ci_profile(repo_path)
+        from maxwell_daemon.gh.repo_schematic import build_repo_schematic
+        schematic = build_repo_schematic(repo_path).to_prompt(max_chars=4000)
         return RepoContext(
             language=language,
             file_tree=file_tree,
@@ -216,6 +223,7 @@ class ContextBuilder:
             relevant_files=relevant,
             recent_commits=commits,
             ci_profile=ci_profile,
+            schematic=schematic,
         )
 
     async def _file_tree(self, repo_path: Path, *, limit: int) -> str:

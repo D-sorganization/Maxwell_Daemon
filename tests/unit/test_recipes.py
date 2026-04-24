@@ -228,13 +228,13 @@ class TestLoadRecipeDirectory:
         recipes = load_recipe_directory(tmp_path)
         assert sorted(r.name for r in recipes) == ["fix-flaky-test", "other"]
 
-    def test_skips_malformed(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    def test_skips_malformed(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         _write_recipe(tmp_path, _FULL_RECIPE, name="good.yaml")
         _write_recipe(tmp_path, "not: [valid\n", name="bad.yaml")
-        with caplog.at_level(logging.WARNING):
-            recipes = load_recipe_directory(tmp_path)
+        recipes = load_recipe_directory(tmp_path)
         assert [r.name for r in recipes] == ["fix-flaky-test"]
-        assert any("bad.yaml" in rec.message for rec in caplog.records)
+        captured = capsys.readouterr()
+        assert "bad.yaml" in captured.out or "bad.yaml" in captured.err
 
     def test_ignores_non_yaml_files(self, tmp_path: Path) -> None:
         (tmp_path / "readme.md").write_text("not a recipe")

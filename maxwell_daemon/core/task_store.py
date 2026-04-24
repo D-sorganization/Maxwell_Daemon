@@ -233,6 +233,10 @@ class TaskStore:
                 row,
             )
 
+    def _delete_sync(self, task_id: str) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
     def _update_status_sync(
         self,
         task_id: str,
@@ -291,6 +295,7 @@ class TaskStore:
         kind: str | None = None,
         cursor: datetime | None = None,
         completed_before: datetime | None = None,
+        created_before: datetime | None = None,
     ) -> list[Task]:
         query = "SELECT * FROM tasks"
         args: list[object] = []
@@ -310,6 +315,10 @@ class TaskStore:
         if completed_before is not None:
             clauses.append("completed_at IS NOT NULL AND completed_at < ?")
             args.append(completed_before.isoformat())
+        if created_before is not None:
+            clauses.append("created_at < ?")
+            args.append(created_before.isoformat())
+
         if clauses:
             query += " WHERE " + " AND ".join(clauses)
         query += " ORDER BY created_at DESC LIMIT ?"
@@ -388,6 +397,9 @@ class TaskStore:
         require(bool(task.id), "TaskStore.save: task.id must be non-empty")
         self._save_sync(task)
 
+    def delete(self, task_id: str) -> None:
+        self._delete_sync(task_id)
+
     def update_status(
         self,
         task_id: str,
@@ -426,6 +438,7 @@ class TaskStore:
         kind: str | None = None,
         cursor: datetime | None = None,
         completed_before: datetime | None = None,
+        created_before: datetime | None = None,
     ) -> list[Task]:
         return self._list_sync(
             limit=limit,
@@ -499,6 +512,7 @@ class TaskStore:
         kind: str | None = None,
         cursor: datetime | None = None,
         completed_before: datetime | None = None,
+        created_before: datetime | None = None,
     ) -> list[Task]:
         """Non-blocking version of :meth:`list_tasks` for use in async code."""
         loop = asyncio.get_running_loop()

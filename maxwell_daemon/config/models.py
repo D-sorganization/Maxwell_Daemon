@@ -116,6 +116,11 @@ class AgentConfig(BaseModel):
         ge=1,
         description="Maximum number of tasks allowed in the queue before submissions are rejected with 429 Too Many Requests.",
     )
+    task_live_retention_seconds: int = Field(
+        600,
+        ge=0,
+        description="Seconds to keep terminal tasks in memory before evicting them to the database.",
+    )
 
 
 class MemoryConfig(BaseModel):

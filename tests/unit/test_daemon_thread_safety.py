@@ -30,6 +30,9 @@ class _ThreadBoundQueue:
         self.items: list[tuple[int, Task | None]] = []
         self.put_event = threading.Event()
 
+    def full(self) -> bool:
+        return False
+
     def put_nowait(self, item: tuple[int, Task | None]) -> None:
         if threading.current_thread() is not self.owner_thread:
             raise RuntimeError("queue mutation happened off the daemon loop thread")

@@ -13,6 +13,8 @@ from collections.abc import Awaitable
 from pathlib import Path
 from typing import Any, TypeVar
 
+import pytest
+
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import TaskStatus
@@ -48,6 +50,15 @@ class _FailingSaveStore:
     def recover_pending(self) -> list[Any]:
         return []
 
+    def get(self, _id: str) -> Any:
+        return None
+
+    def delete(self, _id: str) -> None:
+        pass
+
+    async def aprune(self, _days: int) -> int:
+        return 0
+
 
 async def _wait_for_status(
     daemon: Daemon, task_id: str, expected: TaskStatus, timeout: float = 10.0
@@ -69,14 +80,9 @@ class TestTaskStoreErrorLogging:
         self,
         minimal_config: MaxwellDaemonConfig,
         isolated_ledger_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         store = _FailingSaveStore()
-
-        import structlog
-        from structlog.testing import LogCapture
-
-        cap_structlog = LogCapture()
-        structlog.configure(processors=[cap_structlog])
 
         async def body() -> None:
             d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
@@ -91,10 +97,11 @@ class TestTaskStoreErrorLogging:
 
         _run(body())
 
-        matched = [
-            r for r in cap_structlog.entries if "task store write failed" in str(r.get("event", ""))
-        ]
-        assert matched, "expected 'task store write failed' log"
+        # The fix replaces suppress(Exception) with an explicit log.exception.
+        captured = capsys.readouterr()
+        assert "task store write failed" in captured.out or "task store write failed" in captured.err
+        # The failure is an *exception* log (with traceback), not a plain error.
+        assert "Traceback" in captured.out or "Traceback" in captured.err
 
 
 class TestEventPublishFailure:

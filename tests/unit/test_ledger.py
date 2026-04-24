@@ -75,8 +75,8 @@ class TestLedger:
         b = CostLedger(db)
         assert b.month_to_date() == pytest.approx(1.23)
 
-    def test_close_terminates_connection(self, ledger: CostLedger) -> None:
-        """close() should not raise and should close the sqlite connection."""
+    def test_close_is_noop(self, ledger: CostLedger) -> None:
+        """close() should be a safe no-op in the new multi-connection model."""
         ledger.record(_record(cost=0.01))
 
         # Get a connection to ensure it is in the pool, and keep a reference

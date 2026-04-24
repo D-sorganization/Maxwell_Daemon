@@ -246,6 +246,12 @@ class TestRecovery:
         class FailingStore:
             def save(self, _task: Any) -> None:
                 raise RuntimeError("disk locked")
+            def get(self, _id: str) -> Any:
+                return None
+            def delete(self, _id: str) -> None:
+                pass
+            async def aprune(self, _days: int) -> int:
+                return 0
 
         d = Daemon(
             cfg,
@@ -267,6 +273,12 @@ class TestRecovery:
         class FailingStore:
             def save(self, _task: Any) -> None:
                 raise RuntimeError("disk locked")
+            def get(self, _id: str) -> Any:
+                return None
+            def delete(self, _id: str) -> None:
+                pass
+            async def aprune(self, _days: int) -> int:
+                return 0
 
         d = Daemon(
             cfg,
@@ -301,6 +313,8 @@ class TestRecovery:
             async def aprune(self, days: int) -> int:
                 self.days = days
                 return self.count
+            def get(self, _id: str) -> Any:
+                return None
 
         async def body() -> None:
             d = Daemon(

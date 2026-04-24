@@ -11,6 +11,9 @@ from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
 
+import os
+os.environ["MAXWELL_AGGRESSIVE_COMPRESSION"] = "1"
+
 import pytest
 import structlog
 
@@ -23,6 +26,35 @@ from maxwell_daemon.backends import (
     registry,
 )
 from maxwell_daemon.config import MaxwellDaemonConfig
+
+
+@pytest.fixture(autouse=True)
+def _reset_structlog_cache() -> Iterator[None]:
+    """Reset structlog's cached logger before each test.
+
+    structlog caches the bound logger on first use (cache_logger_on_first_use=True).
+    When pytest's capsys fixture swaps sys.stderr, the cached PrintLogger still holds
+    the old buffer reference.  After capsys restores stderr the old buffer is closed,
+    which causes "I/O operation on closed file" on the *next* test that tries to log.
+    Clearing the cache ensures each test gets a fresh PrintLogger pointing at the
+    current sys.stderr.
+    """
+    structlog.reset_defaults()
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
+            structlog.dev.ConsoleRenderer(colors=False),
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(10),  # DEBUG
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),  # uses current sys.stdout
+        cache_logger_on_first_use=False,
+    )
+    yield
+    structlog.reset_defaults()
+
 
 
 class RecordingBackend(ILLMBackend):

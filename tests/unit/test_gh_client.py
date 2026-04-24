@@ -606,10 +606,9 @@ class TestRateLimitRetry:
         assert sleep_calls[0] == 300  # capped at 5 minutes
 
     def test_rate_limit_remaining_logged_from_stderr(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """X-RateLimit-Remaining in stderr output is logged at DEBUG level."""
-        import logging
 
         async def fake_sleep(secs: float) -> None:
             pass
@@ -623,10 +622,10 @@ class TestRateLimitRetry:
         )
         client = GitHubClient(runner=runner)
 
-        with caplog.at_level(logging.DEBUG, logger="maxwell_daemon.gh.client"):
-            asyncio.run(client._request_with_retry("api", "repos/x/y", max_retries=1))
+        asyncio.run(client._request_with_retry("api", "repos/x/y", max_retries=1))
 
-        assert any("42" in record.message for record in caplog.records)
+        captured = capsys.readouterr()
+        assert "42" in captured.out or "42" in captured.err
 
     def test_list_issues_retries_on_rate_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """list_issues uses _request_with_retry and therefore handles rate limits."""

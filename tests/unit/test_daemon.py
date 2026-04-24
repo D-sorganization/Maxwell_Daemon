@@ -348,6 +348,12 @@ class TestRunningStatusResilience:
             def recover_pending(self) -> list[Any]:
                 return []
 
+            def delete(self, task_id: str) -> None:
+                pass
+
+            async def aprune(self, days: int, *, now: Any = None) -> int:
+                return 0
+
         store = _PartiallyFailingStore()
 
         async def body() -> None:
@@ -387,6 +393,12 @@ class TestRunningStatusResilience:
             def recover_pending(self) -> list[Any]:
                 return []
 
+            def delete(self, task_id: str) -> None:
+                pass
+
+            async def aprune(self, days: int, *, now: Any = None) -> int:
+                return 0
+
         store = _OnceFailStore()
 
         async def body() -> None:
@@ -405,7 +417,7 @@ class TestRunningStatusResilience:
         _run(body())
 
     def test_requeue_error_is_logged(
-        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """A failed RUNNING status update is logged at ERROR level."""
 
@@ -424,21 +436,15 @@ class TestRunningStatusResilience:
             def recover_pending(self) -> list[Any]:
                 return []
 
+            def delete(self, task_id: str) -> None:
+                pass
+
+            async def aprune(self, days: int, *, now: Any = None) -> int:
+                return 0
+
         store = _FailFirstStore()
 
         async def body() -> None:
-            import structlog
-            from structlog.testing import LogCapture
-
-            cap_structlog = LogCapture()
-            structlog.configure(processors=[cap_structlog])
-
-            d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
-            d._task_store = store  # type: ignore[assignment]
-            await d.start(worker_count=1)
-            try:
-                task = d.submit("log test")
-                await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
                 matched = [
                     r for r in cap_structlog.entries if "re-queuing" in str(r.get("event", ""))
                 ]

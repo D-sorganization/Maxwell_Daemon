@@ -10,11 +10,12 @@ its own default.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 from maxwell_daemon.config import MaxwellDaemonConfig
 
-__all__ = ["RepoOverrides", "resolve_overrides"]
+__all__ = ["RepoOverrides", "resolve_overrides", "RepoSchematic"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -41,3 +42,29 @@ def resolve_overrides(config: MaxwellDaemonConfig, *, repo: str) -> RepoOverride
         system_prompt_prefix=repo_cfg.system_prompt_prefix,
         system_prompt_file=repo_cfg.system_prompt_file,
     )
+
+class RepoSchematic:
+    def __init__(self, repo_name: str, workspace_path: Path):
+        self.repo_name = repo_name
+        self.workspace_path = workspace_path
+
+    def generate(self) -> str:
+        # Generate a schematic string based on directory layout (simplified)
+        schematic = f"Schematic for {self.repo_name}:\n"
+        if not self.workspace_path.exists():
+            return schematic + "Workspace not found."
+            
+        try:
+            for item in self.workspace_path.iterdir():
+                if item.is_dir() and not item.name.startswith("."):
+                    schematic += f"Dir: {item.name}\n"
+                elif item.is_file():
+                    schematic += f"File: {item.name}\n"
+        except Exception as e:
+            schematic += f"Error: {e}\n"
+            
+        if os.environ.get("MAXWELL_AGGRESSIVE_COMPRESSION") == "1":
+            from maxwell_daemon.tools.compression import ToolResultCompressor
+            compressor = ToolResultCompressor(head_lines=100, tail_lines=100, max_chars=4000)
+            return compressor.compress("repo_schematic", schematic).content
+        return schematic

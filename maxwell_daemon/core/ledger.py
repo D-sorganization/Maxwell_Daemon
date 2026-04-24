@@ -31,6 +31,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from contextlib import contextmanager
+from typing import Iterator
 
 from maxwell_daemon.backends.base import TokenUsage
 
@@ -109,6 +111,15 @@ class CostLedger:
                 self._pool.put_nowait(conn)
             except queue.Full:
                 conn.close()
+
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        conn = sqlite3.connect(str(self._path), isolation_level=None, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     # ── Sync helpers (called inside thread-pool workers) ─────────────────────
 

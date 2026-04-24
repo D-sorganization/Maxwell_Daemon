@@ -33,6 +33,7 @@ __all__ = [
     "MAXWELL_REQUEST_COST",
     "MAXWELL_REQUEST_DURATION",
     "MAXWELL_TOKENS_TOTAL",
+    "MAXWELL_TOKEN_BUDGET_ALLOCATION",
     "build_registry",
     "mount_metrics_endpoint",
     "record_cache_hit",
@@ -78,6 +79,12 @@ MAXWELL_FREE_REQUESTS_TOTAL = Counter(
         "distinguish 'never ran' from 'ran many free requests'."
     ),
     labelnames=("backend", "model"),
+)
+
+MAXWELL_TOKEN_BUDGET_ALLOCATION = Gauge(
+    "maxwell_daemon_token_budget_allocation",
+    "Safe budget allocation for task in USD",
+    labelnames=("task_id", "budget_remaining", "model_chosen"),
 )
 
 MAXWELL_COST_FORECAST_USD = Gauge(

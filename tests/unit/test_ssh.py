@@ -36,6 +36,10 @@ class TestSSHKeyStore:
         _, pub2 = store.get_or_generate("testhost")
         assert pub1 == pub2
 
+    @pytest.mark.skipif(
+        __import__("sys").platform == "win32",
+        reason="Windows does not enforce Unix-style POSIX file permissions",
+    )
     def test_pem_has_restricted_permissions(self, tmp_path: Path) -> None:
         import stat
 

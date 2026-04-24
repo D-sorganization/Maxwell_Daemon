@@ -164,14 +164,16 @@ class TestCostEstimation:
         assert is_free_provider("ollama")
         assert get_rates("ollama", "any-local-model") == (0.0, 0.0)
 
-    def test_unknown_pricing_falls_back_to_zero(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_unknown_pricing_falls_back_to_zero(self, capsys: pytest.CaptureFixture[str]) -> None:
         usage = TokenUsage(prompt_tokens=1000, completion_tokens=500, total_tokens=1500)
 
         assert get_rates("unknown-provider", "mystery") == (0.0, 0.0)
         assert get_rates("openai", "mystery") == (0.0, 0.0)
         assert cost_for("unknown-provider", "mystery", usage) == 0.0
-        assert "Unknown provider" in caplog.text
-        assert "Unknown model" in caplog.text
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+        assert "Unknown provider" in output
+        assert "Unknown model" in output
 
     def test_anthropic_models_priced_nonzero(self) -> None:
         # Pin the Anthropic lookup so the existing behavior is regression-guarded
@@ -209,33 +211,25 @@ class TestCostEstimation:
         assert cost_for("azure", "gpt-4o", usage) == pytest.approx(12.5)
 
     def test_unknown_openai_model_warns_without_crashing(
-        self, caplog: pytest.LogCaptureFixture
+        self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         usage = TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150)
-        import logging
-
-        caplog.set_level(logging.WARNING, logger="maxwell_daemon.backends.pricing")
         # Known provider, unknown model — should warn and return 0.0, not raise.
         cost = cost_for("openai", "gpt-5-fantasy", usage)
         assert cost == 0.0
-        assert any(
-            "Unknown model" in rec.message and "gpt-5-fantasy" in rec.message
-            for rec in caplog.records
-        )
+        captured = capsys.readouterr()
+        assert "Unknown model" in captured.out or "Unknown model" in captured.err
+        assert "gpt-5-fantasy" in captured.out or "gpt-5-fantasy" in captured.err
 
     def test_unknown_azure_model_warns_without_crashing(
-        self, caplog: pytest.LogCaptureFixture
+        self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         usage = TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150)
-        import logging
-
-        caplog.set_level(logging.WARNING, logger="maxwell_daemon.backends.pricing")
         cost = cost_for("azure", "mystery-deployment", usage)
         assert cost == 0.0
-        assert any(
-            "Unknown model" in rec.message and "mystery-deployment" in rec.message
-            for rec in caplog.records
-        )
+        captured = capsys.readouterr()
+        assert "Unknown model" in captured.out or "Unknown model" in captured.err
+        assert "mystery-deployment" in captured.out or "mystery-deployment" in captured.err
 
 
 class TestBackendInterface:

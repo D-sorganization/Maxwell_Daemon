@@ -101,7 +101,7 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --cov=maxwell_daemon --cov-report=term-missing"
+addopts = "-ra --strict-markers --cov=maxwell_daemon --cov-report=term-missing --cov-fail-under=85"
 
 [tool.mypy]
 python_version = "3.10"

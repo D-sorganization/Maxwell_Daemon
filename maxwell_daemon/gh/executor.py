@@ -219,6 +219,11 @@ class IssueExecutor:
                 issue_number=issue_number,
             )
             context_prompt = ctx.to_prompt(max_chars=ctx_max)
+            
+        from maxwell_daemon.core.repo_overrides import RepoSchematic
+        repo_path = await self._ws.ensure_clone(repo, task_id=effective_task_id)
+        schematic = RepoSchematic(repo, repo_path).generate()
+        context_prompt = f"{schematic}\n\n{context_prompt}" if context_prompt else schematic
 
         # Memory: assemble repo profile + related episodes + scratchpad, if any.
         memory_prompt = ""
