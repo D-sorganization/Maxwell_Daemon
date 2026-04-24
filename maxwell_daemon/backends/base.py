@@ -123,6 +123,13 @@ class ILLMBackend(ABC):
     async def health_check(self) -> bool:
         """Return True if the backend is reachable and authenticated."""
 
+    async def list_models(self) -> list[str]:
+        """Return a list of available models for this backend.
+
+        Defaults to an empty list if discovery is not supported.
+        """
+        return []
+
     @abstractmethod
     def capabilities(self, model: str) -> BackendCapabilities:
         """Describe what `model` can do. Used for routing decisions."""

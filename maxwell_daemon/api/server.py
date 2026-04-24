@@ -41,6 +41,8 @@ from maxwell_daemon.api.validation import PriorityField, PromptField, RepoField,
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
 from maxwell_daemon.backends import BackendManifest, registry
+from maxwell_daemon.config.loader import _default_secret_store, save_config
+from maxwell_daemon.config.models import BackendConfig
 from maxwell_daemon.core.actions import Action, ActionStatus
 from maxwell_daemon.core.artifacts import Artifact, ArtifactIntegrityError, ArtifactKind
 from maxwell_daemon.core.delegate_lifecycle import DelegateSessionSnapshot, DelegateSessionStatus
@@ -235,6 +237,36 @@ class TaskGraphView(BaseModel):
             graph=record.graph,
             node_runs=tuple(NodeRunView.from_run(run) for run in record.node_runs),
         )
+
+
+class BackendConfigPayload(BaseModel):
+    name: str
+    api_key: str | None = None
+    endpoint: str | None = None
+    set_as_default: bool = False
+
+
+class AvailableBackendView(BaseModel):
+    name: str
+    display_name: str
+    description: str
+    requires_api_key: bool
+    local_only: bool
+    logo_key: str | None = None
+    default_endpoint: str | None = None
+    configured: bool = False
+
+
+class BackendTestResponse(BaseModel):
+    success: bool
+    latency_ms: float | None = None
+    models: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class OnboardingSmokeTestRequest(BaseModel):
+    backend_name: str
+    model: str
 
 
 class ArtifactView(BaseModel):
@@ -434,6 +466,7 @@ class BackendCatalogEntryView(BaseModel):
     description: str
     requires_api_key: bool
     local_only: bool
+    logo_key: str | None = None
     default_endpoint: str | None = None
     api_key_env_var: str | None = None
     endpoint_env_var: str | None = None
@@ -458,6 +491,7 @@ class BackendCatalogEntryView(BaseModel):
             description=manifest.description,
             requires_api_key=manifest.requires_api_key,
             local_only=manifest.local_only,
+            logo_key=manifest.logo_key,
             default_endpoint=manifest.default_endpoint,
             api_key_env_var=manifest.api_key_env_var,
             endpoint_env_var=manifest.endpoint_env_var,
@@ -1440,6 +1474,131 @@ def create_app(
             for manifest in registry.catalog()
         )
         return BackendCatalogResponse(backends=catalog)
+
+    @app.post("/api/v1/backends", dependencies=[Depends(_require_admin())])
+    async def configure_backend(payload: BackendConfigPayload) -> dict[str, Any]:
+        from maxwell_daemon.secrets import backend_api_key_secret_ref
+
+        manifest = next((m for m in registry.catalog() if m.name == payload.name), None)
+        if not manifest:
+            raise HTTPException(
+                status_code=404, detail=f"Backend '{payload.name}' not found in registry"
+            )
+
+        store = _default_secret_store()
+        secret_ref = backend_api_key_secret_ref(payload.name)
+        if payload.api_key and store:
+            store.set(secret_ref, payload.api_key)
+
+        cfg_dict: dict[str, Any] = {
+            "type": payload.name,
+            "model": "",  # To be set or default
+            "base_url": payload.endpoint or manifest.default_endpoint,
+            "api_key_secret_ref": secret_ref if (payload.api_key and store) else None,
+        }
+
+        # Give it a default model so it passes validation if possible
+        if payload.name == "ollama":
+            cfg_dict["model"] = "llama3"
+        elif payload.name == "openai":
+            cfg_dict["model"] = "gpt-4o-mini"
+        elif payload.name == "claude":
+            cfg_dict["model"] = "claude-haiku-4-5"
+        else:
+            cfg_dict["model"] = "default"
+
+        daemon._config.backends[payload.name] = BackendConfig(**cfg_dict)
+
+        if payload.set_as_default:
+            daemon._config.agent.default_backend = payload.name
+
+        try:
+            save_config(daemon._config)
+            # Make sure it's instantiated so the daemon can use it immediately
+            if payload.name not in daemon._router._instances:
+                daemon._router._instances[payload.name] = registry.create(payload.name, cfg_dict)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save config: {e}") from e
+
+        return {"status": "success"}
+
+    @app.post("/api/v1/backends/{name}/test", dependencies=[Depends(_require_admin())])
+    async def test_backend(name: str) -> BackendTestResponse:
+        from time import monotonic
+
+        if name in daemon._router._instances:
+            backend = daemon._router._instances[name]
+        else:
+            # Maybe it's registered but not loaded due to config
+            if name not in daemon._config.backends:
+                raise HTTPException(status_code=404, detail=f"Backend '{name}' not configured")
+            try:
+                backend = registry.create(
+                    daemon._config.backends[name].type,
+                    daemon._config.backends[name].model_dump(
+                        exclude={
+                            "type",
+                            "model",
+                            "fallback_backend",
+                            "fallback_threshold_percent",
+                            "cost_per_million_input_tokens",
+                            "cost_per_million_output_tokens",
+                            "tier_map",
+                            "enabled",
+                            "api_key_secret_ref",
+                        }
+                    ),
+                )
+            except Exception as e:
+                return BackendTestResponse(success=False, error=str(e))
+
+        start = monotonic()
+        try:
+            is_healthy = await backend.health_check()
+        except Exception as e:
+            return BackendTestResponse(success=False, error=str(e))
+
+        latency = (monotonic() - start) * 1000
+
+        models = []
+        if is_healthy and hasattr(backend, "list_models"):
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                models = await backend.list_models()
+
+        return BackendTestResponse(
+            success=is_healthy,
+            latency_ms=latency,
+            models=models,
+            error=None if is_healthy else "Health check returned false",
+        )
+
+    @app.post("/api/v1/onboarding/smoke-test", dependencies=[Depends(_require_admin())])
+    async def onboarding_smoke_test(payload: OnboardingSmokeTestRequest) -> dict[str, Any]:
+        from maxwell_daemon.backends.base import Message, MessageRole
+
+        if payload.backend_name not in daemon._router._instances:
+            raise HTTPException(
+                status_code=404, detail=f"Backend '{payload.backend_name}' not loaded"
+            )
+
+        backend = daemon._router._instances[payload.backend_name]
+        try:
+            resp = await backend.complete(
+                messages=[
+                    Message(
+                        role=MessageRole.USER,
+                        content="Hello! Please reply with exactly 'Hello world'.",
+                    )
+                ],
+                model=payload.model,
+                temperature=0.0,
+                max_tokens=10,
+            )
+            return {"status": "success", "response": resp.content}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
 
     @app.post(
         "/api/v1/tasks",

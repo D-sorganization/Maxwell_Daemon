@@ -144,6 +144,13 @@ class OpenAIBackend(ILLMBackend):
         except Exception:
             return False
 
+    async def list_models(self) -> list[str]:
+        try:
+            page = await self._client.models.list()
+            return [m.id for m in page.data]
+        except Exception:
+            return []
+
     def capabilities(self, model: str) -> BackendCapabilities:
         # Look up pricing under ``self.name`` so subclasses (e.g. AzureOpenAIBackend)
         # hit their own provider entry in the pricing table rather than always

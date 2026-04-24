@@ -25,6 +25,7 @@ class BackendManifest:
     description: str
     requires_api_key: bool
     local_only: bool
+    logo_key: str | None = None
     default_endpoint: str | None = None
     api_key_env_var: str | None = None
     endpoint_env_var: str | None = None

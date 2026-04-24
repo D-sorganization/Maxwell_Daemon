@@ -142,6 +142,13 @@ class ClaudeBackend(ILLMBackend):
         except Exception:
             return False
 
+    async def list_models(self) -> list[str]:
+        try:
+            page = await self._client.models.list()
+            return [m.id for m in page.data]
+        except Exception:
+            return []
+
     def capabilities(self, model: str) -> BackendCapabilities:
         price_in, price_out = get_rates("claude", model)
         return BackendCapabilities(
