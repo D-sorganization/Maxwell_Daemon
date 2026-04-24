@@ -321,17 +321,17 @@ class TestToolPolicyAndInvocationAudit:
     async def test_audit_store_write_failure_does_not_break_tool(self, monkeypatch) -> None:
         """Issue #538: audit-store persistence failures should not break the execution path."""
         store = ToolInvocationStore()
-        
+
         def _failing_append(*args: object, **kwargs: object) -> None:
             raise OSError("Disk full")
-            
+
         monkeypatch.setattr(store, "append", _failing_append)
-        
+
         reg = ToolRegistry(invocation_store=store)
         reg.register(_echo_spec())
-        
+
         result = await reg.invoke("echo", {"message": "hi"})
-        
+
         assert result.is_error is False
         assert result.content == "echo: hi"
 

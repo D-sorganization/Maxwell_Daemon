@@ -10,14 +10,13 @@ Routing rules (in priority order):
 
 from __future__ import annotations
 
-import logging
-from maxwell_daemon.logging import get_logger
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from maxwell_daemon.backends import ILLMBackend
 from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.config import BackendConfig, MaxwellDaemonConfig
+from maxwell_daemon.logging import get_logger
 
 if TYPE_CHECKING:
     pass

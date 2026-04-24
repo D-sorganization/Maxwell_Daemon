@@ -22,8 +22,6 @@ turns before returning the final text response.
 
 from __future__ import annotations
 
-import logging
-from maxwell_daemon.logging import get_logger
 import os
 import time
 from collections.abc import AsyncIterator, Callable
@@ -49,6 +47,7 @@ from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.contracts import PreconditionError
 from maxwell_daemon.gh.ci_patterns import detect_ci_profile
 from maxwell_daemon.gh.repo_schematic import build_repo_schematic
+from maxwell_daemon.logging import get_logger
 from maxwell_daemon.tools import ToolRegistry, build_default_registry
 
 __all__ = [

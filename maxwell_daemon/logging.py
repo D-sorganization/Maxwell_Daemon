@@ -37,7 +37,7 @@ def _redact_secrets_processor(
 ) -> structlog.types.EventDict:
     if os.environ.get("MAXWELL_REDACT_LOGS", "1") != "1":
         return event_dict
-    
+
     for key, value in event_dict.items():
         if any(redact_key in key.lower() for redact_key in _REDACT_KEYS):
             event_dict[key] = _redact_value(value)

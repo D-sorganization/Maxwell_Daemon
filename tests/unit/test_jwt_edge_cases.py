@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import pytest
-from datetime import datetime, timezone
-from maxwell_daemon.auth import JWTConfig, Role, TokenClaims
+
+from maxwell_daemon.auth import JWTConfig, Role
+
 
 class TestJWTEdgeCases:
     def test_jwtconfig_invalid_algorithm(self) -> None:
@@ -39,23 +41,24 @@ class TestJWTEdgeCases:
 
     def test_decode_token_missing_claims_handled(self) -> None:
         cfg = JWTConfig(secret="sec")
-        import jwt
         # PyJWT checks required claims, but let's test if we can cover the exception mapping in require_role.
         # Actually require_role tests might be harder without FastAPI test client, but we already have those gaps.
         pass
 
     def test_require_role_non_jwt_error(self) -> None:
-        from maxwell_daemon.auth import require_role
-        from fastapi import HTTPException
         import asyncio
         from unittest.mock import MagicMock
 
+        from fastapi import HTTPException
+
+        from maxwell_daemon.auth import require_role
+
         cfg = MagicMock()
         cfg.decode_token.side_effect = Exception("database error")
-        
+
         dep = require_role(Role.admin, cfg)
         req = MagicMock()
-        
+
         with pytest.raises(HTTPException) as exc:
             asyncio.run(dep(req, "Bearer mytoken"))
         assert exc.value.status_code == 401

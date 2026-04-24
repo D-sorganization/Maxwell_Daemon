@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
-from maxwell_daemon.logging import get_logger
 import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
+
+from maxwell_daemon.logging import get_logger
 
 __all__ = [
     "GhCliError",
