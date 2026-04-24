@@ -542,7 +542,7 @@ class Daemon:
             def _put_inline() -> None:
                 try:
                     self._queue.put_nowait(item)
-                except asyncio.QueueFull as exc:
+                except asyncio.QueueFull:
                     log.error("Queue saturated inline; dropped task %s", getattr(task, "id", None))
 
             self._loop.call_soon_threadsafe(_put_inline)
@@ -553,7 +553,7 @@ class Daemon:
         def _put() -> None:
             try:
                 self._queue.put_nowait(item)
-            except asyncio.QueueFull as exc:
+            except asyncio.QueueFull:
                 result.set_exception(
                     QueueSaturationError(
                         "Task queue is full, please try again later", backoff_seconds=60
