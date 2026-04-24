@@ -1,14 +1,46 @@
+"""Input validation utilities for REST API endpoints.
+
+Provides reusable Pydantic field types for common input patterns:
+- Repository format (owner/repo)
+- Task IDs
+- Priorities
+- Model names
+- Prompts
+
+These ensure consistent validation across all API endpoints.
+"""
+
+from __future__ import annotations
+
+import re
 from typing import Annotated
 
 from pydantic import Field
 
-# Reusable regex patterns
-REPO_PATTERN = r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
-TASK_ID_PATTERN = r"^[A-Za-z0-9-]+$"
+__all__ = [
+    "REPO_PATTERN",
+    "TASK_ID_PATTERN",
+    "MODEL_NAME_PATTERN",
+    "RepoField",
+    "PromptField",
+    "PriorityField",
+    "TaskIdField",
+    "ModelField",
+]
 
-# Reusable Pydantic Field configurations
+# Reusable regex patterns for validation
+REPO_PATTERN = r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+TASK_ID_PATTERN = r"^[A-Za-z0-9-]{1,256}$"
+MODEL_NAME_PATTERN = r"^[A-Za-z0-9_:.-]+$"
+
+# Reusable Pydantic Field configurations for consistent API input validation
 RepoField = Annotated[
-    str, Field(pattern=REPO_PATTERN, max_length=100, description="Repository in owner/repo format")
+    str,
+    Field(
+        pattern=REPO_PATTERN,
+        max_length=100,
+        description="Repository in owner/repo format (e.g., 'my-org/my-repo')",
+    ),
 ]
 
 PromptField = Annotated[
@@ -21,14 +53,27 @@ PromptField = Annotated[
 ]
 
 PriorityField = Annotated[
-    int, Field(ge=0, le=200, description="Priority must be between 0 and 200")
+    int,
+    Field(
+        ge=0,
+        le=200,
+        description="Priority (0=emergency, 50=high, 100=normal, 200=batch)",
+    ),
 ]
 
 TaskIdField = Annotated[
     str,
     Field(
         pattern=TASK_ID_PATTERN,
-        max_length=256,
-        description="Task ID must be alphanumeric and dashes only",
+        description="Task ID: alphanumeric and dashes, max 256 chars",
+    ),
+]
+
+ModelField = Annotated[
+    str,
+    Field(
+        pattern=MODEL_NAME_PATTERN,
+        max_length=128,
+        description="Model name (e.g., 'claude-opus-4-7', 'gpt-4o', 'ollama:llama2')",
     ),
 ]
