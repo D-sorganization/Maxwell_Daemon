@@ -1611,11 +1611,11 @@ class Daemon:
 
 def main() -> None:
     """Run the daemon standalone (systemd entrypoint)."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    from maxwell_daemon.logging import configure_logging
+
     daemon = Daemon.from_config_path()
+    log_file = getattr(daemon._config, "log_file", None)
+    configure_logging(level="INFO", log_file=log_file)
 
     async def _run() -> None:
         await daemon.start()

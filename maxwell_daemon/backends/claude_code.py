@@ -96,7 +96,12 @@ class ClaudeCodeCLIBackend(ILLMBackend):
             raise BackendUnavailableError(f"claude CLI unreachable: {e}") from e
         if rc != 0:
             detail = stderr.decode(errors="replace").strip() or "claude -p failed"
-            raise BackendUnavailableError(f"claude -p rc={rc}: {detail[:500]}")
+            import structlog
+
+            structlog.get_logger(__name__).error(
+                "claude -p failed", rc=rc, stderr=detail[-32768:]
+            )
+            raise BackendUnavailableError(f"claude -p rc={rc}: {detail[:1024]}")
 
         try:
             payload = json.loads(stdout.decode(errors="replace"))
