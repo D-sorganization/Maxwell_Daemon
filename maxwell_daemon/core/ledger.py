@@ -160,8 +160,8 @@ class CostLedger:
     ) -> tuple[int, int, int, int]:
         with self._get_conn() as conn:
             query = """
-                SELECT 
-                    COUNT(*), 
+                SELECT
+                    COUNT(*),
                     COALESCE(SUM(cached_tokens), 0),
                     COALESCE(SUM(prompt_tokens), 0),
                     COALESCE(SUM(completion_tokens), 0)
