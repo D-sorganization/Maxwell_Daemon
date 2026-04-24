@@ -6,6 +6,11 @@ from maxwell_daemon.core.action_store import ActionStore
 from maxwell_daemon.core.actions import Action, ActionKind, ActionRiskLevel, ActionStatus
 from maxwell_daemon.core.artifacts import Artifact, ArtifactKind, ArtifactStore
 from maxwell_daemon.core.budget import BudgetCheck, BudgetEnforcer, BudgetExceededError
+from maxwell_daemon.core.cost_analytics import (
+    CacheHitMetrics,
+    CostAnalytics,
+    CostSummary,
+)
 from maxwell_daemon.core.cross_audit import (
     DEFAULT_CROSS_AUDIT_ROLES,
     CrossAuditReport,
@@ -39,6 +44,11 @@ from maxwell_daemon.core.resource_broker import (
     RoutingPolicy,
 )
 from maxwell_daemon.core.router import BackendRouter
+from maxwell_daemon.core.token_budget import (
+    EstimatedCost,
+    TokenBudgetAllocator,
+    TokenBudgetStatus,
+)
 from maxwell_daemon.core.workspace_service import WorkspaceService
 from maxwell_daemon.core.workspace_store import WorkspaceStore
 from maxwell_daemon.core.workspaces import (
@@ -66,10 +76,13 @@ __all__ = [
     "BudgetCheck",
     "BudgetEnforcer",
     "BudgetExceededError",
+    "CacheHitMetrics",
     "CapabilityProfile",
     "Checkpoint",
+    "CostAnalytics",
     "CostLedger",
     "CostRecord",
+    "CostSummary",
     "CrossAuditReport",
     "CrossAuditResult",
     "CrossAuditService",
@@ -81,6 +94,7 @@ __all__ = [
     "DelegateSessionSnapshot",
     "DelegateSessionStatus",
     "DelegateSessionStore",
+    "EstimatedCost",
     "HandoffArtifact",
     "LeaseRecoveryPolicy",
     "PolicyDecision",
@@ -92,6 +106,8 @@ __all__ = [
     "RoutingDecision",
     "RoutingPolicy",
     "TaskWorkspace",
+    "TokenBudgetAllocator",
+    "TokenBudgetStatus",
     "WorkspaceCheckpoint",
     "WorkspaceService",
     "WorkspaceStatus",
