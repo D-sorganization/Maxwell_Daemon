@@ -448,8 +448,12 @@ def serve(
 
     from maxwell_daemon.api import create_app
     from maxwell_daemon.daemon import Daemon
+    from maxwell_daemon.logging import configure_logging
 
     cfg = load_config(config)
+    log_file = getattr(cfg, "log_file", None)
+    configure_logging(level="INFO", log_file=log_file)
+
     daemon = Daemon(cfg)
 
     async def _boot() -> None:

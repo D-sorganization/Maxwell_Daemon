@@ -122,3 +122,21 @@ def dual_backend_config(register_recording_backend: None) -> MaxwellDaemonConfig
 @pytest.fixture
 def isolated_ledger_path(tmp_path: Path) -> Path:
     return tmp_path / "ledger.db"
+
+
+
+
+import structlog
+import logging
+from collections.abc import Iterator
+import pytest
+
+@pytest.fixture(autouse=True)
+def _structlog_test_config() -> Iterator[None]:
+    structlog.configure(
+        wrapper_class=structlog.make_filtering_bound_logger(logging.DEBUG),
+        logger_factory=structlog.stdlib.LoggerFactory(),
+    )
+    yield
+    structlog.reset_defaults()
+    logging.getLogger().handlers.clear()

@@ -15,14 +15,18 @@ from maxwell_daemon.events import EventKind
 
 
 class FakeIssue:
-    def __init__(self, title: str = "Fix", body: str = "Fix", labels: list[str] | None = None) -> None:
+    def __init__(
+        self, title: str = "Fix", body: str = "Fix", labels: list[str] | None = None
+    ) -> None:
         self.title = title
         self.body = body
         self.labels = labels or ["bug"]
 
+
 class FakeGithub:
     async def get_issue(self, repo: str, number: int) -> FakeIssue:
         return FakeIssue(labels=["complexity: high"])
+
 
 class FakeExecutor:
     def __init__(self, *a: Any, **kw: Any) -> None:
@@ -126,7 +130,9 @@ class TestIssueDispatch:
 
         asyncio.run(body())
 
-    def test_issue_completion_event_uses_effective_model(self, daemon_with_fake_executor: Daemon) -> None:
+    def test_issue_completion_event_uses_effective_model(
+        self, daemon_with_fake_executor: Daemon
+    ) -> None:
         async def body() -> None:
             # Configure a tier_map that maps "complex" to "override-model"
             backend_cfg = daemon_with_fake_executor._config.backends[

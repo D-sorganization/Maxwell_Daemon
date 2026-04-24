@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-import logging
 import signal
 import threading
 import uuid
@@ -135,14 +134,6 @@ class DaemonState:
     backends_available: list[str]
     worker_count: int = 0
     queue_depth: int = 0
-
-
-@dataclass
-class ConfigSnapshot:
-    config: MaxwellDaemonConfig
-    router: BackendRouter
-    budget: BudgetEnforcer
-    ledger: CostLedger
 
 
 class Daemon:
@@ -551,7 +542,7 @@ class Daemon:
             def _put_inline() -> None:
                 try:
                     self._queue.put_nowait(item)
-                except asyncio.QueueFull:
+                except asyncio.QueueFull as exc:
                     log.error("Queue saturated inline; dropped task %s", getattr(task, "id", None))
 
             self._loop.call_soon_threadsafe(_put_inline)
@@ -562,7 +553,7 @@ class Daemon:
         def _put() -> None:
             try:
                 self._queue.put_nowait(item)
-            except asyncio.QueueFull:
+            except asyncio.QueueFull as exc:
                 result.set_exception(
                     QueueSaturationError(
                         "Task queue is full, please try again later", backoff_seconds=60
@@ -1327,14 +1318,6 @@ class Daemon:
                 task.status = TaskStatus.RUNNING
                 task.started_at = datetime.now(timezone.utc)
             with bind_context(task_id=task.id, worker_id=worker_id):
-                # Snapshot the config state to avoid races with hot reloads
-                with self._config_lock:
-                    snapshot = ConfigSnapshot(
-                        config=self._config,
-                        router=self._router,
-                        budget=self._budget,
-                        ledger=self._ledger,
-                    )
                 # Attempt to mark the task RUNNING in the durable store before
                 # executing.  If that write fails (disk full, lock contention),
                 # re-queue the task so it is retried rather than silently lost.
@@ -1357,9 +1340,9 @@ class Daemon:
                             task.started_at = None
                     await self._queue.put((task.priority, task))
                     continue
-                await self._execute(task, snapshot)
+                await self._execute(task)
 
-    async def _execute(self, task: Task, snapshot: ConfigSnapshot) -> None:
+    async def _execute(self, task: Task) -> None:
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now(timezone.utc)
         try:
@@ -1378,8 +1361,8 @@ class Daemon:
                     ),
                 )
             )
-            snapshot.budget.require_under_budget()
-            decision = snapshot.router.route(
+            self._budget.require_under_budget()
+            decision = self._router.route(
                 repo=task.repo,
                 backend_override=task.backend,
                 model_override=task.model,
@@ -1396,7 +1379,7 @@ class Daemon:
                 log.exception("task store write failed while recording route for task=%s", task.id)
 
             if task.kind is TaskKind.ISSUE:
-                await self._execute_issue(task, decision, snapshot)
+                await self._execute_issue(task, decision)
                 return
 
             resp = await decision.backend.complete(
@@ -1407,7 +1390,7 @@ class Daemon:
             estimated_cost = decision.backend.estimate_cost(resp.usage, decision.model)
             task.cost_usd = estimated_cost if estimated_cost is not None else 0.0
             task.status = TaskStatus.COMPLETED
-            snapshot.ledger.record(
+            self._ledger.record(
                 CostRecord(
                     ts=datetime.now(timezone.utc),
                     backend=decision.backend_name,
@@ -1512,7 +1495,7 @@ class Daemon:
                     # Scratchpad API mismatch — log but don't crash the task.
                     log.warning("scratchpad.clear API not available for task %s", task.id)
 
-    async def _execute_issue(self, task: Task, decision: Any, snapshot: ConfigSnapshot) -> None:
+    async def _execute_issue(self, task: Task, decision: Any) -> None:
         """Run the issue → PR flow. Called with status already RUNNING."""
         from maxwell_daemon.core.repo_overrides import resolve_overrides
         from maxwell_daemon.gh import GitHubClient
@@ -1539,13 +1522,13 @@ class Daemon:
         )
 
         mode = task.issue_mode if task.issue_mode in {"plan", "implement"} else "plan"
-        overrides = resolve_overrides(snapshot.config, repo=task.issue_repo)
+        overrides = resolve_overrides(self._config, repo=task.issue_repo)
 
         # Smart model selection: if the task didn't specify a model AND the
         # backend has a tier_map, pick by issue complexity. Otherwise fall back
         # to whatever the router resolved.
         effective_model = decision.model
-        backend_cfg = snapshot.config.backends.get(decision.backend_name)
+        backend_cfg = self._router._backend_config(decision.backend_name)
         if not task.model and backend_cfg is not None and backend_cfg.tier_map:
             from maxwell_daemon.core.model_selector import pick_model_for_issue
 
@@ -1638,11 +1621,11 @@ class Daemon:
 
 def main() -> None:
     """Run the daemon standalone (systemd entrypoint)."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    from maxwell_daemon.logging import configure_logging
+
     daemon = Daemon.from_config_path()
+    log_file = getattr(daemon._config, "log_file", None)
+    configure_logging(level="INFO", log_file=log_file)
 
     async def _run() -> None:
         await daemon.start()

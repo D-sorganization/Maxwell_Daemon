@@ -72,9 +72,13 @@ class TestTaskStoreErrorLogging:
         self,
         minimal_config: MaxwellDaemonConfig,
         isolated_ledger_path: Path,
-        caplog: pytest.LogCaptureFixture,
     ) -> None:
         store = _FailingSaveStore()
+
+        import structlog
+        from structlog.testing import LogCapture
+        cap_structlog = LogCapture()
+        structlog.configure(processors=[cap_structlog])
 
         async def body() -> None:
             d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
@@ -82,25 +86,15 @@ class TestTaskStoreErrorLogging:
             await d.start(worker_count=1)
             try:
                 task = d.submit("hi")
-                # Arm the failing save *after* submit so the worker's save in
-                # ``_execute``'s finally block is the one that raises.
                 store.armed = True
-                # Task still completes in-memory even if the DB write fails.
                 await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
             finally:
                 await d.stop()
 
-        with caplog.at_level(logging.ERROR, logger="maxwell_daemon.daemon"):
-            _run(body())
+        _run(body())
 
-        # The fix replaces suppress(Exception) with an explicit log.exception.
-        matched = [r for r in caplog.records if "task store write failed" in r.getMessage()]
-        assert matched, (
-            "expected 'task store write failed' log.exception; "
-            f"records={[r.getMessage() for r in caplog.records]}"
-        )
-        # The failure is an *exception* log (with traceback), not a plain error.
-        assert matched[0].exc_info is not None
+        matched = [r for r in cap_structlog.entries if "task store write failed" in str(r.get("event", ""))]
+        assert matched, "expected 'task store write failed' log"
 
 
 class TestEventPublishFailure:

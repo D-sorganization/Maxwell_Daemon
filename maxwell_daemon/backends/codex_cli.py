@@ -104,6 +104,9 @@ class CodexCLIBackend(ILLMBackend):
 
         if rc != 0:
             detail = stderr.decode(errors="replace").strip() or "codex exec failed"
+            import structlog
+
+            structlog.get_logger(__name__).error("codex exec failed", rc=rc, stderr=detail[-32768:])
             raise BackendUnavailableError(f"codex exec rc={rc}: {detail[:500]}")
 
         content = stdout.decode(errors="replace").strip()

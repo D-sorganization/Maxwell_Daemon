@@ -336,7 +336,6 @@ class TestToolPolicyAndInvocationAudit:
         assert result.content == "echo: hi"
 
 
-
 class TestMcpToolDecorator:
     def test_decorator_attaches_spec(self) -> None:
         @mcp_tool(

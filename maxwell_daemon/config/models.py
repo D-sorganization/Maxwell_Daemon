@@ -260,6 +260,7 @@ class MaxwellDaemonConfig(BaseModel):
     api: APIConfig = Field(default_factory=lambda: APIConfig())
     budget: BudgetConfig = Field(default_factory=lambda: BudgetConfig())
     github: GithubConfig = Field(default_factory=lambda: GithubConfig())
+    log_file: Path | None = Field(None, description="Path to write structured rotating logs")
 
     @field_validator("backends")
     @classmethod

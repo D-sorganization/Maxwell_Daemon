@@ -46,7 +46,7 @@ class GitHubAuth:
     _private_key_pem: str | None = field(default=None, repr=False)
     _cache: _AppTokenCache | None = field(default=None, repr=False)
 
-    @field_validator('_installation_id')
+    @field_validator("_installation_id")
     @classmethod
     def _validate_installation_id(cls, v: int | None) -> int | None:
         if v is not None and v < 0:

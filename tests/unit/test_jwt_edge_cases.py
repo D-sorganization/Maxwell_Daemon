@@ -23,6 +23,7 @@ class TestJWTEdgeCases:
         cfg = JWTConfig(secret="sec")
         token = cfg.create_token("alice", Role.developer, extra_claims={"custom": "value"})
         import jwt
+
         payload = jwt.decode(token, cfg.secret, algorithms=[cfg.algorithm])
         assert payload["custom"] == "value"
 
@@ -34,7 +35,12 @@ class TestJWTEdgeCases:
     def test_decode_token_invalid_role(self) -> None:
         cfg = JWTConfig(secret="sec")
         import jwt
-        token = jwt.encode({"sub": "a", "role": "fake", "iat": 0, "exp": 9999999999, "jti": "b"}, cfg.secret, algorithm=cfg.algorithm)
+
+        token = jwt.encode(
+            {"sub": "a", "role": "fake", "iat": 0, "exp": 9999999999, "jti": "b"},
+            cfg.secret,
+            algorithm=cfg.algorithm,
+        )
         with pytest.raises(jwt.InvalidTokenError, match="unknown role 'fake'"):
             cfg.decode_token(token)
 

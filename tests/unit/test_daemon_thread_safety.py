@@ -20,7 +20,7 @@ from unittest.mock import MagicMock
 
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon
-from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
+from maxwell_daemon.daemon.runner import QueueSaturationError, Task, TaskKind, TaskStatus
 
 
 class _ThreadBoundQueue:
@@ -34,6 +34,9 @@ class _ThreadBoundQueue:
             raise RuntimeError("queue mutation happened off the daemon loop thread")
         self.items.append(item)
         self.put_event.set()
+
+    def full(self) -> bool:
+        return False
 
 
 class TestTasksDictThreadSafety:
@@ -175,6 +178,8 @@ class TestTasksDictThreadSafety:
         def _submit(_: int) -> None:
             try:
                 d.submit("hi")
+            except QueueSaturationError:
+                pass
             except BaseException as e:
                 errors.append(e)
 
@@ -218,7 +223,10 @@ class TestTasksDictThreadSafety:
             nonlocal stop
             try:
                 while not stop:
-                    d.submit("hi")
+                    try:
+                        d.submit("hi")
+                    except QueueSaturationError:
+                        pass
             except BaseException as e:
                 errors.append(e)
 

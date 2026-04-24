@@ -93,6 +93,9 @@ class ContinueCLIBackend(ILLMBackend):
             raise BackendUnavailableError(f"cn CLI unreachable: {e}") from e
         if rc != 0:
             detail = stderr.decode(errors="replace").strip() or "cn ask failed"
+            import structlog
+
+            structlog.get_logger(__name__).error("cn ask failed", rc=rc, stderr=detail[-32768:])
             raise BackendUnavailableError(f"cn ask rc={rc}: {detail[:500]}")
 
         # Continue picks the model from its own config; we record what the

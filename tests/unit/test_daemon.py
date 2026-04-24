@@ -427,43 +427,24 @@ class TestRunningStatusResilience:
 
         store = _FailFirstStore()
 
-        async def body(caplog: pytest.LogCaptureFixture) -> None:
+        async def body() -> None:
+            import structlog
+            from structlog.testing import LogCapture
+            cap_structlog = LogCapture()
+            structlog.configure(processors=[cap_structlog])
+
             d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
             d._task_store = store  # type: ignore[assignment]
             await d.start(worker_count=1)
             try:
-                with caplog.at_level(logging.ERROR, logger="maxwell_daemon.daemon"):
-                    task = d.submit("log test")
-                    await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
-                matched = [r for r in caplog.records if "re-queuing" in r.getMessage()]
+                task = d.submit("log test")
+                await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
+                matched = [r for r in cap_structlog.entries if "re-queuing" in str(r.get("event", ""))]
                 assert matched, "expected re-queuing log message"
             finally:
                 await d.stop()
 
-        # Run inline with a fixture-free caplog substitute
-        import io
-
-        handler = logging.StreamHandler(io.StringIO())
-        handler.setLevel(logging.ERROR)
-        logger = logging.getLogger("maxwell_daemon.daemon")
-        logger.addHandler(handler)
-        try:
-
-            async def run() -> None:
-                d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
-                d._task_store = store  # type: ignore[assignment]
-                await d.start(worker_count=1)
-                try:
-                    task = d.submit("log test")
-                    await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
-                finally:
-                    await d.stop()
-
-            _run(run())
-        finally:
-            logger.removeHandler(handler)
-        output = handler.stream.getvalue()
-        assert "re-queuing" in output
+        # Removed redundant stream handler test
 
 
 class TestSubmitThreadsafe:

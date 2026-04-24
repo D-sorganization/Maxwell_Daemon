@@ -786,9 +786,9 @@ class IssueExecutor:
             else:
                 # If there's no closing fence on its own line,
                 # try stripping just the leading ```json and trailing ```
-                first_newline = content.find('\n')
+                first_newline = content.find("\n")
                 if first_newline != -1:
-                    content = content[first_newline+1:].strip()
+                    content = content[first_newline + 1 :].strip()
                 if content.endswith("```"):
                     content = content[:-3].strip()
         try:

@@ -1033,7 +1033,9 @@ def create_app(
     from maxwell_daemon.daemon.runner import QueueSaturationError
 
     @app.exception_handler(QueueSaturationError)
-    async def queue_saturation_exception_handler(request: Request, exc: QueueSaturationError) -> JSONResponse:
+    async def queue_saturation_exception_handler(
+        request: Request, exc: QueueSaturationError
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": str(exc)},
