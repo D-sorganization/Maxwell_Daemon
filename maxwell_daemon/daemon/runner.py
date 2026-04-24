@@ -60,6 +60,12 @@ from maxwell_daemon.metrics import record_request
 
 log = logging.getLogger("maxwell_daemon.daemon")
 
+class QueueSaturationError(Exception):
+    """Raised when the priority queue is full and cannot accept more tasks."""
+    def __init__(self, message: str, backoff_seconds: int = 60) -> None:
+        super().__init__(message)
+        self.backoff_seconds = backoff_seconds
+
 
 class TaskStatus(str, Enum):
     QUEUED = "queued"
@@ -231,7 +237,9 @@ class Daemon:
         self._tasks_lock = threading.Lock()
         # PriorityQueue: workers dequeue (priority, task) tuples. Lower priority
         # number = higher urgency (0=emergency, 50=high, 100=normal, 200=batch).
-        self._queue: asyncio.PriorityQueue[tuple[int, Task | None]] = asyncio.PriorityQueue()
+        self._queue: asyncio.PriorityQueue[tuple[int, Task | None]] = asyncio.PriorityQueue(
+            maxsize=config.agent.max_queue_depth
+        )
         self._workers: list[asyncio.Task[None]] = []
         self._worker_count: int = 0
         self._bg_tasks: set[asyncio.Task[None]] = set()
@@ -506,8 +514,15 @@ class Daemon:
     def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:
         """Insert a queue entry while respecting daemon loop thread affinity."""
         item = (priority, task)
+        if self._queue.full():
+            log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
+            raise QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60)
+        
         if self._loop is None or not self._loop.is_running():
-            self._queue.put_nowait(item)
+            try:
+                self._queue.put_nowait(item)
+            except asyncio.QueueFull:
+                raise QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60)
             return
         try:
             running_loop = asyncio.get_running_loop()
@@ -519,7 +534,10 @@ class Daemon:
             # Mutating the PriorityQueue inline can corrupt the heap if the signal
             # interrupted a heapq operation. Use call_soon_threadsafe to defer safely.
             def _put_inline() -> None:
-                self._queue.put_nowait(item)
+                try:
+                    self._queue.put_nowait(item)
+                except asyncio.QueueFull:
+                    log.error("Queue saturated inline; dropped task %s", getattr(task, "id", None))
             self._loop.call_soon_threadsafe(_put_inline)
             return
 
@@ -528,6 +546,8 @@ class Daemon:
         def _put() -> None:
             try:
                 self._queue.put_nowait(item)
+            except asyncio.QueueFull:
+                result.set_exception(QueueSaturationError("Task queue is full, please try again later", backoff_seconds=60))
             except BaseException as exc:  # pragma: no cover - surfaced via Future
                 result.set_exception(exc)
             else:

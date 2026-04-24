@@ -1027,6 +1027,18 @@ def create_app(
     )
     mount_metrics_endpoint(app)
     _mount_web_ui(app)
+    
+    from maxwell_daemon.daemon.runner import QueueSaturationError
+    from fastapi.responses import JSONResponse
+    
+    @app.exception_handler(QueueSaturationError)
+    async def queue_saturation_exception_handler(request: Request, exc: QueueSaturationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": str(exc)},
+            headers={"Retry-After": str(exc.backoff_seconds)},
+        )
+
     # When jwt_config is provided, RBAC deps handle all auth (both static and JWT).
     # The `auth` dep becomes a pass-through so endpoints with Depends(auth) still
     # work with JWT tokens without double-checking the static token.
