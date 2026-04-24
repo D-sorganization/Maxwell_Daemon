@@ -16,10 +16,13 @@ class TestComplexityTiers:
     def test_mid_complexity_picks_mid_model(self) -> None:
         rec = route_model(5.0)
         assert rec.complexity_tier == "mid"
+        # mid complexity should not pick the largest model
+        assert "opus" not in rec.model and "o1" not in rec.model and "70b" not in rec.model
 
     def test_high_complexity_picks_large_model(self) -> None:
         rec = route_model(9.0)
         assert rec.complexity_tier == "high"
+        assert "opus" in rec.model or "o1" in rec.model or "70b" in rec.model
 
     def test_boundary_3_is_low(self) -> None:
         assert route_model(3.0).complexity_tier == "low"
@@ -40,19 +43,17 @@ class TestComplexityTiers:
 
 
 class TestCapabilityRouting:
-    def test_vision_requirement_bumps_model(self) -> None:
+    def test_vision_requirement_bumps_model_above_haiku(self) -> None:
+        # haiku lacks vision; should escalate to sonnet or opus
         rec = route_model(1.0, {"vision"}, preferred_provider="anthropic")
-        assert "vision" in rec.capabilities_matched or rec.model in {
-            "claude-sonnet-4-6",
-            "claude-opus-4-7",
-        }
+        assert "haiku" not in rec.model
 
     def test_long_context_capability_present_on_result(self) -> None:
         rec = route_model(5.0, {"long_context"}, preferred_provider="anthropic")
         assert "long_context" in rec.capabilities_matched or rec.capabilities_missing
 
     def test_missing_capabilities_reported(self) -> None:
-        # "telepathy" is not a real capability — should appear in missing set.
+        # "telepathy" is not a real capability - should appear in missing set.
         rec = route_model(5.0, {"telepathy"})
         assert "telepathy" in rec.capabilities_missing
 
@@ -63,6 +64,11 @@ class TestCapabilityRouting:
     def test_none_required_capabilities_succeeds(self) -> None:
         rec = route_model(5.0, None)
         assert isinstance(rec, ModelRecommendation)
+
+    def test_tool_use_covered_by_small_model(self) -> None:
+        # haiku supports tool_use - no bump needed for low complexity
+        rec = route_model(1.0, {"tool_use"}, preferred_provider="anthropic")
+        assert "tool_use" in rec.capabilities_matched
 
 
 class TestLatencyTiers:
@@ -78,6 +84,14 @@ class TestLatencyTiers:
     def test_balanced_tier_is_default(self) -> None:
         rec = route_model(5.0)
         assert rec.latency_tier == "balanced"
+
+    def test_fast_tier_picks_smallest_openai_model(self) -> None:
+        rec = route_model(9.0, latency_tier="fast", preferred_provider="openai")
+        assert "mini" in rec.model
+
+    def test_quality_tier_picks_largest_openai_model(self) -> None:
+        rec = route_model(1.0, latency_tier="quality", preferred_provider="openai")
+        assert rec.model == "o1"
 
 
 class TestProviderSelection:

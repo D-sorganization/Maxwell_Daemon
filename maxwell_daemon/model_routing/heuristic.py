@@ -1,6 +1,6 @@
 """Heuristic-based model routing by task complexity, capabilities, and latency.
 
-This module provides ``route_model`` — a lightweight function that picks a
+This module provides ``route_model`` - a lightweight function that picks a
 model name suitable for a task without requiring a full ``ModelProfile``
 registry.  It is intended as a fast-path for callers that know what they need
 but do not have a loaded profile list.
@@ -17,15 +17,15 @@ Complexity tiers (0-10):
 
 Required capabilities shift the selection upward when the baseline model is
 known to lack a capability:
-  * ``"vision"`` — requires a multimodal model.
-  * ``"code"`` — prefers coding-optimised models.
-  * ``"long_context"`` — requires a model with ≥100K context.
-  * ``"tool_use"`` — requires a model with function-calling support.
+  * ``"vision"`` - requires a multimodal model.
+  * ``"code"`` - prefers coding-optimised models.
+  * ``"long_context"`` - requires a model with >=100K context.
+  * ``"tool_use"`` - requires a model with function-calling support.
 
 Latency tiers:
-  * ``"fast"`` — prefer the smallest model that meets capability requirements.
-  * ``"balanced"`` (default) — standard heuristic.
-  * ``"quality"`` — prefer the largest model regardless of complexity.
+  * ``"fast"`` - prefer the smallest model that meets capability requirements.
+  * ``"balanced"`` (default) - standard heuristic.
+  * ``"quality"`` - prefer the largest model regardless of complexity.
 
 Provider preference:
   Use ``preferred_provider`` to select between ``"anthropic"`` (default),
@@ -46,7 +46,7 @@ LatencyTier = Literal["fast", "balanced", "quality"]
 Provider = Literal["anthropic", "openai", "ollama"]
 
 # ---------------------------------------------------------------------------
-# Model catalogues — (model_name, capability_tags, complexity_min)
+# Model catalogues - (model_name, capability_tags, complexity_min)
 # Each entry: (name, capabilities_set, min_complexity_for_default_selection)
 # ---------------------------------------------------------------------------
 
@@ -136,6 +136,41 @@ def _min_complexity_for_capabilities(
     return 7
 
 
+def _select_balanced(
+    required: frozenset[str],
+    effective_complexity: float,
+    effective_tier: Literal["low", "mid", "high"],
+    catalogue: list[tuple[str, frozenset[str], int]],
+) -> tuple[str, frozenset[str]]:
+    """Select the best model for balanced latency tier."""
+    # Pick the largest model whose min_c <= effective_complexity.
+    best_entry = catalogue[0]
+    for entry in catalogue:
+        if entry[2] <= effective_complexity:
+            best_entry = entry
+
+    if not required:
+        return best_entry[0], best_entry[1]
+
+    # If capabilities are required, check whether a model within the tier
+    # ceiling covers more of them than the complexity-based pick.
+    _tier_max: dict[Literal["low", "mid", "high"], int] = {"low": 3, "mid": 6, "high": 10}
+    ceiling = _tier_max[effective_tier]
+    base_score = len(best_entry[1] & required)
+    selected_model, best_caps = best_entry[0], best_entry[1]
+
+    for name, caps, min_c in catalogue:
+        if min_c > ceiling:
+            continue
+        score = len(caps & required)
+        if score > base_score:
+            selected_model = name
+            best_caps = caps
+            base_score = score
+
+    return selected_model, best_caps
+
+
 def route_model(
     task_complexity: float,
     required_capabilities: frozenset[str] | set[str] | None = None,
@@ -153,12 +188,11 @@ def route_model(
     required_capabilities:
         Set of capability strings the chosen model must support.
         Recognised values: ``"vision"``, ``"code"``, ``"long_context"``,
-        ``"tool_use"``.  Unknown capabilities are ignored with a note in
-        the rationale.
+        ``"tool_use"``.  Unknown capabilities are noted in the rationale.
     latency_tier:
-        ``"fast"`` — pick the smallest qualifying model.
-        ``"balanced"`` (default) — apply the complexity heuristic.
-        ``"quality"`` — always pick the largest model.
+        ``"fast"`` - pick the smallest qualifying model.
+        ``"balanced"`` (default) - apply the complexity heuristic.
+        ``"quality"`` - always pick the largest model.
     preferred_provider:
         ``"anthropic"`` (default), ``"openai"``, or ``"ollama"``.
 
@@ -173,8 +207,6 @@ def route_model(
 
     catalogue = _PROVIDER_CATALOGUES.get(preferred_provider, _ANTHROPIC_MODELS)
 
-    # For latency=fast, always prefer smallest model that covers capabilities.
-    # For latency=quality, always prefer largest model.
     if latency_tier == "fast":
         effective_complexity = 0.0
     elif latency_tier == "quality":
@@ -186,42 +218,14 @@ def route_model(
 
     effective_tier = _complexity_tier(effective_complexity)
 
-    # Pick a model from the catalogue using the effective latency tier:
-    #
-    # fast   → smallest model (first in catalogue, sorted by min_c ascending)
-    # quality → largest model (last in catalogue)
-    # balanced → model whose min_c most closely matches the effective_complexity
-    #            from below; when required capabilities are specified, prefer
-    #            the model that covers the most of them.
-
     if latency_tier == "fast":
-        selected_model, best_caps, _ = catalogue[0]
+        selected_model, best_caps = catalogue[0][0], catalogue[0][1]
     elif latency_tier == "quality":
-        selected_model, best_caps, _ = catalogue[-1]
+        selected_model, best_caps = catalogue[-1][0], catalogue[-1][1]
     else:
-        # balanced: pick the largest model whose min_c <= effective_complexity;
-        # fall back to the first model if none qualify.
-        best_entry = catalogue[0]
-        for entry in catalogue:
-            _name, _caps, min_c = entry
-            if min_c <= effective_complexity:
-                best_entry = entry
-
-        # If required caps are specified, check whether a slightly larger model
-        # covers more of them without exceeding the next tier boundary.
-        if required:
-            base_score = len(best_entry[1] & required)
-            _tier_max: dict[Literal["low", "mid", "high"], int] = {"low": 3, "mid": 6, "high": 10}
-            ceiling = _tier_max[effective_tier]
-            for entry in catalogue:
-                _name, caps, min_c = entry
-                if min_c > ceiling:
-                    continue
-                if len(caps & required) > base_score:
-                    best_entry = entry
-                    base_score = len(caps & required)
-
-        selected_model, best_caps, _ = best_entry
+        selected_model, best_caps = _select_balanced(
+            required, effective_complexity, effective_tier, catalogue
+        )
 
     caps_matched = best_caps & required
     caps_missing = required - best_caps
