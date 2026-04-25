@@ -80,6 +80,37 @@ def anneal(
     console.print(result)
 
 
+@memory_app.command("export")
+def export_memory(
+    repo_root: Annotated[
+        Path, typer.Argument(help="Path to the repository root that carries .maxwell/memory")
+    ],
+    scope: Annotated[str, typer.Option("--scope", help="Scope to export, e.g. repo:Foo")],
+    out_path: Annotated[Path, typer.Option("--out", "-o", help="Path to write the JSONL to")],
+) -> None:
+    """Export memory entries of a given scope to a JSONL file."""
+    store = RepoMemoryStore(repo_root)
+    store.export_jsonl(scope, out_path)
+    console.print(f"[green]✓[/green] Exported memory scope {scope!r} to {out_path}")
+
+
+@memory_app.command("import")
+def import_memory(
+    repo_root: Annotated[
+        Path, typer.Argument(help="Path to the repository root that carries .maxwell/memory")
+    ],
+    in_path: Annotated[Path, typer.Option("--in", "-i", help="Path to read the JSONL from")],
+    target_scope: Annotated[str, typer.Option("--scope", help="Scope to import into, e.g. repo:Foo")],
+    allow_promotion: Annotated[
+        bool, typer.Option("--allow-promotion", help="Allow promoting 'personal' memory to a broader scope")
+    ] = False,
+) -> None:
+    """Import memory entries from a JSONL file into a given scope."""
+    store = RepoMemoryStore(repo_root)
+    count = store.import_jsonl(in_path, target_scope, allow_promotion=allow_promotion)
+    console.print(f"[green]✓[/green] Imported {count} memory entries into scope {target_scope!r}")
+
+
 @repo_app.command("list")
 def list_entries(
     repo_root: Annotated[

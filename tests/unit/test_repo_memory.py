@@ -127,14 +127,15 @@ def test_duplicate_proposal_ids_are_rejected(tmp_path: Path) -> None:
         store.propose(_proposal("p1", _entry("m2")))
 
 
-def test_rejects_secret_looking_values_before_writing(tmp_path: Path) -> None:
+def test_redacts_secret_looking_values_before_writing(tmp_path: Path) -> None:
     store = RepoMemoryStore(tmp_path)
     secret = "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456"
 
-    with pytest.raises(PreconditionError, match="secret-looking"):
-        store.propose(_proposal("p-secret", _entry("m-secret", body=secret)))
-
-    assert not (tmp_path / ".maxwell" / "memory" / "proposals.jsonl").exists()
+    # It should automatically redact the secret
+    proposal = store.propose(_proposal("p-secret", _entry("m-secret", body=secret)))
+    
+    assert "[REDACTED]" in proposal.entry.body
+    assert "sk-proj-" not in proposal.entry.body
 
 
 def test_superseded_entries_remain_inspectable_but_inactive(tmp_path: Path) -> None:
