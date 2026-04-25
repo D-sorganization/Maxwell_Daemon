@@ -60,9 +60,7 @@ class HookRunnerProtocol(Protocol):
     substitute any object with the same method shape.
     """
 
-    async def run_pre_tool(
-        self, tool_name: str, tool_input: dict[str, Any]
-    ) -> _PreToolOutcome: ...
+    async def run_pre_tool(self, tool_name: str, tool_input: dict[str, Any]) -> _PreToolOutcome: ...
     async def run_post_tool(
         self, tool_name: str, tool_input: dict[str, Any], *, tool_output: str
     ) -> _PostToolOutcome: ...
@@ -192,10 +190,7 @@ class ToolPolicy:
             if unallowed:
                 return f"tool {spec.name!r} has unallowed capabilities: {', '.join(unallowed)}"
 
-        if (
-            _RISK_ORDER[spec.risk_level]
-            > _RISK_ORDER[self.max_risk_level_without_approval]
-        ):
+        if _RISK_ORDER[spec.risk_level] > _RISK_ORDER[self.max_risk_level_without_approval]:
             return (
                 f"tool {spec.name!r} risk level {spec.risk_level!r} exceeds "
                 f"policy maximum {self.max_risk_level_without_approval!r}"
@@ -352,9 +347,7 @@ class ToolRegistry:
         """Register a function previously decorated with ``@mcp_tool``."""
         spec = getattr(fn, "__mcp_tool__", None)
         if not isinstance(spec, ToolSpec):
-            raise ToolRegistryError(
-                f"{fn!r} is not decorated with @mcp_tool — nothing to register"
-            )
+            raise ToolRegistryError(f"{fn!r} is not decorated with @mcp_tool — nothing to register")
         self.register(spec)
 
     def get(self, name: str) -> ToolSpec:
@@ -395,9 +388,7 @@ class ToolRegistry:
              errors turn the success into an agent-visible error while
              preserving the original output for the agent's reference.
         """
-        spec = self.get(
-            name
-        )  # raises ToolRegistryError on unknown — caller bug, not model bug
+        spec = self.get(name)  # raises ToolRegistryError on unknown — caller bug, not model bug
 
         if self._policy is not None:
             denial_reason = self._policy.denial_reason(spec)
@@ -473,9 +464,7 @@ class ToolRegistry:
             return ToolResult(content=f"{type(exc).__name__}: {exc}", is_error=True)
 
         if self._hook_runner is not None:
-            post = await self._hook_runner.run_post_tool(
-                name, arguments, tool_output=content
-            )
+            post = await self._hook_runner.run_post_tool(name, arguments, tool_output=content)
             if post.errored:
                 self._record_invocation(
                     name,
@@ -492,9 +481,7 @@ class ToolRegistry:
                     is_error=True,
                 )
 
-        self._record_invocation(
-            name, arguments, status="succeeded", result_summary=content[:200]
-        )
+        self._record_invocation(name, arguments, status="succeeded", result_summary=content[:200])
         return ToolResult(content=content, is_error=False)
 
     def _record_invocation(

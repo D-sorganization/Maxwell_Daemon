@@ -77,9 +77,7 @@ TERMINAL_WORKSPACE_STATUSES = frozenset(
 )
 
 VALID_WORKSPACE_TRANSITIONS: dict[WorkspaceStatus, frozenset[WorkspaceStatus]] = {
-    WorkspaceStatus.CREATING: frozenset(
-        {WorkspaceStatus.READY, WorkspaceStatus.FAILED}
-    ),
+    WorkspaceStatus.CREATING: frozenset({WorkspaceStatus.READY, WorkspaceStatus.FAILED}),
     WorkspaceStatus.READY: frozenset(
         {
             WorkspaceStatus.DIRTY,
@@ -96,23 +94,15 @@ VALID_WORKSPACE_TRANSITIONS: dict[WorkspaceStatus, frozenset[WorkspaceStatus]] =
             WorkspaceStatus.ARCHIVED,
         }
     ),
-    WorkspaceStatus.COMMITTED: frozenset(
-        {WorkspaceStatus.DIRTY, WorkspaceStatus.ARCHIVED}
-    ),
-    WorkspaceStatus.FAILED: frozenset(
-        {WorkspaceStatus.ARCHIVED, WorkspaceStatus.DELETED}
-    ),
+    WorkspaceStatus.COMMITTED: frozenset({WorkspaceStatus.DIRTY, WorkspaceStatus.ARCHIVED}),
+    WorkspaceStatus.FAILED: frozenset({WorkspaceStatus.ARCHIVED, WorkspaceStatus.DELETED}),
     WorkspaceStatus.ARCHIVED: frozenset({WorkspaceStatus.DELETED}),
     WorkspaceStatus.DELETED: frozenset(),
 }
 
 
-def validate_workspace_transition(
-    current: WorkspaceStatus, new: WorkspaceStatus
-) -> None:
+def validate_workspace_transition(current: WorkspaceStatus, new: WorkspaceStatus) -> None:
     """Raise ValueError when a workspace lifecycle transition is not allowed."""
 
     if new not in VALID_WORKSPACE_TRANSITIONS[current]:
-        raise ValueError(
-            f"invalid workspace transition from {current.value!r} to {new.value!r}"
-        )
+        raise ValueError(f"invalid workspace transition from {current.value!r} to {new.value!r}")

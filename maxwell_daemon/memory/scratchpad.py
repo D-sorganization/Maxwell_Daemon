@@ -34,9 +34,7 @@ class ScratchPad:
         require(bool(task_id), "ScratchPad.append: task_id must be non-empty")
         require(bool(role), "ScratchPad.append: role must be non-empty")
         entries = self._entries.setdefault(task_id, deque(maxlen=self._cap))
-        entries.append(
-            ScratchEntry(role=role, content=content, ts=datetime.now(timezone.utc))
-        )
+        entries.append(ScratchEntry(role=role, content=content, ts=datetime.now(timezone.utc)))
 
     def entries(self, task_id: str) -> list[ScratchEntry]:
         return list(self._entries.get(task_id, ()))

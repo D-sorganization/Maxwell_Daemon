@@ -30,9 +30,7 @@ class MemoryAnnealStatus:
 class MemoryAnnealer:
     """Consolidates raw execution logs into dense architectural memory."""
 
-    def __init__(
-        self, workspace: Path, summarizer_role: RolePlayer | None = None
-    ) -> None:
+    def __init__(self, workspace: Path, summarizer_role: RolePlayer | None = None) -> None:
         self.workspace = workspace
         self.memory_dir = workspace / ".maxwell" / "memory"
         self.raw_logs_dir = workspace / ".maxwell" / "raw_logs"
@@ -40,9 +38,7 @@ class MemoryAnnealer:
 
     def status(self) -> MemoryAnnealStatus:
         """Return raw-log and markdown-memory status without mutating disk."""
-        raw_logs = (
-            list(self.raw_logs_dir.glob("*.log")) if self.raw_logs_dir.exists() else []
-        )
+        raw_logs = list(self.raw_logs_dir.glob("*.log")) if self.raw_logs_dir.exists() else []
         return MemoryAnnealStatus(
             workspace=self.workspace,
             raw_logs_dir=self.raw_logs_dir,
@@ -62,9 +58,7 @@ class MemoryAnnealer:
 
         raw_content = ""
         for log_file in self.raw_logs_dir.glob("*.log"):
-            raw_content += (
-                log_file.read_text(encoding="utf-8", errors="replace") + "\n\n"
-            )
+            raw_content += log_file.read_text(encoding="utf-8", errors="replace") + "\n\n"
 
         job = Job(
             instructions=(

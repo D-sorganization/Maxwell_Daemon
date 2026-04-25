@@ -74,9 +74,7 @@ class TaskGraph:
         node_by_id = {node.id: node for node in self.nodes}
 
         for node in self.nodes:
-            require(
-                0 <= node.max_retries <= 5, f"node {node.id!r} has invalid max_retries"
-            )
+            require(0 <= node.max_retries <= 5, f"node {node.id!r} has invalid max_retries")
             for dep in node.depends_on:
                 require(
                     dep in node_by_id,
@@ -84,9 +82,7 @@ class TaskGraph:
                 )
 
             produced_by_deps = {
-                node_by_id[dep].output_artifact_kind
-                for dep in node.depends_on
-                if dep in node_by_id
+                node_by_id[dep].output_artifact_kind for dep in node.depends_on if dep in node_by_id
             }
             for required in node.required_artifacts:
                 require(

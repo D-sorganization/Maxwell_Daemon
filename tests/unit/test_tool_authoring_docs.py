@@ -10,10 +10,7 @@ MKDOCS = Path("mkdocs.yml")
 def test_tool_authoring_guide_is_discoverable_from_development_nav() -> None:
     mkdocs = MKDOCS.read_text(encoding="utf-8")
 
-    assert (
-        "Tool authoring and MCP boundaries: development/tool-authoring-guide.md"
-        in mkdocs
-    )
+    assert "Tool authoring and MCP boundaries: development/tool-authoring-guide.md" in mkdocs
 
 
 def test_tool_authoring_guide_covers_runtime_contracts() -> None:
@@ -32,10 +29,7 @@ def test_tool_authoring_guide_documents_mcp_boundary_without_overstatement() -> 
     doc = GUIDE_DOC.read_text(encoding="utf-8")
     normalized = " ".join(doc.lower().split())
 
-    assert (
-        "is not a public model context protocol server or client transport today"
-        in normalized
-    )
+    assert "is not a public model context protocol server or client transport today" in normalized
     assert "ToolRegistry.to_openai()" in doc
     assert "ToolRegistry.to_anthropic()" in doc
     assert "not currently shipped" in normalized

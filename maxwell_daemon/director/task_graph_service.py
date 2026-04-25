@@ -62,9 +62,7 @@ class TaskGraphService:
         status: GraphStatus | None = None,
         limit: int = 100,
     ) -> list[TaskGraphRecord]:
-        return self._store.list_records(
-            work_item_id=work_item_id, status=status, limit=limit
-        )
+        return self._store.list_records(work_item_id=work_item_id, status=status, limit=limit)
 
     def start(self, graph_id: str) -> TaskGraphRecord:
         record = self._store.get(graph_id)

@@ -44,9 +44,7 @@ class NodeCapability:
 
     def __post_init__(self) -> None:
         require(bool(self.name.strip()), "capability name must not be empty")
-        _require_aware_datetime(
-            self.observed_at, "capability timestamp must be timezone-aware"
-        )
+        _require_aware_datetime(self.observed_at, "capability timestamp must be timezone-aware")
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,9 +75,7 @@ class NodePolicy:
     heartbeat_stale_after_seconds: int = 300
 
     def __post_init__(self) -> None:
-        require(
-            self.max_concurrent_sessions > 0, "max_concurrent_sessions must be positive"
-        )
+        require(self.max_concurrent_sessions > 0, "max_concurrent_sessions must be positive")
         require(
             self.heartbeat_stale_after_seconds > 0,
             "heartbeat_stale_after_seconds must be positive",
@@ -154,9 +150,7 @@ class TailscaleStatusView:
             "peer_id": self.peer_id,
             "hostname": self.hostname,
             "online": self.online,
-            "last_seen_at": (
-                self.last_seen_at.isoformat() if self.last_seen_at else None
-            ),
+            "last_seen_at": (self.last_seen_at.isoformat() if self.last_seen_at else None),
         }
 
 
@@ -175,9 +169,7 @@ class FleetNode:
         require(bool(self.node_id.strip()), "node_id must not be empty")
         require(bool(self.hostname.strip()), "hostname must not be empty")
         names = [cap.name for cap in self.capabilities]
-        require(
-            len(names) == len(set(names)), "capability names must be unique per node"
-        )
+        require(len(names) == len(set(names)), "capability names must be unique per node")
 
     @property
     def capability_names(self) -> frozenset[str]:
@@ -212,9 +204,7 @@ class NodeStatusView:
             "capabilities": [cap.to_dict() for cap in self.capabilities],
             "policy": self.policy.to_dict(),
             "active_sessions": self.active_sessions,
-            "heartbeat_at": (
-                self.heartbeat_at.isoformat() if self.heartbeat_at else None
-            ),
+            "heartbeat_at": (self.heartbeat_at.isoformat() if self.heartbeat_at else None),
             "heartbeat_age_seconds": self.heartbeat_age_seconds,
             "tailscale_status": (
                 self.tailscale_status.to_dict() if self.tailscale_status else None
@@ -238,9 +228,7 @@ class FleetRegistryStatus:
             "repo": self.repo,
             "tool": self.tool,
             "required_capabilities": list(self.required_capabilities),
-            "selected_node": (
-                self.selected_node.to_dict() if self.selected_node else None
-            ),
+            "selected_node": (self.selected_node.to_dict() if self.selected_node else None),
             "nodes": [node.to_dict() for node in self.nodes],
             "explanation": self.explanation,
         }
@@ -297,15 +285,11 @@ class InMemoryFleetCapabilityRegistry:
             node,
             resource_snapshot=snapshot,
             tailscale_status=(
-                tailscale_status
-                if tailscale_status is not None
-                else node.tailscale_status
+                tailscale_status if tailscale_status is not None else node.tailscale_status
             ),
         )
 
-    def update_capabilities(
-        self, node_id: str, capabilities: tuple[NodeCapability, ...]
-    ) -> None:
+    def update_capabilities(self, node_id: str, capabilities: tuple[NodeCapability, ...]) -> None:
         node = self._require_node(node_id)
         self._nodes[node_id] = replace(node, capabilities=capabilities)
 
@@ -349,9 +333,7 @@ class InMemoryFleetCapabilityRegistry:
             required_capabilities=required_capabilities,
             now=current_time,
         )
-        selected_node_id = (
-            selected.selected_node.node_id if selected.selected_node else None
-        )
+        selected_node_id = selected.selected_node.node_id if selected.selected_node else None
         node_views: list[NodeStatusView] = []
         selected_view: NodeStatusView | None = None
         for node, decision in zip(self.list_nodes(), decisions, strict=True):
@@ -469,9 +451,7 @@ class InMemoryFleetCapabilityRegistry:
         return tuple(decisions), tuple(scored_nodes)
 
 
-def parse_tailscale_status_json(
-    raw: str | Mapping[str, Any]
-) -> tuple[TailscalePeerStatus, ...]:
+def parse_tailscale_status_json(raw: str | Mapping[str, Any]) -> tuple[TailscalePeerStatus, ...]:
     """Parse a Tailscale status JSON payload into a stable tuple of peers."""
 
     payload = json.loads(raw) if isinstance(raw, str) else dict(raw)
@@ -487,16 +467,12 @@ def parse_tailscale_status_json(
             peer_id = str(peer_data.get("ID") or peer_data.get("id") or index)
             peer_items.append((peer_id, peer_data))
     else:
-        raise ValueError(
-            "tailscale status payload must contain Peer, Peers, or peers data"
-        )
+        raise ValueError("tailscale status payload must contain Peer, Peers, or peers data")
 
     statuses = [
         TailscalePeerStatus(
             peer_id=peer_id,
-            hostname=str(
-                peer_data.get("HostName") or peer_data.get("hostname") or peer_id
-            ),
+            hostname=str(peer_data.get("HostName") or peer_data.get("hostname") or peer_id),
             online=bool(peer_data.get("Online", peer_data.get("online", False))),
             tailnet_ip=(
                 str(peer_data.get("TailscaleIPs", [None])[0])
@@ -504,9 +480,7 @@ def parse_tailscale_status_json(
                 else peer_data.get("tailnet_ip")
             ),
             current_address=_extract_current_address(peer_data),
-            last_seen_at=_parse_timestamp(
-                peer_data.get("LastSeen") or peer_data.get("last_seen")
-            ),
+            last_seen_at=_parse_timestamp(peer_data.get("LastSeen") or peer_data.get("last_seen")),
         )
         for peer_id, peer_data in sorted(peer_items, key=lambda item: item[0])
     ]
@@ -632,9 +606,7 @@ def _build_node_view(
     snapshot = node.resource_snapshot
     heartbeat_age_seconds: int | None = None
     if snapshot.heartbeat_at is not None:
-        heartbeat_age_seconds = max(
-            0, int((now - snapshot.heartbeat_at).total_seconds())
-        )
+        heartbeat_age_seconds = max(0, int((now - snapshot.heartbeat_at).total_seconds()))
     tailscale_view = (
         TailscaleStatusView(
             peer_id=node.tailscale_status.peer_id,
