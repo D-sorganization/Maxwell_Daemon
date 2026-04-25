@@ -194,9 +194,7 @@ _BUILTIN_MANIFESTS = (
         install_extra="huggingface",
     ),
 )
-_BUILTIN_MANIFESTS_BY_NAME = {
-    manifest.name: manifest for manifest in _BUILTIN_MANIFESTS
-}
+_BUILTIN_MANIFESTS_BY_NAME = {manifest.name: manifest for manifest in _BUILTIN_MANIFESTS}
 
 
 def _display_name_for_runtime_backend(name: str) -> str:

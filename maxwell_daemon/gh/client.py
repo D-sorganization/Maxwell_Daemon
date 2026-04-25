@@ -120,9 +120,7 @@ class PullRequest:
         return cls(number=int(match.group(1)), url=url, draft=draft)
 
 
-async def _default_runner(
-    *argv: str, cwd: str | None = None
-) -> tuple[int, bytes, bytes]:
+async def _default_runner(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *argv,
         cwd=cwd,
@@ -158,9 +156,7 @@ class GitHubClient:
 
     def _validate_repo(self, repo: str) -> None:
         if not _REPO_RE.match(repo):
-            raise ValueError(
-                f"Invalid repo {repo!r}: expected 'owner/name' with safe characters"
-            )
+            raise ValueError(f"Invalid repo {repo!r}: expected 'owner/name' with safe characters")
 
     @staticmethod
     def _is_rate_limit_error(rc: int, err: bytes) -> bool:
@@ -276,9 +272,9 @@ class GitHubClient:
             err_text = err.decode(errors="replace")
 
             # Log remaining quota at DEBUG level for proactive visibility.
-            remaining_match = _RATE_REMAINING_RE.search(
-                err_text
-            ) or _RATE_REMAINING_RE.search(out.decode(errors="replace"))
+            remaining_match = _RATE_REMAINING_RE.search(err_text) or _RATE_REMAINING_RE.search(
+                out.decode(errors="replace")
+            )
             if remaining_match:
                 remaining = int(remaining_match.group(1))
                 log.debug("GitHub X-RateLimit-Remaining: %d", remaining)
@@ -307,9 +303,7 @@ class GitHubClient:
                 raise last_err
 
             # Non-rate-limit error — raise immediately.
-            raise GhCliError(
-                f"gh {' '.join(argv)} failed (rc={rc}): {err_text.strip()}"
-            )
+            raise GhCliError(f"gh {' '.join(argv)} failed (rc={rc}): {err_text.strip()}")
 
         # Unreachable, but satisfies the type checker.
         if last_err is not None:
@@ -320,9 +314,7 @@ class GitHubClient:
         rc, _, _ = await self._run("gh", "auth", "status")
         return rc == 0
 
-    async def list_issues(
-        self, repo: str, *, state: str = "open", limit: int = 50
-    ) -> list[Issue]:
+    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 50) -> list[Issue]:
         self._validate_repo(repo)
         if state not in {"open", "closed", "all"}:
             raise ValueError(f"state must be one of open/closed/all, got {state!r}")
@@ -387,9 +379,7 @@ class GitHubClient:
         (e.g. ``staging``) actually exists before we base a PR on it.
         """
         self._validate_repo(repo)
-        out = await self._request_with_retry(
-            "api", f"repos/{repo}/branches", "--paginate"
-        )
+        out = await self._request_with_retry("api", f"repos/{repo}/branches", "--paginate")
         payload = json.loads(out) if out else []
         return [str(b.get("name", "")) for b in payload if b.get("name")]
 

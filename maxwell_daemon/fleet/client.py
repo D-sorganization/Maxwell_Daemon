@@ -72,9 +72,7 @@ class HTTPClientProtocol(Protocol):
         self, url: str, *, json: dict[str, Any], headers: dict[str, str]
     ) -> HTTPResponseProtocol: ...
 
-    async def get(
-        self, url: str, *, headers: dict[str, str]
-    ) -> HTTPResponseProtocol: ...
+    async def get(self, url: str, *, headers: dict[str, str]) -> HTTPResponseProtocol: ...
 
 
 class RemoteDaemonClient:
@@ -92,11 +90,7 @@ class RemoteDaemonClient:
         timeout_seconds: float = 30.0,
         tls_verify: bool = True,
     ) -> None:
-        self._http = (
-            http_client
-            if http_client is not None
-            else _make_default_http(timeout_seconds)
-        )
+        self._http = http_client if http_client is not None else _make_default_http(timeout_seconds)
         self._auth_token = auth_token
         self._timeout_seconds = timeout_seconds
         self._tls_verify = tls_verify
@@ -125,9 +119,7 @@ class RemoteDaemonClient:
         url = f"{self._base_url(machine)}{_TASKS_PATH}"
         task_id = str(task_payload.get("task_id", ""))
         try:
-            response = await self._http.post(
-                url, json=task_payload, headers=self._headers()
-            )
+            response = await self._http.post(url, json=task_payload, headers=self._headers())
         except Exception as exc:  # transport-level failure
             raise RemoteDaemonError(
                 f"submit_task to {machine.name} ({url}) failed: {exc!r}"
@@ -157,9 +149,7 @@ class RemoteDaemonClient:
             return False
         return response.status_code == 200
 
-    async def refresh_all(
-        self, machines: tuple[MachineState, ...]
-    ) -> tuple[MachineState, ...]:
+    async def refresh_all(self, machines: tuple[MachineState, ...]) -> tuple[MachineState, ...]:
         """Probe every machine in parallel, return snapshots with ``healthy`` updated.
 
         One machine's failure never affects the probe of another — each task
@@ -209,9 +199,7 @@ def _extract_error_detail(response: HTTPResponseProtocol) -> str:
         return f"HTTP {status}"
 
 
-def _make_default_http(
-    timeout_seconds: float, *, tls_verify: bool = True
-) -> HTTPClientProtocol:
+def _make_default_http(timeout_seconds: float, *, tls_verify: bool = True) -> HTTPClientProtocol:
     """Create an httpx AsyncClient wrapped to match our protocol.
 
     Imported lazily so unit tests can run without httpx being functional in the
@@ -232,9 +220,7 @@ def _make_default_http(
         ) -> HTTPResponseProtocol:
             return await self._client.post(url, json=json, headers=headers)
 
-        async def get(
-            self, url: str, *, headers: dict[str, str]
-        ) -> HTTPResponseProtocol:
+        async def get(self, url: str, *, headers: dict[str, str]) -> HTTPResponseProtocol:
             return await self._client.get(url, headers=headers)
 
         async def aclose(self) -> None:

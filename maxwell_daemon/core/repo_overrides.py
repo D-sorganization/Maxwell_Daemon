@@ -67,8 +67,6 @@ class RepoSchematic:
         if os.environ.get("MAXWELL_AGGRESSIVE_COMPRESSION") == "1":
             from maxwell_daemon.tools.compression import ToolResultCompressor
 
-            compressor = ToolResultCompressor(
-                head_lines=100, tail_lines=100, max_chars=4000
-            )
+            compressor = ToolResultCompressor(head_lines=100, tail_lines=100, max_chars=4000)
             return compressor.compress("repo_schematic", schematic).content
         return schematic

@@ -17,9 +17,7 @@ class TestComplexityTiers:
         rec = route_model(5.0)
         assert rec.complexity_tier == "mid"
         # mid complexity should not pick the largest model
-        assert (
-            "opus" not in rec.model and "o1" not in rec.model and "70b" not in rec.model
-        )
+        assert "opus" not in rec.model and "o1" not in rec.model and "70b" not in rec.model
 
     def test_high_complexity_picks_large_model(self) -> None:
         rec = route_model(9.0)

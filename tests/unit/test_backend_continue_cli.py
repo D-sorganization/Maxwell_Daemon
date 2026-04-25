@@ -19,9 +19,7 @@ class _Runner:
         self._stderr: bytes = b""
         self._rc: int = 0
 
-    def respond(
-        self, *, rc: int = 0, stdout: bytes | str = b"", stderr: bytes | str = b""
-    ) -> None:
+    def respond(self, *, rc: int = 0, stdout: bytes | str = b"", stderr: bytes | str = b"") -> None:
         self._rc = rc
         self._stdout = stdout.encode() if isinstance(stdout, str) else stdout
         self._stderr = stderr.encode() if isinstance(stderr, str) else stderr
@@ -41,9 +39,7 @@ class _FakeProcess:
 
 
 class TestDefaultRunner:
-    def test_default_runner_invokes_subprocess(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_default_runner_invokes_subprocess(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, Any] = {}
 
         async def fake_exec(*argv: str, **kwargs: Any) -> _FakeProcess:

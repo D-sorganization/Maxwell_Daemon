@@ -114,9 +114,7 @@ def list_scenarios() -> list[EvalScenario]:
                     if isinstance(data, dict):
                         # Simple adaptation
                         data.setdefault("id", suite_file.stem)
-                        data.setdefault(
-                            "title", suite_file.stem.replace("_", " ").title()
-                        )
+                        data.setdefault("title", suite_file.stem.replace("_", " ").title())
                         data.setdefault("description", "")
                         data.setdefault("source_type", EvalSourceType.MANUAL_TASK.value)
                         data.setdefault("fixture_repo_ref", "fixture://local")
@@ -125,9 +123,7 @@ def list_scenarios() -> list[EvalScenario]:
             except Exception as e:
                 import logging
 
-                logging.getLogger(__name__).warning(
-                    f"Failed to load suite {suite_file}: {e}"
-                )
+                logging.getLogger(__name__).warning(f"Failed to load suite {suite_file}: {e}")
 
     return scenarios
 

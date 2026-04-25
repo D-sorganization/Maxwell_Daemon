@@ -46,9 +46,7 @@ class FakeRunner:
             stderr = stderr.encode()
         self._responses[argv] = (returncode, stdout, stderr)
 
-    async def __call__(
-        self, *argv: str, cwd: str | None = None
-    ) -> tuple[int, bytes, bytes]:
+    async def __call__(self, *argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
         self.calls.append(argv)
         return self._responses.get(argv, (0, b"", b""))
 
@@ -132,9 +130,7 @@ class TestCreateIssue:
         client = GitHubClient(runner=fake_runner)
 
         url = asyncio.run(
-            client.create_issue(
-                "owner/repo", title="Something broke", body="details here"
-            )
+            client.create_issue("owner/repo", title="Something broke", body="details here")
         )
 
         assert url == "https://github.com/owner/repo/issues/99"
@@ -235,9 +231,7 @@ class TestAuth:
         assert asyncio.run(client.check_auth()) is True
 
     def test_check_auth_failure(self, fake_runner: FakeRunner) -> None:
-        fake_runner.respond(
-            "gh", "auth", "status", returncode=1, stderr=b"not logged in"
-        )
+        fake_runner.respond("gh", "auth", "status", returncode=1, stderr=b"not logged in")
         client = GitHubClient(runner=fake_runner)
         assert asyncio.run(client.check_auth()) is False
 
@@ -316,9 +310,7 @@ class TestRateLimitHandling:
         assert GitHubClient._is_rate_limit_error(1, b"API rate limit exceeded") is True
         assert GitHubClient._is_rate_limit_error(1, b"secondary rate limit") is True
         assert GitHubClient._is_rate_limit_error(1, b"429 Too Many Requests") is True
-        assert (
-            GitHubClient._is_rate_limit_error(0, b"rate limit") is False
-        )  # rc=0 means success
+        assert GitHubClient._is_rate_limit_error(0, b"rate limit") is False  # rc=0 means success
         assert GitHubClient._is_rate_limit_error(1, b"Repository not found") is False
 
     def test_retries_once_on_rate_limit_with_backoff(self) -> None:
@@ -473,9 +465,7 @@ class RetryRunner:
         self._responses = list(responses)
         self.call_count = 0
 
-    async def __call__(
-        self, *argv: str, cwd: str | None = None
-    ) -> tuple[int, bytes, bytes]:
+    async def __call__(self, *argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
         self.call_count += 1
         if self._responses:
             return self._responses.pop(0)
@@ -485,9 +475,7 @@ class RetryRunner:
 class TestRateLimitRetry:
     """Tests for _request_with_retry rate-limit handling."""
 
-    def test_429_error_is_retried_and_succeeds(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_429_error_is_retried_and_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A rate-limit error followed by success returns the successful output."""
         sleep_calls: list[float] = []
 
@@ -510,9 +498,7 @@ class TestRateLimitRetry:
         client = GitHubClient(runner=runner)
 
         result = asyncio.run(
-            client._request_with_retry(
-                "issue", "list", "--repo", "owner/repo", max_retries=3
-            )
+            client._request_with_retry("issue", "list", "--repo", "owner/repo", max_retries=3)
         )
 
         assert result == success_stdout
@@ -547,9 +533,7 @@ class TestRateLimitRetry:
         # 1 initial + 3 retries = 4 attempts total
         assert runner.call_count == 4
 
-    def test_secondary_rate_limit_is_retried(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_secondary_rate_limit_is_retried(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Secondary rate limit messages are also detected and retried."""
         sleep_calls: list[float] = []
 
@@ -566,16 +550,12 @@ class TestRateLimitRetry:
         )
         client = GitHubClient(runner=runner)
 
-        result = asyncio.run(
-            client._request_with_retry("api", "repos/x/y", max_retries=2)
-        )
+        result = asyncio.run(client._request_with_retry("api", "repos/x/y", max_retries=2))
 
         assert result == b"ok"
         assert len(sleep_calls) == 1
 
-    def test_non_rate_limit_error_is_not_retried(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_non_rate_limit_error_is_not_retried(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A generic failure (non rate-limit) raises GhCliError immediately without retrying."""
         sleep_calls: list[float] = []
 
@@ -593,9 +573,7 @@ class TestRateLimitRetry:
         client = GitHubClient(runner=runner)
 
         with pytest.raises(GhCliError):
-            asyncio.run(
-                client._request_with_retry("issue", "view", "99", max_retries=3)
-            )
+            asyncio.run(client._request_with_retry("issue", "view", "99", max_retries=3))
 
         # Only 1 attempt — no retries for non-rate-limit errors.
         assert runner.call_count == 1
@@ -612,9 +590,7 @@ class TestRateLimitRetry:
 
         # Simulate a reset timestamp far in the future (year 2100)
         future_reset = 4102444800  # 2100-01-01 epoch
-        rate_stderr = (
-            f"API rate limit exceeded. X-RateLimit-Reset: {future_reset}".encode()
-        )
+        rate_stderr = f"API rate limit exceeded. X-RateLimit-Reset: {future_reset}".encode()
 
         runner = RetryRunner(
             [
@@ -651,9 +627,7 @@ class TestRateLimitRetry:
         captured = capsys.readouterr()
         assert "42" in captured.out or "42" in captured.err
 
-    def test_list_issues_retries_on_rate_limit(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_list_issues_retries_on_rate_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """list_issues uses _request_with_retry and therefore handles rate limits."""
         sleep_calls: list[float] = []
 
@@ -688,9 +662,7 @@ class TestRateLimitRetry:
         assert len(issues) == 1
         assert len(sleep_calls) == 1
 
-    def test_get_issue_retries_on_rate_limit(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_get_issue_retries_on_rate_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """get_issue uses _request_with_retry and therefore handles rate limits."""
 
         async def fake_sleep(secs: float) -> None:

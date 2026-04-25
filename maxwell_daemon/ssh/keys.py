@@ -82,11 +82,7 @@ class SSHKeyStore:
         priv = asyncssh.generate_private_key(
             self._key_type,
             comment=f"maxwell-daemon/{name}",
-            **(
-                {"key_size": self._key_bits}
-                if self._key_type in ("rsa", "ssh-rsa")
-                else {}
-            ),
+            **({"key_size": self._key_bits} if self._key_type in ("rsa", "ssh-rsa") else {}),
         )
         priv_path.write_bytes(priv.export_private_key())
         priv_path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600
@@ -97,9 +93,7 @@ class SSHKeyStore:
     def public_key_string(self, name: str) -> str | None:
         """Return the OpenSSH public key for *name*, or None if not found."""
         pub_path = self._pub_path(name)
-        return (
-            pub_path.read_text(encoding="utf-8").strip() if pub_path.is_file() else None
-        )
+        return pub_path.read_text(encoding="utf-8").strip() if pub_path.is_file() else None
 
     def list_machines(self) -> list[str]:
         """Return the names of all machines that have stored keys."""

@@ -72,11 +72,7 @@ class TemplateStore:
                 name="Audit Repo TODOs",
                 description="Scan a repository for TODO comments and summarize them.",
                 prompt_template="Scan the repository {{ repo }} for TODOs and FIXMEs. Group them by file and suggest a priority order for addressing them.",
-                parameters=[
-                    TemplateParameter(
-                        name="repo", type=ParameterType.REPO, required=True
-                    )
-                ],
+                parameters=[TemplateParameter(name="repo", type=ParameterType.REPO, required=True)],
                 tags=["audit", "cleanup"],
             ),
             TaskTemplate(
@@ -100,9 +96,7 @@ class TemplateStore:
                 description="Identify unused functions, classes, and variables.",
                 prompt_template="Scan the Python files in {{ target_dir }} for dead code (unused imports, uncalled functions, inaccessible classes). Produce a summary of what can be safely deleted.",
                 parameters=[
-                    TemplateParameter(
-                        name="target_dir", type=ParameterType.STRING, required=True
-                    )
+                    TemplateParameter(name="target_dir", type=ParameterType.STRING, required=True)
                 ],
                 tags=["audit", "cleanup"],
             ),
@@ -116,9 +110,7 @@ class TemplateStore:
                     TemplateParameter(
                         name="issue_number", type=ParameterType.STRING, required=True
                     ),
-                    TemplateParameter(
-                        name="repo", type=ParameterType.REPO, required=True
-                    ),
+                    TemplateParameter(name="repo", type=ParameterType.REPO, required=True),
                 ],
                 tags=["bug", "triage"],
             ),
@@ -131,9 +123,7 @@ class TemplateStore:
                     TemplateParameter(
                         name="issue_number", type=ParameterType.STRING, required=True
                     ),
-                    TemplateParameter(
-                        name="test_file", type=ParameterType.FILE, required=True
-                    ),
+                    TemplateParameter(name="test_file", type=ParameterType.FILE, required=True),
                 ],
                 tags=["bug", "testing"],
             ),
@@ -144,9 +134,7 @@ class TemplateStore:
                 description="Generate release notes from recent git commits.",
                 prompt_template="Write release notes for {{ repo }} comparing the current state against {{ previous_tag }}. Focus on user-facing features, bug fixes, and breaking changes. Format in markdown.",
                 parameters=[
-                    TemplateParameter(
-                        name="repo", type=ParameterType.REPO, required=True
-                    ),
+                    TemplateParameter(name="repo", type=ParameterType.REPO, required=True),
                     TemplateParameter(
                         name="previous_tag",
                         type=ParameterType.STRING,
@@ -162,9 +150,7 @@ class TemplateStore:
                 description="Append recent changes to the repository's CHANGELOG.md.",
                 prompt_template="Read the git log of {{ repo }} since {{ previous_tag }} and append a new section to CHANGELOG.md following the Keep a Changelog format.",
                 parameters=[
-                    TemplateParameter(
-                        name="repo", type=ParameterType.REPO, required=True
-                    ),
+                    TemplateParameter(name="repo", type=ParameterType.REPO, required=True),
                     TemplateParameter(
                         name="previous_tag", type=ParameterType.STRING, required=True
                     ),
@@ -177,9 +163,7 @@ class TemplateStore:
                 description="Add missing docstrings to functions and classes in a file.",
                 prompt_template="Review {{ file_path }}. Add PEP 257 compliant docstrings to all functions and classes that are missing them. Do not change any logic.",
                 parameters=[
-                    TemplateParameter(
-                        name="file_path", type=ParameterType.FILE, required=True
-                    )
+                    TemplateParameter(name="file_path", type=ParameterType.FILE, required=True)
                 ],
                 tags=["docs", "refactor"],
             ),
@@ -188,11 +172,7 @@ class TemplateStore:
                 name="Refresh README",
                 description="Update the README to reflect current project features.",
                 prompt_template="Review the codebase in {{ repo }} and update the README.md to ensure the feature list, setup instructions, and usage examples are accurate.",
-                parameters=[
-                    TemplateParameter(
-                        name="repo", type=ParameterType.REPO, required=True
-                    )
-                ],
+                parameters=[TemplateParameter(name="repo", type=ParameterType.REPO, required=True)],
                 tags=["docs"],
             ),
             # 4. Code Review & PRs
@@ -202,12 +182,8 @@ class TemplateStore:
                 description="Perform a comprehensive code review on a PR.",
                 prompt_template="Review the changes in PR #{{ pr_number }} for {{ repo }}. Check for logic errors, security issues, performance bottlenecks, and style violations. Produce a consolidated review.",
                 parameters=[
-                    TemplateParameter(
-                        name="repo", type=ParameterType.REPO, required=True
-                    ),
-                    TemplateParameter(
-                        name="pr_number", type=ParameterType.STRING, required=True
-                    ),
+                    TemplateParameter(name="repo", type=ParameterType.REPO, required=True),
+                    TemplateParameter(name="pr_number", type=ParameterType.STRING, required=True),
                 ],
                 tags=["review", "pr"],
             ),
@@ -217,9 +193,7 @@ class TemplateStore:
                 description="Implement a fix for an issue and open a PR.",
                 prompt_template="Read issue #{{ issue_number }} in {{ repo }}. Create a new branch, implement the requested fix or feature, ensure tests pass, and create a Pull Request resolving the issue.",
                 parameters=[
-                    TemplateParameter(
-                        name="repo", type=ParameterType.REPO, required=True
-                    ),
+                    TemplateParameter(name="repo", type=ParameterType.REPO, required=True),
                     TemplateParameter(
                         name="issue_number", type=ParameterType.STRING, required=True
                     ),
@@ -233,12 +207,8 @@ class TemplateStore:
                 description="Write unit tests for a specific module.",
                 prompt_template="Write comprehensive pytest unit tests for the functions in {{ file_path }}. Place the tests in {{ test_path }} and aim for high coverage of edge cases.",
                 parameters=[
-                    TemplateParameter(
-                        name="file_path", type=ParameterType.FILE, required=True
-                    ),
-                    TemplateParameter(
-                        name="test_path", type=ParameterType.FILE, required=True
-                    ),
+                    TemplateParameter(name="file_path", type=ParameterType.FILE, required=True),
+                    TemplateParameter(name="test_path", type=ParameterType.FILE, required=True),
                 ],
                 tags=["testing"],
             ),
@@ -248,9 +218,7 @@ class TemplateStore:
                 description="Diagnose and fix tests that are currently failing.",
                 prompt_template="Run the test suite in {{ target_dir }}. Identify any failing tests, diagnose the root cause (whether the code is broken or the test is outdated), and apply the necessary fixes.",
                 parameters=[
-                    TemplateParameter(
-                        name="target_dir", type=ParameterType.STRING, required=True
-                    )
+                    TemplateParameter(name="target_dir", type=ParameterType.STRING, required=True)
                 ],
                 tags=["testing", "fix"],
             ),
@@ -261,9 +229,7 @@ class TemplateStore:
                 description="Convert synchronous code to asyncio.",
                 prompt_template="Refactor {{ file_path }} to use Python's async/await where appropriate (e.g., I/O bound operations). Ensure backwards compatibility or update callers accordingly.",
                 parameters=[
-                    TemplateParameter(
-                        name="file_path", type=ParameterType.FILE, required=True
-                    )
+                    TemplateParameter(name="file_path", type=ParameterType.FILE, required=True)
                 ],
                 tags=["refactor", "async"],
             ),
@@ -273,9 +239,7 @@ class TemplateStore:
                 description="Add Python type hints to a file and run mypy.",
                 prompt_template="Add strict Python type hints to all function signatures and complex variables in {{ file_path }}. Run mypy to ensure there are no typing errors.",
                 parameters=[
-                    TemplateParameter(
-                        name="file_path", type=ParameterType.FILE, required=True
-                    )
+                    TemplateParameter(name="file_path", type=ParameterType.FILE, required=True)
                 ],
                 tags=["refactor", "typing"],
             ),
@@ -286,9 +250,7 @@ class TemplateStore:
                 description="Audit code for common security vulnerabilities.",
                 prompt_template="Perform a security audit on {{ target_dir }}. Look for SQL injection, hardcoded secrets, XSS vulnerabilities, and unsafe file I/O. Provide a remediation report.",
                 parameters=[
-                    TemplateParameter(
-                        name="target_dir", type=ParameterType.STRING, required=True
-                    )
+                    TemplateParameter(name="target_dir", type=ParameterType.STRING, required=True)
                 ],
                 tags=["security", "audit"],
             ),
@@ -298,9 +260,7 @@ class TemplateStore:
                 description="Update outdated dependencies in pyproject.toml or requirements.txt.",
                 prompt_template="Check the dependencies defined in {{ file_path }} for newer secure versions. Update the file and ensure that `pip install` works without resolution conflicts.",
                 parameters=[
-                    TemplateParameter(
-                        name="file_path", type=ParameterType.FILE, required=True
-                    )
+                    TemplateParameter(name="file_path", type=ParameterType.FILE, required=True)
                 ],
                 tags=["maintenance", "deps"],
             ),
@@ -311,9 +271,7 @@ class TemplateStore:
                 description="Analyze code for performance bottlenecks.",
                 prompt_template="Analyze {{ file_path }} for computational or I/O bottlenecks. Suggest and implement optimizations to reduce time complexity or unnecessary memory allocations.",
                 parameters=[
-                    TemplateParameter(
-                        name="file_path", type=ParameterType.FILE, required=True
-                    )
+                    TemplateParameter(name="file_path", type=ParameterType.FILE, required=True)
                 ],
                 tags=["performance", "optimization"],
             ),
@@ -323,9 +281,7 @@ class TemplateStore:
                 description="Review and optimize database queries.",
                 prompt_template="Review the SQL queries or ORM calls in {{ file_path }}. Suggest indexes, N+1 query fixes, or query rewrites to improve execution speed.",
                 parameters=[
-                    TemplateParameter(
-                        name="file_path", type=ParameterType.FILE, required=True
-                    )
+                    TemplateParameter(name="file_path", type=ParameterType.FILE, required=True)
                 ],
                 tags=["performance", "database"],
             ),
@@ -336,9 +292,7 @@ class TemplateStore:
                 description="Create a new CLI entry point using Typer.",
                 prompt_template="Create a new Typer CLI command in {{ file_path }} named `{{ command_name }}`. It should accept options for `verbose` and `dry-run`, and include basic docstrings.",
                 parameters=[
-                    TemplateParameter(
-                        name="file_path", type=ParameterType.FILE, required=True
-                    ),
+                    TemplateParameter(name="file_path", type=ParameterType.FILE, required=True),
                     TemplateParameter(
                         name="command_name", type=ParameterType.STRING, required=True
                     ),
@@ -351,9 +305,7 @@ class TemplateStore:
                 description="Create a new API route in a FastAPI app.",
                 prompt_template="Add a new `{{ method }}` route at `{{ route_path }}` to the FastAPI router in {{ file_path }}. Include a basic Pydantic model for request/response.",
                 parameters=[
-                    TemplateParameter(
-                        name="file_path", type=ParameterType.FILE, required=True
-                    ),
+                    TemplateParameter(name="file_path", type=ParameterType.FILE, required=True),
                     TemplateParameter(
                         name="route_path",
                         type=ParameterType.STRING,

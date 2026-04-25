@@ -38,9 +38,7 @@ def status(
     table.add_row("Workspace", str(memory_status.workspace))
     table.add_row("Raw logs", str(memory_status.raw_log_count))
     table.add_row("Raw bytes", str(memory_status.raw_bytes))
-    table.add_row(
-        "Markdown memory", "present" if memory_status.memory_exists else "missing"
-    )
+    table.add_row("Markdown memory", "present" if memory_status.memory_exists else "missing")
     table.add_row(
         "Dream interval",
         (
@@ -88,12 +86,8 @@ def export_memory(
         Path,
         typer.Argument(help="Path to the repository root that carries .maxwell/memory"),
     ],
-    scope: Annotated[
-        str, typer.Option("--scope", help="Scope to export, e.g. repo:Foo")
-    ],
-    out_path: Annotated[
-        Path, typer.Option("--out", "-o", help="Path to write the JSONL to")
-    ],
+    scope: Annotated[str, typer.Option("--scope", help="Scope to export, e.g. repo:Foo")],
+    out_path: Annotated[Path, typer.Option("--out", "-o", help="Path to write the JSONL to")],
 ) -> None:
     """Export memory entries of a given scope to a JSONL file."""
     store = RepoMemoryStore(repo_root)
@@ -107,9 +101,7 @@ def import_memory(
         Path,
         typer.Argument(help="Path to the repository root that carries .maxwell/memory"),
     ],
-    in_path: Annotated[
-        Path, typer.Option("--in", "-i", help="Path to read the JSONL from")
-    ],
+    in_path: Annotated[Path, typer.Option("--in", "-i", help="Path to read the JSONL from")],
     target_scope: Annotated[
         str, typer.Option("--scope", help="Scope to import into, e.g. repo:Foo")
     ],
@@ -124,9 +116,7 @@ def import_memory(
     """Import memory entries from a JSONL file into a given scope."""
     store = RepoMemoryStore(repo_root)
     count = store.import_jsonl(in_path, target_scope, allow_promotion=allow_promotion)
-    console.print(
-        f"[green]✓[/green] Imported {count} memory entries into scope {target_scope!r}"
-    )
+    console.print(f"[green]✓[/green] Imported {count} memory entries into scope {target_scope!r}")
 
 
 @repo_app.command("list")
@@ -135,9 +125,7 @@ def list_entries(
         Path,
         typer.Argument(help="Path to the repository root that carries .maxwell/memory"),
     ],
-    repo_id: Annotated[
-        str, typer.Option("--repo-id", help="owner/repo id used by memory entries")
-    ],
+    repo_id: Annotated[str, typer.Option("--repo-id", help="owner/repo id used by memory entries")],
     include_superseded: Annotated[
         bool, typer.Option("--include-superseded", help="Show superseded entries too")
     ] = False,
@@ -208,14 +196,10 @@ def propose_entry(
         typer.Argument(help="Path to the repository root that carries .maxwell/memory"),
     ],
     entry_id: Annotated[str, typer.Argument(help="Stable memory entry id")],
-    repo_id: Annotated[
-        str, typer.Option("--repo-id", help="owner/repo id used by memory entries")
-    ],
+    repo_id: Annotated[str, typer.Option("--repo-id", help="owner/repo id used by memory entries")],
     body: Annotated[str, typer.Option("--body", "-b", help="Memory body text")],
     source: Annotated[str, typer.Option("--source", help="Evidence source")],
-    proposed_by: Annotated[
-        str, typer.Option("--proposed-by", help="Delegate or reviewer id")
-    ],
+    proposed_by: Annotated[str, typer.Option("--proposed-by", help="Delegate or reviewer id")],
     reason: Annotated[str, typer.Option("--reason", help="Why this proposal exists")],
     scope: Annotated[str, typer.Option("--scope")] = "repo",
     kind: Annotated[str, typer.Option("--kind")] = "semantic",
@@ -259,9 +243,7 @@ def review_proposal(
         typer.Argument(help="Path to the repository root that carries .maxwell/memory"),
     ],
     proposal_id: Annotated[str, typer.Argument(help="Proposal id")],
-    reviewer: Annotated[
-        str, typer.Option("--reviewer", help="Reviewer or policy actor")
-    ],
+    reviewer: Annotated[str, typer.Option("--reviewer", help="Reviewer or policy actor")],
     status: Annotated[str, typer.Option("--status")] = "accepted",
     reason: Annotated[str | None, typer.Option("--reason")] = None,
 ) -> None:
@@ -272,9 +254,7 @@ def review_proposal(
     elif status == "rejected":
         proposal = store.reject_proposal(proposal_id, reviewer=reviewer, reason=reason)
     elif status == "superseded":
-        proposal = store.supersede_proposal(
-            proposal_id, reviewer=reviewer, reason=reason
-        )
+        proposal = store.supersede_proposal(proposal_id, reviewer=reviewer, reason=reason)
     else:
         console.print("[red]x[/red] --status must be accepted, rejected, or superseded")
         raise typer.Exit(2)
@@ -288,15 +268,11 @@ def accept_proposal(
         typer.Argument(help="Path to the repository root that carries .maxwell/memory"),
     ],
     proposal_id: Annotated[str, typer.Argument(help="Proposal id")],
-    reviewer: Annotated[
-        str, typer.Option("--reviewer", help="Reviewer or policy actor")
-    ],
+    reviewer: Annotated[str, typer.Option("--reviewer", help="Reviewer or policy actor")],
     reason: Annotated[str | None, typer.Option("--reason")] = None,
 ) -> None:
     """Accept a pending proposal and persist its entry."""
-    review_proposal(
-        repo_root, proposal_id, reviewer=reviewer, status="accepted", reason=reason
-    )
+    review_proposal(repo_root, proposal_id, reviewer=reviewer, status="accepted", reason=reason)
 
 
 @repo_app.command("reject")
@@ -306,15 +282,11 @@ def reject_proposal(
         typer.Argument(help="Path to the repository root that carries .maxwell/memory"),
     ],
     proposal_id: Annotated[str, typer.Argument(help="Proposal id")],
-    reviewer: Annotated[
-        str, typer.Option("--reviewer", help="Reviewer or policy actor")
-    ],
+    reviewer: Annotated[str, typer.Option("--reviewer", help="Reviewer or policy actor")],
     reason: Annotated[str | None, typer.Option("--reason")] = None,
 ) -> None:
     """Reject a pending proposal."""
-    review_proposal(
-        repo_root, proposal_id, reviewer=reviewer, status="rejected", reason=reason
-    )
+    review_proposal(repo_root, proposal_id, reviewer=reviewer, status="rejected", reason=reason)
 
 
 @repo_app.command("snapshot")
@@ -323,9 +295,7 @@ def snapshot(
         Path,
         typer.Argument(help="Path to the repository root that carries .maxwell/memory"),
     ],
-    repo_id: Annotated[
-        str, typer.Option("--repo-id", help="owner/repo id used by memory entries")
-    ],
+    repo_id: Annotated[str, typer.Option("--repo-id", help="owner/repo id used by memory entries")],
     issue_number: Annotated[
         int | None,
         typer.Option("--issue-number", help="Issue/work item id for scoped matches"),

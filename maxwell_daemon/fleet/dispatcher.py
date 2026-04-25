@@ -154,8 +154,7 @@ class FleetDispatcher:
                     # Higher score wins; on equal score prefer lower task id,
                     # then lower machine name (lexicographic, stable).
                     if (score > best[0]) or (
-                        score == best[0]
-                        and (task.task_id, machine.name) < (best[1], best[2])
+                        score == best[0] and (task.task_id, machine.name) < (best[1], best[2])
                     ):
                         best = candidate
 

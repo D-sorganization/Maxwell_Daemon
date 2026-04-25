@@ -64,9 +64,7 @@ def list_delegate_sessions(
     except httpx.HTTPError as exc:
         _fail(f"list failed: {exc}")
 
-    sessions = [
-        DelegateSessionSnapshot.model_validate(item) for item in response.json()
-    ]
+    sessions = [DelegateSessionSnapshot.model_validate(item) for item in response.json()]
     if not sessions:
         console.print("[dim]No delegate sessions.[/dim]")
         return

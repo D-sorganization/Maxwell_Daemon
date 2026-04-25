@@ -85,9 +85,7 @@ class EmbeddingProvider(Protocol):
     @property
     def dimensions(self) -> int: ...
 
-    async def embed_batch(
-        self, texts: tuple[str, ...]
-    ) -> tuple[EmbeddingResult, ...]: ...
+    async def embed_batch(self, texts: tuple[str, ...]) -> tuple[EmbeddingResult, ...]: ...
 
 
 class StubEmbeddingProvider:
@@ -192,9 +190,7 @@ class OpenAIEmbeddingProvider:
             "text-embedding-ada-002": 1536,
         }
         self._dim = (
-            dimensions_override
-            if dimensions_override is not None
-            else _model_dims.get(model, 1536)
+            dimensions_override if dimensions_override is not None else _model_dims.get(model, 1536)
         )
 
     @property
@@ -236,9 +232,7 @@ def cosine_similarity(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     always a bug, never something the caller wants to silently paper over.
     """
     if len(a) != len(b):
-        raise ValueError(
-            f"cosine_similarity: dimension mismatch ({len(a)} vs {len(b)})"
-        )
+        raise ValueError(f"cosine_similarity: dimension mismatch ({len(a)} vs {len(b)})")
     if not a:
         return 0.0
 

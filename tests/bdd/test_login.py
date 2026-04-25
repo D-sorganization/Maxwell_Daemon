@@ -8,9 +8,7 @@ pytest.skip(
 
 from pytest_bdd import given, scenarios, then, when  # noqa: E402
 
-scenarios(
-    "/tmp/pytest-of-dieterolson/pytest-1161/test_writes_scaffold_to_defaul0/login.feature"
-)
+scenarios("/tmp/pytest-of-dieterolson/pytest-1161/test_writes_scaffold_to_defaul0/login.feature")
 
 
 @given("a user")
