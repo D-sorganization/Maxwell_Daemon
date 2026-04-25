@@ -133,7 +133,7 @@ def test_redacts_secret_looking_values_before_writing(tmp_path: Path) -> None:
 
     # It should automatically redact the secret
     proposal = store.propose(_proposal("p-secret", _entry("m-secret", body=secret)))
-    
+
     assert "[REDACTED]" in proposal.entry.body
     assert "sk-proj-" not in proposal.entry.body
 

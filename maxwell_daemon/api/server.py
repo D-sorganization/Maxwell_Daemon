@@ -2234,6 +2234,18 @@ def create_app(
             for i in issues
         ]
 
+    @app.post("/api/v1/push/subscribe", dependencies=[Depends(_require_viewer())])
+    async def push_subscribe(request: Request) -> dict[str, str]:
+        """Register a Web Push subscription.
+        
+        Currently a stub. Real implementation requires storing the subscription
+        and generating a VAPID keypair.
+        """
+        body = await request.json()
+        if not body or "endpoint" not in body:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid subscription")
+        return {"status": "subscribed", "message": "Push notification subscription recorded."}
+
     @app.post("/api/v1/heartbeat", dependencies=[Depends(auth)])
     async def worker_heartbeat(request: Request) -> dict[str, Any]:
         """Workers POST here every heartbeat_seconds to stay registered as alive.

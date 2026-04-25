@@ -253,6 +253,16 @@ class APIConfig(BaseModel):
         """Unwrap the JWT secret SecretStr, or None if unset."""
         return self.jwt_secret.get_secret_value() if self.jwt_secret is not None else None
 
+    @model_validator(mode="after")
+    def _validate_bind_security(self) -> APIConfig:
+        if self.host not in ("127.0.0.1", "localhost", "::1"):
+            if self.jwt_secret is None:
+                raise ValueError(
+                    f"Refusing to bind API to {self.host} without JWT configured. "
+                    "Set api.jwt_secret to expose the daemon on a non-loopback interface."
+                )
+        return self
+
 
 class McpServerConfig(BaseModel):
     name: str = Field(..., description="Unique name for the MCP server")

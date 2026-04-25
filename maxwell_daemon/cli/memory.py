@@ -100,9 +100,14 @@ def import_memory(
         Path, typer.Argument(help="Path to the repository root that carries .maxwell/memory")
     ],
     in_path: Annotated[Path, typer.Option("--in", "-i", help="Path to read the JSONL from")],
-    target_scope: Annotated[str, typer.Option("--scope", help="Scope to import into, e.g. repo:Foo")],
+    target_scope: Annotated[
+        str, typer.Option("--scope", help="Scope to import into, e.g. repo:Foo")
+    ],
     allow_promotion: Annotated[
-        bool, typer.Option("--allow-promotion", help="Allow promoting 'personal' memory to a broader scope")
+        bool,
+        typer.Option(
+            "--allow-promotion", help="Allow promoting 'personal' memory to a broader scope"
+        ),
     ] = False,
 ) -> None:
     """Import memory entries from a JSONL file into a given scope."""

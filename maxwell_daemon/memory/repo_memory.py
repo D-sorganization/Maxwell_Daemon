@@ -26,9 +26,12 @@ __all__ = [
     "select_memory_snapshot",
 ]
 
-MemoryScope = str  # e.g., 'personal', 'repo:<name>', 'workspace:<id>', 'conversation:<id>', 'ephemeral'
+MemoryScope = (
+    str  # e.g., 'personal', 'repo:<name>', 'workspace:<id>', 'conversation:<id>', 'ephemeral'
+)
 MemoryKind = Literal["semantic", "episodic", "procedural", "policy"]
 ProposalStatus = Literal["pending", "accepted", "rejected", "superseded"]
+
 
 def is_valid_scope(scope: str) -> bool:
     if scope in {"personal", "ephemeral", "user-preference", "issue", "gate", "tool", "repo"}:
@@ -38,6 +41,7 @@ def is_valid_scope(scope: str) -> bool:
         if scope.startswith(prefix) and len(scope) > len(prefix):
             return True
     return False
+
 
 _KINDS: set[str] = {"semantic", "episodic", "procedural", "policy"}
 _STATUSES: set[str] = {"pending", "accepted", "rejected", "superseded"}
@@ -78,7 +82,7 @@ class MemoryEntry:
         if not self.allow_secrets:
             object.__setattr__(self, "body", redact_secret_looking_values(self.body))
             object.__setattr__(self, "source", redact_secret_looking_values(self.source))
-        
+
         require(bool(self.body.strip()), "MemoryEntry: body must be non-empty")
         require(bool(self.source.strip()), "MemoryEntry: source must be non-empty")
         require(0.0 <= self.confidence <= 1.0, "MemoryEntry: confidence must be between 0 and 1")
@@ -88,7 +92,9 @@ class MemoryEntry:
             elif self.scope.startswith("conversation:"):
                 object.__setattr__(self, "expires_at", self.created_at + timedelta(days=30))
             elif self.retention_days is not None:
-                object.__setattr__(self, "expires_at", self.created_at + timedelta(days=self.retention_days))
+                object.__setattr__(
+                    self, "expires_at", self.created_at + timedelta(days=self.retention_days)
+                )
         if self.scope == "user-preference":
             require(
                 self.source.startswith("user:") or "user" in self.source.lower(),
@@ -144,7 +150,9 @@ class MemoryEntry:
             expires_at=_parse_optional_datetime(payload.get("expires_at")),
             supersedes=tuple(_str_list(payload.get("supersedes", []), "supersedes")),
             allow_secrets=bool(payload.get("allow_secrets", False)),
-            retention_days=int(payload["retention_days"]) if payload.get("retention_days") is not None else None,
+            retention_days=int(payload["retention_days"])
+            if payload.get("retention_days") is not None
+            else None,
             provenance=_optional_str(payload, "provenance"),
         )
 
@@ -332,9 +340,13 @@ class RepoMemoryStore:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with out_path.open("w", encoding="utf-8", newline="\n") as handle:
             for e in entries:
-                handle.write(f"{json.dumps(e.to_json_dict(), sort_keys=True, separators=(',', ':'))}\n")
+                handle.write(
+                    f"{json.dumps(e.to_json_dict(), sort_keys=True, separators=(',', ':'))}\n"
+                )
 
-    def import_jsonl(self, in_path: Path, target_scope: str, *, allow_promotion: bool = False) -> int:
+    def import_jsonl(
+        self, in_path: Path, target_scope: str, *, allow_promotion: bool = False
+    ) -> int:
         if not in_path.exists():
             return 0
         imported_count = 0
@@ -344,14 +356,17 @@ class RepoMemoryStore:
             if entry.id in existing_ids:
                 continue
             if entry.scope == "personal" and not target_scope.startswith("personal"):
-                require(allow_promotion, "Cannot promote personal memory to broader scope without explicit flag")
-            
+                require(
+                    allow_promotion,
+                    "Cannot promote personal memory to broader scope without explicit flag",
+                )
+
             # Rewrite scope if it doesn't match? Or just enforce they match target_scope?
             # Issue says: "Import respects the scope; refuses to promote personal memory into repo:* without an explicit flag."
             # We'll rewrite the scope to target_scope
             if entry.scope != target_scope:
                 object.__setattr__(entry, "scope", target_scope)
-                
+
             self.add_entry(entry)
             imported_count += 1
         return imported_count

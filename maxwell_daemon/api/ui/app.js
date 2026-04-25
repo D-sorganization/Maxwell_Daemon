@@ -1653,4 +1653,38 @@ document.addEventListener("DOMContentLoaded", () => {
       openNewTaskDialog();
     }
   });
+
+  // Push notifications
+  const notifBtn = document.getElementById("enable-notifications-btn");
+  if (notifBtn && "Notification" in window) {
+    if (Notification.permission === "granted" || Notification.permission === "denied") {
+      notifBtn.hidden = true;
+    } else {
+      notifBtn.hidden = false;
+      notifBtn.addEventListener("click", async () => {
+        const perm = await Notification.requestPermission();
+        if (perm === "granted") {
+          notifBtn.hidden = true;
+          if ('serviceWorker' in navigator && 'PushManager' in window) {
+            try {
+              const reg = await navigator.serviceWorker.ready;
+              // using a dummy applicationServerKey for now
+              const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuB-3qIX7EoOwvj0WMCk9hQYvI"
+              });
+              await fetch("/api/v1/push/subscribe", {
+                method: "POST",
+                headers: { "content-type": "application/json", ...headers() },
+                body: JSON.stringify(sub)
+              });
+              console.log("Subscribed to push");
+            } catch (err) {
+              console.error("Push registration failed", err);
+            }
+          }
+        }
+      });
+    }
+  }
 });
