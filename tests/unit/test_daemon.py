@@ -495,7 +495,6 @@ class TestSubmitThreadsafe:
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
 
-    @pytest.mark.skip(reason="flaky timeout")
     def test_submit_threadsafe_from_background_thread_enqueues_task(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:

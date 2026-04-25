@@ -313,8 +313,10 @@ class TestRateLimitHandling:
         assert GitHubClient._is_rate_limit_error(0, b"rate limit") is False  # rc=0 means success
         assert GitHubClient._is_rate_limit_error(1, b"Repository not found") is False
 
-    def test_retries_once_on_rate_limit_with_backoff(self) -> None:
+    def test_retries_once_on_rate_limit_with_backoff(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Client retries after a rate-limit error and succeeds on the second attempt."""
+        async def fake_sleep(_: float) -> None: pass
+        monkeypatch.setattr(asyncio, "sleep", fake_sleep)
         import json as _json
 
         issues_payload = _json.dumps(
@@ -343,8 +345,10 @@ class TestRateLimitHandling:
         assert len(issues) == 1
         assert issues[0].number == 1
 
-    def test_raises_rate_limit_error_after_all_retries_exhausted(self) -> None:
+    def test_raises_rate_limit_error_after_all_retries_exhausted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """GitHubRateLimitError is raised when every retry attempt is rate-limited."""
+        async def fake_sleep(_: float) -> None: pass
+        monkeypatch.setattr(asyncio, "sleep", fake_sleep)
         runner = self._make_runner(
             [
                 (1, b"", b"API rate limit exceeded"),
@@ -370,8 +374,10 @@ class TestRateLimitHandling:
         # Only one call made — no retries for non-rate-limit errors.
         assert len(runner.calls) == 1  # type: ignore[attr-defined]
 
-    def test_rate_limit_retry_succeeds_on_second_attempt(self) -> None:
+    def test_rate_limit_retry_succeeds_on_second_attempt(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Client retries after a rate-limit error and succeeds on the second attempt."""
+        async def fake_sleep(_: float) -> None: pass
+        monkeypatch.setattr(asyncio, "sleep", fake_sleep)
         import json as _json
 
         issues_payload = _json.dumps(
@@ -399,8 +405,10 @@ class TestRateLimitHandling:
         issues = asyncio.run(client.list_issues("owner/repo"))
         assert len(issues) == 1
 
-    def test_rate_limit_raises_after_max_retries_exhausted(self) -> None:
+    def test_rate_limit_raises_after_max_retries_exhausted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """GitHubRateLimitError raised when all retry attempts are rate-limited."""
+        async def fake_sleep(_: float) -> None: pass
+        monkeypatch.setattr(asyncio, "sleep", fake_sleep)
         runner = self._make_runner(
             [
                 (1, b"", b"rate limit exceeded"),
