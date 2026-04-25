@@ -1208,6 +1208,22 @@ class WebhookTriggerRequest(BaseModel):
     priority: int = Field(default=100, ge=0, le=1000)
 
 
+class EvalRunRequest(BaseModel):
+    suite_id: str
+    backends: list[str] = Field(default_factory=list)
+    models: list[str] = Field(default_factory=list)
+
+
+class EvalLeaderboardEntry(BaseModel):
+    backend: str
+    model: str
+    score: float
+    latency_p50: float | None = None
+    latency_p95: float | None = None
+    cost: float
+    pass_rate: float
+
+
 def create_app(
     daemon: Daemon,
     *,
@@ -2642,20 +2658,6 @@ def create_app(
         )
 
     # ── Evals endpoints ──────────────────────────────────────────────────────
-
-    class EvalRunRequest(BaseModel):
-        suite_id: str
-        backends: list[str] = Field(default_factory=list)
-        models: list[str] = Field(default_factory=list)
-
-    class EvalLeaderboardEntry(BaseModel):
-        backend: str
-        model: str
-        score: float
-        latency_p50: float | None = None
-        latency_p95: float | None = None
-        cost: float
-        pass_rate: float
 
     @app.post("/api/v1/evals/run", dependencies=[Depends(auth), Depends(_require_operator())])
     async def run_evals(payload: EvalRunRequest) -> dict[str, Any]:

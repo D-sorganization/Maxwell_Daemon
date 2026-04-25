@@ -20,7 +20,9 @@ def test_eval_list_shows_starter_scenarios() -> None:
 
 
 def test_eval_run_persists_smoke_suite(tmp_path: Path) -> None:
-    result = CliRunner().invoke(app, ["eval", "run", "--output", str(tmp_path)])
+    result = CliRunner().invoke(
+        app, ["eval", "run", "-s", "single-file-bugfix", "--output", str(tmp_path)]
+    )
 
     assert result.exit_code == 0, result.stdout
     assert "Eval run" in result.stdout

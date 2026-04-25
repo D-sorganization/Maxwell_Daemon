@@ -1,0 +1,22 @@
+{
+  "id": "eval-f9df307938c5",
+  "started_at": "2026-04-25T15:15:29.315040Z",
+  "completed_at": "2026-04-25T15:15:29.324311Z",
+  "scenario_ids": [
+    "single-file-bugfix"
+  ],
+  "daemon_version": "0.1.0",
+  "git_commit": null,
+  "model_profile_ids": [
+    "scripted-agent"
+  ],
+  "routing_policy_id": "deterministic-smoke",
+  "external_agent_adapter_ids": [
+    "fake-local-agent"
+  ],
+  "status": "passed",
+  "summary": "1 passed, 0 failed across 1 scenario(s)",
+  "artifact_refs": [
+    ".maxwell\\evals\\eval-f9df307938c5"
+  ]
+}

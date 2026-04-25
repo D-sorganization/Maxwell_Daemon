@@ -1,0 +1,38 @@
+[
+{
+  "id": "eval-f9df307938c5:single-file-bugfix",
+  "eval_run_id": "eval-f9df307938c5",
+  "scenario_id": "single-file-bugfix",
+  "status": "passed",
+  "score_total": 100.0,
+  "score_breakdown": {
+    "acceptance": 40.0,
+    "required_checks": 25.0,
+    "patch_minimality": 15.0,
+    "test_evidence": 10.0,
+    "artifacts": 10.0
+  },
+  "checks_passed": [
+    "python -m pytest tests/unit/test_bugfix.py -q"
+  ],
+  "checks_failed": [],
+  "diff_summary": "scripted fixture patch for single-file-bugfix",
+  "trace_id": "trace-single-file-bugfix",
+  "cost_summary": {
+    "usd": 0.0,
+    "tokens": 0.0
+  },
+  "failure_category": "none",
+  "artifact_refs": [
+    "patch.diff",
+    "test-results.txt",
+    "trace.json"
+  ],
+  "unrelated_file_changes": [],
+  "missing_tests": false,
+  "disallowed_tool_invocations": [],
+  "approval_required": false,
+  "approval_granted": false,
+  "workspace_path": null
+}
+]

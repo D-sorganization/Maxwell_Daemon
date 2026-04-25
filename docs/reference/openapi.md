@@ -102,6 +102,8 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 | `/api/v1/cost` | `GET` | Cost |
 | `/api/v1/delegate-sessions` | `GET` | Delegates |
 | `/api/v1/delegate-sessions/{session_id}` | `GET` | Delegates |
+| `/api/v1/evals/leaderboard` | `GET` | Evals |
+| `/api/v1/evals/run` | `POST` | Evals |
 | `/api/v1/fleet` | `GET` | Fleet |
 | `/api/v1/fleet/capabilities` | `GET` | Fleet |
 | `/api/v1/fleet/nodes` | `GET` | Fleet |
@@ -138,6 +140,5 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 | `/api/v1/work-items/{item_id}/artifacts` | `GET` | Work items |
 | `/api/v1/work-items/{item_id}/transition` | `POST` | Work items |
 | `/api/v1/workers` | `GET, PUT` | Workers |
-| `/api/webhooks/trigger` | `POST` | Webhooks |
 | `/health` | `GET` | Health |
 | `/readyz` | `GET` | Health |
