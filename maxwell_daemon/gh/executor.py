@@ -195,12 +195,8 @@ class IssueExecutor:
 
         # Resolve per-call settings: overrides first, executor defaults second.
         ctx_max = self._pick(overrides, "context_max_chars", self._context_max_chars)
-        max_diff_retries = self._pick(
-            overrides, "max_diff_retries", self._max_diff_retries
-        )
-        max_test_retries = self._pick(
-            overrides, "max_test_retries", self._max_test_retries
-        )
+        max_diff_retries = self._pick(overrides, "max_diff_retries", self._max_diff_retries)
+        max_test_retries = self._pick(overrides, "max_test_retries", self._max_test_retries)
         test_command = overrides.test_command if overrides else None
 
         # Build effective system prompt from per-repo override (if any).
@@ -229,9 +225,7 @@ class IssueExecutor:
 
         repo_path = await self._ws.ensure_clone(repo, task_id=effective_task_id)
         schematic = RepoSchematic(repo, repo_path).generate()
-        context_prompt = (
-            f"{schematic}\n\n{context_prompt}" if context_prompt else schematic
-        )
+        context_prompt = f"{schematic}\n\n{context_prompt}" if context_prompt else schematic
 
         # Memory: assemble repo profile + related episodes + scratchpad, if any.
         memory_prompt = ""
@@ -300,9 +294,7 @@ class IssueExecutor:
             # If we didn't already clone for context, clone now.
             if not context_prompt:
                 await self._ws.ensure_clone(repo, task_id=effective_task_id)
-            await self._ws.create_branch(
-                repo, branch, base=base_branch, task_id=effective_task_id
-            )
+            await self._ws.create_branch(repo, branch, base=base_branch, task_id=effective_task_id)
             plan, diff = await self._apply_with_retry(
                 repo=repo,
                 issue_title=issue.title,
@@ -394,9 +386,7 @@ class IssueExecutor:
             },
         )
         if dry_run:
-            pr = type(
-                "PR", (), {"html_url": "https://github.com/dry-run/pr/0", "number": 0}
-            )()
+            pr = type("PR", (), {"html_url": "https://github.com/dry-run/pr/0", "number": 0})()
         else:
             async with _trace_span(
                 "maxwell_daemon.issue.open_pr",
@@ -585,9 +575,7 @@ class IssueExecutor:
                 test_output=result.output_tail,
                 system_prompt=system_prompt,
             )
-            await self._ws.create_branch(
-                repo, branch, base=base_branch, task_id=task_id
-            )
+            await self._ws.create_branch(repo, branch, base=base_branch, task_id=task_id)
             await self._apply_with_retry(
                 repo=repo,
                 issue_title=issue_title,
@@ -817,9 +805,7 @@ class IssueExecutor:
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError as e:
-            raise IssueExecutionError(
-                f"Could not parse LLM response as JSON: {e}"
-            ) from e
+            raise IssueExecutionError(f"Could not parse LLM response as JSON: {e}") from e
 
         plan = str(parsed.get("plan", "")).strip()
         diff = str(parsed.get("diff", "")).strip()

@@ -54,9 +54,7 @@ class TestBatchDispatchEndpoint:
         assert len(body["tasks"]) == 3
         assert len(daemon.state().tasks) == 3
 
-    def test_preserves_per_item_priority(
-        self, system: tuple[TestClient, Daemon]
-    ) -> None:
+    def test_preserves_per_item_priority(self, system: tuple[TestClient, Daemon]) -> None:
         client, _ = system
         r = client.post(
             "/api/v1/issues/batch-dispatch",
@@ -83,9 +81,7 @@ class TestBatchDispatchEndpoint:
 
         assert r.status_code == 422
 
-    def test_per_item_failure_does_not_abort_batch(
-        self, system: tuple[TestClient, Daemon]
-    ) -> None:
+    def test_per_item_failure_does_not_abort_batch(self, system: tuple[TestClient, Daemon]) -> None:
         client, _ = system
         r = client.post(
             "/api/v1/issues/batch-dispatch",
@@ -110,9 +106,7 @@ class TestBatchDispatchEndpoint:
 
     def test_oversized_batch_rejected(self, system: tuple[TestClient, Daemon]) -> None:
         client, _ = system
-        too_many = [
-            {"repo": f"o/r{i}", "number": i, "mode": "plan"} for i in range(101)
-        ]
+        too_many = [{"repo": f"o/r{i}", "number": i, "mode": "plan"} for i in range(101)]
         r = client.post("/api/v1/issues/batch-dispatch", json={"items": too_many})
         assert r.status_code == 422
 

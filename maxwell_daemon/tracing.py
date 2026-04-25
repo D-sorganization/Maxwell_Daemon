@@ -87,9 +87,7 @@ def configure_tracing(
             OTLPSpanExporter,
         )
 
-        provider.add_span_processor(
-            BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
-        )
+        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
         _state["memory_exporter"] = None
 
     # OTel only lets you set the global provider once per process — after that,
@@ -109,9 +107,7 @@ def get_tracer(name: str) -> Any:
 
 
 @contextlib.asynccontextmanager
-async def span(
-    name: str, attributes: dict[str, Any] | None = None
-) -> AsyncIterator[None]:
+async def span(name: str, attributes: dict[str, Any] | None = None) -> AsyncIterator[None]:
     """Open a span. Becomes a no-op when tracing is disabled."""
     if not tracing_enabled():
         yield

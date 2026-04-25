@@ -110,9 +110,7 @@ class TaskGraph(BaseModel):
                 if dependency == node.id:
                     raise ValueError(f"node {node.id!r} cannot depend on itself")
                 if dependency not in known_ids:
-                    raise ValueError(
-                        f"unknown dependency {dependency!r} for node {node.id!r}"
-                    )
+                    raise ValueError(f"unknown dependency {dependency!r} for node {node.id!r}")
 
         _reject_cycles(self.nodes)
         return self
@@ -134,10 +132,7 @@ class TaskGraph(BaseModel):
             ready = sorted(
                 node_id
                 for node_id in remaining
-                if all(
-                    dependency not in remaining
-                    for dependency in by_id[node_id].depends_on
-                )
+                if all(dependency not in remaining for dependency in by_id[node_id].depends_on)
             )
             if not ready:
                 raise ValueError("task graph contains a dependency cycle")

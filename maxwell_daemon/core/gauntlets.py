@@ -121,17 +121,13 @@ class GateDefinition:
                 self.timeout_seconds > 0,
                 "GateDefinition.timeout_seconds must be positive",
             )
-        require(
-            self.retry_limit >= 0, "GateDefinition.retry_limit must be non-negative"
-        )
+        require(self.retry_limit >= 0, "GateDefinition.retry_limit must be non-negative")
         for key, value in self.metadata.items():
             require(
                 isinstance(key, str) and bool(key.strip()),
                 "GateDefinition.metadata keys must be non-empty strings",
             )
-            require(
-                isinstance(value, str), "GateDefinition.metadata values must be strings"
-            )
+            require(isinstance(value, str), "GateDefinition.metadata values must be strings")
 
 
 @dataclass(slots=True, frozen=True)
@@ -228,9 +224,7 @@ class GateRun:
             require(self.pr_number > 0, "GateRun.pr_number must be positive")
         if self.status in _COMPLETED_GATE_STATUSES:
             require(self.decision is not None, "completed gate requires a decision")
-            require(
-                self.completed_at is not None, "completed gate requires completed_at"
-            )
+            require(self.completed_at is not None, "completed gate requires completed_at")
         if self.status is GateRunStatus.RUNNING:
             require(self.started_at is not None, "running gate requires started_at")
         if self.status is GateRunStatus.FAILED:
@@ -240,15 +234,13 @@ class GateRun:
                 "failed gate requires at least one reason",
             )
             require(
-                self.decision is not None
-                and self.decision.verdict is GateDecisionVerdict.FAIL,
+                self.decision is not None and self.decision.verdict is GateDecisionVerdict.FAIL,
                 "failed gate requires a fail decision",
             )
         if self.status is GateRunStatus.WAIVED:
             require(bool(self.waivers), "waived gate requires a waiver record")
             require(
-                self.decision is not None
-                and self.decision.verdict is GateDecisionVerdict.FAIL,
+                self.decision is not None and self.decision.verdict is GateDecisionVerdict.FAIL,
                 "waived gate must keep the original failed decision visible",
             )
         for waiver in self.waivers:
@@ -314,9 +306,7 @@ class GauntletRun:
     @property
     def waived_gate_ids(self) -> tuple[str, ...]:
         return tuple(
-            gate_run.id
-            for gate_run in self.gate_runs
-            if gate_run.status is GateRunStatus.WAIVED
+            gate_run.id for gate_run in self.gate_runs if gate_run.status is GateRunStatus.WAIVED
         )
 
     @property
@@ -337,9 +327,7 @@ class GauntletStore(Protocol):
 
     def list_for_work_item(self, work_item_id: str) -> tuple[GauntletRun, ...]: ...
 
-    def append_gate_run(
-        self, gauntlet_run_id: str, gate_run: GateRun
-    ) -> GauntletRun: ...
+    def append_gate_run(self, gauntlet_run_id: str, gate_run: GateRun) -> GauntletRun: ...
 
     def transition_gate_run(
         self,
@@ -373,9 +361,7 @@ class InMemoryGauntletStore:
 
     def list_for_work_item(self, work_item_id: str) -> tuple[GauntletRun, ...]:
         _require_non_empty(work_item_id, "work_item_id")
-        return tuple(
-            run for run in self._runs.values() if run.work_item_id == work_item_id
-        )
+        return tuple(run for run in self._runs.values() if run.work_item_id == work_item_id)
 
     def append_gate_run(self, gauntlet_run_id: str, gate_run: GateRun) -> GauntletRun:
         run = self._require_run(gauntlet_run_id)
@@ -398,9 +384,7 @@ class InMemoryGauntletStore:
         if status is GateRunStatus.RUNNING:
             updated_gate = start_gate(gate_run)
         else:
-            updated_gate = complete_gate(
-                gate_run, status, decision=decision, evidence=evidence
-            )
+            updated_gate = complete_gate(gate_run, status, decision=decision, evidence=evidence)
         self._replace_gate_run(run.id, updated_gate)
         return updated_gate
 
@@ -466,12 +450,8 @@ def complete_gate(
     evidence: tuple[GateEvidence, ...],
     now: datetime | None = None,
 ) -> GateRun:
-    require(
-        status in _COMPLETED_GATE_STATUSES, "complete_gate requires a completed status"
-    )
-    require(
-        status is not GateRunStatus.WAIVED, "use waive_gate_failure to record waivers"
-    )
+    require(status in _COMPLETED_GATE_STATUSES, "complete_gate requires a completed status")
+    require(status is not GateRunStatus.WAIVED, "use waive_gate_failure to record waivers")
     validate_gate_transition(gate_run.status, status)
     timestamp = now or _utc_now()
     return replace(
@@ -492,8 +472,7 @@ def waive_gate_failure(
     validate_gate_transition(gate_run.status, GateRunStatus.WAIVED)
     require(waiver.gate_run_id == gate_run.id, "waiver gate_run_id must match gate run")
     require(
-        gate_run.decision is not None
-        and gate_run.decision.verdict is GateDecisionVerdict.FAIL,
+        gate_run.decision is not None and gate_run.decision.verdict is GateDecisionVerdict.FAIL,
         "waiver requires an original failed gate decision",
     )
     return replace(
@@ -504,9 +483,7 @@ def waive_gate_failure(
     )
 
 
-def finalize_gauntlet(
-    gauntlet: GauntletRun, *, now: datetime | None = None
-) -> GauntletRun:
+def finalize_gauntlet(gauntlet: GauntletRun, *, now: datetime | None = None) -> GauntletRun:
     timestamp = now or _utc_now()
     unwaived_required = gauntlet.unwaived_required_failed_gate_ids
     if unwaived_required:
@@ -516,9 +493,7 @@ def finalize_gauntlet(
             final_decision=GateDecision(
                 verdict=GateDecisionVerdict.FAIL,
                 summary="One or more required gates failed without waiver.",
-                reasons=tuple(
-                    f"required-gate-failed:{gate_id}" for gate_id in unwaived_required
-                ),
+                reasons=tuple(f"required-gate-failed:{gate_id}" for gate_id in unwaived_required),
                 recommended_next_action="fix",
             ),
             completed_at=timestamp,
@@ -530,9 +505,7 @@ def finalize_gauntlet(
             final_decision=GateDecision(
                 verdict=GateDecisionVerdict.WAIVED,
                 summary="All required gate failures were explicitly waived.",
-                reasons=tuple(
-                    f"gate-waived:{gate_id}" for gate_id in gauntlet.waived_gate_ids
-                ),
+                reasons=tuple(f"gate-waived:{gate_id}" for gate_id in gauntlet.waived_gate_ids),
                 recommended_next_action="escalate",
             ),
             completed_at=timestamp,

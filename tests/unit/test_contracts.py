@@ -38,9 +38,7 @@ class TestRequire:
         with pytest.raises(PreconditionError, match="x must be < 10"):
             require(False, "x must be < 10")
 
-    def test_disabled_contracts_skip_check(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_disabled_contracts_skip_check(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("MAXWELL_CONTRACTS", "off")
         # With the flag read on each call, no reload is needed.
         require(False, "should be skipped")
@@ -227,9 +225,7 @@ class TestPostconditionDecoratorAsync:
 
         assert asyncio.run(positive()) == 42
 
-    def test_async_skipped_when_contracts_disabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_async_skipped_when_contracts_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import asyncio
 
         monkeypatch.setenv("MAXWELL_CONTRACTS", "off")
@@ -264,9 +260,7 @@ class TestInvariantAsyncMethods:
         with pytest.raises(ContractViolation, match="non-negative"):
             asyncio.run(c.break_invariant())
 
-    def test_async_invariant_skipped_when_disabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_async_invariant_skipped_when_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import asyncio
 
         monkeypatch.setenv("MAXWELL_CONTRACTS", "off")

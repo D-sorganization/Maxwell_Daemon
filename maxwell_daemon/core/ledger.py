@@ -84,9 +84,7 @@ class CostLedger:
 
         from maxwell_daemon.metrics import MAXWELL_LEDGER_CONNECTIONS_IN_USE
 
-        MAXWELL_LEDGER_CONNECTIONS_IN_USE.set_function(
-            lambda: self._pool_size - self._pool.qsize()
-        )
+        MAXWELL_LEDGER_CONNECTIONS_IN_USE.set_function(lambda: self._pool_size - self._pool.qsize())
 
     def _create_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(
@@ -155,9 +153,7 @@ class CostLedger:
             row = conn.execute(query, tuple(params)).fetchone()
         return float(row[0])
 
-    def _by_backend_sync(
-        self, since: datetime, end: datetime | None = None
-    ) -> dict[str, float]:
+    def _by_backend_sync(self, since: datetime, end: datetime | None = None) -> dict[str, float]:
         with self._get_conn() as conn:
             query = "SELECT backend, COALESCE(SUM(cost_usd), 0) FROM cost_records WHERE ts >= ?"
             params = [since.isoformat()]
@@ -206,9 +202,7 @@ class CostLedger:
     def total_since(self, since: datetime, end: datetime | None = None) -> float:
         return self._total_since_sync(since, end)
 
-    def by_backend(
-        self, since: datetime, end: datetime | None = None
-    ) -> dict[str, float]:
+    def by_backend(self, since: datetime, end: datetime | None = None) -> dict[str, float]:
         return self._by_backend_sync(since, end)
 
     def cache_metrics_raw(
@@ -232,9 +226,7 @@ class CostLedger:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._total_since_sync, since, end)
 
-    async def aby_backend(
-        self, since: datetime, end: datetime | None = None
-    ) -> dict[str, float]:
+    async def aby_backend(self, since: datetime, end: datetime | None = None) -> dict[str, float]:
         """Non-blocking version of :meth:`by_backend` for use in async code."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._by_backend_sync, since, end)
@@ -244,16 +236,12 @@ class CostLedger:
     ) -> tuple[int, int, int, int]:
         """Non-blocking version of :meth:`cache_metrics_raw` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None, self._cache_metrics_raw_sync, since, end
-        )
+        return await loop.run_in_executor(None, self._cache_metrics_raw_sync, since, end)
 
     async def aprune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Non-blocking version of :meth:`prune` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None, lambda: self._prune_sync(older_than_days, now=now)
-        )
+        return await loop.run_in_executor(None, lambda: self._prune_sync(older_than_days, now=now))
 
     # ── Derived helpers ───────────────────────────────────────────────────────
 

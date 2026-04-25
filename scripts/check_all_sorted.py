@@ -30,9 +30,7 @@ def main() -> int:
                     ):
                         names = []
                         for elt in node.value.elts:
-                            if isinstance(elt, ast.Constant) and isinstance(
-                                elt.value, str
-                            ):
+                            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
                                 names.append(elt.value)
                         if names and not _is_sorted(names):
                             print(f"UNSORTED: {path}")

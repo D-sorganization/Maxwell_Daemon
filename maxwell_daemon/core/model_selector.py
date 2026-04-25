@@ -56,9 +56,7 @@ _COMPLEX_LABELS = frozenset(
     {"p0", "critical", "security", "vulnerability", "regression", "data-loss"}
 )
 _MODERATE_LABELS = frozenset({"bug", "enhancement", "feature", "refactor", "perf"})
-_SIMPLE_LABELS = frozenset(
-    {"docs", "typo", "readme", "good-first-issue", "nit", "cosmetic"}
-)
+_SIMPLE_LABELS = frozenset({"docs", "typo", "readme", "good-first-issue", "nit", "cosmetic"})
 _CODE_BLOCK_RE = re.compile(r"```")
 
 
@@ -131,9 +129,7 @@ def select_model(
             return tier_map[candidate]
     if fallback is not None:
         return fallback
-    raise ValueError(
-        f"No model in tier_map for {tier.value!r} and no fallback provided"
-    )
+    raise ValueError(f"No model in tier_map for {tier.value!r} and no fallback provided")
 
 
 def pick_model_for_issue(

@@ -43,9 +43,7 @@ def policy(tmp_path: Path, **overrides: object) -> SandboxPolicy:
 
 
 def test_rejects_paths_outside_workspace(tmp_path: Path) -> None:
-    decision = policy(tmp_path).validate_command(
-        ["python", "-m", "pytest"], cwd=tmp_path.parent
-    )
+    decision = policy(tmp_path).validate_command(["python", "-m", "pytest"], cwd=tmp_path.parent)
 
     assert decision.passed is False
     assert decision.status == "path_denied"
@@ -59,9 +57,7 @@ def test_resolves_relative_workspace_paths_without_escape(tmp_path: Path) -> Non
     safe_dir = tmp_path / "nested" / "safe"
     safe_dir.mkdir(parents=True)
 
-    resolved = sandbox_policy.workspace.resolve_inside(
-        Path("nested") / ".." / "nested" / "safe"
-    )
+    resolved = sandbox_policy.workspace.resolve_inside(Path("nested") / ".." / "nested" / "safe")
 
     assert resolved == safe_dir.resolve()
     assert resolved is not None
@@ -72,9 +68,7 @@ async def test_denied_command_fails_before_execution(tmp_path: Path) -> None:
     executor = RecordingExecutor()
     runner = SandboxCommandRunner(executor=executor)
 
-    decision = await runner.run(
-        ["rm", "-rf", "."], policy=policy(tmp_path), cwd=tmp_path
-    )
+    decision = await runner.run(["rm", "-rf", "."], policy=policy(tmp_path), cwd=tmp_path)
 
     assert decision.passed is False
     assert decision.status == "policy_denied"
@@ -127,9 +121,7 @@ async def test_timeout_result_state_can_be_represented(tmp_path: Path) -> None:
     executor = RecordingExecutor(SandboxRunResult(returncode=None, timed_out=True))
     runner = SandboxCommandRunner(executor=executor)
 
-    decision = await runner.run(
-        ["python", "-m", "pytest"], policy=policy(tmp_path), cwd=tmp_path
-    )
+    decision = await runner.run(["python", "-m", "pytest"], policy=policy(tmp_path), cwd=tmp_path)
 
     assert decision.passed is False
     assert decision.status == "timeout"
@@ -140,9 +132,7 @@ async def test_timeout_result_state_can_be_represented(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_failed_commands_include_evidence(tmp_path: Path) -> None:
     executor = RecordingExecutor(
-        SandboxRunResult(
-            returncode=2, stdout="collected 1 item", stderr="AssertionError"
-        )
+        SandboxRunResult(returncode=2, stdout="collected 1 item", stderr="AssertionError")
     )
     runner = SandboxCommandRunner(executor=executor)
 

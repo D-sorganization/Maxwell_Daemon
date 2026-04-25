@@ -9,29 +9,19 @@ from maxwell_daemon.templates import IssueKind, classify_issue, render_system_pr
 
 class TestClassify:
     def test_docs_by_label(self) -> None:
-        assert (
-            classify_issue(title="any", body="any", labels=["docs"]) is IssueKind.DOCS
-        )
+        assert classify_issue(title="any", body="any", labels=["docs"]) is IssueKind.DOCS
 
     def test_bug_by_label(self) -> None:
         assert classify_issue(title="any", body="any", labels=["bug"]) is IssueKind.BUG
 
     def test_feature_by_label(self) -> None:
-        assert (
-            classify_issue(title="any", body="any", labels=["feature"])
-            is IssueKind.FEATURE
-        )
+        assert classify_issue(title="any", body="any", labels=["feature"]) is IssueKind.FEATURE
 
     def test_refactor_by_label(self) -> None:
-        assert (
-            classify_issue(title="any", body="any", labels=["refactor"])
-            is IssueKind.REFACTOR
-        )
+        assert classify_issue(title="any", body="any", labels=["refactor"]) is IssueKind.REFACTOR
 
     def test_test_by_label(self) -> None:
-        assert (
-            classify_issue(title="any", body="any", labels=["tests"]) is IssueKind.TEST
-        )
+        assert classify_issue(title="any", body="any", labels=["tests"]) is IssueKind.TEST
 
     def test_bug_by_title(self) -> None:
         for title in ("Crash when empty input", "bug: tokenizer fails", "fix segfault"):
@@ -42,23 +32,16 @@ class TestClassify:
             assert classify_issue(title=title, body="", labels=[]) is IssueKind.DOCS
 
     def test_feature_by_title(self) -> None:
-        assert (
-            classify_issue(title="add support for SAML", body="", labels=[])
-            is IssueKind.FEATURE
-        )
+        assert classify_issue(title="add support for SAML", body="", labels=[]) is IssueKind.FEATURE
 
     def test_default_is_default(self) -> None:
-        assert (
-            classify_issue(title="something", body="", labels=[]) is IssueKind.DEFAULT
-        )
+        assert classify_issue(title="something", body="", labels=[]) is IssueKind.DEFAULT
 
     def test_complex_label_wins_over_docs_label(self) -> None:
         # p0 + docs → DEFAULT would be wrong; the template classifier only
         # picks archetype, severity is handled elsewhere. docs label should
         # still classify as docs.
-        assert (
-            classify_issue(title="t", body="", labels=["docs", "p0"]) is IssueKind.DOCS
-        )
+        assert classify_issue(title="t", body="", labels=["docs", "p0"]) is IssueKind.DOCS
 
 
 class TestRenderSystemPrompt:

@@ -32,9 +32,7 @@ def test_eval_show_and_report_use_stored_run(tmp_path: Path) -> None:
     EvalRunStore(tmp_path).save(run, results)
 
     show = CliRunner().invoke(app, ["eval", "show", run.id, "--output", str(tmp_path)])
-    report = CliRunner().invoke(
-        app, ["eval", "report", run.id, "--output", str(tmp_path)]
-    )
+    report = CliRunner().invoke(app, ["eval", "report", run.id, "--output", str(tmp_path)])
 
     assert show.exit_code == 0, show.stdout
     assert "single-file-bugfix" in show.stdout

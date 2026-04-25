@@ -16,9 +16,7 @@ def test_gemini_backend_reports_missing_sdk() -> None:
             "maxwell_daemon.backends.gemini.import_module",
             side_effect=ModuleNotFoundError("google.generativeai"),
         ),
-        pytest.raises(
-            BackendUnavailableError, match="google-generativeai SDK not installed"
-        ),
+        pytest.raises(BackendUnavailableError, match="google-generativeai SDK not installed"),
     ):
         GeminiBackend(api_key="test-key")
 
