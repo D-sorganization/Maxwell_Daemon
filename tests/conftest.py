@@ -56,7 +56,6 @@ def _reset_structlog_cache() -> Iterator[None]:
     structlog.reset_defaults()
 
 
-
 class RecordingBackend(ILLMBackend):
     """Test double that records calls and returns canned responses."""
 

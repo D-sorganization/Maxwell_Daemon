@@ -75,6 +75,7 @@ class StubGitHub:
     async def list_issues(self, repo: str, *, state: str = "open", limit: int = 25) -> list[Issue]:
         return [i for (r, _), i in self._issues.items() if r == repo]
 
+
 class StubWorkspace:
     def __init__(self, tmp_path: Path):
         self.tmp_path = tmp_path
@@ -179,7 +180,8 @@ def _wait_done(
         if t["status"] in {"completed", "failed"}:
             return t
         loop.run_until_complete(asyncio.sleep(0.25))
-    print(f"DEBUG: {t}"); raise AssertionError(f"task did not complete: {t}")
+    print(f"DEBUG: {t}")
+    raise AssertionError(f"task did not complete: {t}")
 
 
 class TestIssueCreationAndDispatch:
@@ -211,7 +213,8 @@ class TestIssueCreationAndDispatch:
 
         # 3. Wait for the daemon to finish.
         final = _wait_done(client, loop, task_id)
-        print(f"DEBUG: {final}"); assert final["status"] == "completed"
+        print(f"DEBUG: {final}")
+        assert final["status"] == "completed"
         assert final["kind"] == "issue"
         assert final["pr_url"].endswith("/pull/1001")
 
@@ -239,7 +242,8 @@ class TestIssueCreationAndDispatch:
         task_id = r.json()["task_id"]
 
         final = _wait_done(client, loop, task_id)
-        print(f"DEBUG: {final}"); assert final["status"] == "completed"
+        print(f"DEBUG: {final}")
+        assert final["status"] == "completed"
         assert final["pr_url"] is not None
 
     def test_multiple_issues_dispatch_concurrently(
@@ -267,4 +271,5 @@ class TestIssueCreationAndDispatch:
 
         for tid in task_ids:
             final = _wait_done(client, loop, tid)
-            print(f"DEBUG: {final}"); assert final["status"] == "completed"
+            print(f"DEBUG: {final}")
+            assert final["status"] == "completed"

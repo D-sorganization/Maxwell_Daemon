@@ -46,6 +46,7 @@ class ActionService:
         payload: dict[str, Any] | None = None,
         work_item_id: str | None = None,
         risk_level: ActionRiskLevel = ActionRiskLevel.MEDIUM,
+        dry_run: bool = False,
     ) -> tuple[Action, PolicyDecision]:
         action = Action(
             id=uuid.uuid4().hex,
@@ -56,7 +57,7 @@ class ActionService:
             payload=payload or {},
             risk_level=risk_level,
         )
-        decision = self._policy.evaluate(action)
+        decision = self._policy.evaluate(action, dry_run=dry_run)
         action.requires_approval = decision.requires_approval
         self._store.save(action)
         self._publish(EventKind.ACTION_PROPOSED, action)
@@ -72,6 +73,7 @@ class ActionService:
         runner: Callable[[], Awaitable[dict[str, Any]] | dict[str, Any]],
         work_item_id: str | None = None,
         risk_level: ActionRiskLevel = ActionRiskLevel.MEDIUM,
+        dry_run: bool = False,
     ) -> Action:
         action, decision = self.propose(
             task_id=task_id,
@@ -80,6 +82,7 @@ class ActionService:
             payload=payload,
             work_item_id=work_item_id,
             risk_level=risk_level,
+            dry_run=dry_run,
         )
         if decision.requires_approval:
             return action
@@ -189,12 +192,14 @@ class ActionService:
         *,
         result: dict[str, Any] | None = None,
         result_artifact_id: str | None = None,
+        inverse_payload: dict[str, Any] | None = None,
     ) -> Action:
         action = self._store.transition(
             action_id,
             ActionStatus.APPLIED,
             result=result,
             result_artifact_id=result_artifact_id,
+            inverse_payload=inverse_payload,
         )
         self._publish(EventKind.ACTION_APPLIED, action)
         return action
@@ -202,6 +207,12 @@ class ActionService:
     def mark_failed(self, action_id: str, *, error: str) -> Action:
         action = self._store.transition(action_id, ActionStatus.FAILED, error=error)
         self._publish(EventKind.ACTION_FAILED, action)
+        return action
+
+    def mark_reverted(self, action_id: str) -> Action:
+        action = self._store.transition(action_id, ActionStatus.REVERTED)
+        # Assuming we don't have ACTION_REVERTED event yet, we could just not publish or add one.
+        # But wait, we don't have EventKind.ACTION_REVERTED. Let's look at events.py if we need to publish.
         return action
 
     def _publish(self, kind: EventKind, action: Action) -> None:

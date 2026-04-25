@@ -108,6 +108,7 @@ class Task:
     depends_on: list[str] = field(default_factory=list)
     # Priority: lower number = higher priority. 0=emergency, 50=high, 100=normal, 200=batch.
     priority: int = 100
+    dry_run: bool = False
     status: TaskStatus = TaskStatus.QUEUED
     result: str | None = None
     error: str | None = None
@@ -137,7 +138,6 @@ class ConfigSnapshot:
     router: BackendRouter
     budget: BudgetEnforcer
     ledger: CostLedger
-
 
 
 @dataclass
@@ -225,9 +225,8 @@ class Daemon:
             DelegateSessionStore(default_delegate_store)
         )
         from maxwell_daemon.core.template_store import TemplateStore
-        self._template_store = TemplateStore(
-            Path.home() / ".local/share/maxwell-daemon/templates"
-        )
+
+        self._template_store = TemplateStore(Path.home() / ".local/share/maxwell-daemon/templates")
 
         default_auth_store = auth_store_path or (
             Path.home() / ".local/share/maxwell-daemon/auth_sessions.db"
@@ -679,6 +678,7 @@ class Daemon:
         priority: int = 100,
         task_id: str | None = None,
         depends_on: list[str] | None = None,
+        dry_run: bool = False,
     ) -> Task:
         resolved_task_id = task_id or uuid.uuid4().hex[:12]
         task = Task(
@@ -690,6 +690,7 @@ class Daemon:
             model=model,
             priority=priority,
             depends_on=list(depends_on) if depends_on else [],
+            dry_run=dry_run,
         )
         # Persist and track the task under lock, then route the queue mutation
         # through the daemon loop if this caller is on a foreign thread.
@@ -736,6 +737,7 @@ class Daemon:
         repo: str | None = None,
         backend: str | None = None,
         model: str | None = None,
+        dry_run: bool = False,
     ) -> Task:
         """Enqueue a prompt task from any thread. **Cross-thread safe.**
 
@@ -770,6 +772,7 @@ class Daemon:
             repo=repo,
             backend=backend,
             model=model,
+            dry_run=dry_run,
         )
         self._task_store.save(task)
         with self._tasks_lock:
@@ -817,6 +820,7 @@ class Daemon:
         model: str | None = None,
         priority: int = 100,
         task_id: str | None = None,
+        dry_run: bool = False,
     ) -> Task:
         """Queue a task that reads a GitHub issue and opens a draft PR for it."""
         if mode not in {"plan", "implement"}:
@@ -833,6 +837,7 @@ class Daemon:
             issue_number=issue_number,
             issue_mode=mode,
             priority=priority,
+            dry_run=dry_run,
         )
         # See note in submit(): queue mutation must stay loop-affine once the
         # daemon has started.
@@ -877,6 +882,7 @@ class Daemon:
         issue_number: int,
         backends: list[str],
         mode: str = "plan",
+        dry_run: bool = False,
     ) -> list[Task]:
         """Dispatch the same issue to multiple backends concurrently.
 
@@ -892,7 +898,7 @@ class Daemon:
         for backend in backends:
             # Let submit_issue do the regular queueing, then tag the group.
             task = self.submit_issue(
-                repo=repo, issue_number=issue_number, mode=mode, backend=backend
+                repo=repo, issue_number=issue_number, mode=mode, backend=backend, dry_run=dry_run
             )
             task.ab_group = ab_group
             # Persist the group so recovery sees it too.
@@ -1596,15 +1602,18 @@ class Daemon:
                     repo_path = Path(repo_cfg.path)
                 else:
                     from maxwell_daemon.gh.workspace import Workspace
+
                     ws = getattr(self, "_workspace", None) or Workspace(root=self._workspace_root)
                     repo_path = await ws.ensure_clone(task.repo, task_id=task.id)
                 from maxwell_daemon.core.repo_overrides import RepoSchematic
+
                 schematic = RepoSchematic(task.repo, repo_path).generate()
                 prompt_content = f"{schematic}\n\n{prompt_content}"
 
             resp = await decision.backend.complete(
                 [Message(role=MessageRole.USER, content=prompt_content)],
                 model=decision.model,
+                dry_run=task.dry_run,
             )
             task.result = resp.content
             estimated_cost = decision.backend.estimate_cost(resp.usage, decision.model)
@@ -1757,6 +1766,7 @@ class Daemon:
                 # Actually, pick_model_for_issue was better here because it has the issue object.
                 # I'll keep pick_model_for_issue but use evaluator for budgeting.
                 from maxwell_daemon.core.model_selector import pick_model_for_issue
+
                 selection = pick_model_for_issue(
                     title=issue.title,
                     body=issue.body,
@@ -1809,6 +1819,7 @@ class Daemon:
             mode=mode,  # type: ignore[arg-type]
             overrides=overrides,
             task_id=task.id,
+            dry_run=task.dry_run,
             on_test_output=_emit_test_output,
         )
 

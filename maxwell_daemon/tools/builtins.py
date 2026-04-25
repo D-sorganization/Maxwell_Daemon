@@ -123,6 +123,7 @@ def make_write_file(
     *,
     action_service: ActionService | None = None,
     task_id: str | None = None,
+    dry_run: bool = False,
 ) -> Callable[..., str]:
     @mcp_tool(
         name="write_file",
@@ -155,6 +156,7 @@ def make_write_file(
                 summary=f"write file {path}",
                 payload={"path": path, "bytes": len(content)},
                 risk_level=ActionRiskLevel.MEDIUM,
+                dry_run=dry_run,
             )
             action_id = action.id
             if not decision.allowed:
@@ -167,6 +169,10 @@ def make_write_file(
                 )
             action_service.approve(action.id, actor="policy")
             action_service.mark_running(action.id)
+
+        file_existed = resolved.exists()
+        old_content = resolved.read_text(encoding="utf-8") if file_existed else None
+
         resolved.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(dir=resolved.parent, text=True)
         try:
@@ -181,7 +187,10 @@ def make_write_file(
                 action_service.mark_failed(action_id, error="write_file failed")
             raise
         if action_id is not None and action_service is not None:
-            action_service.mark_applied(action_id, result={"path": path, "bytes": len(content)})
+            inverse = {"existed": file_existed, "old_content": old_content}
+            action_service.mark_applied(
+                action_id, result={"path": path, "bytes": len(content)}, inverse_payload=inverse
+            )
         return f"wrote {len(content)} bytes to {path}"
 
     return write_file
@@ -193,6 +202,7 @@ def make_edit_file(
     *,
     action_service: ActionService | None = None,
     task_id: str | None = None,
+    dry_run: bool = False,
 ) -> Callable[..., str]:
     @mcp_tool(
         name="edit_file",
@@ -235,6 +245,7 @@ def make_edit_file(
                 summary=f"edit file {path}",
                 payload={"path": path, "old_bytes": len(old_string), "new_bytes": len(new_string)},
                 risk_level=ActionRiskLevel.MEDIUM,
+                dry_run=dry_run,
             )
             action_id = action.id
             if not decision.allowed:
@@ -251,6 +262,8 @@ def make_edit_file(
         import tempfile
 
         new_content = content.replace(old_string, new_string)
+        old_content_full = content
+
         fd, tmp_path = tempfile.mkstemp(dir=resolved.parent, text=True)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -264,7 +277,8 @@ def make_edit_file(
                 action_service.mark_failed(action_id, error="edit_file failed")
             raise
         if action_id is not None and action_service is not None:
-            action_service.mark_applied(action_id, result={"path": path})
+            inverse = {"existed": True, "old_content": old_content_full}
+            action_service.mark_applied(action_id, result={"path": path}, inverse_payload=inverse)
         return f"edited {path}"
 
     return edit_file
@@ -323,6 +337,7 @@ def make_run_bash(
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
     action_service: ActionService | None = None,
     task_id: str | None = None,
+    dry_run: bool = False,
 ) -> Callable[..., Awaitable[str]]:
     run = runner or _default_runner
 
@@ -358,6 +373,7 @@ def make_run_bash(
                 summary=f"run command: {command[:80]}",
                 payload={"command": command, "timeout_seconds": timeout},
                 risk_level=ActionRiskLevel.HIGH,
+                dry_run=dry_run,
             )
             action_id = action.id
             if not decision.allowed:
@@ -595,6 +611,7 @@ def build_default_registry(
     policy: ToolPolicy | None = None,
     invocation_store: ToolInvocationStore | None = None,
     browser_service: BrowserService | None = None,
+    dry_run: bool = False,
 ) -> ToolRegistry:
     """Return a ``ToolRegistry`` with built-in tools bound to ``root``.
 
@@ -612,9 +629,11 @@ def build_default_registry(
     )
     reg.register_from_function(make_read_file(root))
     reg.register_from_function(
-        make_write_file(root, action_service=action_service, task_id=task_id)
+        make_write_file(root, action_service=action_service, task_id=task_id, dry_run=dry_run)
     )
-    reg.register_from_function(make_edit_file(root, action_service=action_service, task_id=task_id))
+    reg.register_from_function(
+        make_edit_file(root, action_service=action_service, task_id=task_id, dry_run=dry_run)
+    )
     reg.register_from_function(make_glob_files(root))
     reg.register_from_function(make_grep_files(root))
     reg.register_from_function(
@@ -623,6 +642,7 @@ def build_default_registry(
             runner=bash_runner,
             action_service=action_service,
             task_id=task_id,
+            dry_run=dry_run,
         )
     )
     if browser_service is not None:

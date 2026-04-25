@@ -80,10 +80,16 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
     async def handle_list_resources() -> list[Resource]:
         return [
             Resource(
-                uri=AnyUrl("artifact://list"), name="Artifacts", description="Maxwell Daemon artifacts"
+                uri=AnyUrl("artifact://list"),
+                name="Artifacts",
+                description="Maxwell Daemon artifacts",
             ),
-            Resource(uri=AnyUrl("workspace://list"), name="Workspaces", description="Task workspaces"),
-            Resource(uri=AnyUrl("memory://list"), name="Episodic Memory", description="Agent memory"),
+            Resource(
+                uri=AnyUrl("workspace://list"), name="Workspaces", description="Task workspaces"
+            ),
+            Resource(
+                uri=AnyUrl("memory://list"), name="Episodic Memory", description="Agent memory"
+            ),
         ]
 
     @server.read_resource()  # type: ignore[no-untyped-call, untyped-decorator]

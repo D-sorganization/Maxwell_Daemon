@@ -33,13 +33,15 @@ class ActionPolicy:
         default_factory=lambda: frozenset({"rm", "shutdown", "reboot", "mkfs"})
     )
 
-    def evaluate(self, action: Action) -> PolicyDecision:
+    def evaluate(self, action: Action, *, dry_run: bool = False) -> PolicyDecision:
         if not self._known_kind(action.kind):
             return PolicyDecision(False, True, f"unknown action kind: {action.kind.value}")
         if not self._within_allowed_scope(action):
             return PolicyDecision(False, True, "action target is outside the allowed workspace")
         if action.kind is ActionKind.COMMAND and self._uses_denied_command(action):
             return PolicyDecision(False, True, "command is denied by policy")
+        if dry_run:
+            return PolicyDecision(True, True, "dry-run forces approval required")
         if self.mode is ApprovalMode.SUGGEST:
             return PolicyDecision(True, True, "suggest mode requires approval")
         if self.mode is ApprovalMode.AUTO_EDIT:

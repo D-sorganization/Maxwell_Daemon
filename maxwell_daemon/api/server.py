@@ -124,6 +124,7 @@ class TaskSubmit(BaseModel):
     issue_number: int | None = None
     issue_mode: Literal["plan", "implement"] | None = None
     priority: PriorityField = 100
+    dry_run: bool = False
     depends_on: list[str] = Field(
         default_factory=list,
         description="Task IDs that must reach COMPLETED before this task starts.",
@@ -394,6 +395,7 @@ class IssueDispatch(BaseModel):
     backend: str | None = None
     model: str | None = None
     priority: PriorityField = 100
+    dry_run: bool = False
 
 
 class IssueBatchDispatch(BaseModel):
@@ -405,6 +407,7 @@ class IssueAbDispatch(BaseModel):
     number: int = Field(..., ge=1)
     backends: list[str] = Field(..., min_length=2, max_length=4)
     mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
+    dry_run: bool = False
 
     @field_validator("backends")
     @classmethod
@@ -436,6 +439,7 @@ class TaskView(BaseModel):
     waived_by: str | None = None
     waiver_reason: str | None = None
     waived_at: datetime | None = None
+    dry_run: bool = False
     cost_usd: float
     created_at: datetime
     started_at: datetime | None
@@ -469,6 +473,7 @@ class TaskView(BaseModel):
             created_at=t.created_at,
             started_at=t.started_at,
             finished_at=t.finished_at,
+            dry_run=getattr(t, "dry_run", False),
         )
 
 
@@ -1632,6 +1637,7 @@ def create_app(
                         model=payload.model,
                         priority=payload.priority,
                         task_id=payload.task_id,
+                        dry_run=payload.dry_run,
                     )
                 except ValueError as exc:
                     raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
@@ -1644,6 +1650,7 @@ def create_app(
                     priority=payload.priority,
                     task_id=payload.task_id,
                     depends_on=payload.depends_on or [],
+                    dry_run=payload.dry_run,
                 )
         except DuplicateTaskIdError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
@@ -1670,9 +1677,7 @@ def create_app(
             try:
                 task_status = TaskStatus(status)
             except ValueError as exc:
-                raise HTTPException(
-                    422, f"invalid task status: {status}"
-                ) from exc
+                raise HTTPException(422, f"invalid task status: {status}") from exc
 
         tasks = await daemon._task_store.alist_tasks(
             limit=limit,
@@ -2114,6 +2119,7 @@ def create_app(
             backend=payload.backend,
             model=payload.model,
             priority=payload.priority,
+            dry_run=payload.dry_run,
         )
         return TaskView.from_task(task)
 
@@ -2155,6 +2161,7 @@ def create_app(
                 issue_number=payload.number,
                 backends=payload.backends,
                 mode=payload.mode,
+                dry_run=payload.dry_run,
             )
         except ValueError as e:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
@@ -2175,7 +2182,6 @@ def create_app(
         if not t:
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Template {template_id} not found")
         return cast(dict[str, Any], t.model_dump())
-
 
     @app.post(
         "/api/v1/issues/batch-dispatch",

@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS actions (
     result TEXT NOT NULL,
     error TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    inverse_payload TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_actions_task ON actions(task_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_actions_work_item ON actions(work_item_id, created_at);
@@ -80,6 +81,10 @@ class ActionStore:
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
+            try:
+                conn.execute("ALTER TABLE actions ADD COLUMN inverse_payload TEXT")
+            except sqlite3.OperationalError:
+                pass
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -99,8 +104,8 @@ class ActionStore:
                     id, task_id, work_item_id, kind, status, summary, payload,
                     risk_level, requires_approval, approved_by, approved_at,
                     rejected_by, rejected_at, rejection_reason, result_artifact_id,
-                    result, error, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    result, error, created_at, updated_at, inverse_payload
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     task_id=excluded.task_id,
                     work_item_id=excluded.work_item_id,
@@ -118,7 +123,8 @@ class ActionStore:
                     result_artifact_id=excluded.result_artifact_id,
                     result=excluded.result,
                     error=excluded.error,
-                    updated_at=excluded.updated_at
+                    updated_at=excluded.updated_at,
+                    inverse_payload=excluded.inverse_payload
                 """,
                 _action_to_row(action),
             )
@@ -190,6 +196,7 @@ class ActionStore:
         result: dict[str, Any] | None = None,
         error: str | None = None,
         result_artifact_id: str | None = None,
+        inverse_payload: dict[str, Any] | None = None,
     ) -> Action:
         now = datetime.now(timezone.utc)
         with self._lock, self._connect() as conn:
@@ -222,6 +229,8 @@ class ActionStore:
                 updates["error"] = error
             if result_artifact_id is not None:
                 updates["result_artifact_id"] = result_artifact_id
+            if inverse_payload is not None:
+                updates["inverse_payload"] = _json(inverse_payload)
 
             assignments = ", ".join(f"{key} = ?" for key in updates)
             args = [*updates.values(), action_id, action.status.value]
@@ -261,6 +270,7 @@ def _action_to_row(action: Action) -> tuple[object, ...]:
         action.error,
         action.created_at.isoformat(),
         action.updated_at.isoformat(),
+        _json(action.inverse_payload) if action.inverse_payload is not None else None,
     )
 
 
@@ -285,4 +295,7 @@ def _row_to_action(row: sqlite3.Row) -> Action:
         error=row["error"],
         created_at=_parse_iso_required(row["created_at"]),
         updated_at=_parse_iso_required(row["updated_at"]),
+        inverse_payload=json.loads(row["inverse_payload"])
+        if "inverse_payload" in row.keys() and row["inverse_payload"]
+        else None,
     )

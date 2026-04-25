@@ -282,8 +282,6 @@ class TaskStore:
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _row_to_task(row) if row else None
 
-
-
     def _list_sync(
         self,
         *,
@@ -423,8 +421,6 @@ class TaskStore:
 
     def get(self, task_id: str) -> Task | None:
         return self._get_sync(task_id)
-
-
 
     def list_tasks(
         self,

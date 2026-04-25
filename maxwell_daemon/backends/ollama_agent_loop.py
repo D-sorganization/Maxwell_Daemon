@@ -22,7 +22,7 @@ from __future__ import annotations
 import json as _json
 import os
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, Protocol
@@ -40,7 +40,7 @@ from maxwell_daemon.backends.registry import registry
 from maxwell_daemon.contracts import PreconditionError
 from maxwell_daemon.gh.ci_patterns import detect_ci_profile
 from maxwell_daemon.gh.repo_schematic import build_repo_schematic
-from maxwell_daemon.tools import ToolRegistry, build_default_registry
+from maxwell_daemon.tools import build_default_registry
 
 __all__ = [
     "OllamaAgentLoopBackend",
@@ -88,7 +88,7 @@ class OllamaAgentLoopBackend(ILLMBackend):
         workspace_dir: str | None = None,
         wall_clock_timeout_seconds: float | None = None,
         enable_prompt_caching: bool = False,
-        registry_factory: Callable[[Path], ToolRegistry] | None = None,
+        registry_factory: Any = None,
         client: _PostClient | None = None,
         mcp_manager: Any | None = None,
         condenser: Condenser | None = None,
@@ -118,13 +118,15 @@ class OllamaAgentLoopBackend(ILLMBackend):
         tools: list[dict[str, Any]] | None = None,
         workspace_dir: str | None = None,
         max_turns: int | None = None,
-        **_: Any,
+        **kwargs: Any,
     ) -> BackendResponse:
         effective_workspace = self._resolve_workspace(workspace_dir)
         effective_model = model or self.default_model
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
-        tool_registry = self._registry_factory(effective_workspace)
+        tool_registry = self._registry_factory(
+            effective_workspace, dry_run=kwargs.get("dry_run", False)
+        )
         if self._mcp_manager is not None:
             self._mcp_manager.attach_tools(tool_registry)
         tool_defs = tool_registry.to_openai()

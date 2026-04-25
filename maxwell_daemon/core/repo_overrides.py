@@ -43,6 +43,7 @@ def resolve_overrides(config: MaxwellDaemonConfig, *, repo: str) -> RepoOverride
         system_prompt_file=repo_cfg.system_prompt_file,
     )
 
+
 class RepoSchematic:
     def __init__(self, repo_name: str, workspace_path: Path):
         self.repo_name = repo_name
@@ -65,6 +66,7 @@ class RepoSchematic:
 
         if os.environ.get("MAXWELL_AGGRESSIVE_COMPRESSION") == "1":
             from maxwell_daemon.tools.compression import ToolResultCompressor
+
             compressor = ToolResultCompressor(head_lines=100, tail_lines=100, max_chars=4000)
             return compressor.compress("repo_schematic", schematic).content
         return schematic

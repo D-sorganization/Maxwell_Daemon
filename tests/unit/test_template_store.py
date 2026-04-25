@@ -21,9 +21,7 @@ def test_template_store_loads_from_disk(tmp_path: Path) -> None:
         "name": "Custom 1",
         "description": "My custom template",
         "prompt_template": "Do custom things to {{ repo }}",
-        "parameters": [
-            {"name": "repo", "type": "repo", "required": True}
-        ]
+        "parameters": [{"name": "repo", "type": "repo", "required": True}],
     }
 
     (tmp_path / "custom-1.json").write_text(json.dumps(custom_template))

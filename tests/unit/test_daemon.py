@@ -450,7 +450,7 @@ class TestRunningStatusResilience:
             await d.start(worker_count=1)
             try:
                 d.submit("hi")
-                await asyncio.sleep(0.1) # Wait for processing attempt
+                await asyncio.sleep(0.1)  # Wait for processing attempt
                 matched = [
                     r for r in cap_structlog.entries if "re-queuing" in str(r.get("event", ""))
                 ]

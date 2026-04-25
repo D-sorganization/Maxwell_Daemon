@@ -40,7 +40,6 @@ class _ThreadBoundQueue:
         self.put_event.set()
 
 
-
 class TestTasksDictThreadSafety:
     def test_enqueue_task_entry_puts_directly_before_daemon_loop_starts(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path

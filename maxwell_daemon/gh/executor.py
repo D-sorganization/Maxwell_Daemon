@@ -180,6 +180,7 @@ class IssueExecutor:
         base_branch: str = "main",
         overrides: RepoOverrides | None = None,
         task_id: str | None = None,
+        dry_run: bool = False,
         on_test_output: Any = None,
     ) -> IssueResult:
         async with _trace_span(
@@ -221,6 +222,7 @@ class IssueExecutor:
             context_prompt = ctx.to_prompt(max_chars=ctx_max)
 
         from maxwell_daemon.core.repo_overrides import RepoSchematic
+
         repo_path = await self._ws.ensure_clone(repo, task_id=effective_task_id)
         schematic = RepoSchematic(repo, repo_path).generate()
         context_prompt = f"{schematic}\n\n{context_prompt}" if context_prompt else schematic
@@ -356,12 +358,13 @@ class IssueExecutor:
                         "mode": mode,
                     },
                 )
-            await self._ws.commit_and_push(
-                repo,
-                branch=branch,
-                message=f"Fix #{issue_number}: {issue.title}",
-                task_id=effective_task_id,
-            )
+            if not dry_run:
+                await self._ws.commit_and_push(
+                    repo,
+                    branch=branch,
+                    message=f"Fix #{issue_number}: {issue.title}",
+                    task_id=effective_task_id,
+                )
             applied = True
 
         pr_body = self._format_pr_body(
@@ -382,18 +385,21 @@ class IssueExecutor:
                 "mode": mode,
             },
         )
-        async with _trace_span(
-            "maxwell_daemon.issue.open_pr",
-            {"repo": repo, "issue": issue_number, "applied_diff": applied},
-        ):
-            pr = await self._gh.create_pull_request(
-                repo,
-                head=branch,
-                base=base_branch,
-                title=f"Fix #{issue_number}: {issue.title}",
-                body=pr_body,
-                draft=True,
-            )
+        if dry_run:
+            pr = type("PR", (), {"html_url": "https://github.com/dry-run/pr/0", "number": 0})()
+        else:
+            async with _trace_span(
+                "maxwell_daemon.issue.open_pr",
+                {"repo": repo, "issue": issue_number, "applied_diff": applied},
+            ):
+                pr = await self._gh.create_pull_request(
+                    repo,
+                    head=branch,
+                    base=base_branch,
+                    title=f"Fix #{issue_number}: {issue.title}",
+                    body=pr_body,
+                    draft=True,
+                )
 
         # Memory write-back: one episode per successful PR open so future
         # related issues can retrieve it. Outcome is "completed" until/unless

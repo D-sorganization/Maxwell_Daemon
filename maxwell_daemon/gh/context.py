@@ -214,6 +214,7 @@ class ContextBuilder:
         # Detect CI contract synchronously — file-system only, fast.
         ci_profile = detect_ci_profile(repo_path)
         from maxwell_daemon.gh.repo_schematic import build_repo_schematic
+
         schematic = build_repo_schematic(repo_path).to_prompt(max_chars=4000)
         return RepoContext(
             language=language,

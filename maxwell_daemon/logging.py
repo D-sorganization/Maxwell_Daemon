@@ -34,6 +34,7 @@ def _redact_value(val: Any) -> Any:
         return "***"
     return f"{val[:8]}...{val[-4:]}"
 
+
 _SECRET_PATTERN = re.compile(r"(?:sk-|ant-|key-|ghp_)[a-zA-Z0-9_-]{20,}")
 
 

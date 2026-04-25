@@ -49,6 +49,7 @@ class Action(BaseModel):
     status: ActionStatus = ActionStatus.PROPOSED
     summary: str = Field(..., min_length=1)
     payload: dict[str, Any] = Field(default_factory=dict)
+    inverse_payload: dict[str, Any] | None = None
     risk_level: ActionRiskLevel = ActionRiskLevel.MEDIUM
     requires_approval: bool = True
     approved_by: str | None = None
