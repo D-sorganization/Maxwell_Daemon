@@ -43,10 +43,13 @@ const commands = [
 
 // ---- helpers ---------------------------------------------------------------
 
+// ⚡ Bolt: Extracted to avoid object allocation on every character replacement
+const ESCAPE_MAP = {
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+};
+
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  }[c]));
+  return String(s).replace(/[&<>"']/g, (c) => ESCAPE_MAP[c]);
 }
 
 function fmtUsd(n) { return `$${(n || 0).toFixed(4)}`; }
@@ -64,17 +67,19 @@ function fmtTsShort(iso) {
   return d.toLocaleString(undefined, { timeStyle: "short" });
 }
 
+// ⚡ Bolt: Extracted to avoid object allocation on every sort comparison
+const GATE_STATUS_RANK = {
+  failed: 0,
+  blocked: 1,
+  waived: 2,
+  running: 3,
+  pending: 4,
+  passed: 5,
+  skipped: 6,
+};
+
 function gateStatusRank(status) {
-  const order = {
-    failed: 0,
-    blocked: 1,
-    waived: 2,
-    running: 3,
-    pending: 4,
-    passed: 5,
-    skipped: 6,
-  };
-  return order[status] ?? 99;
+  return GATE_STATUS_RANK[status] ?? 99;
 }
 
 function findingSeverityRank(severity) {
@@ -325,10 +330,18 @@ function renderCostTasks() {
   const tbody = document.getElementById("cost-task-body");
   if (!tbody) return;
   tbody.innerHTML = "";
-  const sorted = [...state.allTasks.values()]
-    .filter((t) => (t.cost_usd || 0) > 0)
+
+  // ⚡ Bolt: Use a for...of loop to filter instead of spreading Map.values()
+  // into an intermediate array. This avoids O(N) array allocation overhead.
+  const filtered = [];
+  for (const t of state.allTasks.values()) {
+    if ((t.cost_usd || 0) > 0) filtered.push(t);
+  }
+
+  const sorted = filtered
     .sort((a, b) => (b.cost_usd || 0) - (a.cost_usd || 0))
     .slice(0, 20);
+
   if (sorted.length === 0) {
     tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted)">No cost data yet</td></tr>`;
     return;
@@ -1126,17 +1139,24 @@ function renderHistory() {
   ol.innerHTML = "";
   const filterVal = document.getElementById("history-filter")?.value || "";
   const terminalStatuses = new Set(["completed", "failed", "cancelled"]);
-  const items = [...state.tasks.values()]
-    .filter((t) => {
-      if (filterVal) return t.status === filterVal;
-      return terminalStatuses.has(t.status);
-    })
-    .sort((a, b) => {
-      const aT = a.finished_at || a.created_at;
-      const bT = b.finished_at || b.created_at;
-      // ⚡ Bolt: Fast ISO 8601 sort using string operators.
-      return aT < bT ? 1 : (aT > bT ? -1 : 0);
-    });
+
+  // ⚡ Bolt: Use a for...of loop to filter instead of spreading Map.values()
+  // into an intermediate array. This avoids O(N) array allocation overhead.
+  const filtered = [];
+  for (const t of state.tasks.values()) {
+    if (filterVal) {
+      if (t.status === filterVal) filtered.push(t);
+    } else if (terminalStatuses.has(t.status)) {
+      filtered.push(t);
+    }
+  }
+
+  const items = filtered.sort((a, b) => {
+    const aT = a.finished_at || a.created_at;
+    const bT = b.finished_at || b.created_at;
+    // ⚡ Bolt: Fast ISO 8601 sort using string operators.
+    return aT < bT ? 1 : (aT > bT ? -1 : 0);
+  });
 
   if (items.length === 0) {
     ol.innerHTML = `<li style="padding:14px;color:var(--muted)">No finished tasks yet.</li>`;

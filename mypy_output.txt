@@ -1,0 +1,19 @@
+maxwell_daemon\core\template_store.py:47: error: Unused "type: ignore" comment  [unused-ignore]
+maxwell_daemon\mcp\server\__init__.py:52: error: Unused "type: ignore[untyped-decorator]" comment  [unused-ignore]
+maxwell_daemon\mcp\server\__init__.py:52: error: Untyped decorator makes function "handle_list_tools" untyped  [misc]
+maxwell_daemon\mcp\server\__init__.py:52: note: Error code "misc" not covered by "type: ignore" comment
+maxwell_daemon\mcp\server\__init__.py:77: error: Unused "type: ignore" comment  [unused-ignore]
+maxwell_daemon\mcp\server\__init__.py:77: error: Untyped decorator makes function "handle_call_tool" untyped  [misc]
+maxwell_daemon\mcp\server\__init__.py:77: note: Error code "misc" not covered by "type: ignore" comment
+maxwell_daemon\mcp\server\__init__.py:90: error: Unused "type: ignore[untyped-decorator]" comment  [unused-ignore]
+maxwell_daemon\mcp\server\__init__.py:90: error: Untyped decorator makes function "handle_list_resources" untyped  [misc]
+maxwell_daemon\mcp\server\__init__.py:90: note: Error code "misc" not covered by "type: ignore" comment
+maxwell_daemon\mcp\server\__init__.py:110: error: Unused "type: ignore[untyped-decorator]" comment  [unused-ignore]
+maxwell_daemon\mcp\server\__init__.py:110: error: Untyped decorator makes function "handle_read_resource" untyped  [misc]
+maxwell_daemon\mcp\server\__init__.py:110: note: Error code "misc" not covered by "type: ignore" comment
+maxwell_daemon\mcp\server\__init__.py:114: error: Unused "type: ignore[untyped-decorator]" comment  [unused-ignore]
+maxwell_daemon\mcp\server\__init__.py:114: error: Untyped decorator makes function "handle_list_prompts" untyped  [misc]
+maxwell_daemon\mcp\server\__init__.py:114: note: Error code "misc" not covered by "type: ignore" comment
+maxwell_daemon\mcp\server\__init__.py:127: error: Unused "type: ignore[untyped-decorator]" comment  [unused-ignore]
+maxwell_daemon\mcp\server\__init__.py:127: error: Untyped decorator makes function "handle_get_prompt" untyped  [misc]
+maxwell_daemon\mcp\server\__init__.py:127: note: Error code "misc" not covered by "type: ignore" comment

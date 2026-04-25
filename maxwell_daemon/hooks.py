@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import json
+import re
 import shlex
 import subprocess
 from collections.abc import Awaitable, Callable
@@ -318,11 +319,16 @@ def _substitute(command: str, tool_input: dict[str, Any]) -> str:
     Missing keys are left as-is so hook authors can spot unresolved placeholders
     in logs rather than having them silently replaced with ``""``.
     """
-    out = command
-    for key, value in tool_input.items():
+
+    def replacer(match: re.Match[str]) -> str:
+        key = match.group(1)
+        if key not in tool_input:
+            return match.group(0)
+        value = tool_input[key]
         rendered = json.dumps(value, default=str) if isinstance(value, (dict, list)) else str(value)
-        out = out.replace(f"{{{{{key}}}}}", shlex.quote(rendered))
-    return out
+        return shlex.quote(rendered)
+
+    return re.sub(r"\{\{([^{}]+)\}\}", replacer, command)
 
 
 def _env(

@@ -2641,6 +2641,82 @@ def create_app(
             status_code=status.HTTP_200_OK,
         )
 
+    # ── Evals endpoints ──────────────────────────────────────────────────────
+
+    class EvalRunRequest(BaseModel):
+        suite_id: str
+        backends: list[str] = Field(default_factory=list)
+        models: list[str] = Field(default_factory=list)
+
+    class EvalLeaderboardEntry(BaseModel):
+        backend: str
+        model: str
+        score: float
+        latency_p50: float | None = None
+        latency_p95: float | None = None
+        cost: float
+        pass_rate: float
+
+    @app.post("/api/v1/evals/run", dependencies=[Depends(auth), Depends(_require_operator())])
+    async def run_evals(payload: EvalRunRequest) -> dict[str, Any]:
+        """Kick off an evaluation run."""
+        import asyncio
+
+        from maxwell_daemon.evals.runner import EvalRunner
+        from maxwell_daemon.evals.storage import EvalRunStore
+
+        output_root = daemon._config.memory.workspace_path / "evals"
+        runner = EvalRunner(output_root)
+        store = EvalRunStore(output_root)
+
+        def _do_run() -> None:
+            # Note: A fully featured run would matrix-multiply over the requested
+            # backends and models. For now, we kick the base suite via the runner.
+            run, results = runner.run(scenario_ids=[payload.suite_id], allow_non_fixture=True)
+            store.save(run, results)
+
+        asyncio.get_running_loop().run_in_executor(None, _do_run)
+        return {"status": "started", "suite_id": payload.suite_id}
+
+    @app.get("/api/v1/evals/leaderboard", dependencies=[Depends(_require_viewer())])
+    async def get_eval_leaderboard(suite_id: str) -> dict[str, Any]:
+        """Return sortable leaderboard results for a suite."""
+        from maxwell_daemon.evals.storage import EvalRunStore
+
+        output_root = daemon._config.memory.workspace_path / "evals"
+        store = EvalRunStore(output_root)
+        entries: list[EvalLeaderboardEntry] = []
+
+        if output_root.exists():
+            for run_dir in output_root.iterdir():
+                if not run_dir.is_dir():
+                    continue
+                try:
+                    run = store.load_run(run_dir.name)
+                    if suite_id in run.scenario_ids:
+                        results = store.load_results(run_dir.name)
+                        for res in results:
+                            if res.scenario_id == suite_id:
+                                backend = "local"
+                                model = "scripted-agent"
+                                if run.external_agent_adapter_ids:
+                                    backend = run.external_agent_adapter_ids[0]
+                                if run.model_profile_ids:
+                                    model = run.model_profile_ids[0]
+                                entries.append(
+                                    EvalLeaderboardEntry(
+                                        backend=backend,
+                                        model=model,
+                                        score=res.score_total,
+                                        cost=sum(res.cost_summary.values()),
+                                        pass_rate=1.0 if res.status.value == "passed" else 0.0,
+                                    )
+                                )
+                except Exception:
+                    pass
+
+        return {"suite_id": suite_id, "entries": [e.model_dump() for e in entries]}
+
     # ── Generic webhook trigger ──────────────────────────────────────────────
 
     @app.post("/api/webhooks/trigger", dependencies=[Depends(_require_operator())])
