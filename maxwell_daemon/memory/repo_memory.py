@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal, cast
 
@@ -26,11 +26,19 @@ __all__ = [
     "select_memory_snapshot",
 ]
 
-MemoryScope = Literal["repo", "issue", "gate", "tool", "user-preference"]
+MemoryScope = str  # e.g., 'personal', 'repo:<name>', 'workspace:<id>', 'conversation:<id>', 'ephemeral'
 MemoryKind = Literal["semantic", "episodic", "procedural", "policy"]
 ProposalStatus = Literal["pending", "accepted", "rejected", "superseded"]
 
-_SCOPES: set[str] = {"repo", "issue", "gate", "tool", "user-preference"}
+def is_valid_scope(scope: str) -> bool:
+    if scope in {"personal", "ephemeral", "user-preference", "issue", "gate", "tool", "repo"}:
+        # keep legacy scopes for backward compatibility
+        return True
+    for prefix in ("repo:", "workspace:", "conversation:"):
+        if scope.startswith(prefix) and len(scope) > len(prefix):
+            return True
+    return False
+
 _KINDS: set[str] = {"semantic", "episodic", "procedural", "policy"}
 _STATUSES: set[str] = {"pending", "accepted", "rejected", "superseded"}
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -58,15 +66,29 @@ class MemoryEntry:
     created_at: datetime = field(default_factory=_utcnow)
     expires_at: datetime | None = None
     supersedes: tuple[str, ...] = ()
+    allow_secrets: bool = False
+    retention_days: int | None = None
+    provenance: str | None = None
 
     def __post_init__(self) -> None:
         require(bool(self.id.strip()), "MemoryEntry: id must be non-empty")
-        require(self.scope in _SCOPES, f"MemoryEntry: unsupported scope {self.scope!r}")
+        require(is_valid_scope(self.scope), f"MemoryEntry: unsupported scope {self.scope!r}")
         require(bool(self.repo_id.strip()), "MemoryEntry: repo_id must be non-empty")
         require(self.kind in _KINDS, f"MemoryEntry: unsupported kind {self.kind!r}")
+        if not self.allow_secrets:
+            object.__setattr__(self, "body", redact_secret_looking_values(self.body))
+            object.__setattr__(self, "source", redact_secret_looking_values(self.source))
+        
         require(bool(self.body.strip()), "MemoryEntry: body must be non-empty")
         require(bool(self.source.strip()), "MemoryEntry: source must be non-empty")
         require(0.0 <= self.confidence <= 1.0, "MemoryEntry: confidence must be between 0 and 1")
+        if self.expires_at is None:
+            if self.scope == "ephemeral":
+                object.__setattr__(self, "expires_at", self.created_at + timedelta(hours=24))
+            elif self.scope.startswith("conversation:"):
+                object.__setattr__(self, "expires_at", self.created_at + timedelta(days=30))
+            elif self.retention_days is not None:
+                object.__setattr__(self, "expires_at", self.created_at + timedelta(days=self.retention_days))
         if self.scope == "user-preference":
             require(
                 self.source.startswith("user:") or "user" in self.source.lower(),
@@ -80,9 +102,10 @@ class MemoryEntry:
         require(self.id not in self.supersedes, "MemoryEntry: entry cannot supersede itself")
 
     def to_json_dict(self) -> dict[str, object]:
-        reject_secret_looking_values(
-            {"body": self.body, "source": self.source, "supersedes": list(self.supersedes)}
-        )
+        if not self.allow_secrets:
+            reject_secret_looking_values(
+                {"body": self.body, "source": self.source, "supersedes": list(self.supersedes)}
+            )
         return {
             "body": self.body,
             "confidence": self.confidence,
@@ -95,6 +118,9 @@ class MemoryEntry:
             "source": self.source,
             "supersedes": list(self.supersedes),
             "work_item_id": self.work_item_id,
+            "allow_secrets": self.allow_secrets,
+            "retention_days": self.retention_days,
+            "provenance": self.provenance,
         }
 
     @classmethod
@@ -117,6 +143,9 @@ class MemoryEntry:
             created_at=_parse_datetime(_required_str(payload, "created_at")),
             expires_at=_parse_optional_datetime(payload.get("expires_at")),
             supersedes=tuple(_str_list(payload.get("supersedes", []), "supersedes")),
+            allow_secrets=bool(payload.get("allow_secrets", False)),
+            retention_days=int(payload["retention_days"]) if payload.get("retention_days") is not None else None,
+            provenance=_optional_str(payload, "provenance"),
         )
 
 
@@ -140,7 +169,7 @@ class MemoryProposal:
         require(bool(self.reason.strip()), "MemoryProposal: reason must be non-empty")
         require(bool(self.evidence), "MemoryProposal: evidence must be non-empty")
         require(
-            self.target_scope in _SCOPES,
+            is_valid_scope(self.target_scope),
             f"MemoryProposal: unsupported target_scope {self.target_scope!r}",
         )
         require(
@@ -268,7 +297,8 @@ class RepoMemoryStore:
         return self._memory_dir
 
     def add_entry(self, entry: MemoryEntry) -> None:
-        reject_secret_looking_values(entry.to_json_dict())
+        if not entry.allow_secrets:
+            reject_secret_looking_values(entry.to_json_dict())
         existing = {item.id for item in self._load_entries()}
         require(
             entry.id not in existing, f"RepoMemoryStore.add_entry: duplicate entry id {entry.id!r}"
@@ -296,6 +326,35 @@ class RepoMemoryStore:
             if entry.id not in superseded_ids
             and (entry.expires_at is None or entry.expires_at > reference_time)
         ]
+
+    def export_jsonl(self, scope: str, out_path: Path) -> None:
+        entries = [e for e in self.list_entries(include_superseded=True) if e.scope == scope]
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with out_path.open("w", encoding="utf-8", newline="\n") as handle:
+            for e in entries:
+                handle.write(f"{json.dumps(e.to_json_dict(), sort_keys=True, separators=(',', ':'))}\n")
+
+    def import_jsonl(self, in_path: Path, target_scope: str, *, allow_promotion: bool = False) -> int:
+        if not in_path.exists():
+            return 0
+        imported_count = 0
+        existing_ids = {e.id for e in self._load_entries()}
+        for payload in _read_jsonl(in_path):
+            entry = MemoryEntry.from_json_dict(payload)
+            if entry.id in existing_ids:
+                continue
+            if entry.scope == "personal" and not target_scope.startswith("personal"):
+                require(allow_promotion, "Cannot promote personal memory to broader scope without explicit flag")
+            
+            # Rewrite scope if it doesn't match? Or just enforce they match target_scope?
+            # Issue says: "Import respects the scope; refuses to promote personal memory into repo:* without an explicit flag."
+            # We'll rewrite the scope to target_scope
+            if entry.scope != target_scope:
+                object.__setattr__(entry, "scope", target_scope)
+                
+            self.add_entry(entry)
+            imported_count += 1
+        return imported_count
 
     def propose(self, proposal: MemoryProposal) -> MemoryProposal:
         require(proposal.status == "pending", "RepoMemoryStore.propose: proposal must be pending")
