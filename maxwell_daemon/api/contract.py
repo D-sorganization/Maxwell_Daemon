@@ -8,6 +8,8 @@ made to these shapes.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 CONTRACT_VERSION = "1.0.0"
@@ -51,8 +53,8 @@ class TaskDetail(BaseModel):
     status: str
     created_at: str
     repo: str | None = None
-    transcript: list[dict]
-    artifacts: list[dict]
+    transcript: list[dict[str, Any]]
+    artifacts: list[dict[str, Any]]
 
 
 class DispatchRequest(BaseModel):
