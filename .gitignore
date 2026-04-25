@@ -30,5 +30,14 @@ maxwell-daemon.yaml
 *.swp
 .DS_Store
 
+# Temporary files
+issue_*.json
+open_items.json
+list_issues.py
+ci_failures.txt
+mypy_output.txt
+output.txt
+runner_log.txt
+
 # Ansible
 *.retry
