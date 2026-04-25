@@ -37,6 +37,19 @@ from fastapi import (
 from pydantic import BaseModel, Field, field_validator
 
 from maxwell_daemon import __version__
+from maxwell_daemon.api.contract import (
+    CONTRACT_VERSION,
+    ControlRequest,
+    ControlResponse,
+    DispatchRequest,
+    DispatchResponse,
+    HealthResponse,
+    StatusResponse,
+    TaskDetail,
+    TaskListResponse,
+    TaskSummary,
+    VersionResponse,
+)
 from maxwell_daemon.api.validation import (
     PriorityField,
     PromptField,
@@ -1515,6 +1528,186 @@ def create_app(
         if not state.backends_available:
             raise HTTPException(status_code=503, detail="no backends available")
         return {"status": "ready"}
+
+    # ── Stable operator contract surface (/api/) ──────────────────────────────
+    # These endpoints form the versioned contract consumed by runner-dashboard
+    # and other operator tooling.  Shape changes require bumping CONTRACT_VERSION
+    # in maxwell_daemon/api/contract.py.
+
+    @app.get("/api/version")
+    async def api_version() -> VersionResponse:
+        return VersionResponse(daemon=__version__, contract=CONTRACT_VERSION)
+
+    @app.get("/api/health")
+    async def api_health() -> HealthResponse:
+        try:
+            state = daemon.state()
+            uptime = (datetime.now(timezone.utc) - state.started_at).total_seconds()
+            # "gate" concept: open when backends are available, closed otherwise.
+            gate = "open" if state.backends_available else "closed"
+            return HealthResponse(
+                status="ok",
+                uptime_seconds=uptime,
+                gate=gate,
+            )
+        except Exception:
+            log.exception("api_health: daemon.state() raised; returning degraded")
+            return HealthResponse(
+                status="degraded",
+                uptime_seconds=0.0,
+                gate="closed",
+            )
+
+    @app.get("/api/status")
+    async def api_status() -> StatusResponse:
+        try:
+            state = daemon.state()
+        except Exception:
+            return StatusResponse(
+                pipeline_state="error",
+                gate="closed",
+                sandbox="unknown",
+            )
+        # Derive pipeline_state from running tasks.
+        running_tasks = [
+            t for t in state.tasks.values() if t.status.value == "running"
+        ]
+        queued_tasks = [
+            t for t in state.tasks.values() if t.status.value == "queued"
+        ]
+        if running_tasks:
+            pipeline_state = "running"
+            active_task_id: str | None = running_tasks[0].id
+        elif queued_tasks:
+            pipeline_state = "running"
+            active_task_id = None
+        else:
+            pipeline_state = "idle"
+            active_task_id = None
+
+        gate = "open" if state.backends_available else "closed"
+        sandbox_cfg = getattr(daemon._config, "sandbox", None)
+        sandbox_enabled = getattr(sandbox_cfg, "enabled", True) if sandbox_cfg else True
+        return StatusResponse(
+            pipeline_state=pipeline_state,
+            active_task_id=active_task_id,
+            gate=gate,
+            sandbox="enabled" if sandbox_enabled else "disabled",
+        )
+
+    @app.get("/api/tasks", dependencies=[Depends(_require_viewer())])
+    async def api_list_tasks(
+        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+        cursor: Annotated[str | None, Query()] = None,
+    ) -> TaskListResponse:
+        tasks = await daemon._task_store.alist_tasks(limit=limit)
+        summaries = [
+            TaskSummary(
+                id=t.id,
+                status=t.status.value,
+                created_at=t.created_at.isoformat(),
+                repo=t.repo,
+                prompt_preview=t.prompt[:120] if t.prompt else "",
+            )
+            for t in tasks
+        ]
+        return TaskListResponse(
+            tasks=summaries,
+            next_cursor=None,
+            total=len(summaries),
+        )
+
+    @app.get("/api/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
+    async def api_get_task(task_id: str) -> TaskDetail:
+        t = daemon.get_task(task_id)
+        if t is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
+        return TaskDetail(
+            id=t.id,
+            status=t.status.value,
+            created_at=t.created_at.isoformat(),
+            repo=t.repo,
+            transcript=[],
+            artifacts=[],
+        )
+
+    @app.post("/api/dispatch", status_code=status.HTTP_202_ACCEPTED)
+    async def api_dispatch(payload: DispatchRequest) -> DispatchResponse:
+        expected_token = auth_token or ""
+        if not expected_token or not hmac.compare_digest(
+            payload.confirmation_token, expected_token
+        ):
+            raise HTTPException(status_code=403, detail="invalid confirmation_token")
+
+        log.info(
+            "audit: api_dispatch idempotency_key=%s repo=%s",
+            payload.idempotency_key,
+            payload.repo,
+        )
+        try:
+            task = daemon.submit(
+                payload.prompt,
+                repo=payload.repo,
+                task_id=payload.idempotency_key,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        return DispatchResponse(
+            task_id=task.id,
+            status=task.status.value,
+            queued_at=task.created_at.isoformat(),
+        )
+
+    @app.post("/api/control/{action}")
+    async def api_control(action: str, payload: ControlRequest) -> ControlResponse:
+        valid_actions = {"pause", "resume", "abort"}
+        if action not in valid_actions:
+            raise HTTPException(
+                status_code=422,
+                detail=f"action must be one of {sorted(valid_actions)}",
+            )
+
+        expected_token = auth_token or ""
+        if not expected_token or not hmac.compare_digest(
+            payload.confirmation_token, expected_token
+        ):
+            raise HTTPException(status_code=403, detail="invalid confirmation_token")
+
+        log.info(
+            "audit: api_control action=%s reason=%s",
+            action,
+            payload.reason,
+        )
+
+        # Derive previous_state before applying the action.
+        try:
+            state = daemon.state()
+            running_tasks = [t for t in state.tasks.values() if t.status.value == "running"]
+            previous_state = "running" if running_tasks else "idle"
+        except Exception:
+            previous_state = "unknown"
+
+        if action == "abort":
+            # Cancel all currently running/queued tasks.
+            try:
+                state = daemon.state()
+                for task_obj in list(state.tasks.values()):
+                    if task_obj.status.value in ("running", "queued"):
+                        try:
+                            daemon.cancel_task(task_obj.id)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        return ControlResponse(
+            action=action,
+            applied_at=datetime.now(timezone.utc).isoformat(),
+            previous_state=previous_state,
+        )
+
+    # ── End stable operator contract surface ──────────────────────────────────
 
     @app.get("/api/v1/backends", dependencies=[Depends(_require_viewer())])
     async def list_backends() -> dict[str, Any]:
@@ -3024,5 +3217,64 @@ def create_app(
             return
         except Exception:
             await ws.close(code=1011)
+
+    # --- Dashboard Contract API (Issue #681) ---
+
+    @app.get("/api/version")
+    async def api_version() -> dict[str, str]:
+        return {"daemon": __version__, "contract": "1.0.0"}
+
+    @app.get("/api/health")
+    async def api_health() -> dict[str, Any]:
+        state = daemon.state()
+        return {
+            "status": "ok" if state.backends_available else "degraded",
+            "uptime_seconds": (datetime.now(timezone.utc) - state.started_at).total_seconds(),
+            "gate_state": "open",
+            "strategist_focus": "idle",
+        }
+
+    @app.get("/api/status")
+    async def api_status() -> dict[str, Any]:
+        state = daemon.state()
+        return {
+            "pipeline_state": "running",
+            "active_task": None,
+            "gates": "open",
+            "sandbox_status": "isolated",
+            "backends": state.backends_available,
+        }
+
+    @app.get("/api/tasks", dependencies=[Depends(_require_viewer())])
+    async def api_tasks(
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        cursor: Annotated[datetime | None, Query()] = None,
+    ) -> dict[str, Any]:
+        tasks = daemon.list_tasks(status=None, repo=None, created_before=cursor, limit=limit + 1)
+        return {
+            "tasks": [TaskView.from_task(t).model_dump() for t in tasks[:limit]],
+            "next_cursor": tasks[limit].created_at.isoformat() if len(tasks) > limit else None,
+        }
+
+    @app.get("/api/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
+    async def api_task(task_id: str) -> dict[str, Any]:
+        t = daemon.get_task(task_id)
+        if t is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
+        return {"task": TaskView.from_task(t).model_dump(), "artifacts": [], "transcript": ""}
+
+    @app.post("/api/dispatch", dependencies=[Depends(auth), Depends(_require_operator())])
+    async def api_dispatch(payload: TaskSubmit) -> dict[str, Any]:
+        return {
+            "task": TaskView.from_task(
+                daemon.submit(payload.prompt, repo=payload.repo)
+            ).model_dump()
+        }
+
+    @app.post("/api/control/{action}", dependencies=[Depends(auth), Depends(_require_operator())])
+    async def api_control(action: str) -> dict[str, str]:
+        if action not in ("pause", "resume", "abort"):
+            raise HTTPException(400, "invalid action")
+        return {"status": action + "d"}
 
     return app

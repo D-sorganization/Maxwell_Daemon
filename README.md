@@ -6,6 +6,23 @@ Maxwell-Daemon is a professionally packaged, autonomous local control plane that
 
 Unlike existing tools that are locked to the terminal, Maxwell-Daemon ships a browser-served **gate-aware dashboard** at `/ui/`, strict **Test-Driven Development (TDD)** enforcement, and **Bring-Your-Own-CLI (BYO-CLI)** flexibility. It ensures you never burn an API token on tasks you don't need to.
 
+## Sibling repos
+
+Maxwell-Daemon is the **AI control plane** in a three-repo fleet. The
+cross-repo contract is in
+[`Repository_Management/docs/sibling-repos.md`](https://github.com/D-sorganization/Repository_Management/blob/main/docs/sibling-repos.md).
+
+| Repo | Role |
+| --- | --- |
+| [`Repository_Management`](https://github.com/D-sorganization/Repository_Management) | Fleet orchestrator (CI workflows, skills, templates, agent coordination). |
+| [`runner-dashboard`](https://github.com/D-sorganization/runner-dashboard) | Operator console; its **Maxwell tab** consumes the daemon's HTTP API. |
+| `Maxwell-Daemon` (here) | Strategist / Implementer / Crucible pipeline + ExecutionSandbox + BYO-CLI runtime. |
+
+The daemon's **`/ui/`** is the daemon's own console (for direct/local use).
+The fleet-wide operator console is `runner-dashboard`. The daemon never
+calls back into the dashboard or Repository_Management — all cross-repo
+traffic is into the daemon.
+
 ## 🚀 Why Maxwell-Daemon?
 - **Canonical Dashboard Launcher**: Use `Launch-Maxwell.bat`, `Launch-Maxwell.command`, or `Launch-Maxwell.sh` from a source checkout to bootstrap Maxwell-Daemon and open the shipped `/ui/` dashboard on Windows, macOS, or Linux.
 - **The Cognitive Pipeline**: A state-machine orchestrated team:

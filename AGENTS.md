@@ -12,6 +12,45 @@
 
 ---
 
+## 🗺️ Sibling repos & boundaries (read first)
+
+`Maxwell-Daemon` is the **autonomous AI control plane** in a three-repo
+fleet. The cross-repo contract is documented canonically in
+[`Repository_Management/docs/sibling-repos.md`](https://github.com/D-sorganization/Repository_Management/blob/main/docs/sibling-repos.md).
+
+| Repo                     | Role                                                         |
+| ------------------------ | ------------------------------------------------------------ |
+| [`Repository_Management`](https://github.com/D-sorganization/Repository_Management) | Fleet orchestrator (CI workflows, skills, templates, agent coordination). |
+| [`runner-dashboard`](https://github.com/D-sorganization/runner-dashboard) | Operator console; calls Maxwell-Daemon's HTTP API from its Maxwell tab. |
+| `Maxwell-Daemon` (here)  | Strategist / Implementer / Crucible state machine, ExecutionSandbox, BYO-CLI runtime, gate-aware `/ui/`. |
+
+**Rule that keeps the graph acyclic:** Maxwell-Daemon **never calls back**
+into `runner-dashboard` or `Repository_Management`. Cross-repo traffic is
+always *into* the daemon — never out. This is what lets the daemon stay
+reusable from any caller (CLI, dashboard, future clients).
+
+**HTTP surface this repo must keep stable** (consumed by the dashboard's
+Maxwell tab — see the sibling-repos doc for full schema):
+
+| Method | Path                                | Purpose                                       |
+| ------ | ----------------------------------- | --------------------------------------------- |
+| GET    | `/api/version`                      | Daemon semver + contract version              |
+| GET    | `/api/health`                       | Liveness, gate state, current focus           |
+| GET    | `/api/status`                       | Pipeline state, active task, gates, sandbox   |
+| GET    | `/api/tasks`                        | Recent task history (paginated)               |
+| GET    | `/api/tasks/{id}`                   | One task incl. transcript + artifacts         |
+| POST   | `/api/dispatch`                     | Submit a signed task envelope                 |
+| POST   | `/api/control/{pause,resume,abort}` | Pipeline control (privileged)                 |
+
+This contract is **append-only**: add endpoints freely; never break existing
+ones without a major-version bump advertised at `GET /api/version`.
+
+**Routing rule:** dashboard tabs / `/api/*` endpoints in `runner-dashboard` →
+that repo; fleet workflows / skills / templates → `Repository_Management`;
+pipeline state, gates, sandbox, BYO-CLI → here.
+
+---
+
 ## 🛡️ Safety & Security (CRITICAL)
 
 1. **Secrets Management**:
