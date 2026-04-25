@@ -244,13 +244,9 @@ class ActionService:
         try:
             loop = asyncio.get_running_loop()
             if len(self._event_tasks) >= 1000:
-                log.warning(
-                    "event_tasks queue saturated, dropping action event %s", kind.value
-                )
+                log.warning("event_tasks queue saturated, dropping action event %s", kind.value)
                 return
-            task = loop.create_task(
-                self._events.publish(Event(kind=kind, payload=payload))
-            )
+            task = loop.create_task(self._events.publish(Event(kind=kind, payload=payload)))
             self._event_tasks.add(task)
             task.add_done_callback(self._event_tasks.discard)
         except RuntimeError:

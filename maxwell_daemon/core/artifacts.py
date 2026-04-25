@@ -200,9 +200,7 @@ class ArtifactStore:
         metadata: dict[str, Any] | None = None,
     ) -> Artifact:
         require(bool(name), "ArtifactStore.put_bytes: name must be non-empty")
-        require(
-            bool(media_type), "ArtifactStore.put_bytes: media_type must be non-empty"
-        )
+        require(bool(media_type), "ArtifactStore.put_bytes: media_type must be non-empty")
         artifact_id = uuid.uuid4().hex
         relative_path = self._relative_blob_path(
             artifact_id=artifact_id,
@@ -239,9 +237,7 @@ class ArtifactStore:
 
     def get(self, artifact_id: str) -> Artifact | None:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM artifacts WHERE id = ?", (artifact_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM artifacts WHERE id = ?", (artifact_id,)).fetchone()
         return _row_to_artifact(row) if row else None
 
     def read_text(self, artifact_id: str) -> str:
@@ -254,9 +250,7 @@ class ArtifactStore:
         blob_path = self._blob_path(artifact.path)
         data = blob_path.read_bytes()
         if len(data) != artifact.size_bytes or _hash_bytes(data) != artifact.sha256:
-            raise ArtifactIntegrityError(
-                f"artifact {artifact_id} failed integrity check"
-            )
+            raise ArtifactIntegrityError(f"artifact {artifact_id} failed integrity check")
         return data
 
     def list_for_task(
@@ -316,15 +310,11 @@ class ArtifactStore:
 
     def _blob_path(self, relative_path: Path) -> Path:
         if relative_path.is_absolute():
-            raise ArtifactIntegrityError(
-                f"artifact path must be relative: {relative_path}"
-            )
+            raise ArtifactIntegrityError(f"artifact path must be relative: {relative_path}")
         root = self._blob_root.resolve()
         candidate = (root / relative_path).resolve()
         if candidate != root and root not in candidate.parents:
-            raise ArtifactIntegrityError(
-                f"artifact path escapes blob root: {relative_path}"
-            )
+            raise ArtifactIntegrityError(f"artifact path escapes blob root: {relative_path}")
         return candidate
 
     @staticmethod

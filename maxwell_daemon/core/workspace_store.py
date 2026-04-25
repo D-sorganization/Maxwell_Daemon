@@ -102,26 +102,18 @@ class WorkspaceStore:
 
     def get_workspace(self, workspace_id: str) -> TaskWorkspace | None:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM workspaces WHERE id = ?", (workspace_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
         return _row_to_workspace(row) if row else None
 
     def get_workspace_for_task(self, task_id: str) -> TaskWorkspace | None:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM workspaces WHERE task_id = ?", (task_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM workspaces WHERE task_id = ?", (task_id,)).fetchone()
         return _row_to_workspace(row) if row else None
 
-    def transition(
-        self, workspace_id: str, new_status: WorkspaceStatus
-    ) -> TaskWorkspace:
+    def transition(self, workspace_id: str, new_status: WorkspaceStatus) -> TaskWorkspace:
         now = datetime.now(timezone.utc)
         with self._lock, self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM workspaces WHERE id = ?", (workspace_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
             if row is None:
                 raise KeyError(workspace_id)
             workspace = _row_to_workspace(row)
@@ -163,9 +155,7 @@ class WorkspaceStore:
             )
             if cursor.rowcount != 1:
                 raise KeyError(workspace_id)
-            row = conn.execute(
-                "SELECT * FROM workspaces WHERE id = ?", (workspace_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
         if row is None:
             raise KeyError(workspace_id)
         return _row_to_workspace(row)
@@ -198,9 +188,7 @@ class WorkspaceStore:
             )
             if cursor.rowcount != 1:
                 raise KeyError(workspace_id)
-            row = conn.execute(
-                "SELECT * FROM workspaces WHERE id = ?", (workspace_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
         if row is None:
             raise KeyError(workspace_id)
         return _row_to_workspace(row)

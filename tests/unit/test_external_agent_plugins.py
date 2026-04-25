@@ -62,8 +62,7 @@ def _descriptor_payload(entrypoint: str | None = None) -> dict[str, object]:
     return {
         "name": "descriptor-agent",
         "kind": "external-agent",
-        "entrypoint": entrypoint
-        or "tests.unit.test_external_agent_plugins:DescriptorAdapter",
+        "entrypoint": entrypoint or "tests.unit.test_external_agent_plugins:DescriptorAdapter",
         "version": "1",
         "capabilities": ["plan", "stdout-artifacts"],
     }
@@ -133,9 +132,7 @@ def test_descriptor_validation_rejects_duplicate_capabilities() -> None:
 
 def test_directory_loader_rejects_duplicate_plugin_names(tmp_path: Path) -> None:
     for filename in ("a.json", "b.json"):
-        (tmp_path / filename).write_text(
-            json.dumps(_descriptor_payload()), encoding="utf-8"
-        )
+        (tmp_path / filename).write_text(json.dumps(_descriptor_payload()), encoding="utf-8")
 
     with pytest.raises(ExternalAgentAdapterError, match="duplicate"):
         load_external_agent_plugin_descriptors(tmp_path)

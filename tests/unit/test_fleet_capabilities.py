@@ -21,9 +21,7 @@ from maxwell_daemon.fleet.capabilities import (
 
 
 def _dt(minutes_ago: int = 0) -> datetime:
-    return datetime(2026, 4, 22, 18, 0, tzinfo=timezone.utc) - timedelta(
-        minutes=minutes_ago
-    )
+    return datetime(2026, 4, 22, 18, 0, tzinfo=timezone.utc) - timedelta(minutes=minutes_ago)
 
 
 def _capability(name: str, minutes_ago: int = 0) -> NodeCapability:
@@ -248,9 +246,7 @@ def test_offline_and_stale_nodes_are_not_selected() -> None:
 
     assert assignment.selected_node is not None
     assert assignment.selected_node.node_id == "online"
-    reasons = {
-        decision.node_id: decision.reasons for decision in assignment.rejected_nodes
-    }
+    reasons = {decision.node_id: decision.reasons for decision in assignment.rejected_nodes}
     assert "tailscale peer offline" in reasons["offline"]
     assert any("heartbeat stale" in reason for reason in reasons["stale"])
 
@@ -320,9 +316,7 @@ def test_max_concurrent_sessions_enforced() -> None:
 
     assert assignment.selected_node is not None
     assert assignment.selected_node.node_id == "open"
-    reasons = {
-        decision.node_id: decision.reasons for decision in assignment.rejected_nodes
-    }
+    reasons = {decision.node_id: decision.reasons for decision in assignment.rejected_nodes}
     assert reasons["full"] == ("max concurrent sessions reached (2/2)",)
 
 
@@ -433,9 +427,7 @@ def test_registry_status_redacts_policy_and_capability_values() -> None:
                 hostname="alpha",
                 capabilities=(
                     NodeCapability(name="gpu", observed_at=_dt(), value=8),
-                    NodeCapability(
-                        name="secret-capability", observed_at=_dt(), value="hidden"
-                    ),
+                    NodeCapability(name="secret-capability", observed_at=_dt(), value="hidden"),
                 ),
                 sessions=0,
                 repos=frozenset({"acme/repo"}),

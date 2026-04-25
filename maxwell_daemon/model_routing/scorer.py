@@ -65,11 +65,7 @@ class RoutingScorer:
         else:  # balanced
             w_cost, w_quality, w_speed = -5.0, 5.0, 2.0
 
-        policy_fit = (
-            (w_cost * est_cost_usd)
-            + (w_quality * quality_score)
-            + (w_speed * speed_score)
-        )
+        policy_fit = (w_cost * est_cost_usd) + (w_quality * quality_score) + (w_speed * speed_score)
 
         # Penalty if it doesn't match expected latency
         if task.expected_latency.value == "interactive" and speed_score < 0.8:

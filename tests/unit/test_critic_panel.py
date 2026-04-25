@@ -103,9 +103,7 @@ class TestCriticAggregation:
         runner = CriticPanelRunner(
             adapters={
                 "static": StaticCritic(
-                    result=CriticPanelRun(
-                        profile=profile, status="failed", findings=(finding,)
-                    )
+                    result=CriticPanelRun(profile=profile, status="failed", findings=(finding,))
                 )
             }
         )
@@ -129,9 +127,7 @@ class TestCriticAggregation:
         runner = CriticPanelRunner(
             adapters={
                 "static": StaticCritic(
-                    result=CriticPanelRun(
-                        profile=profile, status="failed", findings=(finding,)
-                    )
+                    result=CriticPanelRun(profile=profile, status="failed", findings=(finding,))
                 )
             }
         )
@@ -158,9 +154,7 @@ class TestCriticAggregation:
         runner = CriticPanelRunner(
             adapters={
                 "static": StaticCritic(
-                    result=CriticPanelRun(
-                        profile=profile, status="passed", findings=(finding,)
-                    )
+                    result=CriticPanelRun(profile=profile, status="passed", findings=(finding,))
                 )
             }
         )
@@ -251,9 +245,7 @@ class TestGateAdapterBridge:
         runner = CriticPanelRunner(
             adapters={
                 "static": StaticCritic(
-                    result=CriticPanelRun(
-                        profile=profile, status="passed", findings=(finding,)
-                    )
+                    result=CriticPanelRun(profile=profile, status="passed", findings=(finding,))
                 )
             }
         )

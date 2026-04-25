@@ -90,17 +90,13 @@ class GraphRunner:
         self._artifact_store = artifact_store
 
     def run(self, graph: TaskGraph) -> GraphExecutionResult:
-        graph = graph.model_copy(
-            update={"status": GraphStatus.RUNNING, "updated_at": _now()}
-        )
+        graph = graph.model_copy(update={"status": GraphStatus.RUNNING, "updated_at": _now()})
         node_runs: list[NodeRun] = []
         artifacts_by_node: dict[str, tuple[Artifact, ...]] = {}
         artifacts_by_kind: dict[ArtifactKind, list[Artifact]] = {}
 
         for node in graph.nodes_in_dependency_order():
-            missing_deps = [
-                dep for dep in node.depends_on if dep not in artifacts_by_node
-            ]
+            missing_deps = [dep for dep in node.depends_on if dep not in artifacts_by_node]
             if missing_deps:
                 run = _blocked_run(
                     graph_id=graph.id,
@@ -117,9 +113,7 @@ class GraphRunner:
                 return GraphExecutionResult(graph=graph, node_runs=tuple(node_runs))
 
             missing_artifacts = [
-                kind.value
-                for kind in node.required_artifacts
-                if kind not in artifacts_by_kind
+                kind.value for kind in node.required_artifacts if kind not in artifacts_by_kind
             ]
             if missing_artifacts:
                 run = _blocked_run(
@@ -156,9 +150,7 @@ class GraphRunner:
             for artifact in node_artifacts:
                 artifacts_by_kind.setdefault(artifact.kind, []).append(artifact)
 
-        graph = graph.model_copy(
-            update={"status": GraphStatus.COMPLETED, "updated_at": _now()}
-        )
+        graph = graph.model_copy(update={"status": GraphStatus.COMPLETED, "updated_at": _now()})
         return GraphExecutionResult(graph=graph, node_runs=tuple(node_runs))
 
     def _run_node(
@@ -171,9 +163,7 @@ class GraphRunner:
         attempts = 0
         last_error = ""
         dependency_ids = tuple(
-            artifact.id
-            for dep in node.depends_on
-            for artifact in artifacts_by_node.get(dep, ())
+            artifact.id for dep in node.depends_on for artifact in artifacts_by_node.get(dep, ())
         )
         dependency_text = self._render_dependency_artifacts(dependency_ids)
         context = GraphExecutionContext(
@@ -237,9 +227,7 @@ class GraphRunner:
     def _resolve_artifact(self, artifact_id: str) -> Artifact:
         artifact = self._artifact_store.get(artifact_id)
         if artifact is None:
-            raise GraphRunnerError(
-                f"artifact {artifact_id!r} disappeared during graph execution"
-            )
+            raise GraphRunnerError(f"artifact {artifact_id!r} disappeared during graph execution")
         return artifact
 
 

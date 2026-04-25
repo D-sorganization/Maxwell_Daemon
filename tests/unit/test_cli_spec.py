@@ -35,9 +35,7 @@ class TestSpecList:
         assert result.exit_code == 0
         assert "No .feature" in result.output
 
-    def test_lists_features_in_directory(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_lists_features_in_directory(self, runner: CliRunner, tmp_path: Path) -> None:
         _write_feature(
             tmp_path,
             """
@@ -85,9 +83,7 @@ class TestSpecShow:
         assert "Success" in result.output
         assert "Given" in result.output and "When" in result.output
 
-    def test_malformed_feature_exits_non_zero(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_malformed_feature_exits_non_zero(self, runner: CliRunner, tmp_path: Path) -> None:
         path = tmp_path / "broken.feature"
         path.write_text("not a feature\n")
         result = runner.invoke(spec_app, ["show", str(path)])
@@ -95,9 +91,7 @@ class TestSpecShow:
 
 
 class TestSpecGenerate:
-    def test_writes_scaffold_to_default_path(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_writes_scaffold_to_default_path(self, runner: CliRunner, tmp_path: Path) -> None:
         feature = _write_feature(
             tmp_path,
             """
@@ -120,9 +114,7 @@ class TestSpecGenerate:
         # Without a chdir we can't assert the relative path; instead assert
         # the scaffold exists at a known absolute path via --output.
         output_path = tmp_path / "out" / "test_login.py"
-        result = runner.invoke(
-            spec_app, ["generate", str(feature), "--output", str(output_path)]
-        )
+        result = runner.invoke(spec_app, ["generate", str(feature), "--output", str(output_path)])
         assert result.exit_code == 0, result.output
         assert output_path.is_file()
         body = output_path.read_text()
@@ -130,9 +122,7 @@ class TestSpecGenerate:
         assert "scenarios(" in body
         assert "@given(" in body and "@when(" in body and "@then(" in body
 
-    def test_refuses_overwrite_without_flag(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_refuses_overwrite_without_flag(self, runner: CliRunner, tmp_path: Path) -> None:
         feature = _write_feature(
             tmp_path,
             "Feature: X\n  Scenario: a\n    Given x\n    When y\n    Then z\n",
@@ -141,16 +131,12 @@ class TestSpecGenerate:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("# sentinel — must not be overwritten\n")
 
-        result = runner.invoke(
-            spec_app, ["generate", str(feature), "--output", str(output_path)]
-        )
+        result = runner.invoke(spec_app, ["generate", str(feature), "--output", str(output_path)])
         assert result.exit_code == 1
         assert re.search(r"already\s+exists", result.output)
         assert output_path.read_text().startswith("# sentinel")
 
-    def test_overwrite_flag_replaces_existing(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_overwrite_flag_replaces_existing(self, runner: CliRunner, tmp_path: Path) -> None:
         feature = _write_feature(
             tmp_path,
             "Feature: X\n  Scenario: a\n    Given x\n    When y\n    Then z\n",

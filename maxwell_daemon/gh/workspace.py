@@ -85,17 +85,13 @@ class Workspace:
         target = (repo_dir / task_id).resolve()
         root_resolved = self._root.resolve()
         if root_resolved not in target.parents and target != root_resolved:
-            raise WorkspaceError(
-                f"Path escape detected for repo={repo!r} task={task_id!r}"
-            )
+            raise WorkspaceError(f"Path escape detected for repo={repo!r} task={task_id!r}")
         return target
 
     async def _run_git(
         self, *argv: str, cwd: Path | None = None, stdin: bytes | None = None
     ) -> None:
-        rc, _, err = await self._run(
-            "git", *argv, cwd=str(cwd) if cwd else None, stdin=stdin
-        )
+        rc, _, err = await self._run("git", *argv, cwd=str(cwd) if cwd else None, stdin=stdin)
         if rc != 0:
             raise WorkspaceError(
                 f"git {' '.join(argv)} failed: {err.decode(errors='replace').strip()}"
@@ -119,9 +115,7 @@ class Workspace:
         Uses ``git ls-remote --heads origin <branch>`` which exits 0 regardless
         of whether the branch exists; the output is empty when it does not.
         """
-        rc, out, _ = await self._run(
-            "git", "ls-remote", "--heads", "origin", branch, cwd=str(cwd)
-        )
+        rc, out, _ = await self._run("git", "ls-remote", "--heads", "origin", branch, cwd=str(cwd))
         return rc == 0 and bool(out.strip())
 
     async def create_branch(
@@ -149,9 +143,7 @@ class Workspace:
         target = self.path_for(repo, task_id=task_id)
         await self._run_git("apply", "--index", "-", cwd=target, stdin=diff.encode())
 
-    async def commit_and_push(
-        self, repo: str, *, branch: str, message: str, task_id: str
-    ) -> None:
+    async def commit_and_push(self, repo: str, *, branch: str, message: str, task_id: str) -> None:
         target = self.path_for(repo, task_id=task_id)
         await self._run_git("add", "-A", cwd=target)
         await self._run_git("commit", "-m", message, cwd=target)

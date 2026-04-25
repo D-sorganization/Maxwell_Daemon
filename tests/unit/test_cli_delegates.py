@@ -48,9 +48,7 @@ def patch_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         params: dict[str, Any] | None = None,
         timeout: float | None = None,
     ) -> _FakeResponse:
-        calls.append(
-            {"method": "GET", "url": url, "headers": headers, "params": params}
-        )
+        calls.append({"method": "GET", "url": url, "headers": headers, "params": params})
         return _Holder.response
 
     import httpx
@@ -61,9 +59,7 @@ def patch_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 class TestDelegateList:
-    def test_renders_table(
-        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
-    ) -> None:
+    def test_renders_table(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
         holder = patch_httpx[-1]["_holder"]
         holder.response = _FakeResponse(
             payload=[
@@ -104,9 +100,7 @@ class TestDelegateList:
                         "current_plan": "Keep a durable checkpoint for recovery.",
                         "changed_files": ["maxwell_daemon/core/delegate_lifecycle.py"],
                         "test_commands": ["pytest tests/unit/test_cli_delegates.py"],
-                        "failures_and_learnings": [
-                            "CLI should render the latest checkpoint."
-                        ],
+                        "failures_and_learnings": ["CLI should render the latest checkpoint."],
                         "artifact_refs": ["artifact://patch-4"],
                         "resume_prompt": "Resume from the last checkpoint.",
                         "metadata": {},
@@ -178,9 +172,7 @@ class TestDelegateShow:
                     "current_plan": "Keep a durable checkpoint for recovery.",
                     "changed_files": ["maxwell_daemon/core/delegate_lifecycle.py"],
                     "test_commands": ["pytest tests/unit/test_cli_delegates.py"],
-                    "failures_and_learnings": [
-                        "CLI should render the latest checkpoint."
-                    ],
+                    "failures_and_learnings": ["CLI should render the latest checkpoint."],
                     "artifact_refs": ["artifact://patch-4"],
                     "resume_prompt": "Resume from the last checkpoint.",
                     "metadata": {},

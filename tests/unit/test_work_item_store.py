@@ -57,9 +57,7 @@ def test_list_filters_by_status_repo_source_and_priority(store: WorkItemStore) -
             priority=10,
         )
     )
-    store.save(
-        _item(id="other", repo="D-sorganization/Other", source="manual", priority=200)
-    )
+    store.save(_item(id="other", repo="D-sorganization/Other", source="manual", priority=200))
 
     listed = store.list_items(
         status=WorkItemStatus.DRAFT,

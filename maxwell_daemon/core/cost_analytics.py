@@ -71,9 +71,7 @@ class CostAnalytics:
         total_cost = self._ledger.total_since(start, end=end)
         cost_by_backend = self._ledger.by_backend(start, end=end)
 
-        calls, cached, prompt, completion = self._ledger.cache_metrics_raw(
-            start, end=end
-        )
+        calls, cached, prompt, completion = self._ledger.cache_metrics_raw(start, end=end)
         cache_hit_rate = 0.0
         if prompt > 0:
             cache_hit_rate = cached / prompt
@@ -107,9 +105,7 @@ class CostAnalytics:
         """
         if since is None:
             since = datetime.min.replace(tzinfo=timezone.utc)
-        _calls, cached, prompt, _completion = self._ledger.cache_metrics_raw(
-            since, end=end
-        )
+        _calls, cached, prompt, _completion = self._ledger.cache_metrics_raw(since, end=end)
         if prompt > 0:
             return cached / prompt
         return 0.0

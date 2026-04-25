@@ -22,9 +22,7 @@ from maxwell_daemon.cli.batch_dispatch import (
 from maxwell_daemon.gh.client import Issue
 
 
-def _issue(
-    number: int, *, labels: Sequence[str] = (), title: str = "t", body: str = ""
-) -> Issue:
+def _issue(number: int, *, labels: Sequence[str] = (), title: str = "t", body: str = "") -> Issue:
     return Issue(
         number=number,
         title=title,
@@ -42,9 +40,7 @@ class _FakeLister:
         self._per_repo = per_repo
         self.calls: list[str] = []
 
-    async def list_issues(
-        self, repo: str, *, state: str = "open", limit: int = 50
-    ) -> list[Issue]:
+    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 50) -> list[Issue]:
         self.calls.append(repo)
         return list(self._per_repo.get(repo, []))
 
@@ -77,9 +73,7 @@ class TestSingleRepoPlan:
         planner = BatchDispatchPlanner(list_issues=lister.list_issues)
         plan = await planner.plan(repos=["a/b"], mode="plan")
         assert [it.number for it in plan.items] == [1, 2, 3]
-        assert plan.summaries == (
-            RepoBatchSummary(repo="a/b", eligible=3, submitted=3, skipped=0),
-        )
+        assert plan.summaries == (RepoBatchSummary(repo="a/b", eligible=3, submitted=3, skipped=0),)
 
     async def test_max_stories_caps_submission(self) -> None:
         lister = _FakeLister({"a/b": [_issue(i) for i in range(5)]})
@@ -164,9 +158,7 @@ class TestMultiRepoFanOut:
         assert plan == BatchDispatchPlan(items=(), summaries=())
 
     async def test_lister_failure_surfaces_as_empty_summary(self) -> None:
-        async def bad_lister(
-            repo: str, *, state: str = "open", limit: int = 50
-        ) -> list[Issue]:
+        async def bad_lister(repo: str, *, state: str = "open", limit: int = 50) -> list[Issue]:
             if repo == "broken/repo":
                 raise RuntimeError("boom")
             return [_issue(1)]

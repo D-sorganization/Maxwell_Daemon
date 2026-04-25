@@ -35,29 +35,20 @@ def score_observation(
     )
     artifact_count = max(len(scenario.expected_artifacts), 1)
     present_artifact_count = len(
-        [
-            artifact
-            for artifact in artifact_refs
-            if artifact in scenario.expected_artifacts
-        ]
+        [artifact for artifact in artifact_refs if artifact in scenario.expected_artifacts]
     )
 
     breakdown = {
-        "acceptance": (
-            profile.weights["acceptance"] if category is FailureCategory.NONE else 0.0
-        ),
+        "acceptance": (profile.weights["acceptance"] if category is FailureCategory.NONE else 0.0),
         "required_checks": profile.weights["required_checks"]
         * (passed_check_count / required_check_count),
         "patch_minimality": (
             0.0 if unrelated_file_changes else profile.weights["patch_minimality"]
         ),
         "test_evidence": (
-            profile.weights["test_evidence"]
-            if tests_added or not scenario.requires_tests
-            else 0.0
+            profile.weights["test_evidence"] if tests_added or not scenario.requires_tests else 0.0
         ),
-        "artifacts": profile.weights["artifacts"]
-        * (present_artifact_count / artifact_count),
+        "artifacts": profile.weights["artifacts"] * (present_artifact_count / artifact_count),
     }
     total = round(sum(breakdown.values()), 2)
     return total, breakdown, category

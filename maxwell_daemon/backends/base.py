@@ -136,10 +136,7 @@ class ILLMBackend(ABC):
 
     def estimate_cost(self, usage: TokenUsage, model: str) -> float | None:
         caps = self.capabilities(model)
-        if (
-            caps.cost_per_1k_input_tokens is None
-            or caps.cost_per_1k_output_tokens is None
-        ):
+        if caps.cost_per_1k_input_tokens is None or caps.cost_per_1k_output_tokens is None:
             return 0.0 if caps.is_local else None
         return (
             usage.prompt_tokens * caps.cost_per_1k_input_tokens / 1000

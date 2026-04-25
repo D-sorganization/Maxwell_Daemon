@@ -31,9 +31,7 @@ def load_check(path: Path | str) -> CheckDefinition:
     if not check_path.is_file():
         raise CheckLoadError(f"{check_path}: check file does not exist")
     if check_path.suffix.lower() != ".md":
-        raise CheckLoadError(
-            f"{check_path}: unsupported check extension {check_path.suffix!r}"
-        )
+        raise CheckLoadError(f"{check_path}: unsupported check extension {check_path.suffix!r}")
 
     try:
         text = check_path.read_text(encoding="utf-8")
@@ -49,9 +47,7 @@ def load_check(path: Path | str) -> CheckDefinition:
     try:
         parsed: Any = yaml.safe_load(match.group("yaml")) or {}
     except yaml.YAMLError as exc:
-        raise CheckLoadError(
-            f"{check_path}: YAML frontmatter is invalid: {exc}"
-        ) from exc
+        raise CheckLoadError(f"{check_path}: YAML frontmatter is invalid: {exc}") from exc
 
     if not isinstance(parsed, dict):
         raise CheckLoadError(f"{check_path}: YAML frontmatter must be a mapping")

@@ -106,9 +106,7 @@ class TaskGraphStore:
 
     def get(self, graph_id: str) -> TaskGraphRecord | None:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM task_graphs WHERE id = ?", (graph_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM task_graphs WHERE id = ?", (graph_id,)).fetchone()
         return _row_to_record(row) if row is not None else None
 
     def list_records(
@@ -138,7 +136,5 @@ class TaskGraphStore:
 
 def _row_to_record(row: sqlite3.Row) -> TaskGraphRecord:
     graph = TaskGraph.model_validate_json(row["graph_json"])
-    node_runs = tuple(
-        NodeRun.model_validate(item) for item in json.loads(row["node_runs_json"])
-    )
+    node_runs = tuple(NodeRun.model_validate(item) for item in json.loads(row["node_runs_json"]))
     return TaskGraphRecord(graph=graph, node_runs=node_runs)

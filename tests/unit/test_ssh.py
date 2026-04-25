@@ -122,9 +122,7 @@ class TestSSHSession:
 
         from maxwell_daemon.ssh.session import SESSION_TTL_SECONDS
 
-        session = SSHSession(
-            _make_session()._conn, time.monotonic() - SESSION_TTL_SECONDS - 1
-        )
+        session = SSHSession(_make_session()._conn, time.monotonic() - SESSION_TTL_SECONDS - 1)
         assert session.is_expired
 
     def test_shell_stream_yields_chunks(self) -> None:
@@ -227,9 +225,7 @@ class TestSSHSessionPool:
         mock_conn.wait_closed = AsyncMock()
 
         async def _run() -> tuple[SSHSession, SSHSession]:
-            with patch(
-                "asyncssh.connect", AsyncMock(return_value=mock_conn)
-            ) as mock_connect:
+            with patch("asyncssh.connect", AsyncMock(return_value=mock_conn)) as mock_connect:
                 s1 = await pool.get("myhost", user="ubuntu")
                 s2 = await pool.get("myhost", user="ubuntu")
                 assert mock_connect.call_count == 1
@@ -280,9 +276,7 @@ class TestSSHSessionPool:
         mock_conn.wait_closed = AsyncMock()
 
         async def _run() -> None:
-            with patch(
-                "asyncssh.connect", AsyncMock(return_value=mock_conn)
-            ) as mock_connect:
+            with patch("asyncssh.connect", AsyncMock(return_value=mock_conn)) as mock_connect:
                 await pool.get("myhost", user="ubuntu", password="secret")
                 call_kwargs = mock_connect.call_args[1]
                 assert call_kwargs["password"] == "secret"

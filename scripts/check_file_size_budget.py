@@ -36,17 +36,11 @@ def _exception_active(exc: dict[str, Any]) -> bool:
 
 
 def _exception_map(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {
-        exc["path"]: exc
-        for exc in config.get("exceptions", [])
-        if _exception_active(exc)
-    }
+    return {exc["path"]: exc for exc in config.get("exceptions", []) if _exception_active(exc)}
 
 
 def _run_git(args: list[str], repo_root: Path) -> str:
-    r = subprocess.run(
-        ["git", *args], cwd=repo_root, capture_output=True, text=True, check=False
-    )
+    r = subprocess.run(["git", *args], cwd=repo_root, capture_output=True, text=True, check=False)
     if r.returncode != 0:
         raise RuntimeError(r.stderr.strip() or "git failed")
     return r.stdout
@@ -55,9 +49,7 @@ def _run_git(args: list[str], repo_root: Path) -> str:
 def _changed_python_files(repo_root: Path, base_ref: str) -> list[Path]:
     diff = _run_git(["diff", "--name-only", f"{base_ref}...HEAD", "--"], repo_root)
     return [
-        repo_root / p
-        for p in diff.splitlines()
-        if p.endswith(".py") and (repo_root / p).exists()
+        repo_root / p for p in diff.splitlines() if p.endswith(".py") and (repo_root / p).exists()
     ]
 
 
@@ -98,9 +90,7 @@ def main() -> int:
     config = _load_config(repo_root)
 
     paths = (
-        _changed_python_files(repo_root, args.diff)
-        if args.diff
-        else _all_python_files(repo_root)
+        _changed_python_files(repo_root, args.diff) if args.diff else _all_python_files(repo_root)
     )
     if not paths:
         print("No Python files to check.")

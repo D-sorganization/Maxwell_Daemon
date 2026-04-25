@@ -105,22 +105,14 @@ class SandboxGateAdapter:
                     self._evidence("gate", gate.gate_id),
                     self._evidence("policy", policy_name),
                     self._evidence("workspace_root", workspace_root),
-                    self._evidence(
-                        "reason", f"missing command metadata for {policy_name}"
-                    ),
+                    self._evidence("reason", f"missing command metadata for {policy_name}"),
                 ),
             )
 
         env = self._parse_env(gate.metadata.get(_ENV_KEY))
-        timeout_seconds = self._parse_float(
-            gate.metadata.get(_TIMEOUT_KEY), default=300.0
-        )
-        output_summary_bytes = self._parse_int(
-            gate.metadata.get(_OUTPUT_LIMIT_KEY), default=8192
-        )
-        network_enabled = self._parse_bool(
-            gate.metadata.get(_NETWORK_KEY), default=False
-        )
+        timeout_seconds = self._parse_float(gate.metadata.get(_TIMEOUT_KEY), default=300.0)
+        output_summary_bytes = self._parse_int(gate.metadata.get(_OUTPUT_LIMIT_KEY), default=8192)
+        network_enabled = self._parse_bool(gate.metadata.get(_NETWORK_KEY), default=False)
         allow_gpu = self._parse_bool(gate.metadata.get(_GPU_KEY), default=False)
         cwd = self._read_metadata(gate.metadata, _CWD_KEY)
         task_id = self._read_metadata(gate.metadata, _TASK_ID_KEY)
@@ -186,27 +178,19 @@ class SandboxGateAdapter:
         capture = self._capture.last_result
         if capture is not None:
             evidence.append(
-                self._evidence(
-                    "stdout", self._summarize_text(capture.stdout, policy, env)
-                )
+                self._evidence("stdout", self._summarize_text(capture.stdout, policy, env))
             )
             evidence.append(
-                self._evidence(
-                    "stderr", self._summarize_text(capture.stderr, policy, env)
-                )
+                self._evidence("stderr", self._summarize_text(capture.stderr, policy, env))
             )
             if capture.error:
-                evidence.append(
-                    self._evidence("error", self._redact_text(capture.error, env))
-                )
+                evidence.append(self._evidence("error", self._redact_text(capture.error, env)))
             evidence.append(self._evidence("timed_out", str(capture.timed_out).lower()))
             if capture.returncode is not None:
                 evidence.append(self._evidence("returncode", str(capture.returncode)))
 
         message = self._default_message(policy_name, decision.status)
-        return GateAdapterResult(
-            passed=decision.passed, evidence=tuple(evidence), message=message
-        )
+        return GateAdapterResult(passed=decision.passed, evidence=tuple(evidence), message=message)
 
     @staticmethod
     def _read_metadata(metadata: Mapping[str, str], key: str) -> str | None:
@@ -302,9 +286,7 @@ class SandboxGateAdapter:
                 formatted.append(self._evidence(name, value))
         return formatted
 
-    def _summarize_text(
-        self, text: str, policy: SandboxPolicy, env: Mapping[str, str]
-    ) -> str:
+    def _summarize_text(self, text: str, policy: SandboxPolicy, env: Mapping[str, str]) -> str:
         redacted = self._redact_text(text, env)
         encoded = redacted.encode()
         if len(encoded) <= policy.output_summary_bytes:
@@ -332,6 +314,4 @@ class SandboxGateAdapter:
         return f"{policy_name} sandbox gate {status}"
 
     def _failure(self, message: str, evidence: Sequence[str]) -> GateAdapterResult:
-        return GateAdapterResult(
-            passed=False, evidence=tuple(evidence), message=message
-        )
+        return GateAdapterResult(passed=False, evidence=tuple(evidence), message=message)

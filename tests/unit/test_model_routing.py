@@ -50,9 +50,7 @@ def test_profile_rejects_raw_secret_like_endpoint_ref() -> None:
 
 def test_policy_requires_suite_and_threshold_together() -> None:
     with pytest.raises(ValidationError, match="set together"):
-        ModelRoutingPolicy(
-            task_type=TaskType.ISSUE_TRIAGE, required_benchmark_suite="suite-only"
-        )
+        ModelRoutingPolicy(task_type=TaskType.ISSUE_TRIAGE, required_benchmark_suite="suite-only")
 
 
 def test_selects_cheapest_eligible_profile() -> None:
@@ -68,9 +66,7 @@ def test_selects_cheapest_eligible_profile() -> None:
                 deployment=DeploymentKind.REMOTE,
                 cost=CostClass.PREMIUM,
             ),
-            _profile(
-                "local.cheap", deployment=DeploymentKind.LOCAL, cost=CostClass.CHEAP
-            ),
+            _profile("local.cheap", deployment=DeploymentKind.LOCAL, cost=CostClass.CHEAP),
         ],
         policy=policy,
     )
@@ -155,12 +151,8 @@ def test_benchmark_gate_escalates_to_qualified_remote() -> None:
         required_benchmark_suite="maxwell.context_recall",
         min_benchmark_score=0.80,
     )
-    local = _profile(
-        "local.devstral", deployment=DeploymentKind.LOCAL, cost=CostClass.FREE_LOCAL
-    )
-    remote = _profile(
-        "remote.frontier", deployment=DeploymentKind.REMOTE, cost=CostClass.STANDARD
-    )
+    local = _profile("local.devstral", deployment=DeploymentKind.LOCAL, cost=CostClass.FREE_LOCAL)
+    remote = _profile("remote.frontier", deployment=DeploymentKind.REMOTE, cost=CostClass.STANDARD)
     decision = select_profile(
         profiles=[local, remote],
         policy=policy,
@@ -186,12 +178,8 @@ def test_benchmark_gate_rejects_non_finite_scores(bad_score: float) -> None:
     )
     decision = select_profile(
         profiles=[
-            _profile(
-                "local.bad", deployment=DeploymentKind.LOCAL, cost=CostClass.FREE_LOCAL
-            ),
-            _profile(
-                "remote.good", deployment=DeploymentKind.REMOTE, cost=CostClass.STANDARD
-            ),
+            _profile("local.bad", deployment=DeploymentKind.LOCAL, cost=CostClass.FREE_LOCAL),
+            _profile("remote.good", deployment=DeploymentKind.REMOTE, cost=CostClass.STANDARD),
         ],
         policy=policy,
         benchmark_scores={
@@ -226,7 +214,6 @@ def test_rejects_profiles_that_cannot_handle_required_risk() -> None:
     assert decision.plan is not None
     assert decision.plan.primary == "remote.exec"
     assert any(
-        r.profile_id == "local.safe-only"
-        and r.reason == "action_risk_too_high_for_profile"
+        r.profile_id == "local.safe-only" and r.reason == "action_risk_too_high_for_profile"
         for r in decision.rejections
     )

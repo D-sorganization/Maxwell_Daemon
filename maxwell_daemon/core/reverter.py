@@ -28,9 +28,7 @@ class ActionReverter:
 
     def _revert_file_operation(self, action: Action) -> None:
         if not action.inverse_payload:
-            raise ValueError(
-                f"Action {action.id} lacks an inverse_payload for reversion"
-            )
+            raise ValueError(f"Action {action.id} lacks an inverse_payload for reversion")
 
         # Re-resolve the original path
         path_str = action.payload.get("path")
@@ -41,9 +39,7 @@ class ActionReverter:
         try:
             candidate.relative_to(self._workspace_root)
         except ValueError as exc:
-            raise ValueError(
-                f"Path {path_str!r} resolves outside workspace root"
-            ) from exc
+            raise ValueError(f"Path {path_str!r} resolves outside workspace root") from exc
 
         existed = action.inverse_payload.get("existed", False)
         old_content = action.inverse_payload.get("old_content")

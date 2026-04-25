@@ -148,11 +148,7 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
 
     @mcp_tool(
         description="Search episodic memory.",
-        params=[
-            ToolParam(
-                name="query", type="string", description="Search query.", required=True
-            )
-        ],
+        params=[ToolParam(name="query", type="string", description="Search query.", required=True)],
     )
     async def search_memory(query: str, **kwargs: Any) -> str:
         res = await client.get("/memory/search", params={"q": query})

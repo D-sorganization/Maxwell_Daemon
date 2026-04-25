@@ -185,9 +185,7 @@ class ContextPack:
 
     def to_manifest(self, *, include_text: bool = False) -> dict[str, Any]:
         return {
-            "files": [
-                file.to_manifest(include_text=include_text) for file in self.files
-            ],
+            "files": [file.to_manifest(include_text=include_text) for file in self.files],
             "metadata": {
                 "file_count": self.metadata.file_count,
                 "included_file_count": self.metadata.included_file_count,
@@ -197,8 +195,7 @@ class ContextPack:
                 "total_included_bytes": self.metadata.total_included_bytes,
             },
             "sections": [
-                section.to_manifest(include_text=include_text)
-                for section in self.sections
+                section.to_manifest(include_text=include_text) for section in self.sections
             ],
         }
 
@@ -287,9 +284,7 @@ async def _render_provider_sections(
     return sections
 
 
-def _collect_file_entries(
-    root: Path, policy: ContextPackPolicy
-) -> list[ContextPackFileEntry]:
+def _collect_file_entries(root: Path, policy: ContextPackPolicy) -> list[ContextPackFileEntry]:
     entries: list[ContextPackFileEntry] = []
     running_bytes = 0
     for path in _iter_files(root, skip_dirs=policy.skip_dirs):
@@ -386,10 +381,7 @@ def _sort_key(path: Path) -> str:
 
 
 def _is_text_candidate(path: Path, policy: ContextPackPolicy) -> bool:
-    return (
-        path.name in policy.text_filenames
-        or path.suffix.lower() in policy.text_suffixes
-    )
+    return path.name in policy.text_filenames or path.suffix.lower() in policy.text_suffixes
 
 
 def _looks_binary(sample: bytes) -> bool:

@@ -44,11 +44,7 @@ class HuggingFaceBackend(ILLMBackend):
         base_url: str = _BASE_URL,
         timeout: float = 120.0,
     ) -> None:
-        key = (
-            api_key
-            or os.environ.get("HUGGINGFACE_API_KEY")
-            or os.environ.get("HF_TOKEN")
-        )
+        key = api_key or os.environ.get("HUGGINGFACE_API_KEY") or os.environ.get("HF_TOKEN")
         # For private/local TGI instances no key may be needed, but we require
         # explicit opt-in for the public HF endpoint.
         if not key and base_url == _BASE_URL:
@@ -73,9 +69,7 @@ class HuggingFaceBackend(ILLMBackend):
     ) -> BackendResponse:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [
-                {"role": m.role.value, "content": m.content} for m in messages
-            ],
+            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
             "temperature": temperature,
         }
         if max_tokens is not None:
@@ -112,9 +106,7 @@ class HuggingFaceBackend(ILLMBackend):
     ) -> AsyncIterator[str]:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [
-                {"role": m.role.value, "content": m.content} for m in messages
-            ],
+            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
             "temperature": temperature,
             "stream": True,
         }

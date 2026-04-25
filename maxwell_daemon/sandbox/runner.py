@@ -63,9 +63,7 @@ class SubprocessCommandExecutor:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout_seconds
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
             return SandboxRunResult(
                 returncode=proc.returncode,
                 stdout=stdout.decode(errors="replace"),
@@ -120,9 +118,7 @@ class SandboxCommandRunner:
             env=filtered_env,
             timeout_seconds=policy.timeout_seconds,
         )
-        summary = policy.summarize_output(
-            result.stdout, result.stderr or result.error, env=env
-        )
+        summary = policy.summarize_output(result.stdout, result.stderr or result.error, env=env)
         command_display = policy.env.redact(" ".join(validation.command), env=env)
         redacted_stdout = policy.env.redact(result.stdout, env=env)
         redacted_stderr = policy.env.redact(result.stderr, env=env)
@@ -157,9 +153,7 @@ class SandboxCommandRunner:
             cwd=validation.cwd,
             evidence=evidence,
         )
-        if artifact_store is not None and (
-            task_id is not None or work_item_id is not None
-        ):
+        if artifact_store is not None and (task_id is not None or work_item_id is not None):
             ensure(
                 not (task_id is not None and work_item_id is not None),
                 "Sandbox artifacts must belong to exactly one task or work item",
@@ -201,7 +195,5 @@ class SandboxCommandRunner:
                     GateEvidence("artifact_kind", artifact.kind.value),
                 ),
             )
-        ensure(
-            bool(decision.evidence), "Sandbox command decisions must include evidence"
-        )
+        ensure(bool(decision.evidence), "Sandbox command decisions must include evidence")
         return decision
