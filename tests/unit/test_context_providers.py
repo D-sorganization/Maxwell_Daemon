@@ -102,7 +102,9 @@ class TestAssembleContext:
         reg = ContextProviderRegistry()
         reg.register(InlineTextProvider(name="a", body="AAA"))
         reg.register(InlineTextProvider(name="b", body="BBB"))
-        text = await assemble_context(reg, requested=("b", "a"), query="", total_budget=1000)
+        text = await assemble_context(
+            reg, requested=("b", "a"), query="", total_budget=1000
+        )
         # Each block is prefixed with "## <name>" so the model can see which is which.
         assert text.index("BBB") < text.index("AAA")
         assert "## b" in text
@@ -112,7 +114,9 @@ class TestAssembleContext:
         reg = ContextProviderRegistry()
         reg.register(InlineTextProvider(name="a", body="x" * 1000))
         reg.register(InlineTextProvider(name="b", body="y" * 1000))
-        text = await assemble_context(reg, requested=("a", "b"), query="", total_budget=400)
+        text = await assemble_context(
+            reg, requested=("a", "b"), query="", total_budget=400
+        )
         # Each provider got roughly half the budget.
         assert len(text) <= 600  # some overhead for headers + truncation markers
         assert "x" in text
@@ -121,7 +125,9 @@ class TestAssembleContext:
     async def test_unknown_provider_name_raises(self) -> None:
         reg = ContextProviderRegistry()
         with pytest.raises(KeyError, match="nope"):
-            await assemble_context(reg, requested=("nope",), query="", total_budget=1000)
+            await assemble_context(
+                reg, requested=("nope",), query="", total_budget=1000
+            )
 
 
 # ── File-backed provider (DocsProvider) ─────────────────────────────────────
@@ -134,7 +140,9 @@ class TestDocsProvider:
         (tmp_path / "CLAUDE.md").write_text("# Project rules\nuse ruff")
         (tmp_path / "CONTRIBUTING.md").write_text("# Contributing\n...")
 
-        p = DocsProvider(workspace=tmp_path, candidates=("CLAUDE.md", "CONTRIBUTING.md"))
+        p = DocsProvider(
+            workspace=tmp_path, candidates=("CLAUDE.md", "CONTRIBUTING.md")
+        )
         result = await p.render(query="", budget_chars=1000)
         assert "Project rules" in result.text
         assert "Contributing" not in result.text  # only first match used

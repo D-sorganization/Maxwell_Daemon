@@ -244,7 +244,9 @@ async def test_network_flags_flow_into_policy_evidence(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_persists_redacted_execution_artifact_for_task_owner(tmp_path: Path) -> None:
+async def test_persists_redacted_execution_artifact_for_task_owner(
+    tmp_path: Path,
+) -> None:
     executor = FakeExecutor(
         SandboxRunResult(
             returncode=1,
@@ -252,7 +254,9 @@ async def test_persists_redacted_execution_artifact_for_task_owner(tmp_path: Pat
             stderr="stderr secret-token",
         )
     )
-    artifact_store = ArtifactStore(tmp_path / "artifacts.db", blob_root=tmp_path / "artifacts")
+    artifact_store = ArtifactStore(
+        tmp_path / "artifacts.db", blob_root=tmp_path / "artifacts"
+    )
     adapter = SandboxGateAdapter(executor=executor, artifact_store=artifact_store)
 
     decision = await adapter.run(
@@ -265,7 +269,9 @@ async def test_persists_redacted_execution_artifact_for_task_owner(tmp_path: Pat
         )
     )
 
-    artifacts = artifact_store.list_for_task("task-1", kind=ArtifactKind.SANDBOX_EXECUTION)
+    artifacts = artifact_store.list_for_task(
+        "task-1", kind=ArtifactKind.SANDBOX_EXECUTION
+    )
     assert len(artifacts) == 1
     artifact = artifacts[0]
     payload = json.loads(artifact_store.read_text(artifact.id))

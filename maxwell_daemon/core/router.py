@@ -126,7 +126,10 @@ class BackendRouter:
         if cfg is None:
             return candidate, reason
 
-        if cfg.fallback_backend is not None and budget_percent >= cfg.fallback_threshold_percent:
+        if (
+            cfg.fallback_backend is not None
+            and budget_percent >= cfg.fallback_threshold_percent
+        ):
             fallback = cfg.fallback_backend
             fallback_reason = (
                 f"budget fallback from {candidate} to {fallback} "
@@ -137,7 +140,9 @@ class BackendRouter:
         return candidate, reason
 
     def available_backends(self) -> list[str]:
-        return [name for name, cfg in self._all_backend_configs().items() if cfg.enabled]
+        return [
+            name for name, cfg in self._all_backend_configs().items() if cfg.enabled
+        ]
 
     # ── Config boundary accessors ─────────────────────────────────────────────
     # These methods prevent callers from traversing the config object graph

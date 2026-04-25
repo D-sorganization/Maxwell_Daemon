@@ -154,7 +154,11 @@ def _select_balanced(
 
     # If capabilities are required, check whether a model within the tier
     # ceiling covers more of them than the complexity-based pick.
-    _tier_max: dict[Literal["low", "mid", "high"], int] = {"low": 3, "mid": 6, "high": 10}
+    _tier_max: dict[Literal["low", "mid", "high"], int] = {
+        "low": 3,
+        "mid": 6,
+        "high": 10,
+    }
     ceiling = _tier_max[effective_tier]
     base_score = len(best_entry[1] & required)
     selected_model, best_caps = best_entry[0], best_entry[1]
@@ -238,9 +242,7 @@ def route_model(
     elif latency_tier == "quality":
         notes.append("latency=quality selects largest model")
 
-    rationale = (
-        f"complexity={clamped:.1f} ({tier}), provider={preferred_provider}, latency={latency_tier}"
-    )
+    rationale = f"complexity={clamped:.1f} ({tier}), provider={preferred_provider}, latency={latency_tier}"
     if notes:
         rationale += "; " + "; ".join(notes)
 

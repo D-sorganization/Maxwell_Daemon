@@ -78,7 +78,10 @@ def _parse_field(value: str, lo: int, hi: int) -> set[int]:
 def _parse_cron(expr: str) -> tuple[set[int], set[int], set[int], set[int], set[int]]:
     """Return (minutes, hours, mdays, months, wdays) sets for *expr*."""
     parts = expr.strip().split()
-    require(len(parts) == 5, f"cron expression must have 5 fields, got {len(parts)}: {expr!r}")
+    require(
+        len(parts) == 5,
+        f"cron expression must have 5 fields, got {len(parts)}: {expr!r}",
+    )
     minutes = _parse_field(parts[0], 0, 59)
     hours = _parse_field(parts[1], 0, 23)
     mdays = _parse_field(parts[2], 1, 31)

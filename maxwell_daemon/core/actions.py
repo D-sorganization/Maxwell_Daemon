@@ -100,4 +100,6 @@ def validate_action_transition(current: ActionStatus, new: ActionStatus) -> None
     """Raise ValueError when an action lifecycle transition is not allowed."""
 
     if new not in VALID_ACTION_TRANSITIONS[current]:
-        raise ValueError(f"invalid action transition from {current.value!r} to {new.value!r}")
+        raise ValueError(
+            f"invalid action transition from {current.value!r} to {new.value!r}"
+        )

@@ -100,7 +100,9 @@ class TokenBudgetAllocator:
             (0.0, 0.0),  # unknown model; assume free (local)
         )
 
-        cost = (prompt_tokens * prompt_cost / 1000) + (completion_tokens * completion_cost / 1000)
+        cost = (prompt_tokens * prompt_cost / 1000) + (
+            completion_tokens * completion_cost / 1000
+        )
         return EstimatedCost(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -137,7 +139,9 @@ class TokenBudgetAllocator:
         # Conservative estimate: 10k prompt tokens, 2k completion tokens per task
         can_afford = {}
         for model in ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"]:
-            est = self.estimate_cost(model=model, prompt_tokens=10000, completion_tokens=2000)
+            est = self.estimate_cost(
+                model=model, prompt_tokens=10000, completion_tokens=2000
+            )
             can_afford[model] = est.cost_usd < remaining
 
         tight_budget = utilization >= 75.0
@@ -194,7 +198,9 @@ class TokenBudgetAllocator:
         # Decide on safe allocation: min(remaining, 5% of monthly limit, or $1.00)
         safe_alloc = 1.0
         if status.monthly_limit_usd:
-            safe_alloc = min(status.remaining_budget_usd, status.monthly_limit_usd * 0.05)
+            safe_alloc = min(
+                status.remaining_budget_usd, status.monthly_limit_usd * 0.05
+            )
 
         # Estimate the call cost with the recommended model
         call_est = self.estimate_cost(

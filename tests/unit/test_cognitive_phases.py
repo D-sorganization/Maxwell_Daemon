@@ -24,12 +24,18 @@ class DummyRolePlayer:
 
 @pytest.mark.asyncio
 async def test_cognitive_pipeline_execution():  # type: ignore[no-untyped-def]
-    strategist = DummyRolePlayer(Role("Strategist", "plan", False), content="Here is the plan.")
-    implementer = DummyRolePlayer(Role("Implementer", "code", False), content="Here is the code.")
+    strategist = DummyRolePlayer(
+        Role("Strategist", "plan", False), content="Here is the plan."
+    )
+    implementer = DummyRolePlayer(
+        Role("Implementer", "code", False), content="Here is the code."
+    )
     validator = DummyRolePlayer(Role("Validator", "check", False), content="PASS")
 
     pipeline = CognitivePipeline(
-        strategist=strategist, implementer=implementer, validator=validator  # type: ignore[arg-type]
+        strategist=strategist,
+        implementer=implementer,
+        validator=validator,  # type: ignore[arg-type]
     )
 
     initial_job = Job(instructions="Fix the bug")
@@ -42,14 +48,20 @@ async def test_cognitive_pipeline_execution():  # type: ignore[no-untyped-def]
 
 @pytest.mark.asyncio
 async def test_cognitive_pipeline_failure():  # type: ignore[no-untyped-def]
-    strategist = DummyRolePlayer(Role("Strategist", "plan", False), content="Here is the plan.")
-    implementer = DummyRolePlayer(Role("Implementer", "code", False), content="Here is bad code.")
+    strategist = DummyRolePlayer(
+        Role("Strategist", "plan", False), content="Here is the plan."
+    )
+    implementer = DummyRolePlayer(
+        Role("Implementer", "code", False), content="Here is bad code."
+    )
     validator = DummyRolePlayer(
         Role("Validator", "check", False), content="FAIL: Did not follow TDD."
     )
 
     pipeline = CognitivePipeline(
-        strategist=strategist, implementer=implementer, validator=validator  # type: ignore[arg-type]
+        strategist=strategist,
+        implementer=implementer,
+        validator=validator,  # type: ignore[arg-type]
     )
 
     initial_job = Job(instructions="Fix the bug")

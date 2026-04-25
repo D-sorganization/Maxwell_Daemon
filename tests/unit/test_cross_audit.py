@@ -133,7 +133,9 @@ async def test_cross_audit_preserves_successes_when_one_backend_fails() -> None:
 
     assert report.succeeded is True
     assert len(report.results) == 2
-    assert [result.backend_name for result in report.results if result.succeeded] == ["ok"]
+    assert [result.backend_name for result in report.results if result.succeeded] == [
+        "ok"
+    ]
     failed = [result for result in report.results if not result.succeeded]
     assert failed[0].backend_name == "bad"
     assert failed[0].error == "RuntimeError: backend exploded"

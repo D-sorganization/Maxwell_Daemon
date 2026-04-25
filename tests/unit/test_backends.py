@@ -76,8 +76,12 @@ class FakeBackend(ILLMBackend):
 
 class TestTokenUsage:
     def test_addition_sums_all_fields(self) -> None:
-        a = TokenUsage(prompt_tokens=10, completion_tokens=20, total_tokens=30, cached_tokens=5)
-        b = TokenUsage(prompt_tokens=1, completion_tokens=2, total_tokens=3, cached_tokens=1)
+        a = TokenUsage(
+            prompt_tokens=10, completion_tokens=20, total_tokens=30, cached_tokens=5
+        )
+        b = TokenUsage(
+            prompt_tokens=1, completion_tokens=2, total_tokens=3, cached_tokens=1
+        )
         result = a + b
         assert result.prompt_tokens == 11
         assert result.completion_tokens == 22
@@ -164,7 +168,9 @@ class TestCostEstimation:
         assert is_free_provider("ollama")
         assert get_rates("ollama", "any-local-model") == (0.0, 0.0)
 
-    def test_unknown_pricing_falls_back_to_zero(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_unknown_pricing_falls_back_to_zero(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         usage = TokenUsage(prompt_tokens=1000, completion_tokens=500, total_tokens=1500)
 
         assert get_rates("unknown-provider", "mystery") == (0.0, 0.0)
@@ -181,7 +187,9 @@ class TestCostEstimation:
         for model in ("claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"):
             price_in, price_out = get_rates("claude", model)
             assert price_in > 0, f"claude {model} input price should be > 0"
-            assert price_out > price_in, f"claude {model} output should cost more than input"
+            assert (
+                price_out > price_in
+            ), f"claude {model} output should cost more than input"
 
     @pytest.mark.parametrize("model", ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"])
     def test_openai_models_priced_nonzero(self, model: str) -> None:
@@ -229,7 +237,9 @@ class TestCostEstimation:
         assert cost == 0.0
         captured = capsys.readouterr()
         assert "Unknown model" in captured.out or "Unknown model" in captured.err
-        assert "mystery-deployment" in captured.out or "mystery-deployment" in captured.err
+        assert (
+            "mystery-deployment" in captured.out or "mystery-deployment" in captured.err
+        )
 
 
 class TestBackendInterface:

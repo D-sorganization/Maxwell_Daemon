@@ -6,7 +6,6 @@ behavior rather than scaffolding.
 
 from __future__ import annotations
 
-import logging
 import os
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -155,5 +154,3 @@ def dual_backend_config(register_recording_backend: None) -> MaxwellDaemonConfig
 @pytest.fixture
 def isolated_ledger_path(tmp_path: Path) -> Path:
     return tmp_path / "ledger.db"
-
-

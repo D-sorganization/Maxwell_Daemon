@@ -25,7 +25,9 @@ console = Console()
 def new(
     repo: Annotated[str, typer.Argument(help="owner/repo")],
     title: Annotated[str, typer.Argument(help="Issue title")],
-    body: Annotated[str, typer.Option("--body", "-b", help="Issue body (markdown)")] = "",
+    body: Annotated[
+        str, typer.Option("--body", "-b", help="Issue body (markdown)")
+    ] = "",
     label: Annotated[
         list[str] | None,
         typer.Option("--label", "-l", help="Add a label (repeatable)"),
@@ -47,7 +49,9 @@ def new(
     client = GitHubClient()
 
     async def _run() -> str:
-        url = await client.create_issue(repo, title=title, body=body, labels=label or [])
+        url = await client.create_issue(
+            repo, title=title, body=body, labels=label or []
+        )
         console.print(f"[green]✓[/green] Created: {url}")
         return url
 
@@ -88,7 +92,9 @@ def list_issues(
 def dispatch_batch(
     from_file: Annotated[
         Path | None,
-        typer.Option("--from-file", "-f", help="Text file: lines of owner/repo#N[:mode]"),
+        typer.Option(
+            "--from-file", "-f", help="Text file: lines of owner/repo#N[:mode]"
+        ),
     ] = None,
     repos: Annotated[
         list[str] | None,
@@ -108,7 +114,9 @@ def dispatch_batch(
             help="Path to fleet.yaml (default: cwd/~/.maxwell-daemon)",
         ),
     ] = None,
-    label: Annotated[str | None, typer.Option("--label", help="Filter by label")] = None,
+    label: Annotated[
+        str | None, typer.Option("--label", help="Filter by label")
+    ] = None,
     mode: Annotated[str, typer.Option("--mode")] = "plan",
     limit: Annotated[int, typer.Option("--limit")] = 100,
     max_stories: Annotated[
@@ -120,7 +128,9 @@ def dispatch_batch(
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="Print what would be dispatched without submitting"),
+        typer.Option(
+            "--dry-run", help="Print what would be dispatched without submitting"
+        ),
     ] = False,
     daemon_url: Annotated[
         str, typer.Option("--daemon-url", envvar="MAXWELL_DAEMON_URL")
@@ -170,13 +180,21 @@ def dispatch_batch(
 
     if target_repos:
         client = GitHubClient()
-        planner = BatchDispatchPlanner(list_issues=client.list_issues, max_stories=max_stories)
+        planner = BatchDispatchPlanner(
+            list_issues=client.list_issues, max_stories=max_stories
+        )
         plan = asyncio.run(
-            planner.plan(repos=target_repos, label=label, mode=mode, state="open", limit=limit)
+            planner.plan(
+                repos=target_repos, label=label, mode=mode, state="open", limit=limit
+            )
         )
 
-        _render_plan_summary(plan, dry_run=dry_run, label=label, mode=mode, max_stories=max_stories)
-        items.extend({"repo": it.repo, "number": it.number, "mode": it.mode} for it in plan.items)
+        _render_plan_summary(
+            plan, dry_run=dry_run, label=label, mode=mode, max_stories=max_stories
+        )
+        items.extend(
+            {"repo": it.repo, "number": it.number, "mode": it.mode} for it in plan.items
+        )
 
     if dry_run:
         console.print("[yellow]Dry run — nothing submitted.[/yellow]")
@@ -207,7 +225,9 @@ def dispatch_batch(
         f"[{'red' if body['failed'] else 'dim'}]{body['failed']} failed[/]"
     )
     for failure in body.get("failures", []):
-        console.print(f"  [red]✗[/red] {failure['repo']}#{failure['number']} — {failure['error']}")
+        console.print(
+            f"  [red]✗[/red] {failure['repo']}#{failure['number']} — {failure['error']}"
+        )
 
 
 def _render_plan_summary(
@@ -224,7 +244,9 @@ def _render_plan_summary(
         filter_bits.append(f"label={label}")
     if max_stories is not None:
         filter_bits.append(f"max-stories={max_stories}")
-    header = f"{'Dry run: ' if dry_run else ''}Dispatching {len(plan.summaries)} repo(s)"
+    header = (
+        f"{'Dry run: ' if dry_run else ''}Dispatching {len(plan.summaries)} repo(s)"
+    )
     console.print(f"\n[bold]{header}[/bold]  ([dim]{', '.join(filter_bits)}[/dim])\n")
 
     t = Table(header_style="bold cyan")
@@ -251,7 +273,11 @@ def _parse_batch_file(path: Path, *, default_mode: str) -> list[dict[str, object
     )
     with path.open() as f:
         for raw in f:
-            line = raw.split("#")[0].strip() if raw.strip().startswith("#") else raw.strip()
+            line = (
+                raw.split("#")[0].strip()
+                if raw.strip().startswith("#")
+                else raw.strip()
+            )
             if not line:
                 continue
             m = line_re.match(line)
@@ -298,7 +324,9 @@ def _dispatch_url(url: str, *, mode: str, config: Path | None) -> None:
 
     match = re.search(r"github\.com/([^/]+/[^/]+)/issues/(\d+)", url)
     if not match:
-        console.print(f"[yellow]Could not parse issue URL {url!r} — skipping dispatch.[/yellow]")
+        console.print(
+            f"[yellow]Could not parse issue URL {url!r} — skipping dispatch.[/yellow]"
+        )
         return
     repo, number = match.group(1), int(match.group(2))
     load_config(config)  # validates that config is loadable

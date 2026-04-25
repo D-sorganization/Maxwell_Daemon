@@ -52,7 +52,8 @@ class TestSandboxEdgeCases:
         from maxwell_daemon.sandbox.policy import CommandPolicy
 
         policy = CommandPolicy(
-            allowed_commands=frozenset({"git"}), destructive_tokens=frozenset({"--force"})
+            allowed_commands=frozenset({"git"}),
+            destructive_tokens=frozenset({"--force"}),
         )
         allowed, reason = policy.validate(("git", "push", "--force"))
         assert allowed is False

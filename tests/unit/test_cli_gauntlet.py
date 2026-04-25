@@ -49,7 +49,13 @@ def patch_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         timeout: float | None = None,
     ) -> _FakeResponse:
         calls.append(
-            {"method": "GET", "url": url, "params": params, "headers": headers, "timeout": timeout}
+            {
+                "method": "GET",
+                "url": url,
+                "params": params,
+                "headers": headers,
+                "timeout": timeout,
+            }
         )
         return _Holder.response
 
@@ -61,7 +67,13 @@ def patch_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         timeout: float | None = None,
     ) -> _FakeResponse:
         calls.append(
-            {"method": "POST", "url": url, "json": json, "headers": headers, "timeout": timeout}
+            {
+                "method": "POST",
+                "url": url,
+                "json": json,
+                "headers": headers,
+                "timeout": timeout,
+            }
         )
         return _Holder.response
 
@@ -82,7 +94,12 @@ def _gauntlet_row(*, task_id: str = "task-1", status: str = "failed") -> dict[st
         "current_gate": "Verification",
         "next_action": "Inspect blocker evidence, then retry or waive with a reason",
         "gates": (
-            {"id": "intake", "name": "Intake", "status": "passed", "next_action": "done"},
+            {
+                "id": "intake",
+                "name": "Intake",
+                "status": "passed",
+                "next_action": "done",
+            },
             {
                 "id": "verification",
                 "name": "Verification",
@@ -119,7 +136,9 @@ def _gauntlet_row(*, task_id: str = "task-1", status: str = "failed") -> dict[st
 
 
 class TestGauntletList:
-    def test_list_renders_rows(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
+    def test_list_renders_rows(
+        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
+    ) -> None:
         holder = next(item["_holder"] for item in patch_httpx if "_holder" in item)
         holder.response = _FakeResponse(payload=[_gauntlet_row()])
 
@@ -135,7 +154,9 @@ class TestGauntletList:
         holder = next(item["_holder"] for item in patch_httpx if "_holder" in item)
         holder.response = _FakeResponse(payload=[])
 
-        result = runner.invoke(app, ["gate", "list", "--task-id", "task-9", "--status", "failed"])
+        result = runner.invoke(
+            app, ["gate", "list", "--task-id", "task-9", "--status", "failed"]
+        )
 
         assert result.exit_code == 0
         call = next(call for call in patch_httpx if call.get("method") == "GET")

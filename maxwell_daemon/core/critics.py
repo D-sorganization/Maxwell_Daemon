@@ -77,7 +77,9 @@ class CriticProfile:
     metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        require(bool(self.critic_id.strip()), "CriticProfile.critic_id must be non-empty")
+        require(
+            bool(self.critic_id.strip()), "CriticProfile.critic_id must be non-empty"
+        )
         require(bool(self.name.strip()), "CriticProfile.name must be non-empty")
         require(bool(self.adapter.strip()), "CriticProfile.adapter must be non-empty")
         title = self.title or self.name
@@ -89,7 +91,10 @@ class CriticProfile:
             "CriticProfile.output_schema_version must be non-empty",
         )
         if self.timeout_seconds is not None:
-            require(self.timeout_seconds > 0, "CriticProfile.timeout_seconds must be positive")
+            require(
+                self.timeout_seconds > 0,
+                "CriticProfile.timeout_seconds must be positive",
+            )
         require(self.retry_limit >= 0, "CriticProfile.retry_limit must be non-negative")
         for field_name, values in (
             ("required_inputs", self.required_inputs),
@@ -115,7 +120,9 @@ class CriticProfile:
                 isinstance(key, str) and bool(key.strip()),
                 "CriticProfile.metadata keys must be non-empty strings",
             )
-            require(isinstance(value, str), "CriticProfile.metadata values must be strings")
+            require(
+                isinstance(value, str), "CriticProfile.metadata values must be strings"
+            )
 
 
 @dataclass(slots=True, frozen=True)
@@ -131,7 +138,9 @@ class CriticFinding:
     evidence: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        require(bool(self.critic_id.strip()), "CriticFinding.critic_id must be non-empty")
+        require(
+            bool(self.critic_id.strip()), "CriticFinding.critic_id must be non-empty"
+        )
         require(bool(self.summary.strip()), "CriticFinding.summary must be non-empty")
         require(
             self.severity in _CRITIC_SEVERITY_ORDER,
@@ -144,7 +153,8 @@ class CriticFinding:
             )
         if self.line_number is not None:
             require(
-                self.line_number > 0, "CriticFinding.line_number must be positive when provided"
+                self.line_number > 0,
+                "CriticFinding.line_number must be positive when provided",
             )
         for item in self.evidence:
             require(
@@ -205,7 +215,9 @@ class CriticVerdict:
         ordered_findings = tuple(sorted(self.findings, key=_finding_sort_key))
         object.__setattr__(self, "runs", ordered_runs)
         object.__setattr__(self, "findings", ordered_findings)
-        blocking_findings = tuple(finding for finding in ordered_findings if finding.is_blocking)
+        blocking_findings = tuple(
+            finding for finding in ordered_findings if finding.is_blocking
+        )
         require(
             self.passed == (not blocking_findings),
             "CriticVerdict.passed must match blocking findings",
@@ -262,11 +274,15 @@ class CriticAggregatePolicy:
             elif run.status == "error":
                 if run.profile.required:
                     errored_ids.append(run.profile.critic_id)
-                findings.append(self._execution_finding(run, run.message or "critic error"))
+                findings.append(
+                    self._execution_finding(run, run.message or "critic error")
+                )
 
         ordered_findings = tuple(sorted(findings, key=_finding_sort_key))
         blocking_findings = tuple(
-            finding for finding in ordered_findings if finding.severity in self.blocking_severities
+            finding
+            for finding in ordered_findings
+            if finding.severity in self.blocking_severities
         )
         passed = not blocking_findings
         return CriticVerdict(
@@ -303,14 +319,19 @@ class CriticPanelRunner:
         self._adapters = dict(adapters)
         self._policy = policy or CriticAggregatePolicy()
 
-    def as_gate_adapter(self, profiles: Sequence[CriticProfile]) -> CriticPanelGateAdapter:
+    def as_gate_adapter(
+        self, profiles: Sequence[CriticProfile]
+    ) -> CriticPanelGateAdapter:
         return CriticPanelGateAdapter(runner=self, profiles=tuple(profiles))
 
     async def run(self, profiles: Sequence[CriticProfile]) -> CriticVerdict:
         require(bool(profiles), "CriticPanelRunner.run: profiles must not be empty")
         seen: set[str] = set()
         for profile in profiles:
-            require(profile.critic_id not in seen, f"duplicate critic_id {profile.critic_id!r}")
+            require(
+                profile.critic_id not in seen,
+                f"duplicate critic_id {profile.critic_id!r}",
+            )
             seen.add(profile.critic_id)
 
         runs = await asyncio.gather(*(self._run_one(profile) for profile in profiles))
@@ -523,10 +544,16 @@ class CriticPanelGateAdapter:
     profiles: tuple[CriticProfile, ...]
 
     def __post_init__(self) -> None:
-        require(bool(self.profiles), "CriticPanelGateAdapter.profiles must not be empty")
+        require(
+            bool(self.profiles), "CriticPanelGateAdapter.profiles must not be empty"
+        )
 
     async def run(self, gate: GateDefinition) -> GateAdapterResult:
         verdict = await self.runner.run(self.profiles)
-        evidence = tuple(item for finding in verdict.findings for item in finding.evidence)
+        evidence = tuple(
+            item for finding in verdict.findings for item in finding.evidence
+        )
         message = verdict.message or gate.name or "critic panel completed"
-        return GateAdapterResult(passed=verdict.passed, evidence=evidence, message=message)
+        return GateAdapterResult(
+            passed=verdict.passed, evidence=evidence, message=message
+        )

@@ -66,9 +66,13 @@ class RuffFormatGate:
         self._run = runner or _default_runner
 
     async def check(self, repo_path: Path) -> GateResult:
-        rc, stdout, stderr = await self._run("ruff", "format", "--check", ".", cwd=str(repo_path))
+        rc, stdout, stderr = await self._run(
+            "ruff", "format", "--check", ".", cwd=str(repo_path)
+        )
         if rc == 127:
-            return GateResult(self.name, passed=True, output="ruff not on PATH — skipped")
+            return GateResult(
+                self.name, passed=True, output="ruff not on PATH — skipped"
+            )
         output = (stdout + stderr).decode(errors="replace").strip()
         return GateResult(self.name, passed=(rc == 0), output=output or "clean")
 
@@ -78,7 +82,9 @@ class TodoFixmeGate:
 
     name = "todo-fixme"
 
-    _PATTERN = re.compile(r"\b(TODO|FIXME|XXX|HACK)\b(?!.*(#\d+|https?://))", re.IGNORECASE)
+    _PATTERN = re.compile(
+        r"\b(TODO|FIXME|XXX|HACK)\b(?!.*(#\d+|https?://))", re.IGNORECASE
+    )
 
     async def check(self, repo_path: Path) -> GateResult:
         offenders: list[str] = []
@@ -88,7 +94,9 @@ class TodoFixmeGate:
             try:
                 with tokenize.open(path) as f:
                     for token in tokenize.generate_tokens(f.readline):
-                        if token.type != tokenize.COMMENT or not self._PATTERN.search(token.string):
+                        if token.type != tokenize.COMMENT or not self._PATTERN.search(
+                            token.string
+                        ):
                             continue
                         offenders.append(
                             f"{path.relative_to(repo_path)}:{token.start[0]}: {token.string.rstrip()}"
@@ -123,7 +131,9 @@ class FileSizeBudgetGate:
             except (OSError, UnicodeDecodeError):
                 continue
             if count > self._max:
-                offenders.append(f"{path.relative_to(repo_path)}: {count} lines (max {self._max})")
+                offenders.append(
+                    f"{path.relative_to(repo_path)}: {count} lines (max {self._max})"
+                )
         if offenders:
             return GateResult(self.name, passed=False, output="\n".join(offenders))
         return GateResult(self.name, passed=True, output="within budget")

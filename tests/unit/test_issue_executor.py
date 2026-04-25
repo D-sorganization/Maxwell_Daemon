@@ -31,7 +31,9 @@ from maxwell_daemon.gh.executor import IssueExecutionError, IssueExecutor
 class FakeGitHub:
     issue: Issue
     created_pr: PullRequest = field(
-        default_factory=lambda: PullRequest(number=100, url="https://x/pull/100", draft=True)
+        default_factory=lambda: PullRequest(
+            number=100, url="https://x/pull/100", draft=True
+        )
     )
     pr_calls: list[dict[str, Any]] = field(default_factory=list)
 
@@ -69,13 +71,17 @@ class FakeWorkspace:
         self.log.append(("clone", (repo,)))
         return Path("/fake") / repo.split("/", 1)[1]
 
-    async def create_branch(self, repo: str, branch: str, *, base: str = "main", **_: Any) -> None:
+    async def create_branch(
+        self, repo: str, branch: str, *, base: str = "main", **_: Any
+    ) -> None:
         self.log.append(("branch", (repo, branch, base)))
 
     async def apply_diff(self, repo: str, diff: str, **_: Any) -> None:
         self.log.append(("apply", (repo, len(diff))))
 
-    async def commit_and_push(self, repo: str, *, branch: str, message: str, **_: Any) -> None:
+    async def commit_and_push(
+        self, repo: str, *, branch: str, message: str, **_: Any
+    ) -> None:
         self.log.append(("commit_push", (repo, branch, message)))
 
 
@@ -146,7 +152,9 @@ class TestPlanMode:
     def test_opens_draft_pr_with_plan_body(self) -> None:
         gh = FakeGitHub(issue=_issue())
         ws = FakeWorkspace()
-        backend = ScriptedBackend(payload={"plan": "add a test and fix the off-by-one", "diff": ""})
+        backend = ScriptedBackend(
+            payload={"plan": "add a test and fix the off-by-one", "diff": ""}
+        )
         executor = IssueExecutor(github=gh, workspace=ws, backend=backend)
 
         result = asyncio.run(
@@ -167,7 +175,9 @@ class TestPlanMode:
         gh = FakeGitHub(issue=_issue())
         ws = FakeWorkspace()
         backend = ScriptedBackend(payload={"plan": "artifact plan", "diff": ""})
-        artifact_store = ArtifactStore(tmp_path / "artifacts.db", blob_root=tmp_path / "blobs")
+        artifact_store = ArtifactStore(
+            tmp_path / "artifacts.db", blob_root=tmp_path / "blobs"
+        )
         executor = IssueExecutor(
             github=gh,
             workspace=ws,
@@ -199,7 +209,9 @@ class TestPlanMode:
         ws = FakeWorkspace()
         backend = ScriptedBackend(payload={"plan": "memory-aware plan", "diff": ""})
         memory = AsyncOnlyMemory()
-        executor = IssueExecutor(github=gh, workspace=ws, backend=backend, memory=memory)
+        executor = IssueExecutor(
+            github=gh, workspace=ws, backend=backend, memory=memory
+        )
 
         asyncio.run(
             executor.execute_issue(
@@ -284,7 +296,9 @@ class TestLLMResponseParsing:
 
         executor = IssueExecutor(github=gh, workspace=ws, backend=FencedBackend())
         asyncio.run(
-            executor.execute_issue(repo="owner/repo", issue_number=42, model="m", mode="plan")
+            executor.execute_issue(
+                repo="owner/repo", issue_number=42, model="m", mode="plan"
+            )
         )
         assert "hi" in gh.pr_calls[0]["body"]
 
@@ -317,7 +331,9 @@ class TestLLMResponseParsing:
         executor = IssueExecutor(github=gh, workspace=ws, backend=BrokenBackend())
         with pytest.raises(IssueExecutionError, match="parse"):
             asyncio.run(
-                executor.execute_issue(repo="owner/repo", issue_number=42, model="m", mode="plan")
+                executor.execute_issue(
+                    repo="owner/repo", issue_number=42, model="m", mode="plan"
+                )
             )
 
 
@@ -329,6 +345,8 @@ class TestBranchNaming:
         executor = IssueExecutor(github=gh, workspace=ws, backend=backend)
 
         asyncio.run(
-            executor.execute_issue(repo="owner/repo", issue_number=42, model="m", mode="plan")
+            executor.execute_issue(
+                repo="owner/repo", issue_number=42, model="m", mode="plan"
+            )
         )
         assert gh.pr_calls[0]["head"] == "maxwell-daemon/issue-42"

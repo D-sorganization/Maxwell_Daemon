@@ -191,10 +191,14 @@ def _parse_parameters(path: Path, raw: Any) -> tuple[RecipeParameter, ...]:
             )
         description = spec.get("description", "")
         if not isinstance(description, str):
-            raise RecipeLoadError(f"{path}: parameter {name!r} 'description' must be a string")
+            raise RecipeLoadError(
+                f"{path}: parameter {name!r} 'description' must be a string"
+            )
         required = spec.get("required", False)
         if not isinstance(required, bool):
-            raise RecipeLoadError(f"{path}: parameter {name!r} 'required' must be a boolean")
+            raise RecipeLoadError(
+                f"{path}: parameter {name!r} 'required' must be a boolean"
+            )
         default = spec.get("default")
         out.append(
             RecipeParameter(
@@ -231,13 +235,19 @@ def _parse_requires(path: Path, raw: Any) -> RecipeRequires:
     if model_tier is not None and not isinstance(model_tier, str):
         raise RecipeLoadError(f"{path}: 'requires.model_tier' must be a string")
     max_turns = raw.get("max_turns")
-    if max_turns is not None and (not isinstance(max_turns, int) or isinstance(max_turns, bool)):
+    if max_turns is not None and (
+        not isinstance(max_turns, int) or isinstance(max_turns, bool)
+    ):
         raise RecipeLoadError(f"{path}: 'requires.max_turns' must be an integer")
     budget = raw.get("budget_per_story_usd")
-    if budget is not None and (isinstance(budget, bool) or not isinstance(budget, (int, float))):
+    if budget is not None and (
+        isinstance(budget, bool) or not isinstance(budget, (int, float))
+    ):
         # bool is a subclass of int in Python — we don't want ``True`` to
         # silently become 1.0, so check bool first.
-        raise RecipeLoadError(f"{path}: 'requires.budget_per_story_usd' must be a number")
+        raise RecipeLoadError(
+            f"{path}: 'requires.budget_per_story_usd' must be a number"
+        )
     return RecipeRequires(
         model_tier=model_tier,
         max_turns=max_turns,

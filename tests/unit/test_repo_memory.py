@@ -97,15 +97,21 @@ def test_proposals_stay_pending_until_reviewed(tmp_path: Path) -> None:
     accepted = store.accept_proposal("p1", reviewer="maintainer")
 
     assert accepted.status == "accepted"
-    assert store.list_entries(repo_id="D-sorganization/Maxwell-Daemon") == [_entry("m1")]
+    assert store.list_entries(repo_id="D-sorganization/Maxwell-Daemon") == [
+        _entry("m1")
+    ]
 
 
-def test_rejected_and_superseded_proposals_stay_out_of_accepted_memory(tmp_path: Path) -> None:
+def test_rejected_and_superseded_proposals_stay_out_of_accepted_memory(
+    tmp_path: Path,
+) -> None:
     store = RepoMemoryStore(tmp_path)
     store.propose(_proposal("p-reject", _entry("reject-me")))
     store.propose(_proposal("p-supersede", _entry("supersede-me")))
 
-    rejected = store.reject_proposal("p-reject", reviewer="critic", reason="contradicted")
+    rejected = store.reject_proposal(
+        "p-reject", reviewer="critic", reason="contradicted"
+    )
     superseded = store.supersede_proposal(
         "p-supersede", reviewer="critic", reason="replaced by newer proposal"
     )
@@ -175,17 +181,25 @@ def test_conflicting_entries_are_detected_for_review(tmp_path: Path) -> None:
     assert [conflict.id for conflict in conflicts] == ["m1"]
 
 
-def test_snapshot_selection_honors_repo_scope_issue_scope_and_limits(tmp_path: Path) -> None:
+def test_snapshot_selection_honors_repo_scope_issue_scope_and_limits(
+    tmp_path: Path,
+) -> None:
     store = RepoMemoryStore(tmp_path)
     store.add_entry(_entry("repo-1", body="Repository fact."))
-    store.add_entry(_entry("issue-1", scope="issue", work_item_id="397", body="Issue fact."))
     store.add_entry(
-        _entry("issue-2", scope="issue", work_item_id="999", body="Unrelated issue fact.")
+        _entry("issue-1", scope="issue", work_item_id="397", body="Issue fact.")
+    )
+    store.add_entry(
+        _entry(
+            "issue-2", scope="issue", work_item_id="999", body="Unrelated issue fact."
+        )
     )
     store.add_entry(_entry("other-repo", repo_id="other/repo", body="Other repo fact."))
 
     snapshot = select_memory_snapshot(
-        store.list_entries(repo_id="D-sorganization/Maxwell-Daemon", include_superseded=True),
+        store.list_entries(
+            repo_id="D-sorganization/Maxwell-Daemon", include_superseded=True
+        ),
         repo_id="D-sorganization/Maxwell-Daemon",
         work_item_id="397",
         max_items=2,
@@ -200,19 +214,25 @@ def test_snapshot_selection_honors_repo_scope_issue_scope_and_limits(tmp_path: P
     }
 
 
-def test_accepted_repo_memory_can_be_loaded_by_another_store_instance(tmp_path: Path) -> None:
+def test_accepted_repo_memory_can_be_loaded_by_another_store_instance(
+    tmp_path: Path,
+) -> None:
     first = RepoMemoryStore(tmp_path)
     first.add_entry(_entry("m1"))
 
     second = RepoMemoryStore(tmp_path)
 
-    assert second.list_entries(repo_id="D-sorganization/Maxwell-Daemon") == [_entry("m1")]
+    assert second.list_entries(repo_id="D-sorganization/Maxwell-Daemon") == [
+        _entry("m1")
+    ]
 
 
 def test_snapshot_render_includes_selection_reasons(tmp_path: Path) -> None:
     store = RepoMemoryStore(tmp_path)
     store.add_entry(_entry("repo-1", body="Repository fact."))
-    store.add_entry(_entry("issue-1", scope="issue", work_item_id="397", body="Issue fact."))
+    store.add_entry(
+        _entry("issue-1", scope="issue", work_item_id="397", body="Issue fact.")
+    )
 
     rendered = store.render_snapshot(
         repo_id="D-sorganization/Maxwell-Daemon",

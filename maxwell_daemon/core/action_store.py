@@ -8,7 +8,7 @@ import json
 import sqlite3
 import threading
 from collections.abc import Iterator
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -130,7 +130,9 @@ class ActionStore:
 
     def get(self, action_id: str) -> Action | None:
         with self._connect() as conn:
-            row = conn.execute("SELECT * FROM actions WHERE id = ?", (action_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM actions WHERE id = ?", (action_id,)
+            ).fetchone()
         return _row_to_action(row) if row else None
 
     def list_for_task(self, task_id: str) -> builtins.list[Action]:
@@ -199,7 +201,9 @@ class ActionStore:
     ) -> Action:
         now = datetime.now(timezone.utc)
         with self._lock, self._connect() as conn:
-            row = conn.execute("SELECT * FROM actions WHERE id = ?", (action_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM actions WHERE id = ?", (action_id,)
+            ).fetchone()
             if row is None:
                 raise KeyError(action_id)
             action = _row_to_action(row)
@@ -239,7 +243,9 @@ class ActionStore:
             )
             if cursor.rowcount != 1:
                 raise RuntimeError(f"action {action_id} changed concurrently")
-            updated = conn.execute("SELECT * FROM actions WHERE id = ?", (action_id,)).fetchone()
+            updated = conn.execute(
+                "SELECT * FROM actions WHERE id = ?", (action_id,)
+            ).fetchone()
         if updated is None:
             raise KeyError(action_id)
         return _row_to_action(updated)
@@ -294,5 +300,9 @@ def _row_to_action(row: sqlite3.Row) -> Action:
         error=row["error"],
         created_at=_parse_iso_required(row["created_at"]),
         updated_at=_parse_iso_required(row["updated_at"]),
-        inverse_payload=json.loads(row["inverse_payload"]) if "inverse_payload" in row.keys() and row["inverse_payload"] else None,  # noqa: SIM118
+        inverse_payload=(
+            json.loads(row["inverse_payload"])
+            if "inverse_payload" in row.keys() and row["inverse_payload"]  # noqa: SIM118
+            else None
+        ),
     )

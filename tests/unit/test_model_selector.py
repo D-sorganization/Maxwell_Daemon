@@ -66,7 +66,10 @@ class TestSelectModel:
         assert select_model(ModelTier.SIMPLE, tier_map, fallback="sonnet") == "sonnet"
 
     def test_empty_tier_map_returns_fallback(self) -> None:
-        assert select_model(ModelTier.SIMPLE, {}, fallback="some-default") == "some-default"
+        assert (
+            select_model(ModelTier.SIMPLE, {}, fallback="some-default")
+            == "some-default"
+        )
 
     def test_no_fallback_no_entry_raises(self) -> None:
         with pytest.raises(ValueError):
@@ -75,7 +78,9 @@ class TestSelectModel:
 
 class TestIntegration:
     def test_short_body_no_keywords_is_simple(self) -> None:
-        s = score_issue(title="need help with login", body="small change needed", labels=[])
+        s = score_issue(
+            title="need help with login", body="small change needed", labels=[]
+        )
         assert s.tier is ModelTier.SIMPLE
 
     def test_end_to_end_pick(self) -> None:

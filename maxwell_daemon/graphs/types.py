@@ -74,12 +74,19 @@ class TaskGraph:
         node_by_id = {node.id: node for node in self.nodes}
 
         for node in self.nodes:
-            require(0 <= node.max_retries <= 5, f"node {node.id!r} has invalid max_retries")
+            require(
+                0 <= node.max_retries <= 5, f"node {node.id!r} has invalid max_retries"
+            )
             for dep in node.depends_on:
-                require(dep in node_by_id, f"node {node.id!r} depends on unknown node {dep!r}")
+                require(
+                    dep in node_by_id,
+                    f"node {node.id!r} depends on unknown node {dep!r}",
+                )
 
             produced_by_deps = {
-                node_by_id[dep].output_artifact_kind for dep in node.depends_on if dep in node_by_id
+                node_by_id[dep].output_artifact_kind
+                for dep in node.depends_on
+                if dep in node_by_id
             }
             for required in node.required_artifacts:
                 require(
@@ -130,7 +137,9 @@ class GraphTemplate:
         return graph
 
 
-def select_template_kind(selector_input: GraphTemplateSelectorInput) -> GraphTemplateKind:
+def select_template_kind(
+    selector_input: GraphTemplateSelectorInput,
+) -> GraphTemplateKind:
     """Select a built-in graph template."""
     risk = selector_input.risk_level.strip().lower()
     if selector_input.has_security_labels or risk in {"high", "critical"}:

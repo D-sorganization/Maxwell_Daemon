@@ -27,7 +27,10 @@ def ledger(tmp_path: Path) -> CostLedger:
 
 
 _MESSAGES = [
-    {"role": "user", "content": "Summarize the following Python file in one paragraph."},
+    {
+        "role": "user",
+        "content": "Summarize the following Python file in one paragraph.",
+    },
     {"role": "assistant", "content": "Sure, I will summarize it now."},
 ]
 
@@ -121,7 +124,9 @@ class TestWorkspaceCostRollup:
             )
         )
         result = workspace_cost_rollup(
-            ledger, "ws-x", since=now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            ledger,
+            "ws-x",
+            since=now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
         )
         assert result.total_cost_usd == pytest.approx(0.05)
 

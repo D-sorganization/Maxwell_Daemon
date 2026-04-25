@@ -8,7 +8,14 @@ from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import GetPromptResult, Prompt, PromptMessage, Resource, TextContent, Tool
+from mcp.types import (
+    GetPromptResult,
+    Prompt,
+    PromptMessage,
+    Resource,
+    TextContent,
+    Tool,
+)
 from pydantic import AnyUrl
 
 from maxwell_daemon.config import load_config
@@ -33,7 +40,9 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
     action_service = ActionService(action_store)
 
     # We expose the built-in sandbox tools mapped to the default workspace.
-    registry = build_default_registry(config.memory.workspace_path, action_service=action_service)
+    registry = build_default_registry(
+        config.memory.workspace_path, action_service=action_service
+    )
 
     # Expose the daemon tools via REST API proxy
     client = DaemonClient(config.api.host, config.api.port, config.api.auth_token)
@@ -49,7 +58,11 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
             spec = registry.get(name)
 
             # Map ToolParam to JSON Schema
-            schema: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+            schema: dict[str, Any] = {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            }
             for param in spec.params:
                 schema["properties"][param.name] = {
                     "type": param.type,
@@ -60,11 +73,15 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
                 if param.required:
                     schema["required"].append(param.name)
 
-            mcp_tools.append(Tool(name=spec.name, description=spec.description, inputSchema=schema))
+            mcp_tools.append(
+                Tool(name=spec.name, description=spec.description, inputSchema=schema)
+            )
         return mcp_tools
 
     @server.call_tool()  # type: ignore[untyped-decorator]
-    async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+    async def handle_call_tool(
+        name: str, arguments: dict[str, Any] | None
+    ) -> list[TextContent]:
         try:
             # We enforce that all MCP calls pass through the audit/approval tier by default
             # if the tool was created with requires_approval, but here the UI handles approval.
@@ -85,10 +102,14 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
                 description="Maxwell Daemon artifacts",
             ),
             Resource(
-                uri=AnyUrl("workspace://list"), name="Workspaces", description="Task workspaces"
+                uri=AnyUrl("workspace://list"),
+                name="Workspaces",
+                description="Task workspaces",
             ),
             Resource(
-                uri=AnyUrl("memory://list"), name="Episodic Memory", description="Agent memory"
+                uri=AnyUrl("memory://list"),
+                name="Episodic Memory",
+                description="Agent memory",
             ),
         ]
 
@@ -101,12 +122,18 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
         prompts = []
         for role_id, role in DEFAULT_CROSS_AUDIT_ROLES.items():
             prompts.append(
-                Prompt(name=f"maxwell_{role_id}", description=f"Maxwell: {role.name}", arguments=[])
+                Prompt(
+                    name=f"maxwell_{role_id}",
+                    description=f"Maxwell: {role.name}",
+                    arguments=[],
+                )
             )
         return prompts
 
     @server.get_prompt()  # type: ignore[no-untyped-call, untyped-decorator]
-    async def handle_get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
+    async def handle_get_prompt(
+        name: str, arguments: dict[str, str] | None
+    ) -> GetPromptResult:
         role_id = name.replace("maxwell_", "")
         role = DEFAULT_CROSS_AUDIT_ROLES.get(role_id)
         if not role:
@@ -116,7 +143,8 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
             description=role.name,
             messages=[
                 PromptMessage(
-                    role="user", content=TextContent(type="text", text=role.system_prompt)
+                    role="user",
+                    content=TextContent(type="text", text=role.system_prompt),
                 )
             ],
         )

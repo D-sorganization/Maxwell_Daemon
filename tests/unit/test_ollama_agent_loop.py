@@ -155,7 +155,9 @@ class TestLoopControl:
         assert tool_msg["tool_call_id"] == "call_1"
         assert "world" in tool_msg["content"]
 
-    async def test_max_turns_raises_when_stuck_in_tool_loop(self, tmp_path: Path) -> None:
+    async def test_max_turns_raises_when_stuck_in_tool_loop(
+        self, tmp_path: Path
+    ) -> None:
         (tmp_path / "x").write_text("x")
         looping_call = {
             "id": "call_x",
@@ -175,7 +177,9 @@ class TestLoopControl:
                 ),
             ]
         )
-        backend = OllamaAgentLoopBackend(workspace_dir=str(tmp_path), client=client, max_turns=3)
+        backend = OllamaAgentLoopBackend(
+            workspace_dir=str(tmp_path), client=client, max_turns=3
+        )
         with pytest.raises(RuntimeError, match="max_turns"):
             await backend.complete(_user("hi"))
 
@@ -210,7 +214,9 @@ class TestToolSchemas:
 
 class TestCapabilities:
     def test_is_local_true(self, tmp_path: Path) -> None:
-        caps = OllamaAgentLoopBackend(workspace_dir=str(tmp_path)).capabilities("devstral")
+        caps = OllamaAgentLoopBackend(workspace_dir=str(tmp_path)).capabilities(
+            "devstral"
+        )
         assert caps.is_local is True
         assert caps.cost_per_1k_input_tokens == 0.0
         assert caps.cost_per_1k_output_tokens == 0.0

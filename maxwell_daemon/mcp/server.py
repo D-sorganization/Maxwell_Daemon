@@ -32,7 +32,11 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
             spec = registry.get(name)
 
             # Map ToolParam to JSON Schema
-            schema: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+            schema: dict[str, Any] = {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            }
             for param in spec.params:
                 schema["properties"][param.name] = {
                     "type": param.type,
@@ -43,11 +47,15 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
                 if param.required:
                     schema["required"].append(param.name)
 
-            mcp_tools.append(Tool(name=spec.name, description=spec.description, inputSchema=schema))
+            mcp_tools.append(
+                Tool(name=spec.name, description=spec.description, inputSchema=schema)
+            )
         return mcp_tools
 
     @server.call_tool()  # type: ignore[untyped-decorator]
-    async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+    async def handle_call_tool(
+        name: str, arguments: dict[str, Any] | None
+    ) -> list[TextContent]:
         try:
             # We enforce that all MCP calls pass through the audit/approval tier by default
             # if the tool was created with requires_approval, but here the UI handles approval.

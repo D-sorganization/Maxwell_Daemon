@@ -61,7 +61,9 @@ class TestToolSpecAnthropicSchema:
             description="desc",
             params=[
                 ToolParam(name="a", type="string", description="required"),
-                ToolParam(name="b", type="integer", description="optional", required=False),
+                ToolParam(
+                    name="b", type="integer", description="optional", required=False
+                ),
             ],
             handler=lambda **_: "x",
         )
@@ -74,7 +76,9 @@ class TestToolSpecAnthropicSchema:
             name="t",
             description="desc",
             params=[
-                ToolParam(name="color", type="string", description="c", enum=["red", "blue"]),
+                ToolParam(
+                    name="color", type="string", description="c", enum=["red", "blue"]
+                ),
             ],
             handler=lambda **_: "x",
         )
@@ -114,8 +118,12 @@ class TestToolRegistry:
 
     def test_names_sorted(self) -> None:
         reg = ToolRegistry()
-        reg.register(ToolSpec(name="zulu", description="z", params=[], handler=lambda: "z"))
-        reg.register(ToolSpec(name="alpha", description="a", params=[], handler=lambda: "a"))
+        reg.register(
+            ToolSpec(name="zulu", description="z", params=[], handler=lambda: "z")
+        )
+        reg.register(
+            ToolSpec(name="alpha", description="a", params=[], handler=lambda: "a")
+        )
         assert reg.names() == ["alpha", "zulu"]
 
     def test_to_anthropic_returns_list(self) -> None:
@@ -184,7 +192,9 @@ class TestApprovalTierEnforcement:
             return "should not run"
 
         reg = ToolRegistry(approval_tier="suggest")
-        reg.register(ToolSpec(name="t", description="d", params=[], handler=_side_effect))
+        reg.register(
+            ToolSpec(name="t", description="d", params=[], handler=_side_effect)
+        )
         result = await reg.invoke("t", {})
         assert result.is_error is True
         assert "approval" in result.content.lower()
@@ -237,7 +247,9 @@ class TestToolPolicyAndInvocationAudit:
             )
         )
 
-        result = await reg.invoke("read_file", {"path": "README.md", "token": "secret-token"})
+        result = await reg.invoke(
+            "read_file", {"path": "README.md", "token": "secret-token"}
+        )
 
         assert result == ToolResult(content="read README.md", is_error=False)
         [record] = store.records
@@ -300,7 +312,9 @@ class TestToolPolicyAndInvocationAudit:
         assert store.records[0].status == "denied"
         assert "denied by policy" in (store.records[0].error or "")
 
-    async def test_suggest_tier_records_approval_required_with_redacted_nested_values(self) -> None:
+    async def test_suggest_tier_records_approval_required_with_redacted_nested_values(
+        self,
+    ) -> None:
         store = ToolInvocationStore()
         reg = ToolRegistry(approval_tier="suggest", invocation_store=store)
         reg.register(_echo_spec())

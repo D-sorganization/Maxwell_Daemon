@@ -74,7 +74,9 @@ def _make_config(
     return MaxwellDaemonConfig.model_validate(data)
 
 
-def _task(task_id: str = "t1", status: TaskStatus = TaskStatus.QUEUED, priority: int = 100) -> Task:
+def _task(
+    task_id: str = "t1", status: TaskStatus = TaskStatus.QUEUED, priority: int = 100
+) -> Task:
     return Task(
         id=task_id,
         prompt="test",
@@ -298,7 +300,9 @@ class _FakeHTTPClient:
 
 class TestDispatchToFleet:
     def _daemon_with_machines(
-        self, tmp_path: Path, machines: list[dict]  # type: ignore[type-arg]
+        self,
+        tmp_path: Path,
+        machines: list[dict],  # type: ignore[type-arg]
     ) -> tuple[Daemon, _FakeHTTPClient]:
         cfg = _make_config(role="coordinator", machines=machines)
         daemon = Daemon(

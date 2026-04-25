@@ -28,7 +28,9 @@ def mock_ledger(tmp_path: Path) -> CostLedger:
     return CostLedger(tmp_path / "test_ledger.db")
 
 
-def test_estimate_cost_anthropic_models(mock_config: Any, mock_ledger: CostLedger) -> None:
+def test_estimate_cost_anthropic_models(
+    mock_config: Any, mock_ledger: CostLedger
+) -> None:
     """Test cost estimation for Anthropic models."""
     allocator = TokenBudgetAllocator(mock_config, mock_ledger)
 

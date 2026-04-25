@@ -97,6 +97,7 @@ class AuthSessionStore:
         """Check if a token has been revoked."""
         with self._get_conn() as conn:
             cursor = conn.execute(
-                "SELECT 1 FROM auth_sessions WHERE jti = ? AND revoked_at IS NOT NULL", (jti,)
+                "SELECT 1 FROM auth_sessions WHERE jti = ? AND revoked_at IS NOT NULL",
+                (jti,),
             )
             return cursor.fetchone() is not None

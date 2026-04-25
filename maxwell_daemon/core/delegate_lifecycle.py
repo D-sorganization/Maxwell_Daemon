@@ -12,7 +12,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveFloat,
+    PositiveInt,
+    model_validator,
+)
 
 from maxwell_daemon.contracts import require
 
@@ -192,7 +199,11 @@ class AssignmentLease(BaseModel):
 
     def is_active(self, now: datetime) -> bool:
         checked_at = _normalize_datetime(now)
-        return self.released_at is None and self.expired_at is None and self.expires_at > checked_at
+        return (
+            self.released_at is None
+            and self.expired_at is None
+            and self.expires_at > checked_at
+        )
 
 
 class Checkpoint(BaseModel):
@@ -263,7 +274,10 @@ class DelegateSession(BaseModel):
             raise ValueError("updated_at cannot be before created_at")
         if self.work_item_id is None and self.task_id is None:
             raise ValueError("delegate session must reference a work item or task")
-        if self.status is DelegateSessionStatus.RUNNING and self.active_lease_id is None:
+        if (
+            self.status is DelegateSessionStatus.RUNNING
+            and self.active_lease_id is None
+        ):
             raise ValueError("running session requires an active lease")
         if self.recovered_at is not None and self.prior_session_id is None:
             raise ValueError("recovered session must record the prior session id")
@@ -369,7 +383,9 @@ class DelegateLifecycleManager:
         self._last_leases[session.id] = lease
         return lease
 
-    def renew_lease(self, session_id: str, *, owner_id: str, ttl: timedelta) -> AssignmentLease:
+    def renew_lease(
+        self, session_id: str, *, owner_id: str, ttl: timedelta
+    ) -> AssignmentLease:
         now = self._now()
         lease = self.current_lease(session_id)
         if lease is None:
@@ -483,7 +499,9 @@ def _json_tuple(value: str | None) -> tuple[str, ...]:
     if not value:
         return ()
     loaded = json.loads(value)
-    require(isinstance(loaded, list), "delegate lifecycle payload must decode to a list")
+    require(
+        isinstance(loaded, list), "delegate lifecycle payload must decode to a list"
+    )
     return tuple(str(item) for item in loaded)
 
 
@@ -673,7 +691,11 @@ class DelegateSessionStore:
     def save_lease(self, lease: AssignmentLease) -> AssignmentLease:
         if not lease.id:
             lease = lease.model_copy(
-                update={"id": _lease_id(lease.session_id, lease.owner_id, lease.heartbeat_at)}
+                update={
+                    "id": _lease_id(
+                        lease.session_id, lease.owner_id, lease.heartbeat_at
+                    )
+                }
             )
         row = (
             lease.id,
@@ -853,13 +875,16 @@ class DelegateSessionStore:
 class DelegateLifecycleService:
     """High-level lifecycle operations backed by a durable session store."""
 
-    def __init__(self, store: DelegateSessionStore, *, clock: Clock | None = None) -> None:
+    def __init__(
+        self, store: DelegateSessionStore, *, clock: Clock | None = None
+    ) -> None:
         self._store = store
         self._clock = clock or _utc_now
 
     def create_session(self, session: DelegateSession) -> DelegateSession:
         require(
-            self._store.get_session(session.id) is None, f"session {session.id!r} already exists"
+            self._store.get_session(session.id) is None,
+            f"session {session.id!r} already exists",
         )
         self._store.save_session(session)
         return session
@@ -931,7 +956,9 @@ class DelegateLifecycleService:
     def mark_running(self, session_id: str, *, owner_id: str) -> DelegateSession:
         session = self._require_session(session_id)
         lease = self._require_active_lease(session_id, owner_id=owner_id)
-        running = session.with_status(DelegateSessionStatus.RUNNING, lease=lease, now=self._now())
+        running = session.with_status(
+            DelegateSessionStatus.RUNNING, lease=lease, now=self._now()
+        )
         self._store.save_session(running)
         return running
 
@@ -954,9 +981,13 @@ class DelegateLifecycleService:
         self._store.save_lease(renewed)
         session = self._require_session(session_id)
         if session.status is DelegateSessionStatus.LEASED:
-            session = session.with_status(DelegateSessionStatus.RUNNING, lease=renewed, now=now)
+            session = session.with_status(
+                DelegateSessionStatus.RUNNING, lease=renewed, now=now
+            )
         else:
-            session = session.model_copy(update={"active_lease_id": renewed.id, "updated_at": now})
+            session = session.model_copy(
+                update={"active_lease_id": renewed.id, "updated_at": now}
+            )
         self._store.save_session(session)
         return renewed
 
@@ -1030,7 +1061,9 @@ class DelegateLifecycleService:
     def expire_session(self, session_id: str) -> DelegateSession:
         session = self._require_session(session_id)
         lease = self._store.current_lease(session_id)
-        require(lease is not None, f"session {session_id!r} does not have an active lease")
+        require(
+            lease is not None, f"session {session_id!r} does not have an active lease"
+        )
         assert lease is not None
         now = self._now()
         next_status = (
@@ -1083,7 +1116,9 @@ class DelegateLifecycleService:
             latest_checkpoint=latest_checkpoint,
             now=now,
         )
-        validate_delegate_session_transition(prior.status, DelegateSessionStatus.SUPERSEDED)
+        validate_delegate_session_transition(
+            prior.status, DelegateSessionStatus.SUPERSEDED
+        )
         self._store.save_session(recovered)
         superseded = prior.model_copy(
             update={
@@ -1105,7 +1140,9 @@ class DelegateLifecycleService:
         session = self._require_session(session_id)
         lease = self._require_active_lease(session_id, owner_id=owner_id)
         now = self._now()
-        validate_delegate_session_transition(session.status, DelegateSessionStatus.COMPLETED)
+        validate_delegate_session_transition(
+            session.status, DelegateSessionStatus.COMPLETED
+        )
         released = lease.model_copy(update={"released_at": now})
         self._store.save_lease(released)
         completed = session.model_copy(
@@ -1124,11 +1161,18 @@ class DelegateLifecycleService:
         assert session is not None
         return session
 
-    def _require_active_lease(self, session_id: str, *, owner_id: str) -> AssignmentLease:
+    def _require_active_lease(
+        self, session_id: str, *, owner_id: str
+    ) -> AssignmentLease:
         lease = self._store.current_lease(session_id)
-        require(lease is not None, f"session {session_id!r} does not have an active lease")
+        require(
+            lease is not None, f"session {session_id!r} does not have an active lease"
+        )
         assert lease is not None
-        require(lease.owner_id == owner_id, "only the current lease owner may update the session")
+        require(
+            lease.owner_id == owner_id,
+            "only the current lease owner may update the session",
+        )
         return lease
 
     def _now(self) -> datetime:

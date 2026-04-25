@@ -92,7 +92,8 @@ def test_execute_plan_can_skip_browser_open(monkeypatch, tmp_path: Path) -> None
 
     monkeypatch.setattr("maxwell_daemon.launcher.ensure_venv", lambda _plan: None)
     monkeypatch.setattr(
-        "maxwell_daemon.launcher._launch_dashboard_thread", lambda _plan: calls.append(("browser",))
+        "maxwell_daemon.launcher._launch_dashboard_thread",
+        lambda _plan: calls.append(("browser",)),
     )
     monkeypatch.setattr(
         "maxwell_daemon.launcher._run", lambda args, *, cwd: calls.append(tuple(args))

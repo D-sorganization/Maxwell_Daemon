@@ -165,7 +165,9 @@ class BrowserService:
         task_id: str | None = None,
     ) -> None:
         if artifact_store is not None and not task_id:
-            raise ValueError("BrowserService requires task_id when artifact_store is configured")
+            raise ValueError(
+                "BrowserService requires task_id when artifact_store is configured"
+            )
         self._runner = runner or UnavailableBrowserRunner()
         self._artifact_store = artifact_store
         self._task_id = task_id
@@ -182,7 +184,9 @@ class BrowserService:
             raise ValueError("browser runner returned a result for a different action")
         return self._store_artifacts(request, result)
 
-    def _store_artifacts(self, request: BrowserRequest, result: BrowserResult) -> BrowserResult:
+    def _store_artifacts(
+        self, request: BrowserRequest, result: BrowserResult
+    ) -> BrowserResult:
         store = self._artifact_store
         if store is None:
             if result.screenshot_png is not None:
@@ -197,7 +201,9 @@ class BrowserService:
 
         updates: dict[str, object] = {}
         action_value = (
-            request.action.value if isinstance(request.action, BrowserAction) else request.action
+            request.action.value
+            if isinstance(request.action, BrowserAction)
+            else request.action
         )
         metadata = {
             "url": request.url,
@@ -233,7 +239,8 @@ class BrowserService:
                 task_id=task_id,
                 kind=ArtifactKind.PAGE_ERROR,
                 name="browser-page-errors.json",
-                text=json.dumps(list(result.page_errors), indent=2, sort_keys=True) + "\n",
+                text=json.dumps(list(result.page_errors), indent=2, sort_keys=True)
+                + "\n",
                 media_type="application/json",
                 metadata=metadata,
             )

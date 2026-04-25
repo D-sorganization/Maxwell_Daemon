@@ -18,7 +18,9 @@ from rich.table import Table
 from maxwell_daemon.cli.actions import render_actions
 from maxwell_daemon.core.presets import FilterPreset, PresetStore
 
-tasks_app = typer.Typer(name="tasks", help="List, show, cancel tasks on a running daemon.")
+tasks_app = typer.Typer(
+    name="tasks", help="List, show, cancel tasks on a running daemon."
+)
 preset_app = typer.Typer(name="preset", help="Named filter presets for `tasks list`.")
 tasks_app.add_typer(preset_app, name="preset")
 console = Console()
@@ -47,14 +49,18 @@ def _fail(message: str) -> None:
 def list_tasks(
     status: Annotated[
         str | None,
-        typer.Option("--status", help="queued | running | completed | failed | cancelled"),
+        typer.Option(
+            "--status", help="queued | running | completed | failed | cancelled"
+        ),
     ] = None,
     kind: Annotated[str | None, typer.Option("--kind", help="prompt | issue")] = None,
     repo: Annotated[str | None, typer.Option("--repo")] = None,
     limit: Annotated[int, typer.Option("--limit")] = 25,
     preset: Annotated[
         str | None,
-        typer.Option("--preset", help="Name of a saved preset; CLI flags override fields it sets"),
+        typer.Option(
+            "--preset", help="Name of a saved preset; CLI flags override fields it sets"
+        ),
     ] = None,
     daemon_url: Annotated[
         str, typer.Option("--daemon-url", envvar="MAXWELL_DAEMON_URL")
@@ -68,7 +74,9 @@ def list_tasks(
     if preset:
         p = _preset_store().get(preset)
         if p is None:
-            _fail(f"preset {preset!r} not found — try `maxwell-daemon tasks preset list`")
+            _fail(
+                f"preset {preset!r} not found — try `maxwell-daemon tasks preset list`"
+            )
         assert p is not None
         status = status or p.status
         kind = kind or p.kind
@@ -235,7 +243,9 @@ def preset_list() -> None:
     """Show every saved preset."""
     presets = _preset_store().list()
     if not presets:
-        console.print("[dim]No presets saved. Try `maxwell-daemon tasks preset save ...`[/dim]")
+        console.print(
+            "[dim]No presets saved. Try `maxwell-daemon tasks preset save ...`[/dim]"
+        )
         return
     t = Table(header_style="bold cyan")
     t.add_column("Name", style="bold")

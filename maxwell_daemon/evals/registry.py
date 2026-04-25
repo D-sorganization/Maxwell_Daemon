@@ -6,7 +6,12 @@ from pathlib import Path
 
 import yaml
 
-from maxwell_daemon.evals.models import EvalScenario, EvalSourceType, RiskLevel, ScoringProfile
+from maxwell_daemon.evals.models import (
+    EvalScenario,
+    EvalSourceType,
+    RiskLevel,
+    ScoringProfile,
+)
 
 DEFAULT_SCORING_PROFILE = ScoringProfile(
     id="default",
@@ -95,6 +100,7 @@ _STARTER_SCENARIOS = (
     ),
 )
 
+
 def list_scenarios() -> list[EvalScenario]:
     """Return the built-in starter smoke scenarios plus curated YAML suites."""
     scenarios = list(_STARTER_SCENARIOS)
@@ -108,7 +114,9 @@ def list_scenarios() -> list[EvalScenario]:
                     if isinstance(data, dict):
                         # Simple adaptation
                         data.setdefault("id", suite_file.stem)
-                        data.setdefault("title", suite_file.stem.replace("_", " ").title())
+                        data.setdefault(
+                            "title", suite_file.stem.replace("_", " ").title()
+                        )
                         data.setdefault("description", "")
                         data.setdefault("source_type", EvalSourceType.MANUAL_TASK.value)
                         data.setdefault("fixture_repo_ref", "fixture://local")
@@ -117,7 +125,9 @@ def list_scenarios() -> list[EvalScenario]:
             except Exception as e:
                 import logging
 
-                logging.getLogger(__name__).warning(f"Failed to load suite {suite_file}: {e}")
+                logging.getLogger(__name__).warning(
+                    f"Failed to load suite {suite_file}: {e}"
+                )
 
     return scenarios
 

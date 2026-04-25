@@ -22,7 +22,12 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from maxwell_daemon.browser import BrowserAction, BrowserRequest, BrowserResult, BrowserService
+from maxwell_daemon.browser import (
+    BrowserAction,
+    BrowserRequest,
+    BrowserResult,
+    BrowserService,
+)
 from maxwell_daemon.core.actions import ActionKind, ActionRiskLevel
 from maxwell_daemon.tools.mcp import (
     HookRunnerProtocol,
@@ -140,7 +145,9 @@ def make_write_file(
                 type="string",
                 description="Path relative to the workspace root",
             ),
-            ToolParam(name="content", type="string", description="Full file content to write"),
+            ToolParam(
+                name="content", type="string", description="Full file content to write"
+            ),
         ],
     )
     def write_file(path: str, content: str) -> str:
@@ -189,7 +196,9 @@ def make_write_file(
         if action_id is not None and action_service is not None:
             inverse = {"existed": file_existed, "old_content": old_content}
             action_service.mark_applied(
-                action_id, result={"path": path, "bytes": len(content)}, inverse_payload=inverse
+                action_id,
+                result={"path": path, "bytes": len(content)},
+                inverse_payload=inverse,
             )
         return f"wrote {len(content)} bytes to {path}"
 
@@ -220,7 +229,9 @@ def make_edit_file(
                 type="string",
                 description="Path relative to the workspace root",
             ),
-            ToolParam(name="old_string", type="string", description="Exact text to replace"),
+            ToolParam(
+                name="old_string", type="string", description="Exact text to replace"
+            ),
             ToolParam(name="new_string", type="string", description="Replacement text"),
         ],
     )
@@ -243,7 +254,11 @@ def make_edit_file(
                 task_id=task_id,
                 kind=ActionKind.FILE_EDIT,
                 summary=f"edit file {path}",
-                payload={"path": path, "old_bytes": len(old_string), "new_bytes": len(new_string)},
+                payload={
+                    "path": path,
+                    "old_bytes": len(old_string),
+                    "new_bytes": len(new_string),
+                },
                 risk_level=ActionRiskLevel.MEDIUM,
                 dry_run=dry_run,
             )
@@ -278,7 +293,9 @@ def make_edit_file(
             raise
         if action_id is not None and action_service is not None:
             inverse = {"existed": True, "old_content": old_content_full}
-            action_service.mark_applied(action_id, result={"path": path}, inverse_payload=inverse)
+            action_service.mark_applied(
+                action_id, result={"path": path}, inverse_payload=inverse
+            )
         return f"edited {path}"
 
     return edit_file
@@ -312,7 +329,9 @@ def _build_run_bash_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k in allowed}
 
 
-async def _default_runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
+async def _default_runner(
+    cmd: list[str], cwd: str, timeout: float
+) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=cwd,
@@ -363,7 +382,9 @@ def make_run_bash(
         ],
     )
     async def run_bash(command: str, timeout_seconds: int | float | None = None) -> str:
-        timeout = float(timeout_seconds) if timeout_seconds is not None else default_timeout
+        timeout = (
+            float(timeout_seconds) if timeout_seconds is not None else default_timeout
+        )
         cwd = str(root.resolve())
         action_id: str | None = None
         if action_service is not None and task_id is not None:
@@ -454,7 +475,9 @@ def make_grep_files(root: Path) -> Callable[..., str]:
         capabilities=frozenset({"file_read", "repo_read"}),
         risk_level="read_only",
         params=[
-            ToolParam(name="pattern", type="string", description="Python regex pattern"),
+            ToolParam(
+                name="pattern", type="string", description="Python regex pattern"
+            ),
             ToolParam(
                 name="glob",
                 type="string",
@@ -511,7 +534,9 @@ def _format_browser_result(browser_result: BrowserResult) -> str:
     return "\n".join(parts)
 
 
-def make_open_browser_url(browser_service: BrowserService) -> Callable[..., Awaitable[str]]:
+def make_open_browser_url(
+    browser_service: BrowserService,
+) -> Callable[..., Awaitable[str]]:
     @mcp_tool(
         name="open_browser_url",
         description=(
@@ -546,7 +571,9 @@ def make_open_browser_url(browser_service: BrowserService) -> Callable[..., Awai
             url=url,
             action=BrowserAction.SNAPSHOT,
             allowed_hosts=tuple(allowed_hosts or ()),
-            timeout_seconds=float(timeout_seconds) if timeout_seconds is not None else 30.0,
+            timeout_seconds=(
+                float(timeout_seconds) if timeout_seconds is not None else 30.0
+            ),
         )
         result = await browser_service.run(request)
         return _format_browser_result(result)
@@ -555,7 +582,9 @@ def make_open_browser_url(browser_service: BrowserService) -> Callable[..., Awai
 
 
 # ── browser_screenshot ──────────────────────────────────────────────────────
-def make_browser_screenshot(browser_service: BrowserService) -> Callable[..., Awaitable[str]]:
+def make_browser_screenshot(
+    browser_service: BrowserService,
+) -> Callable[..., Awaitable[str]]:
     @mcp_tool(
         name="browser_screenshot",
         description=(
@@ -590,7 +619,9 @@ def make_browser_screenshot(browser_service: BrowserService) -> Callable[..., Aw
             url=url,
             action=BrowserAction.SCREENSHOT,
             allowed_hosts=tuple(allowed_hosts or ()),
-            timeout_seconds=float(timeout_seconds) if timeout_seconds is not None else 30.0,
+            timeout_seconds=(
+                float(timeout_seconds) if timeout_seconds is not None else 30.0
+            ),
         )
         result = await browser_service.run(request)
         if result.screenshot_artifact_id is None:
@@ -629,10 +660,14 @@ def build_default_registry(
     )
     reg.register_from_function(make_read_file(root))
     reg.register_from_function(
-        make_write_file(root, action_service=action_service, task_id=task_id, dry_run=dry_run)
+        make_write_file(
+            root, action_service=action_service, task_id=task_id, dry_run=dry_run
+        )
     )
     reg.register_from_function(
-        make_edit_file(root, action_service=action_service, task_id=task_id, dry_run=dry_run)
+        make_edit_file(
+            root, action_service=action_service, task_id=task_id, dry_run=dry_run
+        )
     )
     reg.register_from_function(make_glob_files(root))
     reg.register_from_function(make_grep_files(root))

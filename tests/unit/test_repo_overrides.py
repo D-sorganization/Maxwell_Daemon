@@ -44,13 +44,17 @@ class TestRepoConfigModel:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            RepoConfig.model_validate({"name": "x", "path": "/tmp/x", "test_command": []})
+            RepoConfig.model_validate(
+                {"name": "x", "path": "/tmp/x", "test_command": []}
+            )
 
     def test_negative_retries_rejected(self) -> None:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            RepoConfig.model_validate({"name": "x", "path": "/tmp/x", "max_test_retries": -1})
+            RepoConfig.model_validate(
+                {"name": "x", "path": "/tmp/x", "max_test_retries": -1}
+            )
 
 
 class TestResolveOverrides:

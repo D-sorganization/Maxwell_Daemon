@@ -68,7 +68,14 @@ class TokenClaims:
     """Decoded, validated JWT claims."""
 
     def __init__(
-        self, sub: str, role: Role, exp: datetime, *, iat: datetime, jti: str, typ: str = "access"
+        self,
+        sub: str,
+        role: Role,
+        exp: datetime,
+        *,
+        iat: datetime,
+        jti: str,
+        typ: str = "access",
     ) -> None:
         self.sub = sub
         self.role = role
@@ -225,7 +232,9 @@ def require_role(minimum: Role, jwt_config: JWTConfig) -> Any:
         authorization: Annotated[str | None, Header()] = None,
     ) -> TokenClaims:
         if authorization is None or not authorization.startswith("Bearer "):
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "JWT bearer token required")
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED, "JWT bearer token required"
+            )
         raw = authorization.removeprefix("Bearer ").strip()
         try:
             claims = jwt_config.decode_token(raw)

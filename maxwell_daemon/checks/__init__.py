@@ -1,6 +1,11 @@
 """Source-controlled Maxwell checks configuration."""
 
-from maxwell_daemon.checks.loader import CheckLoadError, load_check, load_checks, select_checks
+from maxwell_daemon.checks.loader import (
+    CheckLoadError,
+    load_check,
+    load_checks,
+    select_checks,
+)
 from maxwell_daemon.checks.models import (
     CheckApplicability,
     CheckConclusion,

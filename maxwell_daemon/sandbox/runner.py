@@ -12,7 +12,12 @@ from typing import Protocol
 from maxwell_daemon.contracts import ensure
 from maxwell_daemon.core.artifacts import ArtifactKind, ArtifactStore
 from maxwell_daemon.sandbox.artifacts import build_execution_payload
-from maxwell_daemon.sandbox.policy import DecisionStatus, GateDecision, GateEvidence, SandboxPolicy
+from maxwell_daemon.sandbox.policy import (
+    DecisionStatus,
+    GateDecision,
+    GateEvidence,
+    SandboxPolicy,
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -58,7 +63,9 @@ class SubprocessCommandExecutor:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout_seconds
+            )
             return SandboxRunResult(
                 returncode=proc.returncode,
                 stdout=stdout.decode(errors="replace"),
@@ -113,7 +120,9 @@ class SandboxCommandRunner:
             env=filtered_env,
             timeout_seconds=policy.timeout_seconds,
         )
-        summary = policy.summarize_output(result.stdout, result.stderr or result.error, env=env)
+        summary = policy.summarize_output(
+            result.stdout, result.stderr or result.error, env=env
+        )
         command_display = policy.env.redact(" ".join(validation.command), env=env)
         redacted_stdout = policy.env.redact(result.stdout, env=env)
         redacted_stderr = policy.env.redact(result.stderr, env=env)
@@ -130,7 +139,10 @@ class SandboxCommandRunner:
 
         evidence = (
             *validation.evidence,
-            GateEvidence("returncode", "" if result.returncode is None else str(result.returncode)),
+            GateEvidence(
+                "returncode",
+                "" if result.returncode is None else str(result.returncode),
+            ),
             GateEvidence("duration_seconds", f"{result.duration_seconds:.3f}"),
             GateEvidence("summary", summary),
             GateEvidence("env_keys", ",".join(sorted(filtered_env))),
@@ -145,7 +157,9 @@ class SandboxCommandRunner:
             cwd=validation.cwd,
             evidence=evidence,
         )
-        if artifact_store is not None and (task_id is not None or work_item_id is not None):
+        if artifact_store is not None and (
+            task_id is not None or work_item_id is not None
+        ):
             ensure(
                 not (task_id is not None and work_item_id is not None),
                 "Sandbox artifacts must belong to exactly one task or work item",
@@ -187,5 +201,7 @@ class SandboxCommandRunner:
                     GateEvidence("artifact_kind", artifact.kind.value),
                 ),
             )
-        ensure(bool(decision.evidence), "Sandbox command decisions must include evidence")
+        ensure(
+            bool(decision.evidence), "Sandbox command decisions must include evidence"
+        )
         return decision

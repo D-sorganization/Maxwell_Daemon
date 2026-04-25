@@ -22,7 +22,9 @@ def action_service() -> ActionService:
     return MockService()  # type: ignore
 
 
-def test_revert_file_write_creation(workspace: Path, action_service: ActionService) -> None:
+def test_revert_file_write_creation(
+    workspace: Path, action_service: ActionService
+) -> None:
     reverter = ActionReverter(workspace, action_service)
 
     test_file = workspace / "new_file.txt"
@@ -43,7 +45,9 @@ def test_revert_file_write_creation(workspace: Path, action_service: ActionServi
     assert not test_file.exists()
 
 
-def test_revert_file_write_overwrite(workspace: Path, action_service: ActionService) -> None:
+def test_revert_file_write_overwrite(
+    workspace: Path, action_service: ActionService
+) -> None:
     reverter = ActionReverter(workspace, action_service)
 
     test_file = workspace / "existing_file.txt"
@@ -85,7 +89,9 @@ def test_revert_file_edit(workspace: Path, action_service: ActionService) -> Non
     assert test_file.read_text(encoding="utf-8") == "this is the original text"
 
 
-def test_revert_unsupported_kind(workspace: Path, action_service: ActionService) -> None:
+def test_revert_unsupported_kind(
+    workspace: Path, action_service: ActionService
+) -> None:
     reverter = ActionReverter(workspace, action_service)
     action = Action(
         id="act-4",

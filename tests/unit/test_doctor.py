@@ -150,13 +150,17 @@ class TestRunAllChecks:
         path.write_text(
             "backends:\n  x:\n    type: ollama\n    model: m\nagent:\n  default_backend: x\n"
         )
-        results = asyncio.run(run_all_checks(config_path=path, ledger_path=tmp_path / "l.db"))
+        results = asyncio.run(
+            run_all_checks(config_path=path, ledger_path=tmp_path / "l.db")
+        )
         assert len(results) >= 4
         assert all(isinstance(r, CheckResult) for r in results)
 
 
 class TestDoctorCommand:
-    def test_exit_zero_when_all_ok(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exit_zero_when_all_ok(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         runner = CliRunner()
         path = tmp_path / "c.yaml"
         path.write_text(

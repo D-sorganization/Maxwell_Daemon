@@ -49,7 +49,9 @@ class GeminiBackend(ILLMBackend):
     ) -> None:
         key = api_key or os.environ.get("GOOGLE_API_KEY")
         if not key:
-            raise BackendUnavailableError("GOOGLE_API_KEY not set and no api_key passed")
+            raise BackendUnavailableError(
+                "GOOGLE_API_KEY not set and no api_key passed"
+            )
         try:
             self._genai = cast(Any, import_module("google.generativeai"))
         except ModuleNotFoundError as exc:
@@ -59,14 +61,18 @@ class GeminiBackend(ILLMBackend):
         self._genai.configure(api_key=key)
         self._timeout = timeout
 
-    def _build_contents(self, messages: list[Message]) -> tuple[str | None, list[dict[str, Any]]]:
+    def _build_contents(
+        self, messages: list[Message]
+    ) -> tuple[str | None, list[dict[str, Any]]]:
         system_parts: list[str] = []
         contents: list[dict[str, Any]] = []
         for m in messages:
             if m.role is MessageRole.SYSTEM:
                 system_parts.append(m.content)
             else:
-                contents.append({"role": _to_gemini_role(m.role), "parts": [{"text": m.content}]})
+                contents.append(
+                    {"role": _to_gemini_role(m.role), "parts": [{"text": m.content}]}
+                )
         return "\n\n".join(system_parts) or None, contents
 
     async def complete(
@@ -126,7 +132,9 @@ class GeminiBackend(ILLMBackend):
             system_instruction=system_instruction,
             generation_config=self._genai.types.GenerationConfig(**gen_config),
         )
-        async for chunk in await gmodel.generate_content_async(contents, stream=True, **kwargs):
+        async for chunk in await gmodel.generate_content_async(
+            contents, stream=True, **kwargs
+        ):
             if chunk.text:
                 yield chunk.text
 

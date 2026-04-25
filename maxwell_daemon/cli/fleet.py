@@ -40,8 +40,13 @@ def _fetch_status(
 ) -> None:
     """Fetch a redacted capability snapshot from the daemon."""
 
-    params: list[tuple[str, str | int | float | bool | None]] = [("repo", repo), ("tool", tool)]
-    params.extend(("required_capability", capability) for capability in required_capability or ())
+    params: list[tuple[str, str | int | float | bool | None]] = [
+        ("repo", repo),
+        ("tool", tool),
+    ]
+    params.extend(
+        ("required_capability", capability) for capability in required_capability or ()
+    )
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     url = f"{base_url.rstrip('/')}/api/v1/fleet/capabilities"
 

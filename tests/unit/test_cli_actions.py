@@ -134,7 +134,8 @@ def test_action_approve_posts_decision(
     assert "approved proposal" in result.stdout
     assert "proposal_only" in result.stdout
     assert any(
-        call.get("url", "").endswith("/api/v1/actions/act-1/approve") for call in patch_httpx
+        call.get("url", "").endswith("/api/v1/actions/act-1/approve")
+        for call in patch_httpx
     )
 
 

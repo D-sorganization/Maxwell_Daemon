@@ -118,7 +118,9 @@ def load_feature(path: Path) -> Specification:
         if current_scenario is None:
             return
         if not current_scenario.steps:
-            raise GherkinParseError(f"{path}: scenario {current_scenario.name!r} has no step lines")
+            raise GherkinParseError(
+                f"{path}: scenario {current_scenario.name!r} has no step lines"
+            )
         scenarios.append(
             Scenario(
                 name=current_scenario.name,
@@ -140,7 +142,9 @@ def load_feature(path: Path) -> Specification:
 
         if (m := _FEATURE_RE.match(raw_line)) is not None:
             if feature_name is not None:
-                raise GherkinParseError(f"{path}: multiple Feature blocks not supported")
+                raise GherkinParseError(
+                    f"{path}: multiple Feature blocks not supported"
+                )
             feature_name = m.group(1)
             feature_tags = pending_tags
             pending_tags = ()
@@ -228,7 +232,11 @@ def render_pytest_bdd_scaffold(spec: Specification) -> str:
     for scenario in spec.scenarios:
         last_primary = "Given"
         for step in scenario.steps:
-            primary = step.keyword if step.keyword in {"Given", "When", "Then"} else last_primary
+            primary = (
+                step.keyword
+                if step.keyword in {"Given", "When", "Then"}
+                else last_primary
+            )
             key = (primary, step.text)
             if key in emitted:
                 last_primary = primary

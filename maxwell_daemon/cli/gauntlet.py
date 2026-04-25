@@ -95,7 +95,9 @@ def list_gauntlets(
     table.add_column("Actions")
     table.add_column("Title")
     for row in rows:
-        action_kinds = ", ".join(action["kind"] for action in row.get("actions", ())) or "-"
+        action_kinds = (
+            ", ".join(action["kind"] for action in row.get("actions", ())) or "-"
+        )
         table.add_row(
             row["task_id"],
             row["status"],
@@ -173,13 +175,17 @@ def gauntlet_status(
         action_table.add_column("Path")
         action_table.add_column("Expected status")
         for action in actions:
-            action_table.add_row(action["kind"], action["path"], action["expected_status"])
+            action_table.add_row(
+                action["kind"], action["path"], action["expected_status"]
+            )
         console.print(action_table)
 
 
 @gauntlet_app.command("retry")
 def retry_gauntlet(
-    task_id: Annotated[str, typer.Argument(help="Task id to requeue from a failed gate")],
+    task_id: Annotated[
+        str, typer.Argument(help="Task id to requeue from a failed gate")
+    ],
     expected_status: Annotated[str, typer.Option("--expected-status")] = "failed",
     daemon_url: Annotated[
         str, typer.Option("--daemon-url", envvar="MAXWELL_DAEMON_URL")
@@ -242,5 +248,7 @@ def waive_gauntlet(
         _fail(f"waive failed: {exc}")
 
     row = response.json()
-    console.print(f"[green]✓[/green] Waived {row['task_id']} -> {row['final_decision']}")
+    console.print(
+        f"[green]✓[/green] Waived {row['task_id']} -> {row['final_decision']}"
+    )
     console.print(row["next_action"])

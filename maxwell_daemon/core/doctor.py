@@ -64,7 +64,9 @@ def check_ledger_writable(path: Path) -> CheckResult:
     try:
         parent = path.expanduser().parent
         if parent.exists() and parent.stat().st_mode & 0o222 == 0:
-            return CheckResult("ledger", Severity.ERROR, f"ledger parent is not writable: {parent}")
+            return CheckResult(
+                "ledger", Severity.ERROR, f"ledger parent is not writable: {parent}"
+            )
         CostLedger(path)
     except Exception as e:
         return CheckResult("ledger", Severity.ERROR, f"ledger not writable: {e}")
@@ -84,7 +86,9 @@ def check_disk_space(path: Path, *, minimum_mb: int = 500) -> CheckResult:
     return CheckResult("disk", Severity.OK, f"{free_mb} MB free")
 
 
-async def _default_runner(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
+async def _default_runner(
+    *argv: str, cwd: str | None = None
+) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *argv,
         cwd=cwd,

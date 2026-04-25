@@ -84,7 +84,9 @@ def _nodes_for_template(template: TaskGraphTemplate) -> tuple[GraphNode, ...]:
             inputs=("change-summary", "verification-notes"),
             outputs=("security-review-notes",),
         ),
-        _review_node(depends_on=("security-review",), inputs=("security-review-notes",)),
+        _review_node(
+            depends_on=("security-review",), inputs=("security-review-notes",)
+        ),
     )
 
 

@@ -162,7 +162,9 @@ class TestHTMLContent:
         ):
             assert expected in js
 
-    def test_control_plane_rendering_escapes_untrusted_text(self, client: TestClient) -> None:
+    def test_control_plane_rendering_escapes_untrusted_text(
+        self, client: TestClient
+    ) -> None:
         js = client.get("/ui/app.js").text
 
         for expected in (
@@ -187,7 +189,9 @@ class TestHTMLContent:
         assert "confirm(`Cancel" in js
         assert "Gate action denied: operator privileges are required." in js
 
-    def test_gauntlet_view_ships_empty_and_error_states(self, client: TestClient) -> None:
+    def test_gauntlet_view_ships_empty_and_error_states(
+        self, client: TestClient
+    ) -> None:
         html = client.get("/ui/").text
         js = client.get("/ui/app.js").text
         css = client.get("/ui/style.css").text
@@ -245,7 +249,9 @@ class TestHTMLContent:
         ):
             assert expected in css
 
-    def test_deferred_test_output_keeps_selected_task_context(self, client: TestClient) -> None:
+    def test_deferred_test_output_keeps_selected_task_context(
+        self, client: TestClient
+    ) -> None:
         js = client.get("/ui/app.js").text
 
         assert "const selectedAtSchedule = p.task_id;" not in js

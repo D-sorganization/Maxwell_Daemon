@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from maxwell_daemon.evals.models import EvalComparison, EvalComparisonItem, EvalResult, EvalRun
+from maxwell_daemon.evals.models import (
+    EvalComparison,
+    EvalComparisonItem,
+    EvalResult,
+    EvalRun,
+)
 
 
 def render_markdown_report(run: EvalRun, results: list[EvalResult]) -> str:

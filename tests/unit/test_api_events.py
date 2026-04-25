@@ -55,7 +55,9 @@ def auth_system(
 
 
 class TestEventsWebSocket:
-    def test_connection_accepted_without_auth(self, system: tuple[Daemon, TestClient]) -> None:
+    def test_connection_accepted_without_auth(
+        self, system: tuple[Daemon, TestClient]
+    ) -> None:
         _, client = system
         with client.websocket_connect("/api/v1/events") as ws:
             assert ws is not None
@@ -72,7 +74,9 @@ class TestEventsWebSocket:
         ):
             ws.receive_text()
 
-    def test_accepts_correct_token_in_query(self, auth_system: tuple[Daemon, TestClient]) -> None:
+    def test_accepts_correct_token_in_query(
+        self, auth_system: tuple[Daemon, TestClient]
+    ) -> None:
         _, client = auth_system
         with client.websocket_connect("/api/v1/events?token=s3cret") as ws:
             assert ws is not None

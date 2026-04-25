@@ -145,7 +145,9 @@ class TestResourceBrokerRouting:
         assert decision.runnable is True
         assert decision.provider_id == "fallback"
         assert "fallback_selected" in decision.reason_codes
-        rejected = next(alt for alt in decision.alternatives if alt.provider_id == "primary")
+        rejected = next(
+            alt for alt in decision.alternatives if alt.provider_id == "primary"
+        )
         assert rejected.runnable is False
         assert "provider_disabled" in rejected.reason_codes
 
@@ -275,7 +277,9 @@ class TestResourceBrokerRouting:
 
         assert decision.provider_id == "openai"
         local = next(alt for alt in decision.alternatives if alt.provider_id == "local")
-        anthropic = next(alt for alt in decision.alternatives if alt.provider_id == "anthropic")
+        anthropic = next(
+            alt for alt in decision.alternatives if alt.provider_id == "anthropic"
+        )
         assert "provider_not_allowed" in local.reason_codes
         assert "provider_forbidden" in anthropic.reason_codes
 

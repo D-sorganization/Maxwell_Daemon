@@ -98,7 +98,9 @@ def test_directory_loader_is_deterministic(tmp_path: Path) -> None:
     nested = tmp_path / "nested"
     nested.mkdir()
     (nested / "a.yaml").write_text("id: A\ntitle: First\n", encoding="utf-8")
-    (tmp_path / "ignore.txt").write_text("id: ignored\ntitle: ignored\n", encoding="utf-8")
+    (tmp_path / "ignore.txt").write_text(
+        "id: ignored\ntitle: ignored\n", encoding="utf-8"
+    )
 
     items = load_gaai_items(tmp_path)
 
@@ -133,7 +135,9 @@ def test_single_markdown_load_requires_front_matter(tmp_path: Path) -> None:
 
 def test_rejects_metadata_path_that_escapes_root(tmp_path: Path) -> None:
     item_path = tmp_path / "story.yaml"
-    item_path.write_text("id: BAD\ntitle: Bad\nartifacts:\n  - ../outside.txt\n", encoding="utf-8")
+    item_path.write_text(
+        "id: BAD\ntitle: Bad\nartifacts:\n  - ../outside.txt\n", encoding="utf-8"
+    )
 
     with pytest.raises(GaaiLoadError, match="relative and contained"):
         load_gaai_item(item_path, root=tmp_path)

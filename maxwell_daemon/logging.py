@@ -39,7 +39,9 @@ _SECRET_PATTERN = re.compile(r"(?:sk-|ant-|key-|ghp_)[a-zA-Z0-9_-]{20,}")
 
 
 def _redact_secrets_processor(
-    logger: structlog.types.WrappedLogger, name: str, event_dict: structlog.types.EventDict
+    logger: structlog.types.WrappedLogger,
+    name: str,
+    event_dict: structlog.types.EventDict,
 ) -> structlog.types.EventDict:
     if os.environ.get("MAXWELL_REDACT_LOGS", "1") != "1":
         return event_dict

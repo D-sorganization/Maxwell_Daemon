@@ -121,11 +121,17 @@ class TestBlockerSemantics:
         assert decision.blocking_failed_gate_ids == ("gate-1",)
         assert adapter.calls == ["gate-1"]
 
-    async def test_optional_failure_is_recorded_without_blocking_completion(self) -> None:
+    async def test_optional_failure_is_recorded_without_blocking_completion(
+        self,
+    ) -> None:
         adapter = _ScriptedAdapter(
             results={
-                "gate-1": GateAdapterResult(False, ("optional-evidence",), "optional failed"),
-                "gate-2": GateAdapterResult(True, ("required-evidence",), "required passed"),
+                "gate-1": GateAdapterResult(
+                    False, ("optional-evidence",), "optional failed"
+                ),
+                "gate-2": GateAdapterResult(
+                    True, ("required-evidence",), "required passed"
+                ),
             }
         )
         store = InMemoryGateStore()
@@ -144,7 +150,9 @@ class TestBlockerSemantics:
         assert decision.evidence == ("optional-evidence", "required-evidence")
         assert [outcome.status for outcome in store.history()] == ["failed", "passed"]
 
-    async def test_continue_on_failure_keeps_running_but_final_decision_fails(self) -> None:
+    async def test_continue_on_failure_keeps_running_but_final_decision_fails(
+        self,
+    ) -> None:
         adapter = _ScriptedAdapter(
             results={
                 "gate-1": GateAdapterResult(False, ("blocker-evidence",), "blocked"),
@@ -174,7 +182,9 @@ class TestEvidenceAndWaivers:
     async def test_preserves_evidence_for_failed_gate(self) -> None:
         adapter = _ScriptedAdapter(
             results={
-                "gate-1": GateAdapterResult(False, ("stdout: a", "stderr: b"), "failed"),
+                "gate-1": GateAdapterResult(
+                    False, ("stdout: a", "stderr: b"), "failed"
+                ),
             }
         )
         store = InMemoryGateStore()
@@ -190,7 +200,9 @@ class TestEvidenceAndWaivers:
     async def test_waiver_preserves_original_failed_gate(self) -> None:
         adapter = _ScriptedAdapter(
             results={
-                "gate-1": GateAdapterResult(False, ("waived-evidence",), "still failed"),
+                "gate-1": GateAdapterResult(
+                    False, ("waived-evidence",), "still failed"
+                ),
                 "gate-2": GateAdapterResult(True, ("post-waiver",), "passed"),
             }
         )

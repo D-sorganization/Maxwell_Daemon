@@ -86,11 +86,15 @@ def client_with_jwt(file_daemon: Daemon, jwt_config: JWTConfig) -> Iterator[Test
 
 
 class TestReloadConfig:
-    def test_reload_returns_config_path(self, file_daemon: Daemon, config_file: Path) -> None:
+    def test_reload_returns_config_path(
+        self, file_daemon: Daemon, config_file: Path
+    ) -> None:
         returned = file_daemon.reload_config()
         assert returned == config_file
 
-    def test_reload_picks_up_file_changes(self, file_daemon: Daemon, config_file: Path) -> None:
+    def test_reload_picks_up_file_changes(
+        self, file_daemon: Daemon, config_file: Path
+    ) -> None:
         # Original default backend name is "primary"
         assert "primary" in file_daemon._config.backends
 
@@ -134,7 +138,9 @@ class TestReloadConfig:
 
         assert file_daemon._config is original_config
 
-    def test_reload_is_thread_safe(self, file_daemon: Daemon, config_file: Path) -> None:
+    def test_reload_is_thread_safe(
+        self, file_daemon: Daemon, config_file: Path
+    ) -> None:
         """Multiple threads calling reload_config concurrently must not corrupt state."""
         errors: list[Exception] = []
 
@@ -186,7 +192,9 @@ class TestReloadConfig:
 
 class TestSIGHUP:
     @pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="SIGHUP is not available")
-    def test_sighup_triggers_reload(self, file_daemon: Daemon, config_file: Path) -> None:
+    def test_sighup_triggers_reload(
+        self, file_daemon: Daemon, config_file: Path
+    ) -> None:
         """Sending SIGHUP from within the event loop should invoke reload_config."""
 
         reloaded_paths: list[Path] = []
@@ -252,17 +260,25 @@ class TestReloadEndpoint:
 
     # ── static bearer-token auth ─────────────────────────────────────────
 
-    def test_reload_requires_token_when_configured(self, client_with_token: TestClient) -> None:
+    def test_reload_requires_token_when_configured(
+        self, client_with_token: TestClient
+    ) -> None:
         r = client_with_token.post("/api/reload")
         assert r.status_code == 401
 
-    def test_reload_succeeds_with_valid_token(self, client_with_token: TestClient) -> None:
-        r = client_with_token.post("/api/reload", headers={"Authorization": "Bearer s3cr3t"})
+    def test_reload_succeeds_with_valid_token(
+        self, client_with_token: TestClient
+    ) -> None:
+        r = client_with_token.post(
+            "/api/reload", headers={"Authorization": "Bearer s3cr3t"}
+        )
         assert r.status_code == 200
         assert r.json()["status"] == "reloaded"
 
     def test_reload_rejects_wrong_token(self, client_with_token: TestClient) -> None:
-        r = client_with_token.post("/api/reload", headers={"Authorization": "Bearer wrong"})
+        r = client_with_token.post(
+            "/api/reload", headers={"Authorization": "Bearer wrong"}
+        )
         assert r.status_code == 401
 
     # ── JWT / RBAC mode ──────────────────────────────────────────────────
@@ -281,7 +297,9 @@ class TestReloadEndpoint:
     ) -> None:
         """Insufficient JWT (viewer) is rejected — 401 due to annotation resolution."""
         viewer_token = jwt_config.create_token("alice", Role.viewer)
-        r = client_with_jwt.post("/api/reload", headers={"Authorization": f"Bearer {viewer_token}"})
+        r = client_with_jwt.post(
+            "/api/reload", headers={"Authorization": f"Bearer {viewer_token}"}
+        )
         assert r.status_code in {401, 403}
 
     def test_reload_blocks_no_jwt(self, client_with_jwt: TestClient) -> None:
@@ -308,7 +326,9 @@ class TestReloadEndpoint:
             r = c.post("/api/reload")
         assert r.status_code == 500
 
-    def test_reload_config_path_in_response(self, file_daemon: Daemon, config_file: Path) -> None:
+    def test_reload_config_path_in_response(
+        self, file_daemon: Daemon, config_file: Path
+    ) -> None:
         with TestClient(create_app(file_daemon)) as c:
             r = c.post("/api/reload")
         assert r.json()["config_path"] == str(config_file)

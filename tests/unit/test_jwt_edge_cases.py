@@ -21,7 +21,9 @@ class TestJWTEdgeCases:
 
     def test_create_token_with_extra_claims(self) -> None:
         cfg = JWTConfig(secret="sec")
-        token = cfg.create_token("alice", Role.developer, extra_claims={"custom": "value"})
+        token = cfg.create_token(
+            "alice", Role.developer, extra_claims={"custom": "value"}
+        )
         import jwt
 
         payload = jwt.decode(token, cfg.secret, algorithms=[cfg.algorithm])

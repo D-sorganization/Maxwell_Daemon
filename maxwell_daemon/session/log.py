@@ -103,7 +103,9 @@ class AgentFinish:
 
 
 #: Union of every concrete event type. Handy for type-annotating iterators.
-SessionEvent = UserMessage | ToolUseEvent | ObservationEvent | CondensationEvent | AgentFinish
+SessionEvent = (
+    UserMessage | ToolUseEvent | ObservationEvent | CondensationEvent | AgentFinish
+)
 
 
 _KIND_MAP: dict[str, type] = {
@@ -230,7 +232,9 @@ def _render_event(event: SessionEvent) -> str:
         return f"[{event.seq}] tool_use {event.tool}({args})"
     if isinstance(event, ObservationEvent):
         marker = "ERROR" if event.is_error else "ok"
-        return f"[{event.seq}] observation [{marker}] from {event.tool}:\n{event.content}"
+        return (
+            f"[{event.seq}] observation [{marker}] from {event.tool}:\n{event.content}"
+        )
     if isinstance(event, CondensationEvent):
         a, b = event.summarised_range
         return f"[{event.seq}] condensation (summarised seqs {a}-{b}):\n{event.summary}"

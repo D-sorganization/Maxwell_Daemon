@@ -37,7 +37,9 @@ __all__ = [
 _GENESIS_HASH = "0" * 64  # prev_hash sentinel for the first entry
 
 # Keys whose values must never appear verbatim in the audit log (#234).
-_SENSITIVE_KEYS = frozenset({"authorization", "x-api-key", "api_key", "token", "password"})
+_SENSITIVE_KEYS = frozenset(
+    {"authorization", "x-api-key", "api_key", "token", "password"}
+)
 
 
 def _redact_details(details: dict[str, Any]) -> dict[str, Any]:
@@ -77,7 +79,9 @@ def _rechain(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for entry in entries:
         e = dict(entry)
         e["prev_hash"] = prev
-        payload = json.dumps({k: v for k, v in e.items() if k != "entry_hash"}, sort_keys=True)
+        payload = json.dumps(
+            {k: v for k, v in e.items() if k != "entry_hash"}, sort_keys=True
+        )
         e["entry_hash"] = hashlib.sha256(payload.encode()).hexdigest()
         prev = e["entry_hash"]
         result.append(e)
@@ -275,7 +279,10 @@ class AuditLogger:
                 # Malformed / unparseable timestamps are kept as well.
                 try:
                     ts = datetime.fromisoformat(ts_str)
-                    if ts >= cutoff or entry.get("details", {}).get("operation") == "log_rotation":
+                    if (
+                        ts >= cutoff
+                        or entry.get("details", {}).get("operation") == "log_rotation"
+                    ):
                         kept_dicts.append(entry)
                 except ValueError:
                     kept_dicts.append(entry)
@@ -348,7 +355,9 @@ class AuditLogger:
         )
         d = entry.as_dict()
         # Hash everything except entry_hash itself.
-        payload = json.dumps({k: v for k, v in d.items() if k != "entry_hash"}, sort_keys=True)
+        payload = json.dumps(
+            {k: v for k, v in d.items() if k != "entry_hash"}, sort_keys=True
+        )
         entry.entry_hash = hashlib.sha256(payload.encode()).hexdigest()
         d["entry_hash"] = entry.entry_hash
 
@@ -410,7 +419,9 @@ def verify_chain(path: Path) -> list[dict[str, Any]]:
             )
             expected_hash = hashlib.sha256(payload.encode()).hexdigest()
             if stored_hash != expected_hash:
-                violations.append({"line": lineno, "error": "entry_hash mismatch", "entry": obj})
+                violations.append(
+                    {"line": lineno, "error": "entry_hash mismatch", "entry": obj}
+                )
             if stored_prev != prev_hash:
                 violations.append(
                     {

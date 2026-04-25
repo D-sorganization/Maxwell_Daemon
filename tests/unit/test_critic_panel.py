@@ -103,7 +103,9 @@ class TestCriticAggregation:
         runner = CriticPanelRunner(
             adapters={
                 "static": StaticCritic(
-                    result=CriticPanelRun(profile=profile, status="failed", findings=(finding,))
+                    result=CriticPanelRun(
+                        profile=profile, status="failed", findings=(finding,)
+                    )
                 )
             }
         )
@@ -127,7 +129,9 @@ class TestCriticAggregation:
         runner = CriticPanelRunner(
             adapters={
                 "static": StaticCritic(
-                    result=CriticPanelRun(profile=profile, status="failed", findings=(finding,))
+                    result=CriticPanelRun(
+                        profile=profile, status="failed", findings=(finding,)
+                    )
                 )
             }
         )
@@ -154,7 +158,9 @@ class TestCriticAggregation:
         runner = CriticPanelRunner(
             adapters={
                 "static": StaticCritic(
-                    result=CriticPanelRun(profile=profile, status="passed", findings=(finding,))
+                    result=CriticPanelRun(
+                        profile=profile, status="passed", findings=(finding,)
+                    )
                 )
             }
         )
@@ -176,7 +182,9 @@ class TestCriticAggregation:
         assert verdict.blocking_findings
         assert verdict.blocking_findings[0].summary == "Critic Missing"
 
-    async def test_optional_timeout_is_recorded_but_nonblocking_when_allowed(self) -> None:
+    async def test_optional_timeout_is_recorded_but_nonblocking_when_allowed(
+        self,
+    ) -> None:
         profile = _profile("critic-4", required=False, timeout_seconds=0.01)
         slow_run = CriticPanelRun(profile=profile, status="passed")
         runner = CriticPanelRunner(
@@ -243,7 +251,9 @@ class TestGateAdapterBridge:
         runner = CriticPanelRunner(
             adapters={
                 "static": StaticCritic(
-                    result=CriticPanelRun(profile=profile, status="passed", findings=(finding,))
+                    result=CriticPanelRun(
+                        profile=profile, status="passed", findings=(finding,)
+                    )
                 )
             }
         )

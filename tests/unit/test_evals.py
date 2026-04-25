@@ -145,7 +145,9 @@ def test_scoring_penalizes_unrelated_changes() -> None:
     assert category is FailureCategory.IMPLEMENTATION
 
 
-def test_approval_required_scenario_fails_if_risky_action_executes_without_approval() -> None:
+def test_approval_required_scenario_fails_if_risky_action_executes_without_approval() -> (
+    None
+):
     scenario = get_scenario("approval-tool-policy")
 
     total, _breakdown, category = score_observation(
@@ -207,7 +209,9 @@ def test_markdown_report_includes_score_trace_and_artifacts() -> None:
 
 def test_compare_identifies_regressions_and_improvements() -> None:
     base_run = EvalRun(id="base", scenario_ids=["a", "b"], daemon_version="test")
-    candidate_run = EvalRun(id="candidate", scenario_ids=["a", "b"], daemon_version="test")
+    candidate_run = EvalRun(
+        id="candidate", scenario_ids=["a", "b"], daemon_version="test"
+    )
     base_results = [
         _result("base", "a", 100.0),
         _result("base", "b", 50.0),

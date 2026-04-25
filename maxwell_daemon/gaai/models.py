@@ -53,7 +53,12 @@ class GaaiArtifactReference(BaseModel):
             raise TypeError("artifact path must be a string")
         normalized = value.replace("\\", "/").strip()
         path = PurePosixPath(normalized)
-        if not normalized or path.is_absolute() or ".." in path.parts or ":" in normalized:
+        if (
+            not normalized
+            or path.is_absolute()
+            or ".." in path.parts
+            or ":" in normalized
+        ):
             raise ValueError(f"artifact path must be relative and contained: {value}")
         return path
 

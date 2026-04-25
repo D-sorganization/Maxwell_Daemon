@@ -35,9 +35,13 @@ class ActionPolicy:
 
     def evaluate(self, action: Action, *, dry_run: bool = False) -> PolicyDecision:
         if not self._known_kind(action.kind):
-            return PolicyDecision(False, True, f"unknown action kind: {action.kind.value}")
+            return PolicyDecision(
+                False, True, f"unknown action kind: {action.kind.value}"
+            )
         if not self._within_allowed_scope(action):
-            return PolicyDecision(False, True, "action target is outside the allowed workspace")
+            return PolicyDecision(
+                False, True, "action target is outside the allowed workspace"
+            )
         if action.kind is ActionKind.COMMAND and self._uses_denied_command(action):
             return PolicyDecision(False, True, "command is denied by policy")
         if dry_run:
@@ -45,12 +49,24 @@ class ActionPolicy:
         if self.mode is ApprovalMode.SUGGEST:
             return PolicyDecision(True, True, "suggest mode requires approval")
         if self.mode is ApprovalMode.AUTO_EDIT:
-            if action.kind in {ActionKind.FILE_WRITE, ActionKind.FILE_EDIT, ActionKind.DIFF_APPLY}:
-                return PolicyDecision(True, False, "auto-edit permits scoped file changes")
-            return PolicyDecision(True, True, "auto-edit requires approval for this action kind")
+            if action.kind in {
+                ActionKind.FILE_WRITE,
+                ActionKind.FILE_EDIT,
+                ActionKind.DIFF_APPLY,
+            }:
+                return PolicyDecision(
+                    True, False, "auto-edit permits scoped file changes"
+                )
+            return PolicyDecision(
+                True, True, "auto-edit requires approval for this action kind"
+            )
         if self.mode is ApprovalMode.FULL_AUTO:
-            return PolicyDecision(True, False, "full-auto permits this policy-approved action")
-        return PolicyDecision(False, True, f"unsupported approval mode: {self.mode.value}")
+            return PolicyDecision(
+                True, False, "full-auto permits this policy-approved action"
+            )
+        return PolicyDecision(
+            False, True, f"unsupported approval mode: {self.mode.value}"
+        )
 
     @staticmethod
     def _known_kind(kind: ActionKind) -> bool:
@@ -59,7 +75,11 @@ class ActionPolicy:
     def _within_allowed_scope(self, action: Action) -> bool:
         if self.workspace_root is None:
             return True
-        if action.kind not in {ActionKind.FILE_WRITE, ActionKind.FILE_EDIT, ActionKind.DIFF_APPLY}:
+        if action.kind not in {
+            ActionKind.FILE_WRITE,
+            ActionKind.FILE_EDIT,
+            ActionKind.DIFF_APPLY,
+        }:
             return True
         raw_path = action.payload.get("path") or action.payload.get("target_path")
         if not isinstance(raw_path, str) or not raw_path:

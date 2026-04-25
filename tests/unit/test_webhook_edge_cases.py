@@ -10,7 +10,9 @@ class TestWebhookEdgeCases:
         daemon = MagicMock()
         router = WebhookRouter(
             WebhookConfig(
-                secret="sec", allowed_repos=["owner/repo"], routes=[WebhookRoute("push", "opened")]
+                secret="sec",
+                allowed_repos=["owner/repo"],
+                routes=[WebhookRoute("push", "opened")],
             ),
             daemon=daemon,
         )

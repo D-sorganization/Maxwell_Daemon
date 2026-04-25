@@ -246,7 +246,9 @@ def test_repo_memory_listing_and_review_commands(tmp_path: Path) -> None:
     assert "superseded" not in active_list.stdout
 
 
-def test_repo_memory_commands_report_invalid_review_and_empty_snapshot(tmp_path: Path) -> None:
+def test_repo_memory_commands_report_invalid_review_and_empty_snapshot(
+    tmp_path: Path,
+) -> None:
     runner = CliRunner()
     repo_root = tmp_path / "repo"
     repo_root.mkdir()

@@ -169,15 +169,21 @@ def execute_plan(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Launch Maxwell-Daemon from a source checkout.")
+    parser = argparse.ArgumentParser(
+        description="Launch Maxwell-Daemon from a source checkout."
+    )
     parser.add_argument(
         "--repo-root",
         type=Path,
         default=Path(__file__).resolve().parents[1],
         help="Path to the Maxwell-Daemon checkout.",
     )
-    parser.add_argument("--config", type=Path, default=None, help="Config path to initialize/use.")
-    parser.add_argument("--port", type=int, default=8080, help="API port for maxwell-daemon serve.")
+    parser.add_argument(
+        "--config", type=Path, default=None, help="Config path to initialize/use."
+    )
+    parser.add_argument(
+        "--port", type=int, default=8080, help="API port for maxwell-daemon serve."
+    )
     parser.add_argument("--dev", action="store_true", help="Install developer extras.")
     parser.add_argument("--skip-install", action="store_true", help="Skip pip install.")
     parser.add_argument(
@@ -185,7 +191,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Do not open the canonical /ui/ dashboard in a browser.",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Print the launch plan and exit.")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print the launch plan and exit."
+    )
     args = parser.parse_args(argv)
 
     plan = build_plan(
@@ -205,7 +213,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"ui={plan.ui_url}")
         return 0
 
-    execute_plan(plan, skip_install=args.skip_install, open_browser=not args.no_open_browser)
+    execute_plan(
+        plan, skip_install=args.skip_install, open_browser=not args.no_open_browser
+    )
     return 0
 
 

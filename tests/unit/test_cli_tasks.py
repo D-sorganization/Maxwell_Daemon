@@ -42,7 +42,10 @@ def patch_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         response: _FakeResponse = _FakeResponse(payload=[])
 
     def get(
-        url: str, *, headers: dict | None = None, timeout: float | None = None  # type: ignore[type-arg]
+        url: str,
+        *,
+        headers: dict | None = None,
+        timeout: float | None = None,  # type: ignore[type-arg]
     ) -> _FakeResponse:
         calls.append({"method": "GET", "url": url, "headers": headers})
         return _Holder.response
@@ -66,14 +69,18 @@ def patch_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 class TestTasksList:
-    def test_empty_list(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
+    def test_empty_list(
+        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
+    ) -> None:
         holder = patch_httpx[-1]["_holder"]
         holder.response = _FakeResponse(payload=[])
         r = runner.invoke(app, ["tasks", "list"])
         assert r.exit_code == 0
         assert "No tasks" in r.stdout or "no tasks" in r.stdout.lower()
 
-    def test_renders_table(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
+    def test_renders_table(
+        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
+    ) -> None:
         holder = patch_httpx[-1]["_holder"]
         holder.response = _FakeResponse(
             payload=[
@@ -103,7 +110,9 @@ class TestTasksList:
         assert "abc" in r.stdout
         assert "completed" in r.stdout
 
-    def test_filter_by_status(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
+    def test_filter_by_status(
+        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
+    ) -> None:
         holder = patch_httpx[-1]["_holder"]
         holder.response = _FakeResponse(payload=[])
         r = runner.invoke(app, ["tasks", "list", "--status", "queued"])
@@ -114,13 +123,17 @@ class TestTasksList:
 
 
 class TestTasksShow:
-    def test_not_found(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
+    def test_not_found(
+        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
+    ) -> None:
         holder = patch_httpx[-1]["_holder"]
         holder.response = _FakeResponse(status_code=404, payload={"detail": "nope"})
         r = runner.invoke(app, ["tasks", "show", "missing"])
         assert r.exit_code == 1
 
-    def test_shows_task_detail(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
+    def test_shows_task_detail(
+        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
+    ) -> None:
         holder = patch_httpx[-1]["_holder"]
         holder.response = _FakeResponse(
             payload={
@@ -151,7 +164,9 @@ class TestTasksShow:
 
 
 class TestTasksCancel:
-    def test_cancel_success(self, runner: CliRunner, patch_httpx: list[dict[str, Any]]) -> None:
+    def test_cancel_success(
+        self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
+    ) -> None:
         holder = patch_httpx[-1]["_holder"]
         holder.response = _FakeResponse(payload={"id": "abc", "status": "cancelled"})
         r = runner.invoke(app, ["tasks", "cancel", "abc"])
@@ -162,6 +177,8 @@ class TestTasksCancel:
         self, runner: CliRunner, patch_httpx: list[dict[str, Any]]
     ) -> None:
         holder = patch_httpx[-1]["_holder"]
-        holder.response = _FakeResponse(status_code=409, payload={"detail": "already done"})
+        holder.response = _FakeResponse(
+            status_code=409, payload={"detail": "already done"}
+        )
         r = runner.invoke(app, ["tasks", "cancel", "abc"])
         assert r.exit_code == 1

@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from maxwell_daemon.checks import CheckConclusion, CheckLoadError, LocalCheckRunner, load_checks
+from maxwell_daemon.checks import (
+    CheckConclusion,
+    CheckLoadError,
+    LocalCheckRunner,
+    load_checks,
+)
 from maxwell_daemon.core.artifacts import ArtifactKind, ArtifactStore
 
 

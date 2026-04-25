@@ -57,7 +57,10 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
         description="Get a specific task by ID.",
         params=[
             ToolParam(
-                name="task_id", type="string", description="The ID of the task.", required=True
+                name="task_id",
+                type="string",
+                description="The ID of the task.",
+                required=True,
             )
         ],
     )
@@ -105,10 +108,16 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
                 required=True,
             ),
             ToolParam(
-                name="issue_number", type="integer", description="The issue number.", required=True
+                name="issue_number",
+                type="integer",
+                description="The issue number.",
+                required=True,
             ),
             ToolParam(
-                name="mode", type="string", description="'plan' or 'implement'.", required=False
+                name="mode",
+                type="string",
+                description="'plan' or 'implement'.",
+                required=False,
             ),
         ],
     )
@@ -126,7 +135,10 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
         description="Approve a pending action.",
         params=[
             ToolParam(
-                name="action_id", type="string", description="The ID of the action.", required=True
+                name="action_id",
+                type="string",
+                description="The ID of the action.",
+                required=True,
             )
         ],
     )
@@ -136,7 +148,11 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
 
     @mcp_tool(
         description="Search episodic memory.",
-        params=[ToolParam(name="query", type="string", description="Search query.", required=True)],
+        params=[
+            ToolParam(
+                name="query", type="string", description="Search query.", required=True
+            )
+        ],
     )
     async def search_memory(query: str, **kwargs: Any) -> str:
         res = await client.get("/memory/search", params={"q": query})
