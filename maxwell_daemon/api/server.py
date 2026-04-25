@@ -91,9 +91,7 @@ def _mount_web_ui(app: FastAPI) -> None:
     if not _UI_DIR.is_dir():
         return  # Missing assets — skip mounting rather than fail startup.
 
-    app.mount(
-        "/ui/", StaticFiles(directory=_UI_DIR, html=True), name="maxwell-daemon-ui"
-    )
+    app.mount("/ui/", StaticFiles(directory=_UI_DIR, html=True), name="maxwell-daemon-ui")
 
     @app.get("/ui", include_in_schema=False)
     async def _ui_no_slash() -> RedirectResponse:
@@ -583,9 +581,7 @@ class ControlPlaneWorkItemView(BaseModel):
     task_id: str
     title: str
     status: str
-    final_decision: Literal[
-        "pass", "fail", "blocked", "running", "pending", "cancelled", "waived"
-    ]
+    final_decision: Literal["pass", "fail", "blocked", "running", "pending", "cancelled", "waived"]
     current_gate: str | None
     next_action: str
     gates: tuple[GateTimelineEntry, ...]
@@ -689,9 +685,7 @@ def _make_rbac_dep(
     (open/dev mode — same behaviour as the existing ``_auth_dep(None)``).
     """
 
-    async def _dep(
-        request: Request, authorization: Annotated[str | None, Header()] = None
-    ) -> None:
+    async def _dep(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:
         # Open mode — nothing to enforce.
         if static_token is None and jwt_config is None:
             return
@@ -702,9 +696,7 @@ def _make_rbac_dep(
         raw = authorization.removeprefix("Bearer ").strip()
 
         # Fast path: static admin token — always grants admin-level access.
-        if static_token is not None and hmac.compare_digest(
-            raw.encode(), static_token.encode()
-        ):
+        if static_token is not None and hmac.compare_digest(raw.encode(), static_token.encode()):
             if audit:
                 audit.log_auth_decision(
                     subject="static",
@@ -814,9 +806,7 @@ async def _websocket_auth_or_close(
         await ws.close(code=1008)
         return False
 
-    if static_token is not None and hmac.compare_digest(
-        presented.encode(), static_token.encode()
-    ):
+    if static_token is not None and hmac.compare_digest(presented.encode(), static_token.encode()):
         return True
 
     if jwt_config is None:
@@ -859,9 +849,7 @@ async def _websocket_auth_or_close(
                 endpoint=ws.url.path,
                 outcome="fail_wrong_type",
             )
-        await ws.close(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Refresh token not allowed"
-        )
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="Refresh token not allowed")
         return False
 
     if not claims.has_role(minimum):
@@ -1101,15 +1089,15 @@ def _delegate_views_for_task(
             if checkpoint is not None:
                 latest_checkpoint = checkpoint.current_plan
                 if checkpoint.failures_and_learnings:
-                    latest_checkpoint = f"{checkpoint.current_plan} | {checkpoint.failures_and_learnings[0]}"
+                    latest_checkpoint = (
+                        f"{checkpoint.current_plan} | {checkpoint.failures_and_learnings[0]}"
+                    )
             metadata_cost = session.metadata.get("cost_usd")
             try:
                 cost_usd = float(metadata_cost) if metadata_cost is not None else 0.0
             except (TypeError, ValueError):
                 cost_usd = 0.0
-            duration_seconds = max(
-                0.0, (session.updated_at - session.created_at).total_seconds()
-            )
+            duration_seconds = max(0.0, (session.updated_at - session.created_at).total_seconds())
             views.append(
                 DelegateSessionView(
                     id=session.id,
@@ -1156,18 +1144,12 @@ def _work_item_context_for_task(
     return work_item_id, item.status.value if item is not None else None
 
 
-def _control_plane_view_from_task(
-    daemon: Daemon, task: Task
-) -> ControlPlaneWorkItemView:
+def _control_plane_view_from_task(daemon: Daemon, task: Task) -> ControlPlaneWorkItemView:
     gates = _gate_statuses_for_task(task)
     snapshots = _delegate_snapshots_for_task(daemon, task)
     work_item_id, work_item_status = _work_item_context_for_task(daemon, snapshots)
     current_gate = next(
-        (
-            gate.name
-            for gate in gates
-            if gate.status in {"failed", "blocked", "running", "pending"}
-        ),
+        (gate.name for gate in gates if gate.status in {"failed", "blocked", "running", "pending"}),
         None,
     )
     decision_by_status: dict[
@@ -1303,9 +1285,7 @@ def create_app(
         return auth
 
     _audit: AuditLogger | None = (
-        AuditLogger(
-            audit_log_path, retention_days=daemon._config.agent.task_retention_days
-        )
+        AuditLogger(audit_log_path, retention_days=daemon._config.agent.task_retention_days)
         if audit_log_path is not None
         else None
     )
@@ -1403,9 +1383,7 @@ def create_app(
         auth_store = getattr(daemon, "_auth_store", None)
         if auth_store is not None:
             auth_store.record_session(claims.jti, payload.subject, claims.iat)
-            auth_store.record_session(
-                refresh_claims.jti, payload.subject, refresh_claims.iat
-            )
+            auth_store.record_session(refresh_claims.jti, payload.subject, refresh_claims.iat)
 
         return TokenResponse(
             access_token=token,
@@ -1428,20 +1406,14 @@ def create_app(
         try:
             claims = jwt_config.decode_token(payload.refresh_token)
         except Exception as exc:
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED, "Invalid refresh token"
-            ) from exc
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid refresh token") from exc
 
         if getattr(claims, "typ", "access") != "refresh":
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED, "Token is not a refresh token"
-            )
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token is not a refresh token")
 
         auth_store = getattr(daemon, "_auth_store", None)
         if auth_store is not None and auth_store.is_revoked(claims.jti):
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED, "Refresh token is revoked"
-            )
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Refresh token is revoked")
 
         ttl = jwt_config.expiry_seconds
         new_token = jwt_config.create_token(
@@ -1460,9 +1432,7 @@ def create_app(
         )
 
     @app.post("/api/v1/auth/revoke", dependencies=[Depends(_require_operator())])
-    async def revoke_token(
-        payload: Annotated[TokenRevokeRequest, Body()]
-    ) -> dict[str, str]:
+    async def revoke_token(payload: Annotated[TokenRevokeRequest, Body()]) -> dict[str, str]:
         """Revoke a specific token or all tokens for a subject."""
         auth_store = getattr(daemon, "_auth_store", None)
         if auth_store is None:
@@ -1490,20 +1460,14 @@ def create_app(
                 auth_store.revoke(jti)
             return {"status": "Revoked"}
         except Exception as exc:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, "Invalid token format"
-            ) from exc
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid token format") from exc
 
     @app.get("/api/v1/auth/me")
     async def whoami(
         authorization: Annotated[str | None, Header()] = None,
     ) -> dict[str, Any]:
         """Decode and return the caller's JWT claims (or static-token identity)."""
-        if (
-            jwt_config is not None
-            and authorization
-            and authorization.startswith("Bearer ")
-        ):
+        if jwt_config is not None and authorization and authorization.startswith("Bearer "):
             raw = authorization.removeprefix("Bearer ").strip()
             try:
                 claims = jwt_config.decode_token(raw)
@@ -1512,9 +1476,7 @@ def create_app(
                     "role": claims.role.value,
                     "exp": claims.exp.isoformat(),
                 }
-            except (
-                Exception
-            ):  # nosec B110 — invalid/expired JWT, fall through to token check
+            except Exception:  # nosec B110 — invalid/expired JWT, fall through to token check
                 pass
         if auth_token is not None and authorization:
             raw = authorization.removeprefix("Bearer ").strip()
@@ -1528,9 +1490,7 @@ def create_app(
         return {
             "status": "ok",
             "version": state.version,
-            "uptime_seconds": (
-                datetime.now(timezone.utc) - state.started_at
-            ).total_seconds(),
+            "uptime_seconds": (datetime.now(timezone.utc) - state.started_at).total_seconds(),
         }
 
     @app.get("/readyz")
@@ -1559,9 +1519,7 @@ def create_app(
         catalog = tuple(
             BackendCatalogEntryView.from_manifest(
                 manifest,
-                configured_aliases=tuple(
-                    sorted(configured_aliases_by_type.get(manifest.name, ()))
-                ),
+                configured_aliases=tuple(sorted(configured_aliases_by_type.get(manifest.name, ()))),
                 loaded=manifest.name in loaded_backend_types,
                 connected=any(
                     alias in connected_aliases
@@ -1614,13 +1572,9 @@ def create_app(
             save_config(daemon._config)
             # Make sure it's instantiated so the daemon can use it immediately
             # The router handles param normalization and secret unwrapping
-            daemon._router._get_or_create(
-                payload.name, daemon._config.backends[payload.name]
-            )
+            daemon._router._get_or_create(payload.name, daemon._config.backends[payload.name])
         except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to save config: {e}"
-            ) from e
+            raise HTTPException(status_code=500, detail=f"Failed to save config: {e}") from e
 
         return {"status": "success"}
 
@@ -1633,13 +1587,9 @@ def create_app(
         else:
             # Maybe it's registered but not loaded due to config
             if name not in daemon._config.backends:
-                raise HTTPException(
-                    status_code=404, detail=f"Backend '{name}' not configured"
-                )
+                raise HTTPException(status_code=404, detail=f"Backend '{name}' not configured")
             try:
-                backend = daemon._router._get_or_create(
-                    name, daemon._config.backends[name]
-                )
+                backend = daemon._router._get_or_create(name, daemon._config.backends[name])
             except Exception as e:
                 return BackendTestResponse(success=False, error=str(e))
 
@@ -1718,9 +1668,7 @@ def create_app(
                         dry_run=payload.dry_run,
                     )
                 except ValueError as exc:
-                    raise HTTPException(
-                        status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)
-                    ) from exc
+                    raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
             else:
                 task = daemon.submit(
                     payload.prompt,
@@ -1743,9 +1691,7 @@ def create_app(
         repo: Annotated[str | None, Query()] = None,
         cursor: Annotated[datetime | None, Query()] = None,
         completed_before: Annotated[datetime | None, Query()] = None,
-        completed_before_camel: Annotated[
-            datetime | None, Query(alias="completedBefore")
-        ] = None,
+        completed_before_camel: Annotated[datetime | None, Query(alias="completedBefore")] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     ) -> list[TaskView]:
         completed_before_filter = completed_before or completed_before_camel
@@ -1794,9 +1740,7 @@ def create_app(
         if status_filter:
             tasks = [task for task in tasks if task.status.value == status_filter]
         tasks.sort(key=lambda task: task.created_at, reverse=True)
-        return tuple(
-            _control_plane_view_from_task(daemon, task) for task in tasks[:limit]
-        )
+        return tuple(_control_plane_view_from_task(daemon, task) for task in tasks[:limit])
 
     @app.post(
         "/api/v1/control-plane/gauntlet/{task_id}/retry",
@@ -1818,13 +1762,9 @@ def create_app(
                 f"task {task_id} is {task.status.value}; expected {payload.expected_status}",
             )
         if _task_is_waived(task):
-            raise HTTPException(
-                status.HTTP_409_CONFLICT, f"task {task_id} is already waived"
-            )
+            raise HTTPException(status.HTTP_409_CONFLICT, f"task {task_id} is already waived")
         try:
-            task = daemon.retry_task(
-                task_id, expected_status=TaskStatus(payload.expected_status)
-            )
+            task = daemon.retry_task(task_id, expected_status=TaskStatus(payload.expected_status))
         except ValueError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         except KeyError as exc:
@@ -1879,9 +1819,7 @@ def create_app(
                 f"task {task_id} is {task.status.value}; expected {payload.expected_status}",
             )
         if _task_is_waived(task):
-            raise HTTPException(
-                status.HTTP_409_CONFLICT, f"task {task_id} is already waived"
-            )
+            raise HTTPException(status.HTTP_409_CONFLICT, f"task {task_id} is already waived")
         try:
             task = daemon.waive_task(
                 task_id,
@@ -1895,9 +1833,7 @@ def create_app(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found") from exc
         return _control_plane_view_from_task(daemon, task)
 
-    @app.get(
-        "/api/v1/tasks/{task_id}/artifacts", dependencies=[Depends(_require_viewer())]
-    )
+    @app.get("/api/v1/tasks/{task_id}/artifacts", dependencies=[Depends(_require_viewer())])
     async def list_task_artifacts(
         task_id: str,
         kind: Annotated[ArtifactKind | None, Query()] = None,
@@ -1907,14 +1843,9 @@ def create_app(
             for artifact in daemon.list_task_artifacts(task_id, kind=kind)
         ]
 
-    @app.get(
-        "/api/v1/tasks/{task_id}/actions", dependencies=[Depends(_require_viewer())]
-    )
+    @app.get("/api/v1/tasks/{task_id}/actions", dependencies=[Depends(_require_viewer())])
     async def list_task_actions(task_id: str) -> list[ActionView]:
-        return [
-            ActionView.from_action(action)
-            for action in daemon.list_task_actions(task_id)
-        ]
+        return [ActionView.from_action(action) for action in daemon.list_task_actions(task_id)]
 
     @app.get("/api/v1/actions", dependencies=[Depends(_require_viewer())])
     async def list_actions(
@@ -2000,9 +1931,7 @@ def create_app(
     async def list_work_items(
         status_filter: Annotated[WorkItemStatus | None, Query(alias="status")] = None,
         repo: Annotated[str | None, Query(pattern=REPO_PATTERN)] = None,
-        source: Annotated[
-            str | None, Query(pattern=r"^(manual|github_issue|gaai|api)$")
-        ] = None,
+        source: Annotated[str | None, Query(pattern=r"^(manual|github_issue|gaai|api)$")] = None,
         max_priority: Annotated[int | None, Query(ge=0, le=1000)] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     ) -> list[WorkItemView]:
@@ -2050,9 +1979,7 @@ def create_app(
         }
         updates["updated_at"] = datetime.now(timezone.utc)
         try:
-            updated = daemon.update_work_item(
-                WorkItem.model_validate(item.model_dump() | updates)
-            )
+            updated = daemon.update_work_item(WorkItem.model_validate(item.model_dump() | updates))
         except ValueError as exc:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
         return WorkItemView.from_item(updated)
@@ -2068,9 +1995,7 @@ def create_app(
         try:
             item = daemon.transition_work_item(item_id, payload.status)
         except KeyError:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND, "work item not found"
-            ) from None
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found") from None
         except ValueError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         return WorkItemView.from_item(item)
@@ -2089,9 +2014,7 @@ def create_app(
                 labels=payload.labels,
             )
         except KeyError as exc:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND, "work item not found"
-            ) from exc
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found") from exc
         except ValueError as exc:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
         return TaskGraphView.from_record(record)
@@ -2111,9 +2034,7 @@ def create_app(
             )
         ]
 
-    @app.get(
-        "/api/v1/task-graphs/{graph_id}", dependencies=[Depends(_require_viewer())]
-    )
+    @app.get("/api/v1/task-graphs/{graph_id}", dependencies=[Depends(_require_viewer())])
     async def get_task_graph(graph_id: str) -> TaskGraphView:
         record = daemon.get_task_graph(graph_id)
         if record is None:
@@ -2128,9 +2049,7 @@ def create_app(
         try:
             record = daemon.start_task_graph(graph_id)
         except KeyError as exc:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND, "task graph not found"
-            ) from exc
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "task graph not found") from exc
         except TaskGraphExecutorUnavailableError as exc:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
         except ValueError as exc:
@@ -2235,9 +2154,7 @@ def create_app(
         )
         return TaskView.from_task(task)
 
-    @app.get(
-        "/api/v1/artifacts/{artifact_id}", dependencies=[Depends(_require_viewer())]
-    )
+    @app.get("/api/v1/artifacts/{artifact_id}", dependencies=[Depends(_require_viewer())])
     async def get_artifact(artifact_id: str) -> ArtifactView:
         artifact = daemon.get_artifact(artifact_id)
         if artifact is None:
@@ -2292,16 +2209,12 @@ def create_app(
         """List all available task templates."""
         return [t.model_dump() for t in daemon.template_store.list_templates()]
 
-    @app.get(
-        "/api/v1/templates/{template_id}", dependencies=[Depends(_require_viewer())]
-    )
+    @app.get("/api/v1/templates/{template_id}", dependencies=[Depends(_require_viewer())])
     async def get_template(template_id: str) -> dict[str, Any]:
         """Fetch a specific task template by ID."""
         t = daemon.template_store.get_template(template_id)
         if not t:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND, f"Template {template_id} not found"
-            )
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Template {template_id} not found")
         return cast(dict[str, Any], t.model_dump())
 
     @app.post(
@@ -2330,9 +2243,7 @@ def create_app(
                 )
                 dispatched.append(TaskView.from_task(task))
             except Exception as e:
-                failures.append(
-                    {"repo": item.repo, "number": item.number, "error": str(e)}
-                )
+                failures.append({"repo": item.repo, "number": item.number, "error": str(e)})
         return {
             "dispatched": len(dispatched),
             "failed": len(failures),
@@ -2366,9 +2277,7 @@ def create_app(
         """
         body = await request.json()
         if not body or "endpoint" not in body:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid subscription"
-            )
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid subscription")
         return {
             "status": "subscribed",
             "message": "Push notification subscription recorded.",
@@ -2385,9 +2294,7 @@ def create_app(
         body = await request.json()
         machine_name = str(body.get("machine_name") or "")
         if not machine_name:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY, "machine_name required"
-            )
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "machine_name required")
         daemon.record_worker_heartbeat(machine_name)
         return {
             "machine_name": machine_name,
@@ -2493,9 +2400,7 @@ def create_app(
                 {
                     "name": name,
                     "org": org,
-                    "github_url": (
-                        f"https://github.com/{org}/{name}" if org and name else None
-                    ),
+                    "github_url": (f"https://github.com/{org}/{name}" if org and name else None),
                     "slots": r.get("slots", default_slots),
                     "budget_per_story": r.get("budget_per_story", default_budget),
                     "pr_target_branch": r.get("pr_target_branch", default_branch),
@@ -2509,12 +2414,8 @@ def create_app(
             "role": daemon._config.role,
             "fleet": {
                 "name": fleet_section.get("name", ""),
-                "auto_promote_staging": fleet_section.get(
-                    "auto_promote_staging", False
-                ),
-                "discovery_interval_seconds": fleet_section.get(
-                    "discovery_interval_seconds", 300
-                ),
+                "auto_promote_staging": fleet_section.get("auto_promote_staging", False),
+                "discovery_interval_seconds": fleet_section.get("discovery_interval_seconds", 300),
             },
             "repos": repos,
         }
@@ -2654,9 +2555,7 @@ def create_app(
     ) -> dict[str, Any]:
         """Run retention pruning on demand."""
         days = (
-            daemon._config.agent.task_retention_days
-            if older_than_days is None
-            else older_than_days
+            daemon._config.agent.task_retention_days if older_than_days is None else older_than_days
         )
         result = daemon.prune_retained_history(days)
         audit_removed = _audit.rotate() if _audit is not None else 0
@@ -2867,9 +2766,7 @@ def create_app(
         SSHKeyStore().remove(machine)
         return {"machine": machine, "deleted": True}
 
-    @app.post(
-        "/api/v1/ssh/connect", dependencies=[Depends(auth), Depends(_require_admin())]
-    )
+    @app.post("/api/v1/ssh/connect", dependencies=[Depends(auth), Depends(_require_admin())])
     async def ssh_connect(payload: SSHConnectRequest) -> Any:
         """Open (or reuse) an SSH session and return its summary."""
         pool = _ssh_pool()
@@ -2888,9 +2785,7 @@ def create_app(
             "age_seconds": round(session.age_seconds, 1),
         }
 
-    @app.post(
-        "/api/v1/ssh/run", dependencies=[Depends(auth), Depends(_require_admin())]
-    )
+    @app.post("/api/v1/ssh/run", dependencies=[Depends(auth), Depends(_require_admin())])
     async def ssh_run(payload: SSHRunRequest) -> Any:
         """Run a command on a remote machine and return its output."""
         pool = _ssh_pool()
@@ -2934,9 +2829,7 @@ def create_app(
     # Whitelist of shell commands that are permitted over the SSH WebSocket.
     # Only bare command names (no arguments) are accepted — the interactive
     # shell session itself handles all subsequent user input.
-    _ssh_allowed_commands: frozenset[str] = frozenset(
-        {"bash", "sh", "zsh", "fish", "rbash"}
-    )
+    _ssh_allowed_commands: frozenset[str] = frozenset({"bash", "sh", "zsh", "fish", "rbash"})
 
     @app.websocket("/api/v1/ssh/shell")
     async def ssh_shell_ws(ws: WebSocket) -> None:

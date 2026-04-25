@@ -36,9 +36,7 @@ class TestLanguageDetection:
 
 class TestFileTree:
     def test_tree_lists_tracked_files(self, tmp_path: Path) -> None:
-        async def fake_git(
-            *argv: str, cwd: str | None = None
-        ) -> tuple[int, bytes, bytes]:
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             assert argv[:2] == ("git", "ls-files")
             return 0, b"a.py\nb.py\nsub/c.py\n", b""
 
@@ -49,9 +47,7 @@ class TestFileTree:
     def test_tree_respects_limit(self, tmp_path: Path) -> None:
         files = b"\n".join(f"file{i}.py".encode() for i in range(500)) + b"\n"
 
-        async def fake_git(
-            *argv: str, cwd: str | None = None
-        ) -> tuple[int, bytes, bytes]:
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             return 0, files, b""
 
         builder = ContextBuilder(git_runner=fake_git)
@@ -88,15 +84,11 @@ class TestRelevantFiles:
         (tmp_path / "parser.py").write_text("def parse(): pass\n")
         (tmp_path / "unrelated.py").write_text("def other(): pass\n")
 
-        async def fake_git(
-            *argv: str, cwd: str | None = None
-        ) -> tuple[int, bytes, bytes]:
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             return 0, b"parser.py\nunrelated.py\n", b""
 
         builder = ContextBuilder(git_runner=fake_git)
-        hits = asyncio.run(
-            builder._find_relevant_files(tmp_path, "fix the parser output", top_n=5)
-        )
+        hits = asyncio.run(builder._find_relevant_files(tmp_path, "fix the parser output", top_n=5))
         assert "parser.py" in hits
         # unrelated.py shouldn't surface — no keyword match.
         assert "unrelated.py" not in hits or hits["parser.py"]
@@ -105,9 +97,7 @@ class TestRelevantFiles:
         big_content = "x = 1\n" * 5000
         (tmp_path / "big.py").write_text(big_content)
 
-        async def fake_git(
-            *argv: str, cwd: str | None = None
-        ) -> tuple[int, bytes, bytes]:
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             return 0, b"big.py\n", b""
 
         builder = ContextBuilder(git_runner=fake_git, snippet_max_bytes=200)
@@ -135,9 +125,7 @@ class TestBuild:
             )
         )
 
-        async def fake_git(
-            *argv: str, cwd: str | None = None
-        ) -> tuple[int, bytes, bytes]:
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             if argv[1] == "ls-files":
                 return 0, b"parser.py\npyproject.toml\nREADME.md\n", b""
             if argv[1] == "log":
@@ -206,9 +194,7 @@ class TestFileTreeFailure:
     def test_returns_empty_when_git_fails(self, tmp_path: Path) -> None:
         """_file_tree returns empty string when git ls-files exits non-zero."""
 
-        async def fake_git(
-            *argv: str, cwd: str | None = None
-        ) -> tuple[int, bytes, bytes]:
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             return 1, b"", b"not a git repo"
 
         builder = ContextBuilder(git_runner=fake_git)
@@ -220,9 +206,7 @@ class TestRecentCommitsFailure:
     def test_returns_empty_list_when_git_fails(self, tmp_path: Path) -> None:
         """_recent_commits returns empty list when git log exits non-zero."""
 
-        async def fake_git(
-            *argv: str, cwd: str | None = None
-        ) -> tuple[int, bytes, bytes]:
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             return 1, b"", b"not a git repo"
 
         builder = ContextBuilder(git_runner=fake_git)
@@ -234,9 +218,7 @@ class TestFindRelevantFilesFailure:
     def test_returns_empty_when_git_fails(self, tmp_path: Path) -> None:
         """_find_relevant_files returns empty dict when git ls-files exits non-zero."""
 
-        async def fake_git(
-            *argv: str, cwd: str | None = None
-        ) -> tuple[int, bytes, bytes]:
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             return 1, b"", b"not a git repo"
 
         builder = ContextBuilder(git_runner=fake_git)
@@ -249,16 +231,12 @@ class TestFindRelevantFilesFailure:
         """OSError when reading a matched file is silently skipped."""
         from unittest.mock import patch
 
-        async def fake_git(
-            *argv: str, cwd: str | None = None
-        ) -> tuple[int, bytes, bytes]:
+        async def fake_git(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
             return 0, b"parser.py\n", b""
 
         builder = ContextBuilder(git_runner=fake_git)
         # Patch Path.read_bytes to raise OSError for any path
         with patch("pathlib.Path.read_bytes", side_effect=OSError("permission denied")):
-            result = asyncio.run(
-                builder._find_relevant_files(tmp_path, "fix the parser", top_n=5)
-            )
+            result = asyncio.run(builder._find_relevant_files(tmp_path, "fix the parser", top_n=5))
         # Should return empty dict without raising
         assert result == {}

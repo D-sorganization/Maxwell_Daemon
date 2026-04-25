@@ -23,9 +23,7 @@ def _check(paths: list[Path]) -> list[str]:
         try:
             with tokenize.open(path) as f:
                 for token in tokenize.generate_tokens(f.readline):
-                    if token.type != tokenize.COMMENT or not _PATTERN.search(
-                        token.string
-                    ):
+                    if token.type != tokenize.COMMENT or not _PATTERN.search(token.string):
                         continue
                     violations.append(
                         f"{path}:{token.start[0]}: {token.string.rstrip()} - add #<issue> or URL reference"

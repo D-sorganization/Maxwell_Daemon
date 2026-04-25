@@ -143,9 +143,7 @@ class TaskStore:
             # to avoid extra lock churn on every short-lived connection.
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA_BASE)
-            existing_cols = {
-                row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()
-            }
+            existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
             for col, ddl in _MIGRATIONS:
                 if col not in existing_cols:
                     conn.execute(ddl)
@@ -260,9 +258,7 @@ class TaskStore:
             args: list[object] = [status.value, now]
             if status.value in _TERMINAL_STATUS_VALUES and finished_at is None:
                 finished_at = datetime.now(timezone.utc)
-            completed_at = (
-                _iso(finished_at) if status.value in _TERMINAL_STATUS_VALUES else None
-            )
+            completed_at = _iso(finished_at) if status.value in _TERMINAL_STATUS_VALUES else None
             for field, value in (
                 ("result", result),
                 ("error", error),
@@ -283,9 +279,7 @@ class TaskStore:
 
     def _get_sync(self, task_id: str) -> Task | None:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM tasks WHERE id = ?", (task_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _row_to_task(row) if row else None
 
     def _list_sync(
@@ -530,9 +524,7 @@ class TaskStore:
     async def aprune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Non-blocking version of :meth:`prune` for use in async code."""
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None, lambda: self._prune_sync(older_than_days, now=now)
-        )
+        return await loop.run_in_executor(None, lambda: self._prune_sync(older_than_days, now=now))
 
     def close(self) -> None:
         """Compatibility hook for stores that do not keep an open connection."""

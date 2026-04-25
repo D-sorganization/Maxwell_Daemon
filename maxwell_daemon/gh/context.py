@@ -159,9 +159,7 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[:cut] + "\n... truncated ..."
 
 
-async def _default_git_runner(
-    *argv: str, cwd: str | None = None
-) -> tuple[int, bytes, bytes]:
+async def _default_git_runner(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *argv,
         cwd=cwd,

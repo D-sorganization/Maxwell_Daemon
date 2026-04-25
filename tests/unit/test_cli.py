@@ -64,9 +64,7 @@ class TestInit:
 
 
 class TestStatus:
-    def test_reports_configured_backends(
-        self, runner: CliRunner, populated_config: Path
-    ) -> None:
+    def test_reports_configured_backends(self, runner: CliRunner, populated_config: Path) -> None:
         r = runner.invoke(app, ["status", "--config", str(populated_config)])
         assert r.exit_code == 0
         assert "primary" in r.stdout
@@ -132,9 +130,7 @@ class TestFleetStatus:
 
         monkeypatch.setattr("maxwell_daemon.cli.fleet.httpx.Client", _Client)
 
-        r = runner.invoke(
-            app, ["fleet", "status", "--repo", "acme/repo", "--tool", "dispatch"]
-        )
+        r = runner.invoke(app, ["fleet", "status", "--repo", "acme/repo", "--tool", "dispatch"])
 
         assert r.exit_code == 0
         assert "Repo:" in r.stdout
@@ -188,9 +184,7 @@ class TestFleetStatus:
 
         monkeypatch.setattr("maxwell_daemon.cli.fleet.httpx.Client", _Client)
 
-        r = runner.invoke(
-            app, ["fleet", "nodes", "--repo", "acme/repo", "--tool", "dispatch"]
-        )
+        r = runner.invoke(app, ["fleet", "nodes", "--repo", "acme/repo", "--tool", "dispatch"])
 
         assert r.exit_code == 0
         assert "Repo:" in r.stdout
@@ -359,9 +353,7 @@ class TestBackendsCommand:
 
 
 class TestHealth:
-    def test_healthy_backend_passes(
-        self, runner: CliRunner, populated_config: Path
-    ) -> None:
+    def test_healthy_backend_passes(self, runner: CliRunner, populated_config: Path) -> None:
         r = runner.invoke(app, ["health", "--config", str(populated_config)])
         assert r.exit_code == 0
         assert "healthy" in r.stdout
@@ -401,9 +393,7 @@ class TestAsk:
         assert "ok" in r.stdout
         assert "tokens" in r.stdout
 
-    def test_one_shot_prompt_handles_unknown_cost(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_one_shot_prompt_handles_unknown_cost(self, runner: CliRunner, tmp_path: Path) -> None:
         from maxwell_daemon.config import MaxwellDaemonConfig, save_config
 
         class UnknownCostBackend(RecordingBackend):
@@ -414,9 +404,7 @@ class TestAsk:
         try:
             cfg = MaxwellDaemonConfig.model_validate(
                 {
-                    "backends": {
-                        "primary": {"type": "unknown-cost", "model": "test-model"}
-                    },
+                    "backends": {"primary": {"type": "unknown-cost", "model": "test-model"}},
                     "agent": {"default_backend": "primary"},
                 }
             )
@@ -436,9 +424,7 @@ class TestAsk:
 
 
 class TestCrossAudit:
-    def test_cross_audit_json_output(
-        self, runner: CliRunner, populated_config: Path
-    ) -> None:
+    def test_cross_audit_json_output(self, runner: CliRunner, populated_config: Path) -> None:
         r = runner.invoke(
             app,
             [

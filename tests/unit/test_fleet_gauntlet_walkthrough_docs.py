@@ -11,10 +11,7 @@ MKDOCS = Path("mkdocs.yml")
 def test_walkthrough_is_discoverable_from_getting_started_nav() -> None:
     mkdocs = MKDOCS.read_text(encoding="utf-8")
 
-    assert (
-        "Fleet gauntlet walkthrough: getting-started/fleet-gauntlet-walkthrough.md"
-        in mkdocs
-    )
+    assert "Fleet gauntlet walkthrough: getting-started/fleet-gauntlet-walkthrough.md" in mkdocs
 
 
 def test_walkthrough_covers_fleet_memory_gauntlet_and_artifact_surfaces() -> None:

@@ -18,9 +18,7 @@ class _FakeGH:
         self._issues = issues
         self.list_calls: list[dict[str, Any]] = []
 
-    async def list_issues(
-        self, repo: str, *, state: str = "open", limit: int = 50
-    ) -> list[Issue]:
+    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 50) -> list[Issue]:
         self.list_calls.append({"repo": repo, "state": state, "limit": limit})
         return self._issues
 
@@ -100,9 +98,7 @@ class TestDiscover:
                 repo="o/r",
                 github=gh,
                 daemon=daemon,
-                filters=DiscoveryFilter(
-                    required_labels={"triage"}, excluded_labels={"blocked"}
-                ),
+                filters=DiscoveryFilter(required_labels={"triage"}, excluded_labels={"blocked"}),
             )
         )
         assert result.scanned == 3
@@ -112,9 +108,7 @@ class TestDiscover:
     def test_mode_threaded_through(self) -> None:
         gh = _FakeGH([_issue(number=5)])
         daemon = _FakeDaemon()
-        asyncio.run(
-            discover_issues(repo="o/r", github=gh, daemon=daemon, mode="implement")
-        )
+        asyncio.run(discover_issues(repo="o/r", github=gh, daemon=daemon, mode="implement"))
         assert daemon.dispatches[0]["mode"] == "implement"
 
     def test_deduplicates_already_dispatched(self) -> None:
@@ -122,9 +116,7 @@ class TestDiscover:
         gh = _FakeGH([_issue(number=1), _issue(number=2)])
         daemon = _FakeDaemon()
         result = asyncio.run(
-            discover_issues(
-                repo="o/r", github=gh, daemon=daemon, already_dispatched={1}
-            )
+            discover_issues(repo="o/r", github=gh, daemon=daemon, already_dispatched={1})
         )
         assert result.scanned == 2
         assert result.dispatched == 1
@@ -133,9 +125,7 @@ class TestDiscover:
     def test_respects_dispatch_cap(self) -> None:
         gh = _FakeGH([_issue(number=i) for i in range(10)])
         daemon = _FakeDaemon()
-        result = asyncio.run(
-            discover_issues(repo="o/r", github=gh, daemon=daemon, max_dispatch=3)
-        )
+        result = asyncio.run(discover_issues(repo="o/r", github=gh, daemon=daemon, max_dispatch=3))
         assert result.dispatched == 3
 
 

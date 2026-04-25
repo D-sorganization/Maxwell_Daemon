@@ -72,7 +72,5 @@ TaskIdField = Annotated[
 ModelField = Annotated[
     str,
     StringConstraints(pattern=MODEL_NAME_PATTERN, max_length=128),
-    Field(
-        description="Model name (e.g., 'claude-opus-4-7', 'gpt-4o', 'ollama:llama2')"
-    ),
+    Field(description="Model name (e.g., 'claude-opus-4-7', 'gpt-4o', 'ollama:llama2')"),
 ]

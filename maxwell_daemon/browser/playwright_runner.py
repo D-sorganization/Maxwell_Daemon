@@ -63,9 +63,7 @@ class PlaywrightBrowserRunner:
                         timeout=timeout_ms,
                     )
                     title = await page.title()
-                    text = await page.locator("body").inner_text(
-                        timeout=min(timeout_ms, 5000)
-                    )
+                    text = await page.locator("body").inner_text(timeout=min(timeout_ms, 5000))
                     screenshot_png = None
                     if request.action == BrowserAction.SCREENSHOT:
                         screenshot_png = await page.screenshot(

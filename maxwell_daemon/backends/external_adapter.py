@@ -113,9 +113,7 @@ def _operation_is_read_only(operation: ExternalAgentOperation) -> bool:
 
 def _default_read_only_operations() -> frozenset[ExternalAgentOperation]:
     return frozenset(
-        operation
-        for operation in ExternalAgentOperation
-        if _operation_is_read_only(operation)
+        operation for operation in ExternalAgentOperation if _operation_is_read_only(operation)
     )
 
 
@@ -324,9 +322,7 @@ class ExternalAgentRunResult:
             stderr_snippet=stderr_snippet,
             checkpoint=checkpoint,
             policy_warnings=tuple(policy_warnings),
-            read_only=(
-                _operation_is_read_only(operation) if read_only is None else read_only
-            ),
+            read_only=(_operation_is_read_only(operation) if read_only is None else read_only),
             cancellation_requested=cancellation_requested,
             cancellation_recorded=cancellation_recorded,
             metadata={} if metadata is None else metadata,
@@ -396,31 +392,19 @@ class ExternalAgentRunResult:
             self,
             summary=redact_secrets(self.summary),
             details=tuple(redact_secrets(detail) for detail in self.details),
-            commands_run=tuple(
-                redact_secrets(command) for command in self.commands_run
-            ),
+            commands_run=tuple(redact_secrets(command) for command in self.commands_run),
             tests_run=tuple(redact_secrets(test) for test in self.tests_run),
             quota_estimate=(
-                redact_secrets(self.quota_estimate)
-                if self.quota_estimate is not None
-                else None
+                redact_secrets(self.quota_estimate) if self.quota_estimate is not None else None
             ),
             stdout_snippet=(
-                redact_secrets(self.stdout_snippet)
-                if self.stdout_snippet is not None
-                else None
+                redact_secrets(self.stdout_snippet) if self.stdout_snippet is not None else None
             ),
             stderr_snippet=(
-                redact_secrets(self.stderr_snippet)
-                if self.stderr_snippet is not None
-                else None
+                redact_secrets(self.stderr_snippet) if self.stderr_snippet is not None else None
             ),
-            checkpoint=(
-                redact_secrets(self.checkpoint) if self.checkpoint is not None else None
-            ),
-            policy_warnings=tuple(
-                redact_secrets(warning) for warning in self.policy_warnings
-            ),
+            checkpoint=(redact_secrets(self.checkpoint) if self.checkpoint is not None else None),
+            policy_warnings=tuple(redact_secrets(warning) for warning in self.policy_warnings),
             unavailable_reason=(
                 redact_secrets(self.unavailable_reason)
                 if self.unavailable_reason is not None
@@ -451,9 +435,7 @@ class ExternalAgentAdapterProtocol(Protocol):
     @property
     def capabilities(self) -> ExternalAgentCapability: ...
 
-    def probe(
-        self, spec: ExternalAgentProbeSpec | None = None
-    ) -> ExternalAgentProbeResult: ...
+    def probe(self, spec: ExternalAgentProbeSpec | None = None) -> ExternalAgentProbeResult: ...
 
     def run(self, context: ExternalAgentRunContext) -> ExternalAgentRunResult: ...
 
@@ -466,9 +448,7 @@ class ExternalAgentAdapterBase(ABC):
     adapter_id: str = ""
     capabilities: ExternalAgentCapability = ExternalAgentCapability()
 
-    def probe(
-        self, spec: ExternalAgentProbeSpec | None = None
-    ) -> ExternalAgentProbeResult:
+    def probe(self, spec: ExternalAgentProbeSpec | None = None) -> ExternalAgentProbeResult:
         result = self._probe(spec or ExternalAgentProbeSpec())
         if not isinstance(result, ExternalAgentProbeResult):
             raise ExternalAgentAdapterError(
@@ -509,26 +489,15 @@ class ExternalAgentAdapterBase(ABC):
             cancellation_recorded=True,
         )
 
-    def _validate_context(
-        self, context: ExternalAgentRunContext
-    ) -> ExternalAgentRunResult | None:
+    def _validate_context(self, context: ExternalAgentRunContext) -> ExternalAgentRunResult | None:
         if not self.adapter_id.strip():
-            raise ExternalAgentAdapterError(
-                f"{type(self).__name__}.adapter_id cannot be empty"
-            )
+            raise ExternalAgentAdapterError(f"{type(self).__name__}.adapter_id cannot be empty")
         capability_adapter_id = self.capabilities.adapter_id
-        if (
-            capability_adapter_id is not None
-            and capability_adapter_id != self.adapter_id
-        ):
+        if capability_adapter_id is not None and capability_adapter_id != self.adapter_id:
             raise ExternalAgentAdapterError(
                 f"{type(self).__name__}.capabilities.adapter_id must match adapter_id"
             )
-        if (
-            not context.prompt.strip()
-            and context.task_id is None
-            and context.work_item_id is None
-        ):
+        if not context.prompt.strip() and context.task_id is None and context.work_item_id is None:
             return ExternalAgentRunResult.unavailable(
                 adapter_id=self.adapter_id,
                 operation=context.operation,
@@ -548,10 +517,7 @@ class ExternalAgentAdapterBase(ABC):
                 operation=context.operation,
                 reason=f"unsupported operation: {context.operation.value}",
             )
-        if (
-            self.capabilities.requires_workspace(context.operation)
-            and context.workspace is None
-        ):
+        if self.capabilities.requires_workspace(context.operation) and context.workspace is None:
             return ExternalAgentRunResult.unavailable(
                 adapter_id=self.adapter_id,
                 operation=context.operation,
@@ -627,17 +593,12 @@ class ExternalAgentAdapterRegistry:
         if not adapter.adapter_id.strip():
             raise ExternalAgentAdapterError("Adapter id cannot be empty")
         capability_adapter_id = adapter.capabilities.adapter_id
-        if (
-            capability_adapter_id is not None
-            and capability_adapter_id != adapter.adapter_id
-        ):
+        if capability_adapter_id is not None and capability_adapter_id != adapter.adapter_id:
             raise ExternalAgentAdapterError(
                 f"Adapter '{adapter.adapter_id}' capability id does not match"
             )
         if adapter.adapter_id in self._adapters:
-            raise ExternalAgentAdapterError(
-                f"Adapter '{adapter.adapter_id}' already registered"
-            )
+            raise ExternalAgentAdapterError(f"Adapter '{adapter.adapter_id}' already registered")
         self._adapters[adapter.adapter_id] = adapter
 
     def resolve(self, adapter_id: str) -> ExternalAgentAdapterProtocol:
@@ -685,9 +646,7 @@ class BackendReadOnlyExternalAgentAdapter(ExternalAgentAdapterBase):
         quota_model: str | None = None,
         required_credentials: tuple[str, ...] = (),
         required_binaries: tuple[str, ...] = (),
-        workspace_requirements: tuple[str, ...] = (
-            "workspace optional for read-only runs",
-        ),
+        workspace_requirements: tuple[str, ...] = ("workspace optional for read-only runs",),
         safety_notes: tuple[str, ...] = (),
     ) -> None:
         if not adapter_id.strip():
@@ -712,8 +671,7 @@ class BackendReadOnlyExternalAgentAdapter(ExternalAgentAdapterBase):
                 if operation is not ExternalAgentOperation.CANCEL
             ),
             write_operations=frozenset(),
-            capability_tags=capability_tags
-            or frozenset({"cli", "llm", "non-interactive"}),
+            capability_tags=capability_tags or frozenset({"cli", "llm", "non-interactive"}),
             context_limits={"max_context_tokens": backend_caps.max_context_tokens},
             cost_model=cost_model,
             quota_model=quota_model,
@@ -827,9 +785,7 @@ class BackendReadOnlyExternalAgentAdapter(ExternalAgentAdapterBase):
             commands_run=(self._command_hint,),
             stdout_snippet=_snippet(response.content),
             checkpoint=(
-                response.content
-                if context.operation is ExternalAgentOperation.CHECKPOINT
-                else None
+                response.content if context.operation is ExternalAgentOperation.CHECKPOINT else None
             ),
             read_only=True,
             cost_estimate_usd=self._backend.estimate_cost(response.usage, self._model),
@@ -855,27 +811,20 @@ class CodexCLIExternalAgentAdapter(BackendReadOnlyExternalAgentAdapter):
         command_hint: str | None = None,
     ) -> None:
         super().__init__(
-            backend=(
-                backend if backend is not None else CodexCLIBackend(approval="suggest")
-            ),
+            backend=(backend if backend is not None else CodexCLIBackend(approval="suggest")),
             adapter_id=adapter_id,
             display_name="Codex CLI",
             model=model,
             version=version,
-            command_hint=command_hint
-            or f"codex exec --approval suggest --model {model}",
+            command_hint=command_hint or f"codex exec --approval suggest --model {model}",
             probe_info=("codex --version",),
             capability_tags=frozenset({"cli", "codex", "llm", "non-interactive"}),
             cost_model="uses the caller's Codex/OpenAI account; exact cost may be unavailable",
             quota_model="delegated to Codex CLI authentication and provider quota",
             required_credentials=("codex login or equivalent CLI authentication",),
             required_binaries=("codex",),
-            workspace_requirements=(
-                "workspace optional for read-only suggest-mode runs",
-            ),
-            safety_notes=(
-                "Default wrapper uses Codex CLI suggest mode and must not edit files.",
-            ),
+            workspace_requirements=("workspace optional for read-only suggest-mode runs",),
+            safety_notes=("Default wrapper uses Codex CLI suggest mode and must not edit files.",),
         )
 
 
@@ -904,9 +853,7 @@ class ContinueCLIExternalAgentAdapter(BackendReadOnlyExternalAgentAdapter):
             quota_model="delegated to Continue assistant configuration",
             required_credentials=("Continue CLI configured with a local assistant",),
             required_binaries=("cn",),
-            safety_notes=(
-                "Continue model/provider choice is owned by local Continue config.",
-            ),
+            safety_notes=("Continue model/provider choice is owned by local Continue config.",),
         )
 
 
@@ -928,12 +875,9 @@ class ClaudeCodeCLIExternalAgentAdapter(BackendReadOnlyExternalAgentAdapter):
             display_name="Claude Code CLI",
             model=model,
             version=version,
-            command_hint=command_hint
-            or f"claude -p <prompt> --model {model} --output-format json",
+            command_hint=command_hint or f"claude -p <prompt> --model {model} --output-format json",
             probe_info=("claude --version",),
-            capability_tags=frozenset(
-                {"cli", "claude", "llm", "vision", "non-interactive"}
-            ),
+            capability_tags=frozenset({"cli", "claude", "llm", "vision", "non-interactive"}),
             cost_model="uses the caller's Claude Code subscription or Anthropic account",
             quota_model="delegated to Claude Code authentication and provider quota",
             required_credentials=("claude login or equivalent CLI authentication",),
@@ -969,7 +913,5 @@ class JulesCLIExternalAgentAdapter(BackendReadOnlyExternalAgentAdapter):
             quota_model="delegated to Jules CLI authentication and provider quota",
             required_credentials=("jules CLI authentication",),
             required_binaries=("jules",),
-            safety_notes=(
-                "Jules wrapper is read-only until write-capable policy exists.",
-            ),
+            safety_notes=("Jules wrapper is read-only until write-capable policy exists.",),
         )

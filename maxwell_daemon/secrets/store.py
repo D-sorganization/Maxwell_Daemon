@@ -32,9 +32,7 @@ class KeyringSecretStore:
         if keyring_module is None:
             try:
                 import keyring as imported_keyring
-            except (
-                ImportError
-            ) as exc:  # pragma: no cover - exercised via dependency installs
+            except ImportError as exc:  # pragma: no cover - exercised via dependency installs
                 raise RuntimeError(
                     "keyring is required for OS-backed secret storage. "
                     "Install maxwell-daemon with its keyring dependency."

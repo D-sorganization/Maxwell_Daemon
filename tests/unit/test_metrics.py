@@ -53,9 +53,7 @@ class TestRecordRequest:
         free_before = MAXWELL_FREE_REQUESTS_TOTAL.labels(
             backend="ollama", model="llama3"
         )._value.get()
-        cost_before = MAXWELL_REQUEST_COST.labels(
-            backend="ollama", model="llama3"
-        )._value.get()
+        cost_before = MAXWELL_REQUEST_COST.labels(backend="ollama", model="llama3")._value.get()
         record_request(
             backend="ollama",
             model="llama3",
@@ -67,16 +65,12 @@ class TestRecordRequest:
         free_after = MAXWELL_FREE_REQUESTS_TOTAL.labels(
             backend="ollama", model="llama3"
         )._value.get()
-        cost_after = MAXWELL_REQUEST_COST.labels(
-            backend="ollama", model="llama3"
-        )._value.get()
+        cost_after = MAXWELL_REQUEST_COST.labels(backend="ollama", model="llama3")._value.get()
         assert free_after == free_before + 1
         assert cost_after == cost_before
 
     def test_priced_request_does_not_increment_free_counter(self) -> None:
-        free_before = MAXWELL_FREE_REQUESTS_TOTAL.labels(
-            backend="claude", model="m"
-        )._value.get()
+        free_before = MAXWELL_FREE_REQUESTS_TOTAL.labels(backend="claude", model="m")._value.get()
         record_request(
             backend="claude",
             model="m",
@@ -85,9 +79,7 @@ class TestRecordRequest:
             cost_usd=0.02,
             duration_seconds=0.1,
         )
-        free_after = MAXWELL_FREE_REQUESTS_TOTAL.labels(
-            backend="claude", model="m"
-        )._value.get()
+        free_after = MAXWELL_FREE_REQUESTS_TOTAL.labels(backend="claude", model="m")._value.get()
         assert free_after == free_before
 
     def test_unknown_cost_does_not_increment_free_counter(self) -> None:
@@ -108,13 +100,9 @@ class TestRecordRequest:
 
     def test_error_status_skips_token_and_cost(self) -> None:
         # Error path still bumps the request counter but not tokens/cost.
-        tokens_before = MAXWELL_TOKENS_TOTAL.labels(
-            backend="claude", model="err"
-        )._value.get()
+        tokens_before = MAXWELL_TOKENS_TOTAL.labels(backend="claude", model="err")._value.get()
         record_request(backend="claude", model="err", status="error")
-        tokens_after = MAXWELL_TOKENS_TOTAL.labels(
-            backend="claude", model="err"
-        )._value.get()
+        tokens_after = MAXWELL_TOKENS_TOTAL.labels(backend="claude", model="err")._value.get()
         assert tokens_after == tokens_before
 
 

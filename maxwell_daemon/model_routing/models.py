@@ -61,9 +61,7 @@ class ModelProfile(BaseModel):
         lowered = v.lower()
         secret_markers = ("sk-", "ghp_", "bearer ", "api_key=", "token=")
         if any(marker in lowered for marker in secret_markers):
-            raise ValueError(
-                "endpoint_ref must be a named reference, not a raw secret value"
-            )
+            raise ValueError("endpoint_ref must be a named reference, not a raw secret value")
         return v
 
 

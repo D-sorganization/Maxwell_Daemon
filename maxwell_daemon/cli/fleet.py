@@ -44,9 +44,7 @@ def _fetch_status(
         ("repo", repo),
         ("tool", tool),
     ]
-    params.extend(
-        ("required_capability", capability) for capability in required_capability or ()
-    )
+    params.extend(("required_capability", capability) for capability in required_capability or ())
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     url = f"{base_url.rstrip('/')}/api/v1/fleet/capabilities"
 
