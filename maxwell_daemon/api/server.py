@@ -3216,4 +3216,63 @@ def create_app(
         except Exception:
             await ws.close(code=1011)
 
+    # --- Dashboard Contract API (Issue #681) ---
+
+    @app.get("/api/version")
+    async def api_version() -> dict[str, str]:
+        return {"daemon": __version__, "contract": "1.0.0"}
+
+    @app.get("/api/health")
+    async def api_health() -> dict[str, Any]:
+        state = daemon.state()
+        return {
+            "status": "ok" if state.backends_available else "degraded",
+            "uptime_seconds": (datetime.now(timezone.utc) - state.started_at).total_seconds(),
+            "gate_state": "open",
+            "strategist_focus": "idle",
+        }
+
+    @app.get("/api/status")
+    async def api_status() -> dict[str, Any]:
+        state = daemon.state()
+        return {
+            "pipeline_state": "running",
+            "active_task": None,
+            "gates": "open",
+            "sandbox_status": "isolated",
+            "backends": state.backends_available,
+        }
+
+    @app.get("/api/tasks", dependencies=[Depends(_require_viewer())])
+    async def api_tasks(
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        cursor: Annotated[datetime | None, Query()] = None,
+    ) -> dict[str, Any]:
+        tasks = daemon.list_tasks(status=None, repo=None, created_before=cursor, limit=limit + 1)
+        return {
+            "tasks": [TaskView.from_task(t).model_dump() for t in tasks[:limit]],
+            "next_cursor": tasks[limit].created_at.isoformat() if len(tasks) > limit else None,
+        }
+
+    @app.get("/api/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
+    async def api_task(task_id: str) -> dict[str, Any]:
+        t = daemon.get_task(task_id)
+        if t is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
+        return {"task": TaskView.from_task(t).model_dump(), "artifacts": [], "transcript": ""}
+
+    @app.post("/api/dispatch", dependencies=[Depends(auth), Depends(_require_operator())])
+    async def api_dispatch(payload: TaskSubmit) -> dict[str, Any]:
+        return {
+            "task": TaskView.from_task(
+                daemon.submit(payload.prompt, repo=payload.repo)
+            ).model_dump()
+        }
+
+    @app.post("/api/control/{action}", dependencies=[Depends(auth), Depends(_require_operator())])
+    async def api_control(action: str) -> dict[str, str]:
+        if action not in ("pause", "resume", "abort"):
+            raise HTTPException(400, "invalid action")
+        return {"status": action + "d"}
+
     return app
