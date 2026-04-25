@@ -1,0 +1,11 @@
+<idea-plugin>
+    <id>com.maxwell.daemon</id>
+    <name>Maxwell Daemon</name>
+    <vendor>Maxwell</vendor>
+    <description>Maxwell Daemon Integration</description>
+    <actions>
+        <action id="Maxwell.SubmitTask" class="com.maxwell.SubmitTaskAction" text="Submit Task" description="Submit task to Maxwell Daemon">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

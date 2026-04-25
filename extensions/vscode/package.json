@@ -15,6 +15,26 @@
       {
         "command": "maxwell.submitTask",
         "title": "Maxwell: Submit Task"
+      },
+      {
+        "command": "maxwell.askAboutSelection",
+        "title": "Maxwell: Ask About Selection"
+      },
+      {
+        "command": "maxwell.fixThisFile",
+        "title": "Maxwell: Fix This File"
+      },
+      {
+        "command": "maxwell.generateTests",
+        "title": "Maxwell: Generate Tests"
+      },
+      {
+        "command": "maxwell.reviewDiff",
+        "title": "Maxwell: Review Diff"
+      },
+      {
+        "command": "maxwell.showCost",
+        "title": "Maxwell: Show Cost"
       }
     ]
   },
@@ -22,5 +42,10 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^18.11.9",
+    "typescript": "^5.0.0"
   }
 }
