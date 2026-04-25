@@ -1,0 +1,26 @@
+{
+  "name": "maxwell-daemon",
+  "displayName": "Maxwell Daemon",
+  "description": "Maxwell Daemon VS Code Extension",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "maxwell.submitTask",
+        "title": "Maxwell: Submit Task"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  }
+}

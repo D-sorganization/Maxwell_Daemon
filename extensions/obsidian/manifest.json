@@ -1,0 +1,10 @@
+{
+  "id": "maxwell-daemon",
+  "name": "Maxwell Daemon",
+  "version": "0.1.0",
+  "minAppVersion": "0.15.0",
+  "description": "Maxwell Daemon Obsidian plugin for tasks and vault-as-memory mode.",
+  "author": "D-sorganization",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}
