@@ -57,6 +57,7 @@ nav:
       - Resource-aware routing: getting-started/resource-aware-routing.md
       - Fleet issue queue: getting-started/fleet-issue-queue.md
       - Troubleshooting: getting-started/troubleshooting.md
+      - MCP: getting-started/mcp.md
   - Architecture:
       - Overview: architecture/overview.md
       - Fleet architecture: architecture/fleet-architecture.md
@@ -70,6 +71,12 @@ nav:
       - Task graphs: architecture/task-graphs.md
       - Task graphs first slice: architecture/task-graphs-first-slice.md
       - Source-controlled checks: architecture/checks.md
+      - Architecture Decision Records:
+          - ADR-001: adr/ADR-001.md
+          - ADR-002: adr/ADR-002.md
+          - ADR-003: adr/ADR-003.md
+          - ADR-004: adr/ADR-004.md
+          - ADR-005: adr/ADR-005.md
   - Operations:
       - Deployment guide: operations/deployment.md
       - Security: operations/security.md
@@ -81,6 +88,9 @@ nav:
       - Beta release readiness: operations/release-readiness.md
       - Production release readiness: operations/production-readiness.md
       - Documentation publishing: operations/docs-publishing.md
+      - Remote access: operations/remote-access.md
+      - Troubleshooting: operations/troubleshooting.md
+      - Tuning: operations/tuning.md
   - Reference:
       - CLI: reference/cli.md
       - Tasks CLI: reference/tasks-cli.md
@@ -98,6 +108,10 @@ nav:
       - Deep traversal hotspot review: development/deep-traversal-hotspots-20260422.md
       - Open-source agents review: development/open_source_agents_review.md
       - IJFW feature review: development/ijfw_feature_review.md
+      - Extensions: development/extensions.md
+      - Rebase Tracker (Issue 648): development/issue-648-rebase-tracker.md
+      - Next agent prompt: development/next-agent-prompt.md
+      - Testing: development/testing.md
       - Specification workflow: specs/README.md
       - Feature evaluations:
           - AST repo mapping: feature_evaluation/01_ast_repo_mapping.md
