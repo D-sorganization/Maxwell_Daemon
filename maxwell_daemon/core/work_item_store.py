@@ -119,9 +119,7 @@ class WorkItemStore:
 
     def get(self, item_id: str) -> WorkItem | None:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM work_items WHERE id = ?", (item_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM work_items WHERE id = ?", (item_id,)).fetchone()
         return _row_to_item(row) if row else None
 
     def list_items(
@@ -164,9 +162,7 @@ class WorkItemStore:
         now: datetime | None = None,
     ) -> WorkItem:
         with self._lock, self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM work_items WHERE id = ?", (item_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM work_items WHERE id = ?", (item_id,)).fetchone()
             if row is None:
                 raise KeyError(item_id)
             updated = transition_work_item(_row_to_item(row), target, now=now)

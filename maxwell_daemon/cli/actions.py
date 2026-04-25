@@ -9,9 +9,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-action_app = typer.Typer(
-    name="action", help="Inspect and decide proposed agent actions."
-)
+action_app = typer.Typer(name="action", help="Inspect and decide proposed agent actions.")
 console = Console()
 
 
@@ -58,9 +56,7 @@ def render_actions(actions: list[dict[str, Any]]) -> None:
     table.add_column("Approval")
     table.add_column("Summary")
     for action in actions:
-        approval = (
-            "required (proposal only)" if action.get("requires_approval") else "auto"
-        )
+        approval = "required (proposal only)" if action.get("requires_approval") else "auto"
         table.add_row(
             action["id"],
             action["kind"],

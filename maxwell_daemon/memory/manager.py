@@ -80,9 +80,7 @@ class MemoryManager:
 
         parts: list[str] = []
 
-        profile_text = (
-            self.profile.render(repo, max_chars=budget_profile) if self.profile else ""
-        )
+        profile_text = self.profile.render(repo, max_chars=budget_profile) if self.profile else ""
         if profile_text:
             parts.append("## Repo facts (from prior runs)\n")
             parts.append(profile_text)

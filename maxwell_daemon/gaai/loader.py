@@ -19,9 +19,7 @@ class GaaiLoadError(ValueError):
     """Raised when local GAAI metadata cannot be loaded safely."""
 
 
-def load_gaai_item(
-    path: Path | str, *, root: Path | str | None = None
-) -> GaaiBacklogItem:
+def load_gaai_item(path: Path | str, *, root: Path | str | None = None) -> GaaiBacklogItem:
     """Load one local GAAI backlog item file.
 
     ``root`` constrains reads to a known directory. If omitted, the item's parent
@@ -41,9 +39,7 @@ def load_gaai_item(
             data = _load_yaml_metadata(safe_path)
         return GaaiBacklogItem.model_validate(data)
     except (OSError, YAMLError, ValidationError, TypeError, ValueError) as exc:
-        raise GaaiLoadError(
-            f"failed to load GAAI metadata from {safe_path}: {exc}"
-        ) from exc
+        raise GaaiLoadError(f"failed to load GAAI metadata from {safe_path}: {exc}") from exc
 
 
 def load_gaai_items(root: Path | str) -> list[GaaiBacklogItem]:
@@ -104,9 +100,7 @@ def _load_markdown_metadata(path: Path) -> dict[str, Any]:
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         raise ValueError("Markdown GAAI metadata requires YAML front matter")
-    end_index = next(
-        (index for index in range(1, len(lines)) if lines[index].strip() == "---"), -1
-    )
+    end_index = next((index for index in range(1, len(lines)) if lines[index].strip() == "---"), -1)
     if end_index < 0:
         raise ValueError("Markdown GAAI metadata front matter is not closed")
     front_matter = "\n".join(lines[1:end_index])
@@ -126,7 +120,5 @@ def _is_bulk_gaai_metadata_file(path: Path) -> bool:
         with path.open("r", encoding="utf-8") as handle:
             first_line = handle.readline()
     except OSError as exc:
-        raise GaaiLoadError(
-            f"failed to inspect GAAI metadata file {path}: {exc}"
-        ) from exc
+        raise GaaiLoadError(f"failed to inspect GAAI metadata file {path}: {exc}") from exc
     return first_line.strip() == "---"

@@ -1,0 +1,3416 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Multi-backend autonomous code agent orchestrator">
+      
+      
+      
+        <link rel="canonical" href="https://d-sorganization.github.io/Maxwell-Daemon/development/planning/orchestrator_market_comparison/">
+      
+      
+        <link rel="prev" href="../../../reference/configuration/">
+      
+      
+        <link rel="next" href="../../backend-extension-guide/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Agentic orchestrator strategy - Maxwell-Daemon</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#agentic-orchestrators-market-assessment-and-home-user-strategy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Maxwell-Daemon" class="md-header__button md-logo" aria-label="Maxwell-Daemon" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Maxwell-Daemon
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Agentic orchestrator strategy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/D-sorganization/Maxwell-Daemon" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    D-sorganization/Maxwell-Daemon
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../getting-started/quickstart/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../architecture/overview/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../operations/deployment/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/cli/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../assessments/A-N_Assessment_2026-04-19/" class="md-tabs__link">
+          
+  
+  
+  Assessments
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../contributing/" class="md-tabs__link">
+          
+  
+  
+  Community
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Maxwell-Daemon" class="md-nav__button md-logo" aria-label="Maxwell-Daemon" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Maxwell-Daemon
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/D-sorganization/Maxwell-Daemon" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    D-sorganization/Maxwell-Daemon
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/autonomous-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Autonomous workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/fleet-gauntlet-walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fleet gauntlet walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/resource-aware-routing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resource-aware routing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/fleet-issue-queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fleet issue queue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/fleet-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fleet architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/system_specification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/gate-runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gate runtime and critic panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design by Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/work-items/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governed work items
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/artifacts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Durable artifacts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/browser-automation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser automation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/task-graphs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task graphs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/task-graphs-first-slice/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task graphs first slice
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/checks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Source-controlled checks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/ansible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment (Ansible)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/tailscale/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tailscale fleet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/release-readiness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Beta release readiness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/production-readiness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Production release readiness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../operations/docs-publishing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation publishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/tasks-cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/action-ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Action ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/openapi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAPI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/grpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    gRPC status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agentic orchestrator strategy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agentic orchestrator strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evidence-basis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence Basis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#corrections-to-the-initial-memo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Corrections to the Initial Memo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#product-positioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Product Positioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#market-map-for-maxwell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Market Map for Maxwell
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#home-user-product-opportunities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home-User Product Opportunities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Home-User Product Opportunities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-subscription-aware-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Subscription-Aware Routing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-real-mcp-client-and-server-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Real MCP Client and Server Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-repo-carried-memory-and-shared-fleet-experience" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Repo-Carried Memory and Shared Fleet Experience
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-safe-local-validation-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Safe Local Validation Loops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-tailscale-native-personal-fleet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Tailscale-Native Personal Fleet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-home-grade-governance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Home-Grade Governance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-vision-browser-and-gui-automation-after-core-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Vision, Browser, and GUI Automation After Core Safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prioritized-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prioritized Roadmap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backend-extension-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend and extension guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tool-authoring-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool authoring and MCP boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../external-agent-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External agent adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval-harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Eval harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deep-traversal-hotspots-20260422/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deep traversal hotspot review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../open_source_agents_review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open-source agents review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ijfw_feature_review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IJFW feature review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../specs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_10" id="__nav_6_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature evaluations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Feature evaluations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../feature_evaluation/01_ast_repo_mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AST repo mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../feature_evaluation/02_docker_sandboxing_and_auto_fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandboxing and auto-fix loops
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../feature_evaluation/03_mcp_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../feature_evaluation/04_multi_agent_sops_and_trident_qa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-agent SOPs and QA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../feature_evaluation/05_phase_gate_workflows_and_memory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase gates and memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Assessments
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Assessments
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../assessments/A-N_Assessment_2026-04-19/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A-N Assessment 2026-04-19
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../assessments/maxwell_daemon_assessment_v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maxwell-Daemon Assessment v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Community
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/beta-feedback/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Beta feedback operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/documentation-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../community/roadmap-governance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap and Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evidence-basis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence Basis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#corrections-to-the-initial-memo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Corrections to the Initial Memo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#product-positioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Product Positioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#market-map-for-maxwell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Market Map for Maxwell
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#home-user-product-opportunities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home-User Product Opportunities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Home-User Product Opportunities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-subscription-aware-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Subscription-Aware Routing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-real-mcp-client-and-server-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Real MCP Client and Server Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-repo-carried-memory-and-shared-fleet-experience" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Repo-Carried Memory and Shared Fleet Experience
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-safe-local-validation-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Safe Local Validation Loops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-tailscale-native-personal-fleet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Tailscale-Native Personal Fleet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-home-grade-governance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Home-Grade Governance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-vision-browser-and-gui-automation-after-core-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Vision, Browser, and GUI Automation After Core Safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prioritized-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prioritized Roadmap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="agentic-orchestrators-market-assessment-and-home-user-strategy">Agentic Orchestrators: Market Assessment and Home User Strategy<a class="headerlink" href="#agentic-orchestrators-market-assessment-and-home-user-strategy" title="Permanent link">&para;</a></h1>
+<p>This planning note updates the initial market memo with the supplied research
+report and an additional Maxwell-Daemon product analysis. It is intentionally
+biased toward the target user: a home user, hobbyist, or solo developer who has
+limited cash, a few AI subscriptions, one or more personal machines, and a
+strong desire to self-host, test safely, and improve code quality without
+running an enterprise platform.</p>
+<h2 id="decision">Decision<a class="headerlink" href="#decision" title="Permanent link">&para;</a></h2>
+<p>Maxwell-Daemon should not copy the enterprise "agent control tower" category.
+The stronger product is a <strong>personal autonomous engineering hub</strong>:</p>
+<ul>
+<li>Local-first by default, with SQLite, HTTP, and Tailscale-friendly networking.</li>
+<li>Subscription-aware, so users can route work across Claude, Codex/Copilot,
+  API-backed models, and local Ollama without wasting scarce premium quota.</li>
+<li>Safety-first, so every side effect is bounded by approval policy, audit
+  events, work-item scope, source-controlled checks, and sandboxed execution.</li>
+<li>Memory-aware, so the codebase carries durable project knowledge across
+  sessions and across the user's own fleet.</li>
+</ul>
+<p>Enterprise primitives such as Redis Streams, Ray, Kubernetes, and policy engines
+are useful references, but they should remain optional scale-out backends until
+the home-user flow is excellent.</p>
+<h2 id="evidence-basis">Evidence Basis<a class="headerlink" href="#evidence-basis" title="Permanent link">&para;</a></h2>
+<p>The supplied report argues that autonomous software engineering is moving from
+single coding assistants toward coordinated fleets with shared memory,
+spec-driven workflows, tool protocols, validation loops, and runtime governance.
+Treat niche framework adoption numbers in that report as leads rather than
+proof. Product strategy should rely on primary references where possible.</p>
+<table>
+<thead>
+<tr>
+<th>Market signal</th>
+<th>Evidence</th>
+<th>Maxwell implication</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tool interoperability is consolidating around MCP.</td>
+<td>The <a href="https://modelcontextprotocol.io/docs/getting-started/intro">Model Context Protocol</a> describes an open standard for connecting AI apps to data sources, tools, and workflows.</td>
+<td>Maxwell needs real MCP client and server support. The current internal tool registry is useful, but not sufficient protocol adoption.</td>
+</tr>
+<tr>
+<td>Home users already have capable subscription-based coding agents.</td>
+<td><a href="https://code.claude.com/docs/en/overview">Claude Code</a> supports terminal, IDE, desktop, web, MCP, memory, hooks, scheduled tasks, and multi-agent workflows. <a href="https://docs.github.com/en/copilot/concepts/agents/openai-codex">GitHub's Codex integration</a> can be powered by Copilot plans.</td>
+<td>Maxwell should orchestrate these tools and account for quota, rate limits, and local context rather than pretending to replace every vendor surface.</td>
+</tr>
+<tr>
+<td>Local model execution is a baseline requirement.</td>
+<td><a href="https://docs.ollama.com/api/introduction">Ollama's API</a> runs locally at <code>http://localhost:11434/api</code> and has official Python and JavaScript libraries.</td>
+<td>Maxwell should make Ollama the default low-cost workhorse for routine refactors, summarization, memory consolidation, and test-fix loops.</td>
+</tr>
+<tr>
+<td>Repository maps reduce token waste.</td>
+<td><a href="https://aider.chat/docs/repomap.html">Aider's repository map</a> sends concise class/function/signature context and lets the model request specific files when needed.</td>
+<td>Maxwell should prioritize repo maps before heavyweight RAG. Tree-sitter is valuable, but the product goal is "enough structure, low tokens, fast setup."</td>
+</tr>
+<tr>
+<td>AI checks are becoming source-controlled project policy.</td>
+<td><a href="https://docs.continue.dev/">Continue</a> runs markdown-defined AI checks on PRs and reports GitHub status checks.</td>
+<td>Maxwell's <code>.maxwell/checks/*.md</code> direction is strategically correct and should become a core home-user quality feature.</td>
+</tr>
+<tr>
+<td>Distributed runtimes are powerful but heavy.</td>
+<td><a href="https://docs.ray.io/en/latest/ray-core/walkthrough.html">Ray Core</a> provides tasks, actors, objects, scheduling, fault tolerance, and accelerator support.</td>
+<td>Ray/Kubernetes are appropriate optional backends for advanced users, not the default installation path.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="corrections-to-the-initial-memo">Corrections to the Initial Memo<a class="headerlink" href="#corrections-to-the-initial-memo" title="Permanent link">&para;</a></h2>
+<p>The initial PR memo was directionally useful but overstated a few capabilities.</p>
+<table>
+<thead>
+<tr>
+<th>Prior statement</th>
+<th>Corrected interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"Full adoption of MCP"</td>
+<td>Maxwell currently has <code>maxwell_daemon/tools/mcp.py</code>, an internal tool schema registry that emits provider-specific tool definitions. Real MCP adoption means implementing MCP client/server transports and permission mapping.</td>
+</tr>
+<tr>
+<td>"<code>dual_config</code> backend system already supports this"</td>
+<td>Maxwell has backend config, <code>fallback_backend</code>, budget config, request cost tracking, and <code>/api/v1/cost</code>. The roadmap still needs explicit repo budgets, subscription quota tracking, fallback policy, and dashboard UX.</td>
+</tr>
+<tr>
+<td>"Same orchestration capabilities as enterprise fleets"</td>
+<td>Maxwell has the right local primitives, but should not claim parity with Ray/Kubernetes/Redis systems. The advantage is home-user simplicity, not enterprise scale.</td>
+</tr>
+<tr>
+<td>"Hermetic validation loops"</td>
+<td>The loop is a high-value goal. It needs a safety design: isolated worktrees or containers, resource caps, command allowlists, secrets isolation, network policy, timeouts, and a kill switch.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="product-positioning">Product Positioning<a class="headerlink" href="#product-positioning" title="Permanent link">&para;</a></h2>
+<p>Maxwell-Daemon should be the layer that turns scattered personal AI resources
+into a governed development system.</p>
+<p>The home user problem is not "how do I run 100 enterprise agents?" It is:</p>
+<ul>
+<li>I pay for multiple AI products and want to use the right one at the right time.</li>
+<li>I have a local GPU or spare machine and want it used for cheap work.</li>
+<li>I want agents to run tests and improve code quality without damaging my repo.</li>
+<li>I want project memory to live with the codebase, not inside one vendor chat.</li>
+<li>I want self-hosting and Tailscale fleet use without Kubernetes operations.</li>
+<li>I want advanced features, but I need the default path to be understandable.</li>
+</ul>
+<p>That makes Maxwell's core promise:</p>
+<blockquote>
+<p>A local-first daemon that budgets, routes, remembers, tests, and audits
+autonomous code work across the user's own machines and subscriptions.</p>
+</blockquote>
+<h2 id="market-map-for-maxwell">Market Map for Maxwell<a class="headerlink" href="#market-map-for-maxwell" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Representative tools from the report and market</th>
+<th>What Maxwell should learn</th>
+<th>What Maxwell should avoid</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Personal coding agents</td>
+<td>Claude Code, Codex/Copilot, Aider, Cline/Roo, Continue</td>
+<td>Great local workflows, repo awareness, PR checks, subscription-backed access</td>
+<td>Lock-in to one model or one IDE</td>
+</tr>
+<tr>
+<td>Local/self-hosted substrate</td>
+<td>Ollama, OpenHands-style sandboxes, local CLIs</td>
+<td>Cheap repeatable execution, privacy, offline-capable loops</td>
+<td>Treating local models as if they can handle every architecture task</td>
+</tr>
+<tr>
+<td>Enterprise orchestration</td>
+<td>Ray, Kubernetes/KubeRay, Redis Streams, LangGraph, AutoGen, CrewAI, Dify, n8n</td>
+<td>Actors, queues, observability, fault tolerance, role separation</td>
+<td>Making a home user operate a cluster before they get value</td>
+</tr>
+<tr>
+<td>Memory systems</td>
+<td>Zep, Letta/MemGPT, Mem0, repo-local markdown memory</td>
+<td>Episodic, semantic, and procedural memory scopes; shared state for fleets</td>
+<td>Opaque memory that users cannot inspect, diff, or fix</td>
+</tr>
+<tr>
+<td>Governance</td>
+<td>Agent OS-style policy, work items, audit logs, action approval, capability gates</td>
+<td>Policy before side effects, immutable audit, trust boundaries</td>
+<td>Enterprise compliance complexity in the default flow</td>
+</tr>
+<tr>
+<td>Vision and GUI automation</td>
+<td>screenshot-to-code, UI-TARS, Agent-S, Playwright/browser-use patterns</td>
+<td>Useful for frontend QA, screenshot comparison, and browser tasks</td>
+<td>Desktop-control autonomy before file/code safety is mature</td>
+</tr>
+</tbody>
+</table>
+<h2 id="home-user-product-opportunities">Home-User Product Opportunities<a class="headerlink" href="#home-user-product-opportunities" title="Permanent link">&para;</a></h2>
+<h3 id="1-subscription-aware-routing">1. Subscription-Aware Routing<a class="headerlink" href="#1-subscription-aware-routing" title="Permanent link">&para;</a></h3>
+<p>Build routing around the resources the user actually has:</p>
+<ul>
+<li>API backends with measurable USD cost.</li>
+<li>Flat-rate subscriptions with request/session quotas.</li>
+<li>Local models with no per-token fee but limited latency, quality, RAM, and VRAM.</li>
+<li>Cloud agent sessions such as Codex/Copilot or Claude Code where billing is not
+  the same as raw API tokens.</li>
+<li>Terms-safe integrations only: use official APIs, CLIs, SDKs, or documented
+  agent surfaces. If a provider does not expose exact cost or quota telemetry,
+  record estimates and uncertainty rather than inventing precision.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Each backend advertises capability tags: <code>planning</code>, <code>coding</code>, <code>review</code>,
+  <code>vision</code>, <code>long_context</code>, <code>cheap</code>, <code>local</code>, <code>offline</code>, <code>subscription</code>.</li>
+<li>The cost UI shows USD, estimated subscription usage, rate-limit cooldowns, and
+  local resource use separately.</li>
+<li>Users can set policies such as "use local for tests and summaries", "spend
+  frontier models only on architecture and final review", and "hard stop after
+  this repo spends $X this month."</li>
+</ul>
+<h3 id="2-real-mcp-client-and-server-support">2. Real MCP Client and Server Support<a class="headerlink" href="#2-real-mcp-client-and-server-support" title="Permanent link">&para;</a></h3>
+<p>Maxwell should be both:</p>
+<ul>
+<li>An MCP client that consumes local/community MCP servers.</li>
+<li>An MCP server that exposes Maxwell tasks, work items, checks, memories,
+  artifacts, cost state, and fleet status to compatible AI clients.</li>
+</ul>
+<p>This creates a strong home-user loop: Claude Code, Codex/Copilot, or another
+client can ask Maxwell for repo context, budget state, or task history while
+Maxwell can call the user's local tools through standard MCP.</p>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Do not market <code>maxwell_daemon/tools/mcp.py</code> as complete MCP.</li>
+<li>Add transport-level MCP support with permission profiles.</li>
+<li>Map every tool to an action policy tier and audit event.</li>
+<li>Provide a starter catalog of safe local MCP servers: filesystem read-only,
+  GitHub read-only, SQLite read-only, and browser test runner.</li>
+</ul>
+<h3 id="3-repo-carried-memory-and-shared-fleet-experience">3. Repo-Carried Memory and Shared Fleet Experience<a class="headerlink" href="#3-repo-carried-memory-and-shared-fleet-experience" title="Permanent link">&para;</a></h3>
+<p>Memory should belong to the codebase first. The default should be a
+human-readable <code>.maxwell/memory/</code> folder with:</p>
+<ul>
+<li><code>decisions.md</code> for architectural decisions.</li>
+<li><code>patterns.md</code> for project conventions.</li>
+<li><code>commands.md</code> for build, test, and debug commands.</li>
+<li><code>failures.md</code> for known failure modes and fixes.</li>
+<li><code>fleet.md</code> for machine capabilities and routing lessons.</li>
+</ul>
+<p>For fleets, the coordinator can publish memory deltas to workers over the
+existing HTTP/Tailscale transport. The worker should never invent a separate
+truth unless it syncs back as a proposed memory update.</p>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Memory updates are proposed actions, not silent writes.</li>
+<li>Memories have source links to tasks, PRs, tests, or user decisions.</li>
+<li>Workers receive read-only memory snapshots by default.</li>
+<li>Conflicting memories require human review or coordinator reconciliation.</li>
+</ul>
+<p>See also <a href="../../../feature_evaluation/05_phase_gate_workflows_and_memory/">phase-gate workflows and memory</a>.</p>
+<h3 id="4-safe-local-validation-loops">4. Safe Local Validation Loops<a class="headerlink" href="#4-safe-local-validation-loops" title="Permanent link">&para;</a></h3>
+<p>The strongest home-user value is an agent that proves code works before asking
+for review. The safe version requires more than "run pytest":</p>
+<ul>
+<li>Run in an isolated worktree or container.</li>
+<li>Default-deny destructive commands.</li>
+<li>Bound CPU, RAM, disk, time, network, and process count.</li>
+<li>Strip secrets unless explicitly approved.</li>
+<li>Store stdout, stderr, diffs, screenshots, and artifacts.</li>
+<li>Retry only within a configured budget.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Work items define acceptance criteria and required checks.</li>
+<li><code>.maxwell/checks/*.md</code> adds project-specific AI review gates.</li>
+<li>The action ledger records every command, file mutation, and approval.</li>
+<li>The UI shows "what changed", "what ran", "what failed", and "what was fixed."</li>
+</ul>
+<p>See also <a href="../../../feature_evaluation/02_docker_sandboxing_and_auto_fix/">Docker sandboxing and auto-fix loops</a>, <a href="../../../architecture/checks/">source-controlled checks</a>, and <a href="../../../architecture/work-items/">governed work items</a>.</p>
+<h3 id="5-tailscale-native-personal-fleet">5. Tailscale-Native Personal Fleet<a class="headerlink" href="#5-tailscale-native-personal-fleet" title="Permanent link">&para;</a></h3>
+<p>The fleet should feel like "use my machines" rather than "operate a cluster."
+Tailscale is the right default network assumption, but Maxwell should reduce
+the setup burden.</p>
+<p>Product improvements:</p>
+<ul>
+<li>Fleet setup wizard that validates MagicDNS, auth token/JWT, and ACL reachability.</li>
+<li>Worker capability registry: OS, CPU, RAM, GPU, installed tools, local models,
+  repo checkout availability, and max parallel tasks.</li>
+<li>Coordinator scheduling policy that routes cheap/test-heavy work to local
+  machines and premium/review-heavy work to the best model.</li>
+<li>Offline queueing and stale-task recovery when a laptop sleeps.</li>
+<li>Shared memory snapshots and artifact fetches across the tailnet.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li><code>maxwell-daemon fleet doctor</code> reports actionable setup failures.</li>
+<li>Workers can be read-only, test-only, or full-execution nodes.</li>
+<li>Fleet dispatch never exposes task or memory APIs to the public internet.</li>
+</ul>
+<p>See also <a href="../../../operations/tailscale/">Tailscale fleet deployment</a>.</p>
+<h3 id="6-home-grade-governance">6. Home-Grade Governance<a class="headerlink" href="#6-home-grade-governance" title="Permanent link">&para;</a></h3>
+<p>Do not import enterprise trust frameworks wholesale. Translate the useful parts
+into understandable local controls:</p>
+<ul>
+<li>Action ledger: every side effect has a proposed/running/applied/failed state.</li>
+<li>Permission modes: suggest, auto-edit, full-auto with explicit scope limits.</li>
+<li>Capability profiles: read-only, edit-only, command-limited, PR-capable.</li>
+<li>Kill switch: stop current task, revoke worker assignment, and freeze side effects.</li>
+<li>Audit export: a single file or API response the user can inspect after a run.</li>
+</ul>
+<p>This is where Maxwell can beat single-agent tools for trust. The product should
+make the autonomous system legible.</p>
+<h3 id="7-vision-browser-and-gui-automation-after-core-safety">7. Vision, Browser, and GUI Automation After Core Safety<a class="headerlink" href="#7-vision-browser-and-gui-automation-after-core-safety" title="Permanent link">&para;</a></h3>
+<p>The report's multimodal section is relevant, but it should be sequenced after
+safe code mutation and validation. The first practical home-user slice is not
+full desktop control. It is:</p>
+<ul>
+<li>Playwright browser testing.</li>
+<li>Screenshot capture and visual diff artifacts.</li>
+<li>UI failure summarization.</li>
+<li>Optional screenshot-to-code scaffolding for small prototypes.</li>
+</ul>
+<p>Full OS GUI automation should remain experimental until command/file safety,
+approval policy, and artifact review are mature.</p>
+<h2 id="prioritized-roadmap">Prioritized Roadmap<a class="headerlink" href="#prioritized-roadmap" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Work</th>
+<th>Why it matters for home users</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P0</td>
+<td>Keep planning docs navigable and source-backed.</td>
+<td>Users and contributors need a stable strategy, not chat-only market notes.</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Subscription-aware routing and budget dashboard.</td>
+<td>Directly saves money and makes paid plans more useful.</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Real MCP client/server implementation.</td>
+<td>Lets Maxwell plug into the broader tool ecosystem and expose its own memory/tasks.</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Repo-carried memory with fleet sync.</td>
+<td>Gives the codebase a durable "web of experience" across machines.</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Safe validation loop with action ledger, checks, and work items.</td>
+<td>Converts code generation into verified code improvement.</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Tailscale fleet doctor and capability-aware scheduling.</td>
+<td>Lets enthusiasts use spare machines without Kubernetes.</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Repo-map context provider.</td>
+<td>Reduces token waste and improves code quality across large projects.</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Optional Ray/Redis scale-out backend.</td>
+<td>Useful for advanced users after the local-first path is solid.</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Browser/vision QA and screenshot artifacts.</td>
+<td>Valuable for UI work, but not before core safety.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="recommended-issues">Recommended Issues<a class="headerlink" href="#recommended-issues" title="Permanent link">&para;</a></h2>
+<p>Create or update issues around these implementation slices:</p>
+<ol>
+<li><code>MCP</code>: implement protocol-level client/server support and permission mapping.</li>
+<li><code>Routing</code>: add terms-safe subscription-aware backend metadata and policy-driven fallback.</li>
+<li><code>Memory</code>: add repo-local memory files, proposed memory updates, and fleet sync.</li>
+<li><code>Validation</code>: implement sandboxed check execution with resource limits.</li>
+<li><code>Fleet</code>: add <code>fleet doctor</code>, worker capability registry, and Tailscale checks.</li>
+<li><code>UI</code>: add cost/resource dashboard, action approval queue, and validation artifacts.</li>
+<li><code>Context</code>: add repo-map provider with a simple parser first, Tree-sitter where available.</li>
+</ol>
+<p>These are the product gaps most likely to improve Maxwell for the target home
+user while preserving the long-term ability to grow into larger fleets.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "content.code.copy", "content.code.annotate"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

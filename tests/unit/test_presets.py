@@ -79,9 +79,7 @@ class TestPresetCLI:
 
         return CliRunner()
 
-    def test_save_and_list(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_save_and_list(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from maxwell_daemon.cli import tasks as tasks_cli
         from maxwell_daemon.cli.main import app
 
@@ -120,9 +118,7 @@ class TestPresetCLI:
         # Seed a preset directly.
         from maxwell_daemon.core.presets import FilterPreset, PresetStore
 
-        PresetStore(presets_path).save(
-            FilterPreset(name="qf", status="failed", kind="issue")
-        )
+        PresetStore(presets_path).save(FilterPreset(name="qf", status="failed", kind="issue"))
 
         captured: list[str] = []
 

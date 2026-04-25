@@ -51,9 +51,7 @@ def test_create_list_get_and_transition_work_item(client: TestClient) -> None:
     assert created.status_code == 201
     assert created.json()["status"] == "draft"
 
-    listed = client.get(
-        "/api/v1/work-items", params={"repo": "D-sorganization/Maxwell-Daemon"}
-    )
+    listed = client.get("/api/v1/work-items", params={"repo": "D-sorganization/Maxwell-Daemon"})
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()] == ["wi-api"]
 
@@ -78,9 +76,7 @@ def test_create_list_get_and_transition_work_item(client: TestClient) -> None:
 def test_invalid_transition_returns_conflict(client: TestClient) -> None:
     client.post("/api/v1/work-items", json={"id": "wi-bad", "title": "Bad transition"})
 
-    response = client.post(
-        "/api/v1/work-items/wi-bad/transition", json={"status": "done"}
-    )
+    response = client.post("/api/v1/work-items/wi-bad/transition", json={"status": "done"})
 
     assert response.status_code == 409
 
@@ -94,9 +90,7 @@ def test_patch_cannot_break_refined_contract(client: TestClient) -> None:
             "acceptance_criteria": [{"id": "AC1", "text": "covered"}],
         },
     )
-    client.post(
-        "/api/v1/work-items/wi-contract/transition", json={"status": "needs_refinement"}
-    )
+    client.post("/api/v1/work-items/wi-contract/transition", json={"status": "needs_refinement"})
     client.post("/api/v1/work-items/wi-contract/transition", json={"status": "refined"})
 
     response = client.patch(

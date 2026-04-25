@@ -35,13 +35,9 @@ class ActionPolicy:
 
     def evaluate(self, action: Action, *, dry_run: bool = False) -> PolicyDecision:
         if not self._known_kind(action.kind):
-            return PolicyDecision(
-                False, True, f"unknown action kind: {action.kind.value}"
-            )
+            return PolicyDecision(False, True, f"unknown action kind: {action.kind.value}")
         if not self._within_allowed_scope(action):
-            return PolicyDecision(
-                False, True, "action target is outside the allowed workspace"
-            )
+            return PolicyDecision(False, True, "action target is outside the allowed workspace")
         if action.kind is ActionKind.COMMAND and self._uses_denied_command(action):
             return PolicyDecision(False, True, "command is denied by policy")
         if dry_run:
@@ -54,19 +50,11 @@ class ActionPolicy:
                 ActionKind.FILE_EDIT,
                 ActionKind.DIFF_APPLY,
             }:
-                return PolicyDecision(
-                    True, False, "auto-edit permits scoped file changes"
-                )
-            return PolicyDecision(
-                True, True, "auto-edit requires approval for this action kind"
-            )
+                return PolicyDecision(True, False, "auto-edit permits scoped file changes")
+            return PolicyDecision(True, True, "auto-edit requires approval for this action kind")
         if self.mode is ApprovalMode.FULL_AUTO:
-            return PolicyDecision(
-                True, False, "full-auto permits this policy-approved action"
-            )
-        return PolicyDecision(
-            False, True, f"unsupported approval mode: {self.mode.value}"
-        )
+            return PolicyDecision(True, False, "full-auto permits this policy-approved action")
+        return PolicyDecision(False, True, f"unsupported approval mode: {self.mode.value}")
 
     @staticmethod
     def _known_kind(kind: ActionKind) -> bool:

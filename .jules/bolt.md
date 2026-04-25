@@ -13,3 +13,7 @@
 ## 2024-10-26 - O(N) Array Allocations for Map Aggregates
 **Learning:** Spreading `Map.values()` into arrays repeatedly (e.g., `[...state.allTasks.values()].filter(...).length` or `.reduce(...)`) just to compute aggregates causes unnecessary O(N) memory allocations and garbage collection pressure, leading to UI frame drops when updates happen rapidly (like via WebSockets).
 **Action:** Always compute aggregate values over Map or Set structures using a single `for...of` loop or iterator instead of creating intermediate arrays.
+
+## 2024-04-25 - [Frontend Performance: Object allocations in render loops]
+**Learning:** Returning new objects inside replacer functions (e.g. `replace(..., () => ({}))`) and relying on object literals for lookups inside frequently called functions (e.g., sort comparators or formatting methods) creates new object instances on every call, causing memory churn and GC pressure.
+**Action:** Extract static mapping objects (like `ESCAPE_MAP` or `GATE_STATUS_RANK`) outside of the functions that use them to prevent unnecessary allocations on every execution.

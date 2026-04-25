@@ -81,9 +81,7 @@ class TestBranchLifecycle:
         git = FakeGit()
         ws = Workspace(root=tmp_path, runner=git)
         asyncio.run(
-            ws.create_branch(
-                "owner/repo", "maxwell-daemon/issue-42", base="main", task_id="t-1"
-            )
+            ws.create_branch("owner/repo", "maxwell-daemon/issue-42", base="main", task_id="t-1")
         )
         cmds = [c[0] for c in git.calls]
         assert ("git", "checkout", "main") in cmds

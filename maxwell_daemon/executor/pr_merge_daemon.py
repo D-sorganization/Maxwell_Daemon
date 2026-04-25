@@ -52,9 +52,7 @@ _TERMINAL_UNSUCCESSFUL_CONCLUSIONS = frozenset(
         "timed_out",
     }
 )
-_PENDING_CHECK_STATUSES = frozenset(
-    {"in_progress", "pending", "queued", "requested", "waiting"}
-)
+_PENDING_CHECK_STATUSES = frozenset({"in_progress", "pending", "queued", "requested", "waiting"})
 
 
 class PrMergeDecision(str, Enum):
@@ -117,12 +115,8 @@ class _PrStateLike(Protocol):
 
 class _GhLike(Protocol):
     async def get_pr(self, repo: str, number: int) -> Any: ...
-    async def get_check_runs(
-        self, repo: str, head_sha: str
-    ) -> list[dict[str, str]]: ...
-    async def enable_auto_merge(
-        self, repo: str, number: int, *, method: str
-    ) -> None: ...
+    async def get_check_runs(self, repo: str, head_sha: str) -> list[dict[str, str]]: ...
+    async def enable_auto_merge(self, repo: str, number: int, *, method: str) -> None: ...
     async def update_branch(self, repo: str, number: int) -> None: ...
     async def add_label(self, repo: str, number: int, label: str) -> None: ...
 
@@ -155,9 +149,7 @@ class PrMergeDaemon:
             )
 
         if pr.merged:
-            return PrShepherdResult(
-                repo=pr.repo, number=pr.number, decision=PrMergeDecision.MERGED
-            )
+            return PrShepherdResult(repo=pr.repo, number=pr.number, decision=PrMergeDecision.MERGED)
 
         if cfg.required_label not in pr.labels:
             return PrShepherdResult(
@@ -223,17 +215,13 @@ class PrMergeDaemon:
         """Decide between ``CI_FAILED`` and ``WAITING_FOR_CI`` given a check-run snapshot."""
         checks = list(check_runs)
         if any(
-            (check.get("conclusion") or "").lower()
-            in _TERMINAL_UNSUCCESSFUL_CONCLUSIONS
+            (check.get("conclusion") or "").lower() in _TERMINAL_UNSUCCESSFUL_CONCLUSIONS
             for check in checks
         ):
             return PrMergeDecision.CI_FAILED
         if not checks:
             return PrMergeDecision.WAITING_FOR_CI
-        if any(
-            (check.get("status") or "").lower() in _PENDING_CHECK_STATUSES
-            for check in checks
-        ):
+        if any((check.get("status") or "").lower() in _PENDING_CHECK_STATUSES for check in checks):
             return PrMergeDecision.WAITING_FOR_CI
         return PrMergeDecision.UNKNOWN_STATE
 
@@ -253,9 +241,7 @@ class PrMergeDaemon:
             try:
                 results.append(await self.shepherd(pr, gh=gh))
             except Exception:
-                log.warning(
-                    "shepherd raised for pr=%s/%s", pr.repo, pr.number, exc_info=True
-                )
+                log.warning("shepherd raised for pr=%s/%s", pr.repo, pr.number, exc_info=True)
                 results.append(
                     PrShepherdResult(
                         repo=pr.repo,

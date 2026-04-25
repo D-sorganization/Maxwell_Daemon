@@ -75,9 +75,7 @@ class TestCIProfilePrompt:
         assert "coverage" in prompt.lower()
 
     def test_precommit_hooks_listed(self) -> None:
-        prompt = CIProfile(
-            has_precommit=True, precommit_hooks=("ruff", "mypy")
-        ).to_prompt()
+        prompt = CIProfile(has_precommit=True, precommit_hooks=("ruff", "mypy")).to_prompt()
         assert "pre-commit" in prompt.lower()
         assert "ruff" in prompt
         assert "mypy" in prompt

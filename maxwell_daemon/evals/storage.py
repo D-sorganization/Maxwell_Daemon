@@ -19,13 +19,9 @@ class EvalRunStore:
     def save(self, run: EvalRun, results: list[EvalResult]) -> Path:
         run_dir = self._root / run.id
         run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "run.json").write_text(
-            run.model_dump_json(indent=2), encoding="utf-8"
-        )
+        (run_dir / "run.json").write_text(run.model_dump_json(indent=2), encoding="utf-8")
         (run_dir / "results.json").write_text(
-            "[\n"
-            + ",\n".join(result.model_dump_json(indent=2) for result in results)
-            + "\n]\n",
+            "[\n" + ",\n".join(result.model_dump_json(indent=2) for result in results) + "\n]\n",
             encoding="utf-8",
         )
         return run_dir

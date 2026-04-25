@@ -43,10 +43,13 @@ const commands = [
 
 // ---- helpers ---------------------------------------------------------------
 
+// ⚡ Bolt: Extracted to avoid object allocation on every character replacement
+const ESCAPE_MAP = {
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+};
+
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  }[c]));
+  return String(s).replace(/[&<>"']/g, (c) => ESCAPE_MAP[c]);
 }
 
 function fmtUsd(n) { return `$${(n || 0).toFixed(4)}`; }
@@ -64,17 +67,19 @@ function fmtTsShort(iso) {
   return d.toLocaleString(undefined, { timeStyle: "short" });
 }
 
+// ⚡ Bolt: Extracted to avoid object allocation on every sort comparison
+const GATE_STATUS_RANK = {
+  failed: 0,
+  blocked: 1,
+  waived: 2,
+  running: 3,
+  pending: 4,
+  passed: 5,
+  skipped: 6,
+};
+
 function gateStatusRank(status) {
-  const order = {
-    failed: 0,
-    blocked: 1,
-    waived: 2,
-    running: 3,
-    pending: 4,
-    passed: 5,
-    skipped: 6,
-  };
-  return order[status] ?? 99;
+  return GATE_STATUS_RANK[status] ?? 99;
 }
 
 function findingSeverityRank(severity) {
@@ -1659,6 +1664,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // N opens the dialog when it's closed and no input is focused.
   document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      const dialogs = document.querySelectorAll("dialog");
+      const isDialogOpen = Array.from(dialogs).some(d => d.open);
+      if (!isDialogOpen) {
+        const detailCard = document.getElementById("detail-card");
+        if (detailCard && !detailCard.hidden) {
+          detailCard.hidden = true;
+          state.selected = null;
+        }
+      }
+      return;
+    }
+
     if (ev.key !== "n" && ev.key !== "N") return;
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;

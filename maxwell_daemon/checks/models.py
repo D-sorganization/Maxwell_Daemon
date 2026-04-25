@@ -180,9 +180,7 @@ def _coerce_str_tuple(value: object) -> tuple[str, ...]:
 
 
 def _normalize_repo_path(path: str | Path) -> str:
-    normalized = (
-        path.as_posix() if isinstance(path, Path) else str(path).replace("\\", "/")
-    )
+    normalized = path.as_posix() if isinstance(path, Path) else str(path).replace("\\", "/")
     return normalized.lstrip("./")
 
 

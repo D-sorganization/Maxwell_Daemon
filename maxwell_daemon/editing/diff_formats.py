@@ -236,9 +236,7 @@ def parse_search_replace(text: str) -> tuple[FileEdit, ...]:
                 replace_lines.append(lines[k])
                 k += 1
             if replace_idx is None:
-                raise DiffParseError(
-                    "search_replace: missing '>>>>>>> REPLACE' closing marker"
-                )
+                raise DiffParseError("search_replace: missing '>>>>>>> REPLACE' closing marker")
 
             block = (
                 f"{_SR_SEARCH_MARKER}\n"
@@ -322,9 +320,7 @@ def parse_whole_file(text: str) -> tuple[FileEdit, ...]:
             body.append(lines[j])
             j += 1
         if end_idx is None:
-            raise DiffParseError(
-                f"whole_file: missing '--- end ---' closer for {path!r}"
-            )
+            raise DiffParseError(f"whole_file: missing '--- end ---' closer for {path!r}")
         content = "\n".join(body)
         if body:
             content += "\n"

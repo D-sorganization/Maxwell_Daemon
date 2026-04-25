@@ -36,9 +36,7 @@ def test_duplicate_node_ids_are_rejected() -> None:
 
 def test_missing_dependencies_are_rejected() -> None:
     with pytest.raises(ValidationError, match="unknown dependency"):
-        TaskGraph(
-            id="graph-1", name="delivery", nodes=(_node("qa", depends_on=("missing",)),)
-        )
+        TaskGraph(id="graph-1", name="delivery", nodes=(_node("qa", depends_on=("missing",)),))
 
 
 def test_dependency_cycles_are_rejected() -> None:

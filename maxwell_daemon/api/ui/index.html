@@ -28,19 +28,19 @@
 
   <div class="workbench-shell">
     <nav class="activity-bar" role="tablist" aria-label="Activity Bar">
-      <button class="tab active" data-view="tasks" role="tab" aria-selected="true" title="Tasks">T</button>
-      <button class="tab" data-view="fleet" role="tab" aria-selected="false" title="Fleet">F</button>
-      <button class="tab" data-view="gauntlet" role="tab" aria-selected="false" title="Gauntlet">G</button>
-      <button class="tab" data-view="work-items" role="tab" aria-selected="false" title="Work Items">W</button>
-      <button class="tab" data-view="approvals" role="tab" aria-selected="false" title="Approvals">A</button>
-      <button class="tab" data-view="artifacts" role="tab" aria-selected="false" title="Artifacts">I</button>
-      <button class="tab" data-view="graphs" role="tab" aria-selected="false" title="Graphs">G</button>
-      <button class="tab" data-view="checks" role="tab" aria-selected="false" title="Checks">K</button>
-      <button class="tab" data-view="repos" role="tab" aria-selected="false" title="Repositories">R</button>
-      <button class="tab" data-view="monitor" role="tab" aria-selected="false" title="Monitor">M</button>
-      <button class="tab" data-view="history" role="tab" aria-selected="false" title="History">H</button>
-      <button class="tab" data-view="cost" role="tab" aria-selected="false" title="Cost">C</button>
-      <button class="tab" data-view="debug" role="tab" aria-selected="false" title="Debug">D</button>
+      <button class="tab active" data-view="tasks" role="tab" aria-selected="true" title="Tasks" aria-label="Tasks">T</button>
+      <button class="tab" data-view="fleet" role="tab" aria-selected="false" title="Fleet" aria-label="Fleet">F</button>
+      <button class="tab" data-view="gauntlet" role="tab" aria-selected="false" title="Gauntlet" aria-label="Gauntlet">G</button>
+      <button class="tab" data-view="work-items" role="tab" aria-selected="false" title="Work Items" aria-label="Work Items">W</button>
+      <button class="tab" data-view="approvals" role="tab" aria-selected="false" title="Approvals" aria-label="Approvals">A</button>
+      <button class="tab" data-view="artifacts" role="tab" aria-selected="false" title="Artifacts" aria-label="Artifacts">I</button>
+      <button class="tab" data-view="graphs" role="tab" aria-selected="false" title="Graphs" aria-label="Graphs">G</button>
+      <button class="tab" data-view="checks" role="tab" aria-selected="false" title="Checks" aria-label="Checks">K</button>
+      <button class="tab" data-view="repos" role="tab" aria-selected="false" title="Repositories" aria-label="Repositories">R</button>
+      <button class="tab" data-view="monitor" role="tab" aria-selected="false" title="Monitor" aria-label="Monitor">M</button>
+      <button class="tab" data-view="history" role="tab" aria-selected="false" title="History" aria-label="History">H</button>
+      <button class="tab" data-view="cost" role="tab" aria-selected="false" title="Cost" aria-label="Cost">C</button>
+      <button class="tab" data-view="debug" role="tab" aria-selected="false" title="Debug" aria-label="Debug">D</button>
     </nav>
 
     <aside class="sidebar" aria-label="Sidebar">
@@ -439,7 +439,7 @@
         </label>
       </div>
 
-      <div id="new-task-error" class="error" hidden></div>
+      <div id="new-task-error" class="error" role="alert" aria-live="polite" hidden></div>
 
       <menu>
         <button type="button" id="new-task-cancel">Cancel</button>

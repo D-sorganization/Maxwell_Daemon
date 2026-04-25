@@ -123,9 +123,7 @@ class TaskGraph(BaseModel):
         for node in self.nodes:
             for dep in node.depends_on:
                 if dep not in known_ids:
-                    raise ValueError(
-                        f"node {node.id!r} depends on unknown node {dep!r}"
-                    )
+                    raise ValueError(f"node {node.id!r} depends on unknown node {dep!r}")
                 if dep == node.id:
                     raise ValueError(f"node {node.id!r} cannot depend on itself")
 
@@ -201,12 +199,8 @@ def _nodes_for_template(template: TaskGraphTemplate) -> tuple[GraphNode, ...]:
         return (
             _planner_node(),
             _implementer_node(depends_on=("planner",)),
-            _qa_node(
-                depends_on=("implementer",), required_artifacts=(ArtifactKind.DIFF,)
-            ),
-            _reviewer_node(
-                depends_on=("qa",), required_artifacts=(ArtifactKind.TEST_RESULT,)
-            ),
+            _qa_node(depends_on=("implementer",), required_artifacts=(ArtifactKind.DIFF,)),
+            _reviewer_node(depends_on=("qa",), required_artifacts=(ArtifactKind.TEST_RESULT,)),
         )
     return (
         _planner_node(),
@@ -220,9 +214,7 @@ def _nodes_for_template(template: TaskGraphTemplate) -> tuple[GraphNode, ...]:
             output_artifact_kind=ArtifactKind.CHECK_RESULT,
             instructions="Review side effects, secrets, auth, and unsafe operations.",
         ),
-        _reviewer_node(
-            depends_on=("security",), required_artifacts=(ArtifactKind.CHECK_RESULT,)
-        ),
+        _reviewer_node(depends_on=("security",), required_artifacts=(ArtifactKind.CHECK_RESULT,)),
     )
 
 

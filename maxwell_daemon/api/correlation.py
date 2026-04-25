@@ -73,12 +73,8 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     * Echoed back in the ``X-Correlation-ID`` response header.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        raw = request.headers.get("x-correlation-id", "") or request.headers.get(
-            "x-request-id", ""
-        )
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        raw = request.headers.get("x-correlation-id", "") or request.headers.get("x-request-id", "")
         try:
             correlation_id = str(uuid.UUID(raw)) if raw else str(uuid.uuid4())
         except ValueError:
@@ -103,9 +99,7 @@ def install_correlation_middleware(app: Any) -> None:
     """
 
     for m in getattr(app, "user_middleware", []):
-        cls = getattr(m, "cls", None) or (
-            m[1] if isinstance(m, tuple) and len(m) > 1 else None
-        )
+        cls = getattr(m, "cls", None) or (m[1] if isinstance(m, tuple) and len(m) > 1 else None)
         if cls is CorrelationIdMiddleware:
             return
 

@@ -139,9 +139,7 @@ def estimate_task_cost(
     completion_tokens = max(1, int(prompt_tokens * expected_completion_ratio))
 
     price_in, price_out = get_rates(provider, model)
-    cost = (prompt_tokens * price_in / 1_000_000) + (
-        completion_tokens * price_out / 1_000_000
-    )
+    cost = (prompt_tokens * price_in / 1_000_000) + (completion_tokens * price_out / 1_000_000)
 
     log.debug(
         "cost_estimate",
