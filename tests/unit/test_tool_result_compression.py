@@ -89,9 +89,7 @@ class TestHeadTailTruncation:
         # First 5 lines preserved verbatim.
         assert result.content.startswith("line 0\nline 1\nline 2\nline 3\nline 4\n")
         # Last 5 lines preserved verbatim.
-        assert result.content.rstrip().endswith(
-            "line 495\nline 496\nline 497\nline 498\nline 499"
-        )
+        assert result.content.rstrip().endswith("line 495\nline 496\nline 497\nline 498\nline 499")
 
     def test_head_tail_contains_truncation_marker(self) -> None:
         output = "\n".join(f"L{i}" for i in range(200))

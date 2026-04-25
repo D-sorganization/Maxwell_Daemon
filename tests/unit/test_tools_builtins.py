@@ -219,9 +219,7 @@ class TestEditFile:
 # ── run_bash ─────────────────────────────────────────────────────────────────
 class TestRunBash:
     async def test_runs_and_returns_stdout(self, tmp_path: Path) -> None:
-        async def runner(
-            cmd: list[str], cwd: str, timeout: float
-        ) -> tuple[int, bytes, bytes]:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
             assert cwd == str(tmp_path)
             assert cmd[-1] == "echo hi"
             # Must invoke ``bash -c`` (not ``-lc``) so login-profile files
@@ -235,9 +233,7 @@ class TestRunBash:
         assert "hi" in out
 
     async def test_non_zero_exit_reports_rc(self, tmp_path: Path) -> None:
-        async def runner(
-            cmd: list[str], cwd: str, timeout: float
-        ) -> tuple[int, bytes, bytes]:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
             return 2, b"", b"oops"
 
         bash = make_run_bash(tmp_path, runner=runner)
@@ -246,9 +242,7 @@ class TestRunBash:
         assert "oops" in out
 
     async def test_timeout_honoured(self, tmp_path: Path) -> None:
-        async def runner(
-            cmd: list[str], cwd: str, timeout: float
-        ) -> tuple[int, bytes, bytes]:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
             assert timeout == 5
             return 0, b"", b""
 
@@ -258,9 +252,7 @@ class TestRunBash:
     async def test_default_timeout_applied(self, tmp_path: Path) -> None:
         seen: list[float] = []
 
-        async def runner(
-            cmd: list[str], cwd: str, timeout: float
-        ) -> tuple[int, bytes, bytes]:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
             seen.append(timeout)
             return 0, b"", b""
 
@@ -269,9 +261,7 @@ class TestRunBash:
         assert seen == [42]
 
     async def test_output_truncated(self, tmp_path: Path) -> None:
-        async def runner(
-            cmd: list[str], cwd: str, timeout: float
-        ) -> tuple[int, bytes, bytes]:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
             return 0, b"x" * 10_000, b""
 
         bash = make_run_bash(tmp_path, runner=runner, max_output_bytes=100)
@@ -279,9 +269,7 @@ class TestRunBash:
         assert "truncated" in out.lower()
 
     async def test_command_records_failed_action(self, tmp_path: Path) -> None:
-        async def runner(
-            cmd: list[str], cwd: str, timeout: float
-        ) -> tuple[int, bytes, bytes]:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
             return 2, b"", b"oops"
 
         service = ActionService(
@@ -302,9 +290,7 @@ class TestRunBash:
         assert actions[0].status.value == "failed"
 
     async def test_run_bash_skip_action(self, tmp_path: Path) -> None:
-        async def runner(
-            cmd: list[str], cwd: str, timeout: float
-        ) -> tuple[int, bytes, bytes]:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
             return 0, b"", b""
 
         service = ActionService(
@@ -336,25 +322,19 @@ class TestRunBash:
             )
 
         service.propose = mock_propose  # type: ignore[method-assign]
-        bash = make_run_bash(
-            tmp_path, runner=runner, action_service=service, task_id="task-1"
-        )
+        bash = make_run_bash(tmp_path, runner=runner, action_service=service, task_id="task-1")
         res = await bash(command="echo hi")
         assert "skipped" in res
 
     async def test_run_bash_pending_action(self, tmp_path: Path) -> None:
-        async def runner(
-            cmd: list[str], cwd: str, timeout: float
-        ) -> tuple[int, bytes, bytes]:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
             return 0, b"", b""
 
         service = ActionService(
             ActionStore(tmp_path / "actions.db"),
             policy=ActionPolicy(mode=ApprovalMode.SUGGEST, workspace_root=tmp_path),
         )
-        bash = make_run_bash(
-            tmp_path, runner=runner, action_service=service, task_id="task-1"
-        )
+        bash = make_run_bash(tmp_path, runner=runner, action_service=service, task_id="task-1")
         res = await bash(command="echo hi")
         assert "pending approval" in res
 
@@ -381,9 +361,9 @@ class TestRunBash:
         monkeypatch.setenv("MAXWELL_ALLOW_ENV", "SECRET_KEY")
         env = _build_run_bash_env()
         assert os.environ.get("SECRET_KEY") == "hunter2"
-        assert (
-            env.get("SECRET_KEY") == "hunter2"
-        ), f"expected SECRET_KEY in run_bash env; got keys: {sorted(env)}"
+        assert env.get("SECRET_KEY") == "hunter2", (
+            f"expected SECRET_KEY in run_bash env; got keys: {sorted(env)}"
+        )
 
 
 # ── glob_files ───────────────────────────────────────────────────────────────
@@ -536,9 +516,7 @@ class TestBuildDefaultRegistry:
         assert result.content == "payload"
         assert result.is_error is False
 
-    async def test_readonly_policy_denies_default_write_tool(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_readonly_policy_denies_default_write_tool(self, tmp_path: Path) -> None:
         store = ToolInvocationStore()
         reg = build_default_registry(
             tmp_path,
@@ -555,14 +533,10 @@ class TestBuildDefaultRegistry:
         assert record.status == "denied"
         assert "unallowed capabilities" in (record.error or "")
 
-    async def test_readonly_policy_denies_default_shell_tool(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_readonly_policy_denies_default_shell_tool(self, tmp_path: Path) -> None:
         ran: list[bool] = []
 
-        async def runner(
-            cmd: list[str], cwd: str, timeout: float
-        ) -> tuple[int, bytes, bytes]:
+        async def runner(cmd: list[str], cwd: str, timeout: float) -> tuple[int, bytes, bytes]:
             ran.append(True)
             return 0, b"ran", b""
 
@@ -578,9 +552,7 @@ class TestBuildDefaultRegistry:
         assert "denied by policy" in result.content
         assert ran == []
 
-    async def test_sandbox_violation_surfaces_as_tool_error(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_sandbox_violation_surfaces_as_tool_error(self, tmp_path: Path) -> None:
         reg = build_default_registry(tmp_path)
         result = await reg.invoke("read_file", {"path": "/etc/passwd"})
         assert result.is_error is True
@@ -590,9 +562,7 @@ class TestBuildDefaultRegistry:
         sys.platform == "win32",
         reason="Symlinks require admin privileges on Windows",
     )
-    async def test_grep_registry_tool_does_not_read_symlink_escape(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_grep_registry_tool_does_not_read_symlink_escape(self, tmp_path: Path) -> None:
         target = tmp_path.parent / "outside.txt"
         target.write_text("registry-secret", encoding="utf-8")
         (tmp_path / "leak.txt").symlink_to(target)

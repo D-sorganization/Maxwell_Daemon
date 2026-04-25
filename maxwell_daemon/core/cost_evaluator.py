@@ -85,10 +85,7 @@ class CostEvaluator:
                     decision.backend_name,
                     backend_cfg.tier_map.get(complexity) or decision.model,
                 )
-            if (
-                budget_info.safe_allocation < budget_info.est_call_cost
-                and complexity == "moderate"
-            ):
+            if budget_info.safe_allocation < budget_info.est_call_cost and complexity == "moderate":
                 complexity = "simple"
                 budget_info = self.token_budget_for_task(
                     task,
@@ -116,9 +113,7 @@ class CostEvaluator:
             model_chosen=model_chosen,
         ).set(budget_info.safe_allocation)
 
-        return ModelChoice(
-            model=model_chosen, confidence_pct=confidence_pct, reasoning=reasoning
-        )
+        return ModelChoice(model=model_chosen, confidence_pct=confidence_pct, reasoning=reasoning)
 
     def _estimate_complexity(self, task: Task) -> str:
         # Simple heuristic for now: prompt length and keywords
@@ -141,9 +136,7 @@ class CostEvaluator:
 
         return "moderate"
 
-    def token_budget_for_task(
-        self, task: Task, provider: str, model: str
-    ) -> TokenBudgetInfo:
+    def token_budget_for_task(self, task: Task, provider: str, model: str) -> TokenBudgetInfo:
         """Return the TokenBudgetInfo containing the maximum USD budget allocated for this task.
 
         Takes the minimum of:
@@ -155,9 +148,7 @@ class CostEvaluator:
         limit = self._snapshot.config.budget.monthly_limit_usd
         per_task_limit = self._snapshot.config.budget.per_task_limit_usd
 
-        remaining = (
-            (limit - check.spent_usd) if limit else 100.0
-        )  # Default to $100 if no limit
+        remaining = (limit - check.spent_usd) if limit else 100.0  # Default to $100 if no limit
 
         candidates = [remaining]
         if per_task_limit:

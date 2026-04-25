@@ -43,9 +43,7 @@ def _delegate() -> Delegate:
     )
 
 
-def _session(
-    *, status: DelegateSessionStatus = DelegateSessionStatus.QUEUED
-) -> DelegateSession:
+def _session(*, status: DelegateSessionStatus = DelegateSessionStatus.QUEUED) -> DelegateSession:
     created_at = datetime(2026, 4, 22, 11, 0, tzinfo=timezone.utc)
     return DelegateSession(
         id="session-1",
@@ -98,9 +96,7 @@ def test_running_session_requires_active_lease() -> None:
     with pytest.raises(ValueError, match="running session requires an active lease"):
         leased.with_status(DelegateSessionStatus.RUNNING, now=now)
 
-    with pytest.raises(
-        ValidationError, match="running session requires an active lease"
-    ):
+    with pytest.raises(ValidationError, match="running session requires an active lease"):
         _session(status=DelegateSessionStatus.RUNNING)
 
     with pytest.raises(ValueError, match="running session requires an active lease"):
@@ -129,14 +125,10 @@ def test_lease_acquire_renew_expire_release_and_takeover_are_deterministic() -> 
     assert manager.current_lease("session-1") == lease
 
     with pytest.raises(ValueError, match="active lease"):
-        manager.acquire_lease(
-            session=session, owner_id="worker-b", ttl=timedelta(minutes=5)
-        )
+        manager.acquire_lease(session=session, owner_id="worker-b", ttl=timedelta(minutes=5))
 
     clock.advance(timedelta(minutes=2))
-    renewed = manager.renew_lease(
-        "session-1", owner_id="worker-a", ttl=timedelta(minutes=10)
-    )
+    renewed = manager.renew_lease("session-1", owner_id="worker-a", ttl=timedelta(minutes=10))
     assert renewed.renewal_count == 1
     assert renewed.heartbeat_at == clock()
     assert renewed.expires_at == clock() + timedelta(minutes=10)
@@ -207,9 +199,7 @@ def test_recovered_session_records_prior_session_id_and_latest_checkpoint() -> N
     assert recovered.latest_checkpoint_id == "checkpoint-1"
     assert recovered.status is DelegateSessionStatus.QUEUED
 
-    with pytest.raises(
-        ValueError, match="recovered session must record the prior session id"
-    ):
+    with pytest.raises(ValueError, match="recovered session must record the prior session id"):
         DelegateSession(
             id="session-3",
             delegate_id="delegate-1",

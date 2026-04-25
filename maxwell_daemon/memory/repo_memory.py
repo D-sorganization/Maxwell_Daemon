@@ -26,7 +26,9 @@ __all__ = [
     "select_memory_snapshot",
 ]
 
-MemoryScope = str  # e.g., 'personal', 'repo:<name>', 'workspace:<id>', 'conversation:<id>', 'ephemeral'
+MemoryScope = (
+    str  # e.g., 'personal', 'repo:<name>', 'workspace:<id>', 'conversation:<id>', 'ephemeral'
+)
 MemoryKind = Literal["semantic", "episodic", "procedural", "policy"]
 ProposalStatus = Literal["pending", "accepted", "rejected", "superseded"]
 
@@ -52,9 +54,7 @@ def is_valid_scope(scope: str) -> bool:
 _KINDS: set[str] = {"semantic", "episodic", "procedural", "policy"}
 _STATUSES: set[str] = {"pending", "accepted", "rejected", "superseded"}
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(
-        r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY)[A-Za-z0-9_]*\s*=", re.I
-    ),
+    re.compile(r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY)[A-Za-z0-9_]*\s*=", re.I),
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
@@ -84,16 +84,12 @@ class MemoryEntry:
 
     def __post_init__(self) -> None:
         require(bool(self.id.strip()), "MemoryEntry: id must be non-empty")
-        require(
-            is_valid_scope(self.scope), f"MemoryEntry: unsupported scope {self.scope!r}"
-        )
+        require(is_valid_scope(self.scope), f"MemoryEntry: unsupported scope {self.scope!r}")
         require(bool(self.repo_id.strip()), "MemoryEntry: repo_id must be non-empty")
         require(self.kind in _KINDS, f"MemoryEntry: unsupported kind {self.kind!r}")
         if not self.allow_secrets:
             object.__setattr__(self, "body", redact_secret_looking_values(self.body))
-            object.__setattr__(
-                self, "source", redact_secret_looking_values(self.source)
-            )
+            object.__setattr__(self, "source", redact_secret_looking_values(self.source))
 
         require(bool(self.body.strip()), "MemoryEntry: body must be non-empty")
         require(bool(self.source.strip()), "MemoryEntry: source must be non-empty")
@@ -103,13 +99,9 @@ class MemoryEntry:
         )
         if self.expires_at is None:
             if self.scope == "ephemeral":
-                object.__setattr__(
-                    self, "expires_at", self.created_at + timedelta(hours=24)
-                )
+                object.__setattr__(self, "expires_at", self.created_at + timedelta(hours=24))
             elif self.scope.startswith("conversation:"):
-                object.__setattr__(
-                    self, "expires_at", self.created_at + timedelta(days=30)
-                )
+                object.__setattr__(self, "expires_at", self.created_at + timedelta(days=30))
             elif self.retention_days is not None:
                 object.__setattr__(
                     self,
@@ -126,9 +118,7 @@ class MemoryEntry:
                 self.expires_at > self.created_at,
                 "MemoryEntry: expires_at must be after created_at",
             )
-        require(
-            self.id not in self.supersedes, "MemoryEntry: entry cannot supersede itself"
-        )
+        require(self.id not in self.supersedes, "MemoryEntry: entry cannot supersede itself")
 
     def to_json_dict(self) -> dict[str, object]:
         if not self.allow_secrets:
@@ -143,9 +133,7 @@ class MemoryEntry:
             "body": self.body,
             "confidence": self.confidence,
             "created_at": _format_datetime(self.created_at),
-            "expires_at": (
-                _format_datetime(self.expires_at) if self.expires_at else None
-            ),
+            "expires_at": (_format_datetime(self.expires_at) if self.expires_at else None),
             "id": self.id,
             "kind": self.kind,
             "repo_id": self.repo_id,
@@ -280,9 +268,7 @@ class MemoryProposal:
             "proposed_by": self.proposed_by,
             "reason": self.reason,
             "review_reason": self.review_reason,
-            "reviewed_at": (
-                _format_datetime(self.reviewed_at) if self.reviewed_at else None
-            ),
+            "reviewed_at": (_format_datetime(self.reviewed_at) if self.reviewed_at else None),
             "reviewed_by": self.reviewed_by,
             "status": self.status,
             "target_scope": self.target_scope,
@@ -320,9 +306,7 @@ class MemorySnapshot:
 
     def __post_init__(self) -> None:
         require(bool(self.repo_id.strip()), "MemorySnapshot: repo_id must be non-empty")
-        require(
-            self.token_budget >= 0, "MemorySnapshot: token_budget must be non-negative"
-        )
+        require(self.token_budget >= 0, "MemorySnapshot: token_budget must be non-negative")
         require(
             set(self.selection_reasons) == {entry.id for entry in self.entries},
             "MemorySnapshot: selection reasons must cover every entry",
@@ -384,9 +368,7 @@ class RepoMemoryStore:
             return entries
 
         reference_time = now or _utcnow()
-        superseded_ids = {
-            superseded for entry in entries for superseded in entry.supersedes
-        }
+        superseded_ids = {superseded for entry in entries for superseded in entry.supersedes}
         return [
             entry
             for entry in entries
@@ -395,9 +377,7 @@ class RepoMemoryStore:
         ]
 
     def export_jsonl(self, scope: str, out_path: Path) -> None:
-        entries = [
-            e for e in self.list_entries(include_superseded=True) if e.scope == scope
-        ]
+        entries = [e for e in self.list_entries(include_superseded=True) if e.scope == scope]
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with out_path.open("w", encoding="utf-8", newline="\n") as handle:
             for e in entries:
@@ -460,9 +440,7 @@ class RepoMemoryStore:
         reason: str | None = None,
     ) -> MemoryProposal:
         proposal = self._pending_proposal(proposal_id)
-        accepted = proposal.reviewed(
-            status="accepted", reviewer=reviewer, reason=reason
-        )
+        accepted = proposal.reviewed(status="accepted", reviewer=reviewer, reason=reason)
         self.add_entry(accepted.entry)
         self._append_jsonl(self._proposals_path, accepted.to_json_dict())
         return accepted
@@ -506,9 +484,7 @@ class RepoMemoryStore:
         token_budget: int = 800,
         include_superseded: bool = False,
     ) -> MemorySnapshot:
-        entries = self.list_entries(
-            repo_id=repo_id, include_superseded=include_superseded
-        )
+        entries = self.list_entries(repo_id=repo_id, include_superseded=include_superseded)
         return select_memory_snapshot(
             entries,
             repo_id=repo_id,
@@ -554,18 +530,14 @@ class RepoMemoryStore:
         return conflicts
 
     def _pending_proposal(self, proposal_id: str) -> MemoryProposal:
-        require(
-            bool(proposal_id.strip()), "RepoMemoryStore: proposal_id must be non-empty"
-        )
+        require(bool(proposal_id.strip()), "RepoMemoryStore: proposal_id must be non-empty")
         latest = self._latest_proposals()
         require(
             proposal_id in latest,
             f"RepoMemoryStore: proposal {proposal_id!r} does not exist",
         )
         proposal = latest[proposal_id]
-        require(
-            proposal.status == "pending", "RepoMemoryStore: proposal is not pending"
-        )
+        require(proposal.status == "pending", "RepoMemoryStore: proposal is not pending")
         return proposal
 
     def _latest_proposals(self) -> dict[str, MemoryProposal]:
@@ -575,15 +547,11 @@ class RepoMemoryStore:
         return proposals
 
     def _load_entries(self) -> list[MemoryEntry]:
-        return [
-            MemoryEntry.from_json_dict(payload)
-            for payload in _read_jsonl(self._entries_path)
-        ]
+        return [MemoryEntry.from_json_dict(payload) for payload in _read_jsonl(self._entries_path)]
 
     def _load_proposals(self) -> list[MemoryProposal]:
         return [
-            MemoryProposal.from_json_dict(payload)
-            for payload in _read_jsonl(self._proposals_path)
+            MemoryProposal.from_json_dict(payload) for payload in _read_jsonl(self._proposals_path)
         ]
 
     def _append_jsonl(self, path: Path, payload: dict[str, object]) -> None:
@@ -604,9 +572,7 @@ def select_memory_snapshot(
 ) -> MemorySnapshot:
     require(bool(repo_id.strip()), "select_memory_snapshot: repo_id must be non-empty")
     require(max_items >= 0, "select_memory_snapshot: max_items must be non-negative")
-    require(
-        token_budget >= 0, "select_memory_snapshot: token_budget must be non-negative"
-    )
+    require(token_budget >= 0, "select_memory_snapshot: token_budget must be non-negative")
 
     selected: list[MemoryEntry] = []
     reasons: dict[str, str] = {}

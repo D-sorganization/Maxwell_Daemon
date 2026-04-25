@@ -61,9 +61,7 @@ class _FakeDaemon:
         backend: str | None = None,
         model: str | None = None,
     ) -> Any:
-        self.issue_calls.append(
-            {"repo": repo, "issue_number": issue_number, "mode": mode}
-        )
+        self.issue_calls.append({"repo": repo, "issue_number": issue_number, "mode": mode})
 
         class _Task:
             id = f"task-{len(self.issue_calls)}"
@@ -114,9 +112,7 @@ def _issue_payload(
     }
 
 
-def _comment_payload(
-    repo: str, number: int, body: str, action: str = "created"
-) -> dict[str, Any]:
+def _comment_payload(repo: str, number: int, body: str, action: str = "created") -> dict[str, Any]:
     return {
         "action": action,
         "repository": {"full_name": repo},
@@ -126,9 +122,7 @@ def _comment_payload(
 
 
 class TestWebhookRouter:
-    def test_issue_opened_with_matching_label_dispatches(
-        self, config: WebhookConfig
-    ) -> None:
+    def test_issue_opened_with_matching_label_dispatches(self, config: WebhookConfig) -> None:
         daemon = _FakeDaemon()
         router = WebhookRouter(config, daemon=daemon)
         dispatches = router.handle(
@@ -137,13 +131,9 @@ class TestWebhookRouter:
         )
         assert len(dispatches) == 1
         assert dispatches[0].mode == "plan"
-        assert daemon.issue_calls == [
-            {"repo": "owner/allowed", "issue_number": 7, "mode": "plan"}
-        ]
+        assert daemon.issue_calls == [{"repo": "owner/allowed", "issue_number": 7, "mode": "plan"}]
 
-    def test_issue_opened_without_matching_label_is_noop(
-        self, config: WebhookConfig
-    ) -> None:
+    def test_issue_opened_without_matching_label_is_noop(self, config: WebhookConfig) -> None:
         daemon = _FakeDaemon()
         router = WebhookRouter(config, daemon=daemon)
         dispatches = router.handle(
@@ -163,9 +153,7 @@ class TestWebhookRouter:
         assert dispatches == []
         assert daemon.issue_calls == []
 
-    def test_implement_label_dispatches_implement_mode(
-        self, config: WebhookConfig
-    ) -> None:
+    def test_implement_label_dispatches_implement_mode(self, config: WebhookConfig) -> None:
         daemon = _FakeDaemon()
         router = WebhookRouter(config, daemon=daemon)
         router.handle(
@@ -185,9 +173,7 @@ class TestWebhookRouter:
                 "owner/allowed", 42, "Please look at this. /maxwell-daemon plan"
             ),
         )
-        assert daemon.issue_calls == [
-            {"repo": "owner/allowed", "issue_number": 42, "mode": "plan"}
-        ]
+        assert daemon.issue_calls == [{"repo": "owner/allowed", "issue_number": 42, "mode": "plan"}]
 
     def test_closed_issue_not_dispatched(self, config: WebhookConfig) -> None:
         """An `issues.closed` event should not match the `opened` route."""
@@ -195,9 +181,7 @@ class TestWebhookRouter:
         router = WebhookRouter(config, daemon=daemon)
         dispatches = router.handle(
             event_type="issues",
-            payload=_issue_payload(
-                "owner/allowed", 1, ["maxwell-daemon-plan"], action="closed"
-            ),
+            payload=_issue_payload("owner/allowed", 1, ["maxwell-daemon-plan"], action="closed"),
         )
         assert dispatches == []
 
@@ -242,9 +226,7 @@ class TestWebhookEndpoint:
 
     def test_valid_signature_accepted(self) -> None:
         client, daemon = self._setup()
-        body = json.dumps(
-            _issue_payload("owner/allowed", 1, ["maxwell-daemon-plan"])
-        ).encode()
+        body = json.dumps(_issue_payload("owner/allowed", 1, ["maxwell-daemon-plan"])).encode()
         sig = _sign("topsecret", body)
         r = client.post(
             "/api/v1/webhooks/github",

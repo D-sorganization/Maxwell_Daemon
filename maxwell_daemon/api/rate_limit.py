@@ -74,16 +74,12 @@ class TokenBucket:
             if self._tokens >= 1.0:
                 return 0.0
             missing = 1.0 - self._tokens
-            return (
-                missing / self.refill_per_second if self.refill_per_second > 0 else 1.0
-            )
+            return missing / self.refill_per_second if self.refill_per_second > 0 else 1.0
 
     def _refill(self) -> None:
         now = time.monotonic()
         elapsed = now - self._updated
-        self._tokens = min(
-            self.capacity, self._tokens + elapsed * self.refill_per_second
-        )
+        self._tokens = min(self.capacity, self._tokens + elapsed * self.refill_per_second)
         self._updated = now
 
 
@@ -127,9 +123,7 @@ class TokenBucketLimiter:
     def check(self, key: str, *, group: str = "default") -> bool:
         return self._bucket(key, group).try_consume()
 
-    def has_capacity(
-        self, key: str, *, group: str = "default", amount: float = 1.0
-    ) -> bool:
+    def has_capacity(self, key: str, *, group: str = "default", amount: float = 1.0) -> bool:
         return self._bucket(key, group).has_capacity(amount)
 
     def consume(self, key: str, *, group: str = "default", amount: float = 1.0) -> None:

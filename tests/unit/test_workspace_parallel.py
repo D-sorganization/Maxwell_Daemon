@@ -32,9 +32,7 @@ class TestPerTaskIsolation:
             # task_id is keyword-only and required — positional call must fail.
             ws.path_for("owner/repo")  # type: ignore[call-arg]
 
-    def test_same_repo_different_tasks_get_different_paths(
-        self, tmp_path: Path
-    ) -> None:
+    def test_same_repo_different_tasks_get_different_paths(self, tmp_path: Path) -> None:
         ws = Workspace(root=tmp_path)
         a = ws.path_for("owner/repo", task_id="task-a")
         b = ws.path_for("owner/repo", task_id="task-b")
@@ -94,9 +92,7 @@ class TestBranchAndCommitThreadTaskId:
         git = _RecordingGit()
         ws = Workspace(root=tmp_path, runner=git)
 
-        asyncio.run(
-            ws.create_branch("owner/repo", "feature", base="main", task_id="t-9")
-        )
+        asyncio.run(ws.create_branch("owner/repo", "feature", base="main", task_id="t-9"))
 
         checkout_calls = [c for c in git.calls if "checkout" in c[0]]
         assert checkout_calls

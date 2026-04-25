@@ -76,9 +76,7 @@ class GateDefinition:
                 isinstance(key, str) and bool(key.strip()),
                 "GateDefinition.metadata keys must be non-empty strings",
             )
-            require(
-                isinstance(value, str), "GateDefinition.metadata values must be strings"
-            )
+            require(isinstance(value, str), "GateDefinition.metadata values must be strings")
 
 
 @dataclass(slots=True, frozen=True)
