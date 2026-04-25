@@ -1,0 +1,8 @@
+id: "latency-suite"
+title: "Latency Suite"
+description: "Suite to evaluate time-to-first-token and tokens/sec latency."
+source_type: "manual_task"
+fixture_repo_ref: "fixture://latency"
+task_prompt: "Output exactly 1000 tokens of text as quickly as possible."
+time_budget_seconds: 120
+expected_artifacts: []

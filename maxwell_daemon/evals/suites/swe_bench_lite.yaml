@@ -1,0 +1,8 @@
+id: "swe-bench-lite"
+title: "SWE-bench Lite (Subset)"
+description: "A subset of the SWE-bench lite benchmark for evaluating software engineering capabilities."
+source_type: "manual_task"
+fixture_repo_ref: "fixture://swe-bench"
+task_prompt: "Solve the specified SWE-bench issue."
+time_budget_seconds: 3600
+expected_artifacts: []

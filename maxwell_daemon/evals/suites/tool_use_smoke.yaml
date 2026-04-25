@@ -1,0 +1,8 @@
+id: "tool-use-smoke"
+title: "Tool Use Smoke"
+description: "Smoke testing suite for tool invocation correctness."
+source_type: "manual_task"
+fixture_repo_ref: "fixture://tool-use"
+task_prompt: "Invoke the required tools and verify correct functionality."
+time_budget_seconds: 300
+expected_artifacts: ["trace.json"]

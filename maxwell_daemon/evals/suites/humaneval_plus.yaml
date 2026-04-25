@@ -1,0 +1,8 @@
+id: "humaneval-plus"
+title: "HumanEval+"
+description: "HumanEval+ benchmark for evaluating code generation capabilities."
+source_type: "manual_task"
+fixture_repo_ref: "fixture://humaneval"
+task_prompt: "Solve the specified HumanEval+ problem."
+time_budget_seconds: 600
+expected_artifacts: []
