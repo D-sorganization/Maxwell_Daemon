@@ -78,7 +78,14 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 
 | Path | Methods | Area |
 | --- | --- | --- |
+| `/api/control/{action}` | `POST` | Operator Contract |
+| `/api/dispatch` | `POST` | Operator Contract |
+| `/api/health` | `GET` | Operator Contract |
 | `/api/reload` | `POST` | Operations |
+| `/api/status` | `GET` | Operator Contract |
+| `/api/tasks` | `GET` | Operator Contract |
+| `/api/tasks/{task_id}` | `GET` | Operator Contract |
+| `/api/version` | `GET` | Operator Contract |
 | `/api/v1/actions` | `GET` | Actions |
 | `/api/v1/actions/{action_id}` | `GET` | Actions |
 | `/api/v1/actions/{action_id}/approve` | `POST` | Actions |
