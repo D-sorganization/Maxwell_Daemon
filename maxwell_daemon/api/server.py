@@ -2237,7 +2237,7 @@ def create_app(
     @app.post("/api/v1/push/subscribe", dependencies=[Depends(_require_viewer())])
     async def push_subscribe(request: Request) -> dict[str, str]:
         """Register a Web Push subscription.
-        
+
         Currently a stub. Real implementation requires storing the subscription
         and generating a VAPID keypair.
         """

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import contextlib
 import json
 import sqlite3
 import threading
@@ -81,10 +82,8 @@ class ActionStore:
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
-            try:
+            with contextlib.suppress(sqlite3.OperationalError):
                 conn.execute("ALTER TABLE actions ADD COLUMN inverse_payload TEXT")
-            except sqlite3.OperationalError:
-                pass
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -295,7 +294,5 @@ def _row_to_action(row: sqlite3.Row) -> Action:
         error=row["error"],
         created_at=_parse_iso_required(row["created_at"]),
         updated_at=_parse_iso_required(row["updated_at"]),
-        inverse_payload=json.loads(row["inverse_payload"])
-        if "inverse_payload" in row.keys() and row["inverse_payload"]
-        else None,
+        inverse_payload=json.loads(row["inverse_payload"]) if row["inverse_payload"] else None,
     )
