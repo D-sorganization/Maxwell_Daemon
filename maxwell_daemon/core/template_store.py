@@ -12,6 +12,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from maxwell_daemon.logging import get_logger
+
+log = get_logger(__name__)
+
 
 class ParameterType(str, Enum):
     STRING = "string"
@@ -340,7 +344,7 @@ class TemplateStore:
                 template = TaskTemplate.model_validate(data)
                 self._templates[template.id] = template
             except Exception:
-                pass  # Ignore invalid files for now
+                log.warning("Failed to load template from %s", child.name, exc_info=True)
 
     def list_templates(self) -> list[TaskTemplate]:
         return list(self._templates.values())

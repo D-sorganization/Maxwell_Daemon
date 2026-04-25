@@ -1694,7 +1694,7 @@ def create_app(
                         with contextlib.suppress(Exception):
                             daemon.cancel_task(task_obj.id)
             except Exception:
-                pass
+                log.warning("Error during abort: cancel tasks failed", exc_info=True)
 
         return ControlResponse(
             action=action,
@@ -2903,7 +2903,12 @@ def create_app(
                                     )
                                 )
                 except Exception:
-                    pass
+                    log.warning(
+                        "Failed to build leaderboard entry for %s/%s",
+                        backend,
+                        model,
+                        exc_info=True,
+                    )
 
         return {"suite_id": suite_id, "entries": [e.model_dump() for e in entries]}
 
