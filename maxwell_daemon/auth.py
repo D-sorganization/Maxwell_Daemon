@@ -31,11 +31,11 @@ from uuid import uuid4
 from maxwell_daemon.logging import get_logger
 
 __all__ = [
+    "is_jwt_auth_failure",
     "JWTConfig",
+    "require_role",
     "Role",
     "TokenClaims",
-    "is_jwt_auth_failure",
-    "require_role",
 ]
 
 log = get_logger(__name__)
