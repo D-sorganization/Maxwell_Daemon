@@ -49,7 +49,7 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
     for name in daemon_registry.names():
         registry.register(daemon_registry.get(name))
 
-    @server.list_tools()  # type: ignore[no-untyped-call, untyped-decorator]
+    @server.list_tools()  # type: ignore[misc]
     async def handle_list_tools() -> list[Tool]:
         mcp_tools = []
         for name in registry.names():
@@ -74,7 +74,7 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
             mcp_tools.append(Tool(name=spec.name, description=spec.description, inputSchema=schema))
         return mcp_tools
 
-    @server.call_tool()  # type: ignore[untyped-decorator]
+    @server.call_tool()  # type: ignore[misc]
     async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         try:
             # We enforce that all MCP calls pass through the audit/approval tier by default
@@ -87,7 +87,7 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
             log.exception("Tool execution failed: %s", name)
             return [TextContent(type="text", text=f"Tool exception: {e}")]
 
-    @server.list_resources()  # type: ignore[no-untyped-call, untyped-decorator]
+    @server.list_resources()  # type: ignore[misc]
     async def handle_list_resources() -> list[Resource]:
         return [
             Resource(
@@ -107,11 +107,11 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
             ),
         ]
 
-    @server.read_resource()  # type: ignore[no-untyped-call, untyped-decorator]
+    @server.read_resource()  # type: ignore[misc]
     async def handle_read_resource(uri: AnyUrl | str) -> str:
         return f"Resource {uri} is not fully implemented yet over REST proxy."
 
-    @server.list_prompts()  # type: ignore[no-untyped-call, untyped-decorator]
+    @server.list_prompts()  # type: ignore[misc]
     async def handle_list_prompts() -> list[Prompt]:
         prompts = []
         for role_id, role in DEFAULT_CROSS_AUDIT_ROLES.items():
@@ -124,7 +124,7 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
             )
         return prompts
 
-    @server.get_prompt()  # type: ignore[no-untyped-call, untyped-decorator]
+    @server.get_prompt()  # type: ignore[misc]
     async def handle_get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
         role_id = name.replace("maxwell_", "")
         role = DEFAULT_CROSS_AUDIT_ROLES.get(role_id)
