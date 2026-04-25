@@ -111,15 +111,23 @@ class RoutingPolicy:
     allowed_providers: set[str] | frozenset[str] = field(default_factory=frozenset)
     forbidden_providers: set[str] | frozenset[str] = field(default_factory=frozenset)
     escalation_thresholds: dict[str, float] = field(default_factory=dict)
-    role_capability_map: dict[str, set[str] | frozenset[str]] = field(default_factory=dict)
+    role_capability_map: dict[str, set[str] | frozenset[str]] = field(
+        default_factory=dict
+    )
     hard_budget: bool = True
     soft_budget_utilization_threshold: float = 0.80
 
     def __post_init__(self) -> None:
-        allowed = frozenset(_normalise_id(provider) for provider in self.allowed_providers)
-        forbidden = frozenset(_normalise_id(provider) for provider in self.forbidden_providers)
+        allowed = frozenset(
+            _normalise_id(provider) for provider in self.allowed_providers
+        )
+        forbidden = frozenset(
+            _normalise_id(provider) for provider in self.forbidden_providers
+        )
         if allowed & forbidden:
-            raise ValueError("allowed_providers and forbidden_providers must not overlap")
+            raise ValueError(
+                "allowed_providers and forbidden_providers must not overlap"
+            )
         object.__setattr__(self, "allowed_providers", allowed)
         object.__setattr__(self, "forbidden_providers", forbidden)
         normalised_map = {
@@ -136,7 +144,9 @@ class RoutingPolicy:
             if value is not None and value < 0:
                 raise ValueError(f"{field_name} must be >= 0 when set")
         if not 0.0 <= self.soft_budget_utilization_threshold <= 1.0:
-            raise ValueError("soft_budget_utilization_threshold must be between 0.0 and 1.0")
+            raise ValueError(
+                "soft_budget_utilization_threshold must be between 0.0 and 1.0"
+            )
 
     def required_capabilities_for(self, role: str) -> frozenset[str]:
         return frozenset(self.role_capability_map.get(_normalise_id(role), frozenset()))
@@ -177,7 +187,9 @@ class RoutingDecision:
         if not self.reason_codes:
             raise ValueError("RoutingDecision must include reason_codes")
         if self.runnable and (self.provider_id is None or self.backend_id is None):
-            raise ValueError("runnable RoutingDecision requires provider_id and backend_id")
+            raise ValueError(
+                "runnable RoutingDecision requires provider_id and backend_id"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """Return API-safe decision data without account credentials or secrets."""
@@ -188,7 +200,9 @@ class RoutingDecision:
             "reason_codes": list(self.reason_codes),
             "estimated_cost_usd": self.estimated_cost_usd,
             "quota_impact": dict(self.quota_impact),
-            "alternatives": [alternative.to_dict() for alternative in self.alternatives],
+            "alternatives": [
+                alternative.to_dict() for alternative in self.alternatives
+            ],
             "fallback_plan": list(self.fallback_plan),
         }
 
@@ -204,7 +218,9 @@ class ResourceBroker:
         quotas: list[QuotaSnapshot] | None = None,
     ) -> None:
         self._accounts = _index_unique_accounts(accounts)
-        self._capabilities = tuple(sorted(capabilities, key=lambda item: item.backend_id))
+        self._capabilities = tuple(
+            sorted(capabilities, key=lambda item: item.backend_id)
+        )
         self._quotas = _index_latest_quotas(quotas or [])
         for profile in self._capabilities:
             if profile.provider_id not in self._accounts:
@@ -281,7 +297,10 @@ class ResourceBroker:
             reasons.append("auth_not_configured")
         if account.terms_mode == "disabled":
             reasons.append("terms_disabled")
-        if policy.allowed_providers and profile.provider_id not in policy.allowed_providers:
+        if (
+            policy.allowed_providers
+            and profile.provider_id not in policy.allowed_providers
+        ):
             reasons.append("provider_not_allowed")
         if profile.provider_id in policy.forbidden_providers:
             reasons.append("provider_forbidden")
@@ -298,9 +317,15 @@ class ResourceBroker:
             and quota.spent_usd_month_to_date + profile.estimated_cost_usd
             > policy.max_spend_per_month_usd
         ):
-            reasons.append(_budget_reason(policy, hard_code="over_policy_monthly_budget_hard"))
+            reasons.append(
+                _budget_reason(policy, hard_code="over_policy_monthly_budget_hard")
+            )
         reasons.extend(self._account_budget_reasons(account, quota, profile, policy))
-        if quota is not None and quota.available_quota is not None and quota.available_quota <= 0:
+        if (
+            quota is not None
+            and quota.available_quota is not None
+            and quota.available_quota <= 0
+        ):
             reasons.append("quota_exhausted")
 
         hard_reasons = {
@@ -342,7 +367,9 @@ class ResourceBroker:
             return [_budget_reason(policy, hard_code="over_monthly_budget_hard")]
 
         utilisation = (
-            projected / account.monthly_budget_usd if account.monthly_budget_usd > 0 else 1.0
+            projected / account.monthly_budget_usd
+            if account.monthly_budget_usd > 0
+            else 1.0
         )
         if utilisation >= policy.soft_budget_utilization_threshold:
             return ["soft_budget_warning"]
@@ -404,7 +431,9 @@ def _index_unique_accounts(
     indexed: dict[str, ResourceAccount] = {}
     for account in accounts:
         if account.provider_id in indexed:
-            raise ValueError(f"Duplicate ResourceAccount provider_id: {account.provider_id}")
+            raise ValueError(
+                f"Duplicate ResourceAccount provider_id: {account.provider_id}"
+            )
         indexed[account.provider_id] = account
     if not indexed:
         raise ValueError("ResourceBroker requires at least one ResourceAccount")

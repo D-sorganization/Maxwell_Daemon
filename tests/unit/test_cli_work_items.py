@@ -44,7 +44,9 @@ def patch_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         headers: dict | None = None,  # type: ignore[type-arg]
         timeout: float | None = None,
     ) -> _FakeResponse:
-        calls.append({"method": "GET", "url": url, "params": params, "headers": headers})
+        calls.append(
+            {"method": "GET", "url": url, "params": params, "headers": headers}
+        )
         return _Holder.response
 
     def post(

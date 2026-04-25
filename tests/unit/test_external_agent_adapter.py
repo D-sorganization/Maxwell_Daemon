@@ -51,7 +51,9 @@ class RecordingAdapter(ExternalAgentAdapterBase):
         self.capabilities = (
             capabilities
             if capabilities is not None
-            else ExternalAgentCapability(supported_operations=frozenset(ExternalAgentOperation))
+            else ExternalAgentCapability(
+                supported_operations=frozenset(ExternalAgentOperation)
+            )
         )
         self._probe_summary = probe_summary
         self._probe_details = probe_details
@@ -77,7 +79,9 @@ class RecordingAdapter(ExternalAgentAdapterBase):
             operation=context.operation,
             summary=f"handled {context.operation.value}",
             details=("detail-1", "detail-2"),
-            changed_files=(() if context.read_only else ("src/app.py", "tests/test_app.py")),
+            changed_files=(
+                () if context.read_only else ("src/app.py", "tests/test_app.py")
+            ),
             artifacts=("artifacts/report.json",),
             read_only=context.read_only,
             cancellation_requested=context.cancellation_requested,
@@ -188,7 +192,9 @@ class TestRegistry:
             ),
         )
 
-        with pytest.raises(ExternalAgentAdapterError, match="capability id does not match"):
+        with pytest.raises(
+            ExternalAgentAdapterError, match="capability id does not match"
+        ):
             registry.register(adapter)
 
 
@@ -319,7 +325,10 @@ class TestRunValidation:
 
         assert result.status is ExternalAgentRunStatus.UNAVAILABLE
         assert result.changed_files == ()
-        assert result.unavailable_reason == "read-only operation reported changed files: review"
+        assert (
+            result.unavailable_reason
+            == "read-only operation reported changed files: review"
+        )
         assert result.policy_warnings == (
             "Read-only adapter operation returned changed_files and was rejected.",
         )
@@ -485,7 +494,9 @@ class TestCodexCLIExternalAgentAdapter:
         assert result.summary == "plan output"
         assert result.read_only is True
         assert result.changed_files == ()
-        assert result.commands_run == ("codex exec --approval suggest --model gpt-5-codex",)
+        assert result.commands_run == (
+            "codex exec --approval suggest --model gpt-5-codex",
+        )
         assert result.cost_estimate_usd == pytest.approx(0.0002)
         assert backend.seen_messages[0][0].role.value == "system"
         assert "Do not edit files" in backend.seen_messages[0][0].content

@@ -55,7 +55,9 @@ class RolePlayer:
                 f"Backend {self.backend.name} does not support required tool use for role {self.role.name}"
             )
 
-    async def execute(self, job: Job, tools: list[dict[str, Any]] | None = None) -> BackendResponse:
+    async def execute(
+        self, job: Job, tools: list[dict[str, Any]] | None = None
+    ) -> BackendResponse:
         """Executes the job using the assigned backend, adhering to the role's constraints."""
         messages = [
             Message(role=MessageRole.SYSTEM, content=self.role.system_prompt),

@@ -98,7 +98,9 @@ class TestTasksDictThreadSafety:
             loop_ready.set()
             loop.run_forever()
 
-        loop_thread = threading.Thread(target=_run_loop, name="daemon-loop", daemon=True)
+        loop_thread = threading.Thread(
+            target=_run_loop, name="daemon-loop", daemon=True
+        )
         loop_thread.start()
         assert loop_ready.wait(timeout=2.0)
 
@@ -130,7 +132,9 @@ class TestTasksDictThreadSafety:
             loop_ready.set()
             loop.run_forever()
 
-        loop_thread = threading.Thread(target=_run_loop, name="daemon-loop", daemon=True)
+        loop_thread = threading.Thread(
+            target=_run_loop, name="daemon-loop", daemon=True
+        )
         loop_thread.start()
         assert loop_ready.wait(timeout=2.0)
 

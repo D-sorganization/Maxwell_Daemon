@@ -69,7 +69,9 @@ class WorkItem(BaseModel):
     @model_validator(mode="after")
     def _check_contract(self) -> WorkItem:
         if self.status is WorkItemStatus.REFINED and not self.acceptance_criteria:
-            raise ValueError("refined work items require at least one acceptance criterion")
+            raise ValueError(
+                "refined work items require at least one acceptance criterion"
+            )
         if self.status is WorkItemStatus.IN_PROGRESS and self.started_at is None:
             raise ValueError("in-progress work items require started_at")
         if self.status is WorkItemStatus.DONE and self.completed_at is None:
@@ -79,8 +81,12 @@ class WorkItem(BaseModel):
 
 _ALLOWED_TRANSITIONS: dict[WorkItemStatus, frozenset[WorkItemStatus]] = {
     WorkItemStatus.DRAFT: frozenset({WorkItemStatus.NEEDS_REFINEMENT}),
-    WorkItemStatus.NEEDS_REFINEMENT: frozenset({WorkItemStatus.REFINED, WorkItemStatus.CANCELLED}),
-    WorkItemStatus.REFINED: frozenset({WorkItemStatus.IN_PROGRESS, WorkItemStatus.CANCELLED}),
+    WorkItemStatus.NEEDS_REFINEMENT: frozenset(
+        {WorkItemStatus.REFINED, WorkItemStatus.CANCELLED}
+    ),
+    WorkItemStatus.REFINED: frozenset(
+        {WorkItemStatus.IN_PROGRESS, WorkItemStatus.CANCELLED}
+    ),
     WorkItemStatus.IN_PROGRESS: frozenset(
         {WorkItemStatus.DONE, WorkItemStatus.BLOCKED, WorkItemStatus.CANCELLED}
     ),
@@ -98,7 +104,9 @@ _ALLOWED_TRANSITIONS: dict[WorkItemStatus, frozenset[WorkItemStatus]] = {
 
 def validate_transition(current: WorkItemStatus, target: WorkItemStatus) -> None:
     if target not in _ALLOWED_TRANSITIONS[current]:
-        raise ValueError(f"invalid work item transition: {current.value} -> {target.value}")
+        raise ValueError(
+            f"invalid work item transition: {current.value} -> {target.value}"
+        )
 
 
 def transition_work_item(

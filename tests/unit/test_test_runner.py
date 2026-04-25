@@ -91,7 +91,9 @@ class TestRunnerExecute:
             return 0, b"ok\n", b""
 
         runner = TestRunner(runner=fake_runner)
-        result = asyncio.run(runner.detect_and_run(tmp_path, command=["bash", "-c", "echo custom"]))
+        result = asyncio.run(
+            runner.detect_and_run(tmp_path, command=["bash", "-c", "echo custom"])
+        )
         assert result.passed is True
         assert result.command == "bash -c echo custom"
 

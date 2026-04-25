@@ -100,21 +100,29 @@ def test_binary_artifact_persists_across_store_instances(tmp_path: Path) -> None
 
 def test_lists_by_owner_and_kind_deterministically(tmp_path: Path) -> None:
     store = _store(tmp_path)
-    first = store.put_text(task_id="task-1", kind=ArtifactKind.PLAN, name="Plan", text="one")
+    first = store.put_text(
+        task_id="task-1", kind=ArtifactKind.PLAN, name="Plan", text="one"
+    )
     store.put_text(task_id="other", kind=ArtifactKind.PLAN, name="Other", text="other")
-    second = store.put_text(task_id="task-1", kind=ArtifactKind.DIFF, name="Diff", text="two")
+    second = store.put_text(
+        task_id="task-1", kind=ArtifactKind.DIFF, name="Diff", text="two"
+    )
 
     assert [item.id for item in store.list_for_task("task-1")] == [first.id, second.id]
-    assert [item.id for item in store.list_for_task("task-1", kind=ArtifactKind.DIFF)] == [
-        second.id
-    ]
+    assert [
+        item.id for item in store.list_for_task("task-1", kind=ArtifactKind.DIFF)
+    ] == [second.id]
 
 
 def test_rejects_tampered_blob_path(tmp_path: Path) -> None:
     store = _store(tmp_path)
-    artifact = store.put_text(task_id="task-1", kind=ArtifactKind.PLAN, name="Plan", text="safe")
+    artifact = store.put_text(
+        task_id="task-1", kind=ArtifactKind.PLAN, name="Plan", text="safe"
+    )
     with sqlite3.connect(tmp_path / "artifacts.db") as conn:
-        conn.execute("UPDATE artifacts SET path = ? WHERE id = ?", ("../escape.txt", artifact.id))
+        conn.execute(
+            "UPDATE artifacts SET path = ? WHERE id = ?", ("../escape.txt", artifact.id)
+        )
 
     with pytest.raises(ArtifactIntegrityError, match="escapes blob root"):
         store.read_text(artifact.id)
@@ -122,7 +130,9 @@ def test_rejects_tampered_blob_path(tmp_path: Path) -> None:
 
 def test_detects_corrupted_blob_bytes(tmp_path: Path) -> None:
     store = _store(tmp_path)
-    artifact = store.put_text(task_id="task-1", kind=ArtifactKind.PLAN, name="Plan", text="safe")
+    artifact = store.put_text(
+        task_id="task-1", kind=ArtifactKind.PLAN, name="Plan", text="safe"
+    )
     (tmp_path / "blobs" / artifact.path).write_text("changed", encoding="utf-8")
 
     with pytest.raises(ArtifactIntegrityError, match="integrity check"):

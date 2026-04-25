@@ -41,12 +41,16 @@ class TestCancel:
         # Daemon's view should match.
         assert daemon.get_task(task.id).status.value == "cancelled"  # type: ignore[union-attr]
 
-    def test_cancel_missing_returns_404(self, client: tuple[TestClient, Daemon]) -> None:
+    def test_cancel_missing_returns_404(
+        self, client: tuple[TestClient, Daemon]
+    ) -> None:
         c, _ = client
         r = c.post("/api/v1/tasks/nonexistent/cancel")
         assert r.status_code == 404
 
-    def test_cancel_already_completed_returns_409(self, client: tuple[TestClient, Daemon]) -> None:
+    def test_cancel_already_completed_returns_409(
+        self, client: tuple[TestClient, Daemon]
+    ) -> None:
         from maxwell_daemon.daemon.runner import TaskStatus
 
         c, daemon = client

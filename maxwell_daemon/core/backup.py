@@ -138,7 +138,9 @@ class BackupManifest:
         self._data = data
 
     @classmethod
-    def create(cls, hashes: dict[str, Any], config_path: Path, data_dir: Path) -> BackupManifest:
+    def create(
+        cls, hashes: dict[str, Any], config_path: Path, data_dir: Path
+    ) -> BackupManifest:
         return cls(
             {
                 "schema_version": _SCHEMA_VERSION,
@@ -240,7 +242,9 @@ class BackupManager:
             # 6. Manifest
             manifest = BackupManifest.create(hashes, self._config_path, self._data_dir)
             manifest_path = tmp / "manifest.json"
-            manifest_path.write_text(json.dumps(manifest.to_dict(), indent=2), encoding="utf-8")
+            manifest_path.write_text(
+                json.dumps(manifest.to_dict(), indent=2), encoding="utf-8"
+            )
 
             # 7. secrets.env.example
             self._write_secrets_example(tmp / "secrets.env.example")
@@ -378,7 +382,9 @@ class BackupManager:
         for src_file in src_dir.iterdir():
             dst = self._config_path.parent / src_file.name
             if dst.exists() and not force:
-                raise RestoreError(f"config file {dst} already exists; pass --force to overwrite")
+                raise RestoreError(
+                    f"config file {dst} already exists; pass --force to overwrite"
+                )
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src_file, dst)
 
@@ -388,7 +394,9 @@ class BackupManager:
         for src_db in src_dir.glob("*.db"):
             dst = self._data_dir / src_db.name
             if dst.exists() and not force:
-                raise RestoreError(f"database {dst} already exists; pass --force to overwrite")
+                raise RestoreError(
+                    f"database {dst} already exists; pass --force to overwrite"
+                )
             dst.parent.mkdir(parents=True, exist_ok=True)
             _safe_sqlite_backup(src_db, dst)
 
@@ -400,7 +408,9 @@ class BackupManager:
             return
         dst = self._data_dir / "audit.jsonl"
         if dst.exists() and not force:
-            raise RestoreError(f"audit log {dst} already exists; pass --force to overwrite")
+            raise RestoreError(
+                f"audit log {dst} already exists; pass --force to overwrite"
+            )
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
 
@@ -458,10 +468,14 @@ class BackupManager:
         conn.row_factory = sqlite3.Row
         tables: dict[str, list[dict[str, Any]]] = {}
         try:
-            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            )
             for (table_name,) in cursor.fetchall():
                 quoted_table = _quote_sqlite_identifier(str(table_name))
-                rows = conn.execute(f"SELECT * FROM {quoted_table}").fetchall()  # nosec B608
+                rows = conn.execute(
+                    f"SELECT * FROM {quoted_table}"
+                ).fetchall()  # nosec B608
                 tables[table_name] = [dict(r) for r in rows]
         finally:
             conn.close()
@@ -582,5 +596,7 @@ class BackupManager:
                     if ref:
                         lines.append(f"# backend '{name}' — secret ref: {ref}")
                     elif cfg.get("api_key"):
-                        lines.append(f"# backend '{name}' — set ANTHROPIC_API_KEY (or equivalent)")
+                        lines.append(
+                            f"# backend '{name}' — set ANTHROPIC_API_KEY (or equivalent)"
+                        )
         dst.write_text("\n".join(lines) + "\n", encoding="utf-8")

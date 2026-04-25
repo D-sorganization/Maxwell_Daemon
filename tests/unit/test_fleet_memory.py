@@ -79,7 +79,10 @@ def test_assemble_context_merges_remote_context_and_local_scratchpad() -> None:
 
     assert "shared context" in assembled
     assert "local note" in assembled
-    assert _AsyncClient.requests[0]["url"] == "https://coordinator.test/api/v1/memory/assemble"
+    assert (
+        _AsyncClient.requests[0]["url"]
+        == "https://coordinator.test/api/v1/memory/assemble"
+    )
     assert _AsyncClient.requests[0]["headers"]["Authorization"] == "Bearer token"
 
 
@@ -114,7 +117,10 @@ def test_record_outcome_posts_to_coordinator_and_clears_scratchpad() -> None:
         outcome="completed",
     )
 
-    assert _AsyncClient.requests[0]["url"] == "https://coordinator.test/api/v1/memory/record"
+    assert (
+        _AsyncClient.requests[0]["url"]
+        == "https://coordinator.test/api/v1/memory/record"
+    )
     assert _AsyncClient.requests[0]["json"]["issue_number"] == 296
     assert manager.scratchpad.entries("task-1") == []
 
@@ -130,7 +136,10 @@ async def test_assemble_context_async_uses_async_client() -> None:
     )
 
     assert assembled == "shared context"
-    assert _AsyncClient.requests[0]["url"] == "https://coordinator.test/api/v1/memory/assemble"
+    assert (
+        _AsyncClient.requests[0]["url"]
+        == "https://coordinator.test/api/v1/memory/assemble"
+    )
 
 
 async def test_sync_methods_reject_active_event_loop() -> None:

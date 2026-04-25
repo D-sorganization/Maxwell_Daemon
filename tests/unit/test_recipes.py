@@ -227,7 +227,9 @@ class TestLoadRecipeDirectory:
         recipes = load_recipe_directory(tmp_path)
         assert sorted(r.name for r in recipes) == ["fix-flaky-test", "other"]
 
-    def test_skips_malformed(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_skips_malformed(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         _write_recipe(tmp_path, _FULL_RECIPE, name="good.yaml")
         _write_recipe(tmp_path, "not: [valid\n", name="bad.yaml")
         recipes = load_recipe_directory(tmp_path)

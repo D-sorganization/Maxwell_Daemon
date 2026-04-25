@@ -111,7 +111,9 @@ class EvalScenario(BaseModel):
         for value in values:
             path = PurePosixPath(value)
             if path.is_absolute() or ".." in path.parts:
-                raise ValueError(f"artifact path must be relative and contained: {value}")
+                raise ValueError(
+                    f"artifact path must be relative and contained: {value}"
+                )
         return values
 
     @field_validator("scoring_profile_id")
@@ -125,7 +127,9 @@ class EvalScenario(BaseModel):
     def validate_tool_policy(self) -> EvalScenario:
         overlap = set(self.allowed_tools) & set(self.disallowed_tools)
         if overlap:
-            raise ValueError(f"tools cannot be both allowed and disallowed: {sorted(overlap)}")
+            raise ValueError(
+                f"tools cannot be both allowed and disallowed: {sorted(overlap)}"
+            )
         return self
 
 

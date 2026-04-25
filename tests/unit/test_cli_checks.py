@@ -66,7 +66,9 @@ def test_checks_run_reports_matching_result(runner: CliRunner, tmp_path: Path) -
     assert payload[0]["conclusion"] == "pass"
 
 
-def test_checks_run_skips_non_triggered_event(runner: CliRunner, tmp_path: Path) -> None:
+def test_checks_run_skips_non_triggered_event(
+    runner: CliRunner, tmp_path: Path
+) -> None:
     _write_check(tmp_path)
 
     result = runner.invoke(

@@ -14,7 +14,9 @@ from typing import Literal
 
 from maxwell_daemon.contracts import ensure, require
 
-DecisionStatus = Literal["passed", "failed", "timeout", "policy_denied", "path_denied", "error"]
+DecisionStatus = Literal[
+    "passed", "failed", "timeout", "policy_denied", "path_denied", "error"
+]
 
 _DEFAULT_DENIED_COMMANDS = frozenset(
     {
@@ -76,7 +78,9 @@ class GateDecision:
             "name": self.name,
             "passed": self.passed,
             "status": self.status,
-            "command": (command_display if command_display is not None else list(self.command)),
+            "command": (
+                command_display if command_display is not None else list(self.command)
+            ),
             "workspace_root": self.workspace_root,
             "cwd": self.cwd,
             "evidence": [item.to_dict() for item in self.evidence],
@@ -91,7 +95,9 @@ class WorkspacePolicy:
 
     def __post_init__(self) -> None:
         resolved = self.root.expanduser().resolve()
-        require(resolved.is_dir(), f"Sandbox workspace root must be a directory: {resolved}")
+        require(
+            resolved.is_dir(), f"Sandbox workspace root must be a directory: {resolved}"
+        )
         object.__setattr__(self, "root", resolved)
 
     def resolve_inside(self, candidate: Path | str | None) -> Path | None:
@@ -170,7 +176,9 @@ class EnvPolicy:
             if any(marker in key.upper() for marker in _DEFAULT_SECRET_KEY_MARKERS)
         )
         secret_values = set(self.secret_values)
-        secret_values.update(env_values[key] for key in secret_keys if env_values.get(key))
+        secret_values.update(
+            env_values[key] for key in secret_keys if env_values.get(key)
+        )
         for value in sorted(secret_values, key=len, reverse=True):
             if value:
                 redacted = redacted.replace(value, self.redaction)
@@ -231,7 +239,9 @@ class SandboxPolicy:
     ) -> GateDecision:
         command = tuple(argv)
         if not command:
-            return self._deny("policy_denied", command, cwd, "command must be non-empty")
+            return self._deny(
+                "policy_denied", command, cwd, "command must be non-empty"
+            )
 
         resolved_cwd = self.workspace.resolve_inside(cwd)
         if resolved_cwd is None:

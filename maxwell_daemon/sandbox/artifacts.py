@@ -11,7 +11,9 @@ if TYPE_CHECKING:
     from maxwell_daemon.sandbox.runner import SandboxRunResult
 
 
-def serialize_gate_decision(decision: GateDecision, *, command_display: str) -> dict[str, Any]:
+def serialize_gate_decision(
+    decision: GateDecision, *, command_display: str
+) -> dict[str, Any]:
     return decision.to_dict(command_display=command_display)
 
 
@@ -34,7 +36,9 @@ def build_execution_payload(
             "id": gate_id,
             "name": gate_name,
             "policy": policy_name,
-            "decision": serialize_gate_decision(decision, command_display=command_display),
+            "decision": serialize_gate_decision(
+                decision, command_display=command_display
+            ),
         },
         "execution": {
             "returncode": result.returncode,

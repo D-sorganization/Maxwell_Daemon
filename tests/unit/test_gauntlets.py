@@ -62,11 +62,15 @@ def test_failed_gate_requires_reason_and_evidence() -> None:
         complete_gate(gate_run, GateRunStatus.FAILED, decision=decision, evidence=())
 
     evidence = (GateEvidence(id="log-1", kind="log", summary="pytest failure"),)
-    with pytest.raises(PreconditionError, match="failed gate requires at least one reason"):
+    with pytest.raises(
+        PreconditionError, match="failed gate requires at least one reason"
+    ):
         complete_gate(
             gate_run,
             GateRunStatus.FAILED,
-            decision=GateDecision(verdict=GateDecisionVerdict.FAIL, summary="Tests failed"),
+            decision=GateDecision(
+                verdict=GateDecisionVerdict.FAIL, summary="Tests failed"
+            ),
             evidence=evidence,
         )
 
@@ -82,7 +86,9 @@ def test_transition_validation_rejects_invalid_order() -> None:
     evidence = (GateEvidence(id="log-1", kind="log", summary="pytest passed"),)
 
     with pytest.raises(ValueError, match="invalid gate transition"):
-        complete_gate(gate_run, GateRunStatus.PASSED, decision=decision, evidence=evidence)
+        complete_gate(
+            gate_run, GateRunStatus.PASSED, decision=decision, evidence=evidence
+        )
 
 
 def test_waiver_requires_actor_reason_and_keeps_original_failure_visible() -> None:
@@ -105,14 +111,18 @@ def test_waiver_requires_actor_reason_and_keeps_original_failure_visible() -> No
     )
 
     with pytest.raises(PreconditionError, match="actor must be non-empty"):
-        WaiverRecord(id="waiver-1", gate_run_id=failed.id, actor="", reason="accepted risk")
+        WaiverRecord(
+            id="waiver-1", gate_run_id=failed.id, actor="", reason="accepted risk"
+        )
 
     with pytest.raises(PreconditionError, match="reason must be non-empty"):
         WaiverRecord(id="waiver-1", gate_run_id=failed.id, actor="reviewer", reason="")
 
     waived = waive_gate_failure(
         failed,
-        WaiverRecord(id="waiver-1", gate_run_id=failed.id, actor="reviewer", reason="accepted"),
+        WaiverRecord(
+            id="waiver-1", gate_run_id=failed.id, actor="reviewer", reason="accepted"
+        ),
     )
 
     assert waived.status is GateRunStatus.WAIVED
@@ -184,7 +194,9 @@ def test_waived_required_gate_allows_pass_but_preserves_failure() -> None:
     )
     waived = waive_gate_failure(
         failed_required,
-        WaiverRecord(id="waiver-1", gate_run_id=failed_required.id, actor="reviewer", reason="ok"),
+        WaiverRecord(
+            id="waiver-1", gate_run_id=failed_required.id, actor="reviewer", reason="ok"
+        ),
     )
 
     final = finalize_gauntlet(
@@ -202,7 +214,9 @@ def test_waived_required_gate_allows_pass_but_preserves_failure() -> None:
 def test_store_records_runs_transitions_waivers_and_lists_by_work_item() -> None:
     store = InMemoryGauntletStore()
     created_at = datetime(2026, 4, 22, tzinfo=timezone.utc)
-    gauntlet = GauntletRun(id="gauntlet-1", work_item_id="work-1", created_at=created_at)
+    gauntlet = GauntletRun(
+        id="gauntlet-1", work_item_id="work-1", created_at=created_at
+    )
 
     store.create(gauntlet)
     gate_run = GateRun(
@@ -223,7 +237,9 @@ def test_store_records_runs_transitions_waivers_and_lists_by_work_item() -> None
         ),
         evidence=(GateEvidence(id="log-1", kind="log", summary="pytest failure"),),
     )
-    waiver = WaiverRecord(id="waiver-1", gate_run_id=failed.id, actor="reviewer", reason="ok")
+    waiver = WaiverRecord(
+        id="waiver-1", gate_run_id=failed.id, actor="reviewer", reason="ok"
+    )
     waived = store.record_waiver(failed.id, waiver)
     final = store.finalize(gauntlet.id)
 

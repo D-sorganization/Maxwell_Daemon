@@ -54,7 +54,9 @@ def test_standard_delivery_template_orders_planning_implementation_and_review() 
     assert graph.node_by_id("review").role is AgentRole.REVIEWER
 
 
-def test_security_sensitive_template_includes_security_review_before_final_review() -> None:
+def test_security_sensitive_template_includes_security_review_before_final_review() -> (
+    None
+):
     graph = build_template_graph(TaskGraphTemplate.SECURITY_SENSITIVE_DELIVERY)
 
     assert [node.id for node in graph.nodes_in_dependency_order()] == [

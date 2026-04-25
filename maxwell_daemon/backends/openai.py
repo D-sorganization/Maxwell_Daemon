@@ -81,7 +81,9 @@ class OpenAIBackend(ILLMBackend):
     ) -> BackendResponse:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "temperature": temperature,
         }
         if max_tokens is not None:
@@ -118,7 +120,9 @@ class OpenAIBackend(ILLMBackend):
     ) -> AsyncIterator[str]:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "temperature": temperature,
             "stream": True,
         }

@@ -68,11 +68,17 @@ class StubGitHub:
         body: str,
         draft: bool = True,
     ) -> PullRequest:
-        self._prs.append({"repo": repo, "head": head, "base": base, "title": title, "body": body})
+        self._prs.append(
+            {"repo": repo, "head": head, "base": base, "title": title, "body": body}
+        )
         n = 1000 + len(self._prs)
-        return PullRequest(number=n, url=f"https://github.com/{repo}/pull/{n}", draft=draft)
+        return PullRequest(
+            number=n, url=f"https://github.com/{repo}/pull/{n}", draft=draft
+        )
 
-    async def list_issues(self, repo: str, *, state: str = "open", limit: int = 25) -> list[Issue]:
+    async def list_issues(
+        self, repo: str, *, state: str = "open", limit: int = 25
+    ) -> list[Issue]:
         return [i for (r, _), i in self._issues.items() if r == repo]
 
 
@@ -110,7 +116,9 @@ class StubBackend(ILLMBackend):
         return True
 
     def capabilities(self, model: str) -> BackendCapabilities:
-        return BackendCapabilities(cost_per_1k_input_tokens=0.001, cost_per_1k_output_tokens=0.002)
+        return BackendCapabilities(
+            cost_per_1k_input_tokens=0.001, cost_per_1k_output_tokens=0.002
+        )
 
 
 @pytest.fixture
@@ -153,7 +161,9 @@ def full_system(
     daemon.set_issue_collaborators(
         github_client=stub_gh,
         workspace=stub_ws,
-        executor_factory=lambda gh, ws, be: IssueExecutor(github=stub_gh, workspace=ws, backend=be),
+        executor_factory=lambda gh, ws, be: IssueExecutor(
+            github=stub_gh, workspace=ws, backend=be
+        ),
     )
 
     loop.run_until_complete(daemon.start(worker_count=1))

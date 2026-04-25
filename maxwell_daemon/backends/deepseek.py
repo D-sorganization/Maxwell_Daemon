@@ -51,7 +51,9 @@ class DeepSeekBackend(ILLMBackend):
     ) -> None:
         key = api_key or os.environ.get("DEEPSEEK_API_KEY")
         if not key:
-            raise BackendUnavailableError("DEEPSEEK_API_KEY not set and no api_key passed")
+            raise BackendUnavailableError(
+                "DEEPSEEK_API_KEY not set and no api_key passed"
+            )
         self._client = openai.AsyncOpenAI(
             api_key=key,
             base_url=base_url,
@@ -59,7 +61,9 @@ class DeepSeekBackend(ILLMBackend):
         )
 
     @retry(
-        retry=retry_if_exception_type((openai.APIConnectionError, openai.RateLimitError)),
+        retry=retry_if_exception_type(
+            (openai.APIConnectionError, openai.RateLimitError)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         reraise=True,
@@ -76,7 +80,9 @@ class DeepSeekBackend(ILLMBackend):
     ) -> BackendResponse:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "temperature": temperature,
         }
         if max_tokens is not None:
@@ -113,7 +119,9 @@ class DeepSeekBackend(ILLMBackend):
     ) -> AsyncIterator[str]:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "temperature": temperature,
             "stream": True,
         }

@@ -25,7 +25,9 @@ from maxwell_daemon.gh.executor import IssueExecutionError, IssueExecutor
 
 
 def _issue() -> Issue:
-    return Issue(number=1, title="Bug", body="body", state="OPEN", labels=[], url="https://x/i/1")
+    return Issue(
+        number=1, title="Bug", body="body", state="OPEN", labels=[], url="https://x/i/1"
+    )
 
 
 @dataclass
@@ -63,13 +65,17 @@ class TestPickStaticMethod:
 
     def test_pick_returns_override_value_when_set(self) -> None:
         assert (
-            IssueExecutor._pick(RepoOverrides(context_max_chars=12345), "context_max_chars", 9999)
+            IssueExecutor._pick(
+                RepoOverrides(context_max_chars=12345), "context_max_chars", 9999
+            )
             == 12345
         )
 
     def test_pick_returns_default_when_override_field_is_none(self) -> None:
         assert (
-            IssueExecutor._pick(RepoOverrides(context_max_chars=None), "context_max_chars", 9999)
+            IssueExecutor._pick(
+                RepoOverrides(context_max_chars=None), "context_max_chars", 9999
+            )
             == 9999
         )
 
@@ -138,6 +144,8 @@ class TestDraftChangeWithContextAndMemory:
             )
         )
         assert captured_messages
-        user_text = next(m for m in captured_messages[0] if m.role == MessageRole.USER).content
+        user_text = next(
+            m for m in captured_messages[0] if m.role == MessageRole.USER
+        ).content
         assert "CONTEXT_MARKER" in user_text
         assert "MEMORY_MARKER" in user_text

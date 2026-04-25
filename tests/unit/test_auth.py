@@ -152,10 +152,14 @@ class TestJWTConfig:
         dep = require_role(Role.viewer, cfg)
 
         with (
-            patch.object(cfg, "decode_token", side_effect=jwt.PyJWTError("Signature has expired")),
+            patch.object(
+                cfg, "decode_token", side_effect=jwt.PyJWTError("Signature has expired")
+            ),
             pytest.raises(HTTPException) as exc_info,
         ):
-            asyncio.run(dep(request=_make_request(), authorization="Bearer fake.token.here"))
+            asyncio.run(
+                dep(request=_make_request(), authorization="Bearer fake.token.here")
+            )
 
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail == "Authentication failed"
@@ -177,7 +181,9 @@ class TestJWTConfig:
             patch.object(cfg, "decode_token", side_effect=RuntimeError("boom")),
             pytest.raises(HTTPException) as exc_info,
         ):
-            asyncio.run(dep(request=_make_request(), authorization="Bearer fake.token.here"))
+            asyncio.run(
+                dep(request=_make_request(), authorization="Bearer fake.token.here")
+            )
 
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail == "Authentication failed"
@@ -265,7 +271,9 @@ class TestRequireRole:
 
         dep = require_role(Role.viewer, cfg)
         token = cfg.create_token("alice", Role.operator)
-        claims = asyncio.run(dep(request=_make_request(), authorization=f"Bearer {token}"))
+        claims = asyncio.run(
+            dep(request=_make_request(), authorization=f"Bearer {token}")
+        )
         assert claims.sub == "alice"
 
     def test_insufficient_role_raises_403(self, cfg: JWTConfig) -> None:
@@ -302,7 +310,9 @@ class TestRequireRole:
 
         dep = require_role(Role.viewer, cfg)
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(dep(request=_make_request(), authorization="Bearer not.a.valid.jwt"))
+            asyncio.run(
+                dep(request=_make_request(), authorization="Bearer not.a.valid.jwt")
+            )
         assert exc_info.value.status_code == 401
 
     def test_invalid_jwt_detail_is_generic(self, cfg: JWTConfig) -> None:
@@ -315,5 +325,7 @@ class TestRequireRole:
 
         dep = require_role(Role.viewer, cfg)
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(dep(request=_make_request(), authorization="Bearer not.a.valid.jwt"))
+            asyncio.run(
+                dep(request=_make_request(), authorization="Bearer not.a.valid.jwt")
+            )
         assert exc_info.value.detail == "Authentication failed"

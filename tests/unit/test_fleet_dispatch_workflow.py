@@ -22,7 +22,9 @@ WORKFLOW_PATH = (
 
 
 def _load() -> dict[Any, Any]:
-    return cast(dict[Any, Any], yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8")))
+    return cast(
+        dict[Any, Any], yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    )
 
 
 class TestWorkflowExists:

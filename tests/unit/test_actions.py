@@ -67,7 +67,9 @@ class TestActionTransitions:
 
 
 class TestActionPolicy:
-    def test_suggest_requires_approval_for_all_side_effects(self, tmp_path: Path) -> None:
+    def test_suggest_requires_approval_for_all_side_effects(
+        self, tmp_path: Path
+    ) -> None:
         policy = ActionPolicy(mode=ApprovalMode.SUGGEST, workspace_root=tmp_path)
 
         decision = policy.evaluate(_action(payload={"path": "ok.py"}))
@@ -75,7 +77,9 @@ class TestActionPolicy:
         assert decision.allowed is True
         assert decision.requires_approval is True
 
-    def test_auto_edit_allows_scoped_file_edits_but_not_commands(self, tmp_path: Path) -> None:
+    def test_auto_edit_allows_scoped_file_edits_but_not_commands(
+        self, tmp_path: Path
+    ) -> None:
         policy = ActionPolicy(mode=ApprovalMode.AUTO_EDIT, workspace_root=tmp_path)
 
         file_decision = policy.evaluate(

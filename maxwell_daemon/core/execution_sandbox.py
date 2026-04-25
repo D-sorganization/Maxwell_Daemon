@@ -50,7 +50,9 @@ class ExecutionSandbox:
         )
 
         try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout
+            )
         except asyncio.TimeoutError:
             proc.kill()
             stdout_bytes, stderr_bytes = await proc.communicate()

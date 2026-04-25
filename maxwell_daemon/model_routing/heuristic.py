@@ -242,9 +242,7 @@ def route_model(
     elif latency_tier == "quality":
         notes.append("latency=quality selects largest model")
 
-    rationale = (
-        f"complexity={clamped:.1f} ({tier}), provider={preferred_provider}, latency={latency_tier}"
-    )
+    rationale = f"complexity={clamped:.1f} ({tier}), provider={preferred_provider}, latency={latency_tier}"
     if notes:
         rationale += "; " + "; ".join(notes)
 

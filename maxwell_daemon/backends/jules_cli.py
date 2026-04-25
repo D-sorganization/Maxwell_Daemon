@@ -81,14 +81,18 @@ class JulesCLIBackend(ILLMBackend):
             "json",
         ]
         try:
-            rc, stdout, stderr = await asyncio.wait_for(self._run(*argv), timeout=self._timeout)
+            rc, stdout, stderr = await asyncio.wait_for(
+                self._run(*argv), timeout=self._timeout
+            )
         except (FileNotFoundError, asyncio.TimeoutError) as e:
             raise BackendUnavailableError(f"jules CLI unreachable: {e}") from e
         if rc != 0:
             detail = stderr.decode(errors="replace").strip() or "jules failed"
             import structlog
 
-            structlog.get_logger(__name__).error("jules failed", rc=rc, stderr=detail[-32768:])
+            structlog.get_logger(__name__).error(
+                "jules failed", rc=rc, stderr=detail[-32768:]
+            )
             raise BackendUnavailableError(f"jules rc={rc}: {detail[:1024]}")
 
         try:
@@ -96,7 +100,9 @@ class JulesCLIBackend(ILLMBackend):
         except json.JSONDecodeError as e:
             raise BackendUnavailableError(f"jules returned non-JSON: {e}") from e
 
-        content = payload.get("result") or payload.get("output") or payload.get("text") or ""
+        content = (
+            payload.get("result") or payload.get("output") or payload.get("text") or ""
+        )
         usage = payload.get("usage", {})
         returned_model = payload.get("model", model)
         return BackendResponse(
@@ -105,7 +111,8 @@ class JulesCLIBackend(ILLMBackend):
             usage=TokenUsage(
                 prompt_tokens=int(usage.get("input_tokens", 0)),
                 completion_tokens=int(usage.get("output_tokens", 0)),
-                total_tokens=int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0)),
+                total_tokens=int(usage.get("input_tokens", 0))
+                + int(usage.get("output_tokens", 0)),
             ),
             model=returned_model,
             backend=self.name,

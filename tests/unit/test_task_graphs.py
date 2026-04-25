@@ -151,12 +151,16 @@ class TestTemplates:
             is TaskGraphTemplate.SECURITY_SENSITIVE_DELIVERY
         )
         assert (
-            select_task_graph_template(risk_level="critical", acceptance_criteria_count=1)
+            select_task_graph_template(
+                risk_level="critical", acceptance_criteria_count=1
+            )
             is TaskGraphTemplate.SECURITY_SENSITIVE_DELIVERY
         )
 
     def test_build_task_graph_uses_work_item_risk_and_criteria(self) -> None:
-        graph = build_task_graph(_work_item(risk_level="low", criteria_count=1), graph_id="g")
+        graph = build_task_graph(
+            _work_item(risk_level="low", criteria_count=1), graph_id="g"
+        )
 
         assert graph.id == "g"
         assert graph.template is TaskGraphTemplate.MICRO_DELIVERY

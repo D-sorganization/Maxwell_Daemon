@@ -64,14 +64,18 @@ class EvalRunner:
             )
             for scenario in scenarios
         ]
-        failed = [result for result in results if result.status is not EvalStatus.PASSED]
+        failed = [
+            result for result in results if result.status is not EvalStatus.PASSED
+        ]
         run.completed_at = utc_now().astimezone(timezone.utc)
         run.status = EvalStatus.FAILED if failed else EvalStatus.PASSED
         run.summary = (
             f"{len(results) - len(failed)} passed, {len(failed)} failed across {len(results)} "
             "scenario(s)"
         )
-        ensure(bool(results), "EvalRunner.run: every run must produce at least one result")
+        ensure(
+            bool(results), "EvalRunner.run: every run must produce at least one result"
+        )
         return run, results
 
     def _resolve_scenarios(self, scenario_ids: list[str] | None) -> list[EvalScenario]:
@@ -118,7 +122,9 @@ class EvalRunner:
             risky_action_executed=False,
         )
         status = (
-            EvalStatus.PASSED if total >= 80 and category.value == "none" else EvalStatus.FAILED
+            EvalStatus.PASSED
+            if total >= 80 and category.value == "none"
+            else EvalStatus.FAILED
         )
         result = EvalResult(
             id=f"{run_id}:{scenario.id}",
@@ -144,7 +150,9 @@ class EvalRunner:
     def _create_workspace(self, run_root: Path, scenario: EvalScenario) -> Path:
         workspace = run_root / "workspaces" / scenario.id
         workspace.mkdir(parents=True, exist_ok=False)
-        (workspace / "TASK.md").write_text(scenario.task_prompt + "\n", encoding="utf-8")
+        (workspace / "TASK.md").write_text(
+            scenario.task_prompt + "\n", encoding="utf-8"
+        )
         (workspace / "src").mkdir()
         (workspace / "src" / "example.py").write_text(
             "def placeholder() -> bool:\n    return True\n",

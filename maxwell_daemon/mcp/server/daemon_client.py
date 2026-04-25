@@ -11,13 +11,17 @@ class DaemonClient:
             self.headers["Authorization"] = f"Bearer {auth_token}"
 
     async def _request(self, method: str, endpoint: str, **kwargs: Any) -> Any:
-        async with httpx.AsyncClient(base_url=self.base_url, headers=self.headers) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url, headers=self.headers
+        ) as client:
             response = await client.request(method, endpoint, **kwargs)
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError as e:
                 err_text = response.text
-                raise RuntimeError(f"Daemon error {response.status_code}: {err_text}") from e
+                raise RuntimeError(
+                    f"Daemon error {response.status_code}: {err_text}"
+                ) from e
             if response.status_code == 204:
                 return None
             return response.json()

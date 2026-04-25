@@ -100,7 +100,8 @@ class TestTaskStoreErrorLogging:
         # The fix replaces suppress(Exception) with an explicit log.exception.
         captured = capsys.readouterr()
         assert (
-            "task store write failed" in captured.out or "task store write failed" in captured.err
+            "task store write failed" in captured.out
+            or "task store write failed" in captured.err
         )
         # The failure is an *exception* log (with traceback), not a plain error.
         assert "Traceback" in captured.out or "Traceback" in captured.err
@@ -145,9 +146,9 @@ class TestEventPublishFailure:
                 t = d.get_task(task.id)
                 assert t is not None
                 assert t.status is TaskStatus.FAILED
-                assert t.finished_at is not None, (
-                    "task must have finished_at set even on publish failure"
-                )
+                assert (
+                    t.finished_at is not None
+                ), "task must have finished_at set even on publish failure"
             finally:
                 await d.stop()
 

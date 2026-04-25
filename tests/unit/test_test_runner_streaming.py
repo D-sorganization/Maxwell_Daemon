@@ -38,7 +38,9 @@ class TestStreaming:
         async def on_chunk(text: str, stream: str) -> None:
             received.append((stream, text))
 
-        runner = _LineStreamingRunner([b"collecting...\n", b"test_a PASSED\n", b"test_b PASSED\n"])
+        runner = _LineStreamingRunner(
+            [b"collecting...\n", b"test_a PASSED\n", b"test_b PASSED\n"]
+        )
         tr = TestRunner(runner=runner, on_chunk=on_chunk)
         asyncio.run(tr.detect_and_run(tmp_path))
         assert len(received) == 3

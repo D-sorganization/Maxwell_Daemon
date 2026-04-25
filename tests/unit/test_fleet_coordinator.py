@@ -74,7 +74,9 @@ def _make_config(
     return MaxwellDaemonConfig.model_validate(data)
 
 
-def _task(task_id: str = "t1", status: TaskStatus = TaskStatus.QUEUED, priority: int = 100) -> Task:
+def _task(
+    task_id: str = "t1", status: TaskStatus = TaskStatus.QUEUED, priority: int = 100
+) -> Task:
     return Task(
         id=task_id,
         prompt="test",

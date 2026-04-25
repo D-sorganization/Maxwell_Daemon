@@ -150,7 +150,9 @@ class AgentLoopBackend(ILLMBackend):
     ) -> None:
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
-            raise BackendUnavailableError("ANTHROPIC_API_KEY not set and no api_key passed")
+            raise BackendUnavailableError(
+                "ANTHROPIC_API_KEY not set and no api_key passed"
+            )
         self._client: anthropic.AsyncAnthropic = anthropic.AsyncAnthropic(
             api_key=key, timeout=timeout
         )
@@ -364,7 +366,8 @@ class AgentLoopBackend(ILLMBackend):
                 prompt_tokens=response.usage.input_tokens - cached_tokens,
                 completion_tokens=response.usage.output_tokens,
                 total_tokens=response.usage.input_tokens + response.usage.output_tokens,
-                cached_tokens=getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+                cached_tokens=getattr(response.usage, "cache_read_input_tokens", 0)
+                or 0,
             )
             total_usage = total_usage + turn_usage
             turn_cost = self._cost_for(turn_usage, effective_model)
@@ -396,7 +399,9 @@ class AgentLoopBackend(ILLMBackend):
 
             # Per-task limit from BudgetConfig (injected via budget_enforcer).
             if self._budget_enforcer is not None:
-                per_task_limit = getattr(self._budget_enforcer._config, "per_task_limit_usd", None)
+                per_task_limit = getattr(
+                    self._budget_enforcer._config, "per_task_limit_usd", None
+                )
                 if per_task_limit is not None and cumulative_cost > per_task_limit:
                     raise BudgetExceededError(
                         f"agent loop exceeded per-task budget limit "
@@ -430,7 +435,11 @@ class AgentLoopBackend(ILLMBackend):
                         continue
                     tool_use: Any = block
                     result = await tool_registry.invoke(tool_use.name, tool_use.input)
-                    content = f"ERROR: {result.content}" if result.is_error else result.content
+                    content = (
+                        f"ERROR: {result.content}"
+                        if result.is_error
+                        else result.content
+                    )
                     tool_results.append(
                         {
                             "type": "tool_result",
@@ -452,7 +461,9 @@ class AgentLoopBackend(ILLMBackend):
                 raw={"turns": turn + 1, "cost_usd": cumulative_cost},
             )
 
-        raise RuntimeError(f"agent loop exceeded max_turns={effective_max_turns} without end_turn")
+        raise RuntimeError(
+            f"agent loop exceeded max_turns={effective_max_turns} without end_turn"
+        )
 
     async def stream(
         self,
@@ -595,7 +606,11 @@ class AgentLoopBackend(ILLMBackend):
                         continue
                     tool_use: Any = block
                     result = await tool_registry.invoke(tool_use.name, tool_use.input)
-                    content = f"ERROR: {result.content}" if result.is_error else result.content
+                    content = (
+                        f"ERROR: {result.content}"
+                        if result.is_error
+                        else result.content
+                    )
                     tool_results.append(
                         {
                             "type": "tool_result",
@@ -612,7 +627,9 @@ class AgentLoopBackend(ILLMBackend):
                 yield text_chunk
             return
 
-        raise RuntimeError(f"agent loop exceeded max_turns={effective_max_turns} without end_turn")
+        raise RuntimeError(
+            f"agent loop exceeded max_turns={effective_max_turns} without end_turn"
+        )
 
     async def health_check(self) -> bool:
         try:
@@ -646,7 +663,9 @@ class AgentLoopBackend(ILLMBackend):
         leaks sockets and eventually hits ulimit. ``suppress(Exception)``
         guards against SDK versions that expose a different close method.
         """
-        close = getattr(self._client, "aclose", None) or getattr(self._client, "close", None)
+        close = getattr(self._client, "aclose", None) or getattr(
+            self._client, "close", None
+        )
         if close is None:
             return
         with suppress(Exception):

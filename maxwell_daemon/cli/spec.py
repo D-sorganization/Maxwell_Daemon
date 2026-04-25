@@ -106,7 +106,9 @@ def generate_scaffold(
 
     target = output or _default_scaffold_path(feature)
     if target.exists() and not overwrite:
-        console.print(f"[red]✗[/red] {target} already exists — pass --overwrite to replace it.")
+        console.print(
+            f"[red]✗[/red] {target} already exists — pass --overwrite to replace it."
+        )
         raise typer.Exit(1)
 
     scaffold = render_pytest_bdd_scaffold(spec)

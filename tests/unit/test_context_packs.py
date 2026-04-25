@@ -22,7 +22,9 @@ def _write(root: Path, relpath: str, body: bytes | str) -> Path:
 
 
 class TestContextPackFiles:
-    async def test_file_entries_are_deterministically_ordered(self, tmp_path: Path) -> None:
+    async def test_file_entries_are_deterministically_ordered(
+        self, tmp_path: Path
+    ) -> None:
         _write(tmp_path, "zeta.py", "def zeta() -> None: ...\n")
         _write(tmp_path, "alpha.py", "def alpha() -> None: ...\n")
         _write(tmp_path, "pkg/beta.md", "# Beta\n")
@@ -39,7 +41,9 @@ class TestContextPackFiles:
         assert pack.metadata.file_count == 3
         assert pack.metadata.included_file_count == 3
 
-    async def test_size_total_binary_and_type_policy_are_recorded(self, tmp_path: Path) -> None:
+    async def test_size_total_binary_and_type_policy_are_recorded(
+        self, tmp_path: Path
+    ) -> None:
         _write(tmp_path, "big.py", "x" * 10)
         _write(tmp_path, "binary.txt", b"abc\x00def")
         _write(tmp_path, "ok.py", "ab")
@@ -94,7 +98,9 @@ class TestContextPackManifest:
         ]
         assert "text" not in manifest["files"][0]
 
-    async def test_manifest_can_include_text_when_requested(self, tmp_path: Path) -> None:
+    async def test_manifest_can_include_text_when_requested(
+        self, tmp_path: Path
+    ) -> None:
         _write(tmp_path, "README.md", "# Project\n")
 
         pack = await build_context_pack(tmp_path, provider_names=())
@@ -104,9 +110,13 @@ class TestContextPackManifest:
 
 
 class TestContextPackProviders:
-    async def test_default_pack_includes_local_provider_sections(self, tmp_path: Path) -> None:
+    async def test_default_pack_includes_local_provider_sections(
+        self, tmp_path: Path
+    ) -> None:
         _write(tmp_path, "CONTRIBUTING.md", "# Contributing\n")
-        _write(tmp_path, "pkg/core.py", "class Service:\n    def run(self) -> None: ...\n")
+        _write(
+            tmp_path, "pkg/core.py", "class Service:\n    def run(self) -> None: ...\n"
+        )
 
         pack = await build_context_pack(tmp_path)
 

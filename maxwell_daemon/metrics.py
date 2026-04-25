@@ -163,14 +163,18 @@ def record_request(
         if tokens > 0:
             MAXWELL_TOKENS_TOTAL.labels(backend=backend, model=model).inc(tokens)
         if cached_tokens > 0:
-            MAXWELL_CACHE_HIT_TOKENS_TOTAL.labels(backend=backend, model=model).inc(cached_tokens)
+            MAXWELL_CACHE_HIT_TOKENS_TOTAL.labels(backend=backend, model=model).inc(
+                cached_tokens
+            )
         if cost_usd is not None:
             if cost_usd > 0:
                 MAXWELL_REQUEST_COST.labels(backend=backend, model=model).inc(cost_usd)
             elif cost_usd == 0.0:
                 MAXWELL_FREE_REQUESTS_TOTAL.labels(backend=backend, model=model).inc()
         if duration_seconds > 0:
-            MAXWELL_REQUEST_DURATION.labels(backend=backend, model=model).observe(duration_seconds)
+            MAXWELL_REQUEST_DURATION.labels(backend=backend, model=model).observe(
+                duration_seconds
+            )
 
 
 def build_registry() -> CollectorRegistry:

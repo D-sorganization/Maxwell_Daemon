@@ -61,7 +61,9 @@ def test_browser_request_enforces_allowed_hosts() -> None:
 
 
 def test_browser_request_accepts_wildcard_allowed_hosts() -> None:
-    request = BrowserRequest(url="https://docs.example.com/path", allowed_hosts=("*.example.com",))
+    request = BrowserRequest(
+        url="https://docs.example.com/path", allowed_hosts=("*.example.com",)
+    )
 
     assert request.url == "https://docs.example.com/path"
 

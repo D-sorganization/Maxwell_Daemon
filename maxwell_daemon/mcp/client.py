@@ -54,7 +54,9 @@ class McpClientManager:
                     stdio_client(server_params)
                 )
                 read, write = stdio_transport
-                session = await self._exit_stack.enter_async_context(ClientSession(read, write))
+                session = await self._exit_stack.enter_async_context(
+                    ClientSession(read, write)
+                )
                 await session.initialize()
                 self._sessions[name] = session
                 log.info("MCP server %r connected", name)
@@ -113,12 +115,15 @@ class McpClientManager:
 
                 return "\n".join(content_parts)
             except Exception as e:
-                raise RuntimeError(f"MCP tool {server_name}.{_tool_name} failed: {e}") from e
+                raise RuntimeError(
+                    f"MCP tool {server_name}.{_tool_name} failed: {e}"
+                ) from e
 
         tool_name = f"{server_name}__{mcp_tool.name}"
         return ToolSpec(
             name=tool_name,
-            description=mcp_tool.description or f"MCP tool {mcp_tool.name} from {server_name}",
+            description=mcp_tool.description
+            or f"MCP tool {mcp_tool.name} from {server_name}",
             params=params,
             handler=handler,
             risk_level="external_side_effect",

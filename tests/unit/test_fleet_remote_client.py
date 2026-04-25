@@ -21,7 +21,9 @@ from maxwell_daemon.fleet.client import (
 from maxwell_daemon.fleet.dispatcher import MachineState
 
 
-def _machine(name: str = "m1", host: str = "host.example", port: int = 50051) -> MachineState:
+def _machine(
+    name: str = "m1", host: str = "host.example", port: int = 50051
+) -> MachineState:
     return MachineState(
         name=name,
         host=host,
@@ -84,13 +86,17 @@ class FakeHTTPClient:
         self.posts.append(RecordedPost(url=url, json=json, headers=dict(headers)))
         if url in self._post_exceptions:
             raise self._post_exceptions[url]
-        return self._post_responses.get(url, FakeResponse(status_code=200, _body={"ok": True}))
+        return self._post_responses.get(
+            url, FakeResponse(status_code=200, _body={"ok": True})
+        )
 
     async def get(self, url: str, *, headers: dict[str, str]) -> FakeResponse:
         self.gets.append(RecordedGet(url=url, headers=dict(headers)))
         if url in self._get_exceptions:
             raise self._get_exceptions[url]
-        return self._get_responses.get(url, FakeResponse(status_code=200, _body={"ok": True}))
+        return self._get_responses.get(
+            url, FakeResponse(status_code=200, _body={"ok": True})
+        )
 
 
 class TestSubmitTaskRequestShape:
@@ -129,7 +135,9 @@ class TestSubmitTaskResponse:
     async def test_success_statuses_return_submitted(self, status: int) -> None:
         url = "https://host.example:50051/api/v1/tasks"
         http = FakeHTTPClient(
-            post_responses={url: FakeResponse(status_code=status, _body={"accepted": True})}
+            post_responses={
+                url: FakeResponse(status_code=status, _body={"accepted": True})
+            }
         )
         client = RemoteDaemonClient(http_client=http)
         result = await client.submit_task(_machine(), task_payload={"task_id": "t1"})
@@ -143,7 +151,9 @@ class TestSubmitTaskResponse:
         url = "https://host.example:50051/api/v1/tasks"
         http = FakeHTTPClient(
             post_responses={
-                url: FakeResponse(status_code=status, _body={"error": "nope"}, _text="nope"),
+                url: FakeResponse(
+                    status_code=status, _body={"error": "nope"}, _text="nope"
+                ),
             }
         )
         client = RemoteDaemonClient(http_client=http)

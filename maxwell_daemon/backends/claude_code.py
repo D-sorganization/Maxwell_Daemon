@@ -91,14 +91,18 @@ class ClaudeCodeCLIBackend(ILLMBackend):
             "json",
         ]
         try:
-            rc, stdout, stderr = await asyncio.wait_for(self._run(*argv), timeout=self._timeout)
+            rc, stdout, stderr = await asyncio.wait_for(
+                self._run(*argv), timeout=self._timeout
+            )
         except (FileNotFoundError, asyncio.TimeoutError) as e:
             raise BackendUnavailableError(f"claude CLI unreachable: {e}") from e
         if rc != 0:
             detail = stderr.decode(errors="replace").strip() or "claude -p failed"
             import structlog
 
-            structlog.get_logger(__name__).error("claude -p failed", rc=rc, stderr=detail[-32768:])
+            structlog.get_logger(__name__).error(
+                "claude -p failed", rc=rc, stderr=detail[-32768:]
+            )
             raise BackendUnavailableError(f"claude -p rc={rc}: {detail[:1024]}")
 
         try:
@@ -107,7 +111,9 @@ class ClaudeCodeCLIBackend(ILLMBackend):
             raise BackendUnavailableError(f"claude -p returned non-JSON: {e}") from e
 
         # Accept a few shapes so this adapter is tolerant of upstream changes.
-        content = payload.get("result") or payload.get("output") or payload.get("text") or ""
+        content = (
+            payload.get("result") or payload.get("output") or payload.get("text") or ""
+        )
         usage = payload.get("usage", {})
         returned_model = payload.get("model", model)
         return BackendResponse(
@@ -116,7 +122,8 @@ class ClaudeCodeCLIBackend(ILLMBackend):
             usage=TokenUsage(
                 prompt_tokens=int(usage.get("input_tokens", 0)),
                 completion_tokens=int(usage.get("output_tokens", 0)),
-                total_tokens=int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0)),
+                total_tokens=int(usage.get("input_tokens", 0))
+                + int(usage.get("output_tokens", 0)),
             ),
             model=returned_model,
             backend=self.name,

@@ -61,7 +61,9 @@ def map_gaai_artifacts(item: GaaiBacklogItem) -> tuple[MaxwellArtifactImport, ..
     return tuple(_map_artifact(item.id, reference) for reference in item.artifacts)
 
 
-def _map_artifact(work_item_id: str, reference: GaaiArtifactReference) -> MaxwellArtifactImport:
+def _map_artifact(
+    work_item_id: str, reference: GaaiArtifactReference
+) -> MaxwellArtifactImport:
     media_type = reference.media_type or _media_type_for_path(reference.path)
     return MaxwellArtifactImport(
         work_item_id=work_item_id,

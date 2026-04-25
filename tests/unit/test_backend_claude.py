@@ -18,7 +18,9 @@ from maxwell_daemon.backends.registry import registry
 
 @pytest.fixture(autouse=True)
 def _key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")  # nosec B105 — intentional test fixture; env var is monkeypatched, not a real key
+    monkeypatch.setenv(
+        "ANTHROPIC_API_KEY", "sk-ant-test"
+    )  # nosec B105 — intentional test fixture; env var is monkeypatched, not a real key
 
 
 class TestConfiguration:
@@ -28,7 +30,9 @@ class TestConfiguration:
             ClaudeBackend()
 
     def test_accepts_explicit_key(self) -> None:
-        backend = ClaudeBackend(api_key="sk-test-explicit")  # nosec B106 — intentional test fixture, not a real API key
+        backend = ClaudeBackend(
+            api_key="sk-test-explicit"
+        )  # nosec B106 — intentional test fixture, not a real API key
         assert backend is not None
 
 
@@ -60,7 +64,9 @@ class TestSystemPromptSplit:
 
     def test_no_system_returns_none(self) -> None:
         backend = ClaudeBackend()
-        sys, msgs = backend._split_system([Message(role=MessageRole.USER, content="hi")])
+        sys, msgs = backend._split_system(
+            [Message(role=MessageRole.USER, content="hi")]
+        )
         assert sys is None
         assert len(msgs) == 1
 
@@ -150,7 +156,9 @@ class TestRequestPaths:
             lambda **_: fake_client,
         )
 
-        backend = ClaudeBackend(api_key="x")  # nosec B106 — intentional test fixture; real client is monkeypatched
+        backend = ClaudeBackend(
+            api_key="x"
+        )  # nosec B106 — intentional test fixture; real client is monkeypatched
         out = await backend.complete(
             [
                 Message(role=MessageRole.SYSTEM, content="policy"),
@@ -169,7 +177,9 @@ class TestRequestPaths:
         assert calls[0]["metadata"] == {"trace": "1"}
 
     @pytest.mark.asyncio
-    async def test_stream_and_health_check_paths(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_stream_and_health_check_paths(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         async def ok_create(**_: object) -> object:
             return SimpleNamespace()
 
@@ -182,7 +192,9 @@ class TestRequestPaths:
             "maxwell_daemon.backends.claude.anthropic.AsyncAnthropic",
             lambda **_: fake_client,
         )
-        backend = ClaudeBackend(api_key="x")  # nosec B106 — intentional test fixture; real client is monkeypatched
+        backend = ClaudeBackend(
+            api_key="x"
+        )  # nosec B106 — intentional test fixture; real client is monkeypatched
 
         parts = [p async for p in backend.stream([], model="claude-haiku-4-5")]
         assert parts == ["part-1", "part-2"]
@@ -191,7 +203,9 @@ class TestRequestPaths:
         async def broken_create(**_: object) -> object:
             raise RuntimeError("down")
 
-        fake_client.messages = SimpleNamespace(create=broken_create, stream=fake_messages.stream)
+        fake_client.messages = SimpleNamespace(
+            create=broken_create, stream=fake_messages.stream
+        )
         assert await backend.health_check() is False
 
 

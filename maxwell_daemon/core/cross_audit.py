@@ -180,7 +180,9 @@ class CrossAuditService:
                 model=decision.model,
             )
             response = await player.execute(Job(instructions=prompt))
-            return self._success_result(target.role.name, decision.backend_name, response)
+            return self._success_result(
+                target.role.name, decision.backend_name, response
+            )
         except Exception as exc:
             return CrossAuditResult(
                 role_name=target.role.name,
@@ -211,9 +213,13 @@ class CrossAuditService:
             f"Cross-audit completed: {len(successes)} succeeded, {len(failures)} failed.",
         ]
         if successes:
-            unique_outputs = {self._normalized_content(result.content) for result in successes}
+            unique_outputs = {
+                self._normalized_content(result.content) for result in successes
+            }
             agreement = "agreement" if len(unique_outputs) == 1 else "divergence"
-            lines.append(f"Output comparison: {agreement} across {len(unique_outputs)} view(s).")
+            lines.append(
+                f"Output comparison: {agreement} across {len(unique_outputs)} view(s)."
+            )
             lines.extend(
                 f"- {result.role_name} via {result.backend_name}/{result.model}: "
                 f"{self._preview(result.content)}"

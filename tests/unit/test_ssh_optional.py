@@ -52,8 +52,12 @@ def test_key_store_generates_and_reuses_key_without_optional_dependency(
 
     assert public_key == "ssh-ed25519 fake-public"
     assert (tmp_path / "workstation.pem").read_bytes() == b"fake-private-key"
-    assert (tmp_path / "workstation.pub").read_text(encoding="utf-8").strip() == public_key
-    assert fake_asyncssh.generated == [("ssh-ed25519", {"comment": "maxwell-daemon/workstation"})]
+    assert (tmp_path / "workstation.pub").read_text(
+        encoding="utf-8"
+    ).strip() == public_key
+    assert fake_asyncssh.generated == [
+        ("ssh-ed25519", {"comment": "maxwell-daemon/workstation"})
+    ]
 
     _loaded_key, loaded_public_key = store.get_or_generate("workstation")
     assert loaded_public_key == public_key

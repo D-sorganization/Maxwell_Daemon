@@ -67,7 +67,9 @@ class TestComplete:
 
         assert resp.finish_reason == "length"
 
-    def test_network_error_raises_backend_unavailable(self, backend: OllamaBackend) -> None:
+    def test_network_error_raises_backend_unavailable(
+        self, backend: OllamaBackend
+    ) -> None:
         from maxwell_daemon.backends.base import BackendUnavailableError
 
         with respx.mock(base_url="http://fake:11434") as mock:
@@ -149,7 +151,9 @@ class TestHealthCheck:
 
 
 class TestStream:
-    def test_yields_message_content_from_streaming_lines(self, backend: OllamaBackend) -> None:
+    def test_yields_message_content_from_streaming_lines(
+        self, backend: OllamaBackend
+    ) -> None:
         with respx.mock(base_url="http://fake:11434") as mock:
             mock.post("/api/chat").respond(
                 200,
@@ -170,7 +174,9 @@ class TestStream:
 
             assert asyncio.run(collect()) == ["hello", " world"]
 
-    def test_stream_skips_empty_lines_and_empty_messages(self, backend: OllamaBackend) -> None:
+    def test_stream_skips_empty_lines_and_empty_messages(
+        self, backend: OllamaBackend
+    ) -> None:
         with respx.mock(base_url="http://fake:11434") as mock:
             mock.post("/api/chat").respond(
                 200,

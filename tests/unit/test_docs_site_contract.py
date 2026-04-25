@@ -45,7 +45,9 @@ def test_openapi_route_inventory_matches_live_schema(
     minimal_config: MaxwellDaemonConfig,
 ) -> None:
     doc = Path("docs/reference/openapi.md").read_text(encoding="utf-8")
-    section = doc.split("## Live route inventory", maxsplit=1)[1].split("\n## ", maxsplit=1)[0]
+    section = doc.split("## Live route inventory", maxsplit=1)[1].split(
+        "\n## ", maxsplit=1
+    )[0]
     documented_paths = set(re.findall(r"`(/[^`]+)`", section))
 
     app = create_app(_OpenAPIDocsDaemon(minimal_config))  # type: ignore[arg-type]

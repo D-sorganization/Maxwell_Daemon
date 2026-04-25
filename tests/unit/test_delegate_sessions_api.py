@@ -93,17 +93,24 @@ def test_list_and_show_delegate_sessions(client: TestClient, daemon: Daemon) -> 
         resume_prompt="Resume from the last checkpoint.",
     )
 
-    listed = client.get("/api/v1/delegate-sessions", params={"work_item_id": "issue-395"})
+    listed = client.get(
+        "/api/v1/delegate-sessions", params={"work_item_id": "issue-395"}
+    )
     assert listed.status_code == 200
     body = listed.json()
     assert len(body) == 1
     assert body[0]["session"]["id"] == "session-1"
     assert body[0]["session"]["status"] == "running"
-    assert body[0]["latest_checkpoint"]["current_plan"].startswith("Keep a durable checkpoint")
+    assert body[0]["latest_checkpoint"]["current_plan"].startswith(
+        "Keep a durable checkpoint"
+    )
 
     fetched = client.get("/api/v1/delegate-sessions/session-1")
     assert fetched.status_code == 200
     snapshot = fetched.json()
     assert snapshot["session"]["work_item_id"] == "issue-395"
     assert snapshot["active_lease"]["owner_id"] == "worker-a"
-    assert snapshot["latest_checkpoint"]["resume_prompt"] == "Resume from the last checkpoint."
+    assert (
+        snapshot["latest_checkpoint"]["resume_prompt"]
+        == "Resume from the last checkpoint."
+    )

@@ -79,7 +79,11 @@ def _migrate_backend_api_keys(
         if not isinstance(backend_cfg, dict):
             continue
         plaintext = backend_cfg.get("api_key")
-        if not isinstance(plaintext, str) or not plaintext or _looks_like_env_reference(plaintext):
+        if (
+            not isinstance(plaintext, str)
+            or not plaintext
+            or _looks_like_env_reference(plaintext)
+        ):
             continue
         secret_ref = backend_cfg.get("api_key_secret_ref")
         if not isinstance(secret_ref, str) or not secret_ref:
@@ -133,11 +137,17 @@ def load_config(
         )
     with p.open(encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
-    active_secret_store = secret_store if secret_store is not None else _default_secret_store()
-    migrated_raw, changed = _migrate_backend_api_keys(deepcopy(raw), active_secret_store)
+    active_secret_store = (
+        secret_store if secret_store is not None else _default_secret_store()
+    )
+    migrated_raw, changed = _migrate_backend_api_keys(
+        deepcopy(raw), active_secret_store
+    )
     if changed:
         _write_raw_config(migrated_raw, p)
-    resolved_raw = _resolve_backend_api_keys(deepcopy(migrated_raw), active_secret_store)
+    resolved_raw = _resolve_backend_api_keys(
+        deepcopy(migrated_raw), active_secret_store
+    )
     return MaxwellDaemonConfig.model_validate(_substitute_env(resolved_raw))
 
 

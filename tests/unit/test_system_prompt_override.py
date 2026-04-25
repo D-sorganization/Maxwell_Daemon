@@ -23,14 +23,18 @@ from maxwell_daemon.gh.executor import _SYSTEM_PROMPT, IssueExecutor
 
 
 def _issue(title: str = "Fix the bug", body: str = "details here") -> Issue:
-    return Issue(number=42, title=title, body=body, state="OPEN", labels=[], url="https://x/i/42")
+    return Issue(
+        number=42, title=title, body=body, state="OPEN", labels=[], url="https://x/i/42"
+    )
 
 
 @dataclass
 class FakeGitHub:
     issue: Issue
     created_pr: PullRequest = field(
-        default_factory=lambda: PullRequest(number=1, url="https://x/pull/1", draft=True)
+        default_factory=lambda: PullRequest(
+            number=1, url="https://x/pull/1", draft=True
+        )
     )
 
     async def get_issue(self, repo: str, number: int) -> Issue:
@@ -181,11 +185,15 @@ class TestBuildSystemPrompt:
         assert result.startswith("File content.")
         assert _SYSTEM_PROMPT.strip() in result
 
-    def test_system_prompt_file_takes_priority_over_prefix(self, tmp_path: Path) -> None:
+    def test_system_prompt_file_takes_priority_over_prefix(
+        self, tmp_path: Path
+    ) -> None:
         f = tmp_path / "p.md"
         f.write_text("From file.", encoding="utf-8")
         result = IssueExecutor._build_system_prompt(
-            overrides=RepoOverrides(system_prompt_prefix="From prefix.", system_prompt_file=f),
+            overrides=RepoOverrides(
+                system_prompt_prefix="From prefix.", system_prompt_file=f
+            ),
             repo="o/r",
             issue_title="t",
             issue_body="b",
@@ -213,9 +221,13 @@ class TestSystemPromptInExecuteIssue:
                 github=FakeGitHub(issue=_issue()),
                 workspace=FakeWorkspace(),
                 backend=backend,
-            ).execute_issue(repo="o/r", issue_number=42, model="m", mode="plan", overrides=None)
+            ).execute_issue(
+                repo="o/r", issue_number=42, model="m", mode="plan", overrides=None
+            )
         )
-        assert any("JSON" in msg or "json" in msg.lower() for msg in backend.system_messages)
+        assert any(
+            "JSON" in msg or "json" in msg.lower() for msg in backend.system_messages
+        )
 
     def test_prefix_override_reaches_backend(self) -> None:
         backend = CapturingBackend()
@@ -320,7 +332,9 @@ class TestResolveOverridesSystemPromptPropagation:
     def test_propagates_file(self, tmp_path: Path) -> None:
         p = tmp_path / "p.md"
         assert (
-            resolve_overrides(_cfg(system_prompt_file=str(p)), repo="my-repo").system_prompt_file
+            resolve_overrides(
+                _cfg(system_prompt_file=str(p)), repo="my-repo"
+            ).system_prompt_file
             == p
         )
 

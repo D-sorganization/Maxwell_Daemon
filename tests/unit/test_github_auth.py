@@ -29,14 +29,18 @@ class TestTokenAuth:
         auth = GitHubAuth.from_config(cfg)
         assert auth.token == "ghp_from_config"
 
-    def test_from_config_no_github_section_uses_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_from_config_no_github_section_uses_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("GH_TOKEN", "ghp_from_env")
         cfg = MagicMock()
         cfg.github = None
         auth = GitHubAuth.from_config(cfg)
         assert auth.token == "ghp_from_env"
 
-    def test_from_config_missing_token_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_from_config_missing_token_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         cfg = MagicMock()
@@ -44,7 +48,9 @@ class TestTokenAuth:
         with pytest.raises(ValueError, match="GitHub token not configured"):
             GitHubAuth.from_config(cfg)
 
-    def test_from_config_reads_github_token_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_from_config_reads_github_token_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.setenv("GITHUB_TOKEN", "ghp_from_github_env")
         cfg = MagicMock()
@@ -166,7 +172,9 @@ class TestAppAuth:
 
         with (
             patch.dict("sys.modules", {"jwt": fake_jwt}),
-            pytest.raises(RuntimeError, match="GitHub App private key is not configured"),
+            pytest.raises(
+                RuntimeError, match="GitHub App private key is not configured"
+            ),
         ):
             auth._fetch_installation_token()
 
@@ -209,7 +217,9 @@ class TestAsyncGetToken:
         async def _fake_fetch() -> tuple[str, float]:
             return "new_async_token", expected_expires
 
-        with patch.object(auth, "_async_fetch_installation_token", side_effect=_fake_fetch):
+        with patch.object(
+            auth, "_async_fetch_installation_token", side_effect=_fake_fetch
+        ):
             result = await auth.get_token()
 
         assert result == "new_async_token"
@@ -223,7 +233,9 @@ class TestAsyncGetToken:
         async def _fake_fetch() -> tuple[str, float]:
             return "fresh_token", time.monotonic() + 3600
 
-        with patch.object(auth, "_async_fetch_installation_token", side_effect=_fake_fetch):
+        with patch.object(
+            auth, "_async_fetch_installation_token", side_effect=_fake_fetch
+        ):
             result = await auth.get_token()
 
         assert result == "fresh_token"
@@ -297,7 +309,9 @@ class TestAsyncGetToken:
 
         with (
             patch.dict("sys.modules", {"jwt": fake_jwt}),
-            pytest.raises(RuntimeError, match="GitHub App private key is not configured"),
+            pytest.raises(
+                RuntimeError, match="GitHub App private key is not configured"
+            ),
         ):
             await auth._async_fetch_installation_token()
 
@@ -311,7 +325,9 @@ class TestAsyncGetToken:
         async def _fake_fetch() -> tuple[str, float]:
             return "cached_after_fetch", expected_expires
 
-        with patch.object(auth, "_async_fetch_installation_token", side_effect=_fake_fetch):
+        with patch.object(
+            auth, "_async_fetch_installation_token", side_effect=_fake_fetch
+        ):
             result = await auth._async_installation_token()
 
         assert result == "cached_after_fetch"
@@ -321,7 +337,9 @@ class TestAsyncGetToken:
     async def test_async_installation_token_returns_cached(self) -> None:
         """_async_installation_token returns from cache without a fetch when fresh."""
         auth = self._make_auth()
-        auth._cache = _AppTokenCache(token="still_good", expires_at=time.monotonic() + 3600)
+        auth._cache = _AppTokenCache(
+            token="still_good", expires_at=time.monotonic() + 3600
+        )
 
         fetch_called = False
 
@@ -330,7 +348,9 @@ class TestAsyncGetToken:
             fetch_called = True
             return "should_not_be_called", time.monotonic() + 3600
 
-        with patch.object(auth, "_async_fetch_installation_token", side_effect=_fake_fetch):
+        with patch.object(
+            auth, "_async_fetch_installation_token", side_effect=_fake_fetch
+        ):
             result = await auth._async_installation_token()
 
         assert result == "still_good"

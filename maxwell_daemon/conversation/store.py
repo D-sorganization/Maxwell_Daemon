@@ -108,14 +108,20 @@ class JsonConversationStore(ConversationStore):
 
     def _path(self, conversation_id: str) -> Path:
         # Guard against path traversal.
-        if "/" in conversation_id or "\\" in conversation_id or conversation_id.startswith("."):
+        if (
+            "/" in conversation_id
+            or "\\" in conversation_id
+            or conversation_id.startswith(".")
+        ):
             raise ValueError(f"Invalid conversation_id: {conversation_id!r}")
         return self._dir / f"{conversation_id}.json"
 
     def save(self, conversation_id: str, messages: list[Message]) -> None:
         path = self._path(conversation_id)
         payload = [_message_to_dict(m) for m in messages]
-        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
     def load(self, conversation_id: str) -> list[Message]:
         path = self._path(conversation_id)
@@ -185,7 +191,9 @@ class SqliteConversationStore(ConversationStore):
             )
 
     def save(self, conversation_id: str, messages: list[Message]) -> None:
-        payload = json.dumps([_message_to_dict(m) for m in messages], ensure_ascii=False)
+        payload = json.dumps(
+            [_message_to_dict(m) for m in messages], ensure_ascii=False
+        )
         with self._conn() as conn:
             conn.execute(
                 """

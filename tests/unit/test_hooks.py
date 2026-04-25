@@ -45,7 +45,9 @@ class _Runner:
     async def __call__(
         self, command: str, *, cwd: str, env: dict[str, str], timeout: float
     ) -> tuple[int, str]:
-        self.calls.append({"command": command, "cwd": cwd, "env": env, "timeout": timeout})
+        self.calls.append(
+            {"command": command, "cwd": cwd, "env": env, "timeout": timeout}
+        )
         for prefix, resp in self._canned.items():
             if command.startswith(prefix):
                 return resp
@@ -119,7 +121,9 @@ hooks:
             load_hook_config(tmp_path / "h.yaml")
 
     def test_pre_tool_specs_must_be_string_or_mapping(self, tmp_path: Path) -> None:
-        (tmp_path / "h.yaml").write_text("hooks:\n  pre_tool:\n    - 123\n", encoding="utf-8")
+        (tmp_path / "h.yaml").write_text(
+            "hooks:\n  pre_tool:\n    - 123\n", encoding="utf-8"
+        )
         with pytest.raises(HookViolationError, match="string or mapping"):
             load_hook_config(tmp_path / "h.yaml")
 
@@ -132,7 +136,9 @@ hooks:
             load_hook_config(tmp_path / "h.yaml")
 
     def test_pre_commit_entries_must_be_strings(self, tmp_path: Path) -> None:
-        (tmp_path / "h.yaml").write_text("hooks:\n  pre_commit:\n    - true\n", encoding="utf-8")
+        (tmp_path / "h.yaml").write_text(
+            "hooks:\n  pre_commit:\n    - true\n", encoding="utf-8"
+        )
         with pytest.raises(HookViolationError, match="hook entry must be a string"):
             load_hook_config(tmp_path / "h.yaml")
 
@@ -188,15 +194,21 @@ class TestPreToolHook:
 class TestPostToolHook:
     async def test_non_zero_flags_error(self, tmp_path: Path) -> None:
         runner = _Runner({"ruff": (1, "file would be reformatted")})
-        cfg = HookConfig(post_tool=(HookSpec(match="write_file", command="ruff check {{path}}"),))
+        cfg = HookConfig(
+            post_tool=(HookSpec(match="write_file", command="ruff check {{path}}"),)
+        )
         hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
-        out = await hr.run_post_tool("write_file", {"path": "a.py"}, tool_output="wrote 10 bytes")
+        out = await hr.run_post_tool(
+            "write_file", {"path": "a.py"}, tool_output="wrote 10 bytes"
+        )
         assert out.errored is True
         assert "reformatted" in out.detail
 
     async def test_placeholder_substitution(self, tmp_path: Path) -> None:
         runner = _Runner()
-        cfg = HookConfig(post_tool=(HookSpec(match="write_file", command="check {{path}}"),))
+        cfg = HookConfig(
+            post_tool=(HookSpec(match="write_file", command="check {{path}}"),)
+        )
         hr = HookRunner(cfg, workspace=tmp_path, runner=runner)
         await hr.run_post_tool("write_file", {"path": "a.py"}, tool_output="")
         # Safe strings pass through shlex.quote unchanged.
@@ -352,7 +364,9 @@ class TestHookOutcome:
     def test_frozen(self) -> None:
         from dataclasses import FrozenInstanceError
 
-        o = HookOutcome(blocked=False, errored=False, passed=True, detail="ok", failing_command="")
+        o = HookOutcome(
+            blocked=False, errored=False, passed=True, detail="ok", failing_command=""
+        )
         with pytest.raises(FrozenInstanceError):
             o.blocked = True  # type: ignore[misc]
 
@@ -388,10 +402,14 @@ class TestDefaultRunner:
                 close()
             raise asyncio.TimeoutError
 
-        monkeypatch.setattr("maxwell_daemon.hooks.asyncio.create_subprocess_shell", _fake_create)
+        monkeypatch.setattr(
+            "maxwell_daemon.hooks.asyncio.create_subprocess_shell", _fake_create
+        )
         monkeypatch.setattr("maxwell_daemon.hooks.asyncio.wait_for", _fake_wait_for)
 
-        rc, output = await _default_runner("echo hi", cwd=str(tmp_path), env={}, timeout=0.01)
+        rc, output = await _default_runner(
+            "echo hi", cwd=str(tmp_path), env={}, timeout=0.01
+        )
         assert rc == 124
         assert "timeout after" in output
         assert proc.killed is True
@@ -410,8 +428,12 @@ class TestDefaultRunner:
         async def _fake_create(*_: object, **__: object) -> _Proc:
             return _Proc()
 
-        monkeypatch.setattr("maxwell_daemon.hooks.asyncio.create_subprocess_shell", _fake_create)
-        rc, output = await _default_runner("echo hi", cwd=str(tmp_path), env={}, timeout=1.0)
+        monkeypatch.setattr(
+            "maxwell_daemon.hooks.asyncio.create_subprocess_shell", _fake_create
+        )
+        rc, output = await _default_runner(
+            "echo hi", cwd=str(tmp_path), env={}, timeout=1.0
+        )
         assert rc == 0
         assert output.startswith("ok")
 

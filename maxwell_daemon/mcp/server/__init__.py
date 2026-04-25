@@ -40,7 +40,9 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
     action_service = ActionService(action_store)
 
     # We expose the built-in sandbox tools mapped to the default workspace.
-    registry = build_default_registry(config.memory.workspace_path, action_service=action_service)
+    registry = build_default_registry(
+        config.memory.workspace_path, action_service=action_service
+    )
 
     # Expose the daemon tools via REST API proxy
     client = DaemonClient(config.api.host, config.api.port, config.api.auth_token)
@@ -71,11 +73,15 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
                 if param.required:
                     schema["required"].append(param.name)
 
-            mcp_tools.append(Tool(name=spec.name, description=spec.description, inputSchema=schema))
+            mcp_tools.append(
+                Tool(name=spec.name, description=spec.description, inputSchema=schema)
+            )
         return mcp_tools
 
     @server.call_tool()  # type: ignore[untyped-decorator]
-    async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+    async def handle_call_tool(
+        name: str, arguments: dict[str, Any] | None
+    ) -> list[TextContent]:
         try:
             # We enforce that all MCP calls pass through the audit/approval tier by default
             # if the tool was created with requires_approval, but here the UI handles approval.
@@ -125,7 +131,9 @@ async def run_mcp_server(config_path: Path | None = None) -> None:
         return prompts
 
     @server.get_prompt()  # type: ignore[no-untyped-call, untyped-decorator]
-    async def handle_get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
+    async def handle_get_prompt(
+        name: str, arguments: dict[str, str] | None
+    ) -> GetPromptResult:
         role_id = name.replace("maxwell_", "")
         role = DEFAULT_CROSS_AUDIT_ROLES.get(role_id)
         if not role:

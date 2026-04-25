@@ -33,7 +33,10 @@ class TestForecastMonthEnd:
     def test_zero_spend_returns_zero(self, ledger: CostLedger) -> None:
         # First second of a month → no elapsed time, but no spend → 0.
         assert (
-            ledger.forecast_month_end(now=datetime(2026, 4, 1, 0, 0, 0, tzinfo=timezone.utc)) == 0.0
+            ledger.forecast_month_end(
+                now=datetime(2026, 4, 1, 0, 0, 0, tzinfo=timezone.utc)
+            )
+            == 0.0
         )
 
     def test_halfway_through_month(self, ledger: CostLedger) -> None:
@@ -58,7 +61,9 @@ class TestForecastMonthEnd:
         """First minute of the month: don't divide by near-zero and blow up."""
         ts = datetime(2026, 4, 1, 0, 0, 1, tzinfo=timezone.utc)
         _record(ledger, 1.0, ts)
-        forecast = ledger.forecast_month_end(now=datetime(2026, 4, 1, 0, 0, 2, tzinfo=timezone.utc))
+        forecast = ledger.forecast_month_end(
+            now=datetime(2026, 4, 1, 0, 0, 2, tzinfo=timezone.utc)
+        )
         # Must be a finite positive number, not inf.
         assert 0 < forecast < 1e9
 

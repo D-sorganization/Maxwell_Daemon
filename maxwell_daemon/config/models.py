@@ -24,7 +24,9 @@ class BackendConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str = Field(..., description="Backend type: claude, openai, ollama, google, azure")
+    type: str = Field(
+        ..., description="Backend type: claude, openai, ollama, google, azure"
+    )
     model: str = Field(..., description="Default model id for this backend")
     api_key: SecretStr | None = Field(
         None,
@@ -142,7 +144,9 @@ class MemoryConfig(BaseModel):
         if isinstance(v, str):
             return Path(v).expanduser()
         if not isinstance(v, Path):
-            raise ValueError(f"expected str or Path for 'workspace_path', got {type(v).__name__!r}")
+            raise ValueError(
+                f"expected str or Path for 'workspace_path', got {type(v).__name__!r}"
+            )
         return v
 
 
@@ -154,7 +158,9 @@ class RepoConfig(BaseModel):
     name: str
     path: Path
     slots: int = Field(2, ge=1, le=16, description="Max concurrent agents on this repo")
-    backend: str | None = Field(None, description="Override default backend for this repo")
+    backend: str | None = Field(
+        None, description="Override default backend for this repo"
+    )
     model: str | None = None
     tags: list[str] = Field(default_factory=list)
     # Per-repo overrides of IssueExecutor behaviour. None = use executor default.
@@ -178,7 +184,9 @@ class RepoConfig(BaseModel):
         if isinstance(v, str):
             return Path(v).expanduser()
         if not isinstance(v, Path):
-            raise ValueError(f"expected str or Path for 'path', got {type(v).__name__!r}")
+            raise ValueError(
+                f"expected str or Path for 'path', got {type(v).__name__!r}"
+            )
         return v
 
 
@@ -252,11 +260,16 @@ class APIConfig(BaseModel):
 
     def jwt_secret_value(self) -> str | None:
         """Unwrap the JWT secret SecretStr, or None if unset."""
-        return self.jwt_secret.get_secret_value() if self.jwt_secret is not None else None
+        return (
+            self.jwt_secret.get_secret_value() if self.jwt_secret is not None else None
+        )
 
     @model_validator(mode="after")
     def _validate_bind_security(self) -> APIConfig:
-        if self.host not in ("127.0.0.1", "localhost", "::1") and self.jwt_secret is None:
+        if (
+            self.host not in ("127.0.0.1", "localhost", "::1")
+            and self.jwt_secret is None
+        ):
             raise ValueError(
                 f"Refusing to bind API to {self.host} without JWT configured. "
                 "Set api.jwt_secret to expose the daemon on a non-loopback interface."
@@ -266,9 +279,15 @@ class APIConfig(BaseModel):
 
 class McpServerConfig(BaseModel):
     name: str = Field(..., description="Unique name for the MCP server")
-    command: str | None = Field(None, description="Command to execute (e.g. 'npx', 'python')")
-    args: list[str] = Field(default_factory=list, description="Arguments for the command")
-    env: dict[str, str] = Field(default_factory=dict, description="Environment variables")
+    command: str | None = Field(
+        None, description="Command to execute (e.g. 'npx', 'python')"
+    )
+    args: list[str] = Field(
+        default_factory=list, description="Arguments for the command"
+    )
+    env: dict[str, str] = Field(
+        default_factory=dict, description="Environment variables"
+    )
     transport: Literal["stdio", "sse", "http"] = "stdio"
     url: str | None = Field(None, description="URL for sse or http transport")
     enabled: bool = True
@@ -291,11 +310,15 @@ class MaxwellDaemonConfig(BaseModel):
     budget: BudgetConfig = Field(default_factory=lambda: BudgetConfig())
     github: GithubConfig = Field(default_factory=lambda: GithubConfig())
     mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict)
-    log_file: Path | None = Field(None, description="Path to write structured rotating logs")
+    log_file: Path | None = Field(
+        None, description="Path to write structured rotating logs"
+    )
 
     @field_validator("backends")
     @classmethod
-    def _require_default_exists(cls, v: dict[str, BackendConfig]) -> dict[str, BackendConfig]:
+    def _require_default_exists(
+        cls, v: dict[str, BackendConfig]
+    ) -> dict[str, BackendConfig]:
         if not v:
             raise ValueError("At least one backend must be configured")
         return v

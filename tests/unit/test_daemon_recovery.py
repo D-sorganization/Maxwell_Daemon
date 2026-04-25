@@ -27,7 +27,9 @@ def cfg() -> MaxwellDaemonConfig:
 
 
 class TestRecovery:
-    def test_queued_task_requeued_on_start(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
+    def test_queued_task_requeued_on_start(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
         task_store_path = tmp_path / "tasks.db"
         # Simulate a previous daemon run by writing directly to the store.
         store = TaskStore(task_store_path)
@@ -153,7 +155,9 @@ class TestRecovery:
         assert d.get_task("missing-worker").status is TaskStatus.QUEUED  # type: ignore[union-attr]
         assert d._queue.qsize() == 1
 
-    def test_task_store_round_trips_priority_and_dispatched_to(self, tmp_path: Path) -> None:
+    def test_task_store_round_trips_priority_and_dispatched_to(
+        self, tmp_path: Path
+    ) -> None:
         task_store_path = tmp_path / "tasks.db"
         store = TaskStore(task_store_path)
         task = Task(
@@ -174,7 +178,9 @@ class TestRecovery:
         assert loaded.dispatched_to == "worker-b"
         assert loaded.status is TaskStatus.DISPATCHED
 
-    def test_existing_task_db_migrates_priority_and_dispatched_to(self, tmp_path: Path) -> None:
+    def test_existing_task_db_migrates_priority_and_dispatched_to(
+        self, tmp_path: Path
+    ) -> None:
         task_store_path = tmp_path / "tasks.db"
         with sqlite3.connect(task_store_path) as conn:
             conn.executescript(
@@ -207,12 +213,16 @@ class TestRecovery:
         TaskStore(task_store_path)
 
         with sqlite3.connect(task_store_path) as conn:
-            columns = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()
+            }
 
         assert "priority" in columns
         assert "dispatched_to" in columns
 
-    def test_submit_persists_immediately(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
+    def test_submit_persists_immediately(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
         task_store_path = tmp_path / "tasks.db"
         d = Daemon(
             cfg,
@@ -225,7 +235,9 @@ class TestRecovery:
         store = TaskStore(task_store_path)
         assert store.get(task.id) is not None
 
-    def test_cancel_persists_status(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
+    def test_cancel_persists_status(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
         task_store_path = tmp_path / "tasks.db"
         d = Daemon(
             cfg,
@@ -355,7 +367,9 @@ class TestRecovery:
 
 
 class TestExecutionPersistence:
-    def test_completed_task_persists(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
+    def test_completed_task_persists(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
         from maxwell_daemon.backends import registry
         from tests.conftest import RecordingBackend
 

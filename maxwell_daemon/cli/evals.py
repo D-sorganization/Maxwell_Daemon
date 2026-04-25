@@ -15,7 +15,9 @@ from maxwell_daemon.evals.reports import compare_runs, render_markdown_report
 from maxwell_daemon.evals.runner import EvalRunner
 from maxwell_daemon.evals.storage import EvalRunStore
 
-eval_app = typer.Typer(name="eval", help="Run deterministic Maxwell evaluation scenarios.")
+eval_app = typer.Typer(
+    name="eval", help="Run deterministic Maxwell evaluation scenarios."
+)
 console = Console()
 DEFAULT_OUTPUT_ROOT = Path(".maxwell") / "evals"
 

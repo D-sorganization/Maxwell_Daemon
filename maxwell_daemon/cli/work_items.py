@@ -45,7 +45,9 @@ def create_work_item(
 ) -> None:
     """Create a draft work item."""
     criteria = [
-        {"id": f"AC{i + 1}", "text": text} for i, text in enumerate(criterion or []) if text.strip()
+        {"id": f"AC{i + 1}", "text": text}
+        for i, text in enumerate(criterion or [])
+        if text.strip()
     ]
     payload: dict[str, Any] = {
         "title": title,

@@ -29,7 +29,9 @@ _RISK_LEVELS: frozenset[str] = frozenset(("low", "medium", "high", "critical"))
 @task_graph_app.command("create")
 def create_graph(
     work_item_id: Annotated[str, typer.Argument(help="Work item id for the graph")],
-    title: Annotated[str, typer.Option("--title", help="Work item title")] = "Untitled work item",
+    title: Annotated[
+        str, typer.Option("--title", help="Work item title")
+    ] = "Untitled work item",
     criterion: Annotated[
         list[str] | None,
         typer.Option("--criterion", "-a", help="Acceptance criterion. Repeatable."),
@@ -46,7 +48,9 @@ def create_graph(
         TaskGraphTemplate | None,
         typer.Option("--template", help="Override automatic template selection."),
     ] = None,
-    graph_id: Annotated[str | None, typer.Option("--graph-id", help="Stable graph id")] = None,
+    graph_id: Annotated[
+        str | None, typer.Option("--graph-id", help="Stable graph id")
+    ] = None,
     output: Annotated[
         Path | None, typer.Option("--output", "-o", help="Write JSON to file")
     ] = None,
@@ -84,7 +88,9 @@ def create_graph(
 @task_graph_app.command("inspect")
 def inspect_graph(
     path: Annotated[Path, typer.Argument(help="Task graph JSON file")],
-    json_output: Annotated[bool, typer.Option("--json", help="Print normalized JSON")] = False,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Print normalized JSON")
+    ] = False,
 ) -> None:
     """Validate and inspect a saved task graph definition."""
 

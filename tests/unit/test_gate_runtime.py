@@ -126,8 +126,12 @@ class TestBlockerSemantics:
     ) -> None:
         adapter = _ScriptedAdapter(
             results={
-                "gate-1": GateAdapterResult(False, ("optional-evidence",), "optional failed"),
-                "gate-2": GateAdapterResult(True, ("required-evidence",), "required passed"),
+                "gate-1": GateAdapterResult(
+                    False, ("optional-evidence",), "optional failed"
+                ),
+                "gate-2": GateAdapterResult(
+                    True, ("required-evidence",), "required passed"
+                ),
             }
         )
         store = InMemoryGateStore()
@@ -178,7 +182,9 @@ class TestEvidenceAndWaivers:
     async def test_preserves_evidence_for_failed_gate(self) -> None:
         adapter = _ScriptedAdapter(
             results={
-                "gate-1": GateAdapterResult(False, ("stdout: a", "stderr: b"), "failed"),
+                "gate-1": GateAdapterResult(
+                    False, ("stdout: a", "stderr: b"), "failed"
+                ),
             }
         )
         store = InMemoryGateStore()
@@ -194,7 +200,9 @@ class TestEvidenceAndWaivers:
     async def test_waiver_preserves_original_failed_gate(self) -> None:
         adapter = _ScriptedAdapter(
             results={
-                "gate-1": GateAdapterResult(False, ("waived-evidence",), "still failed"),
+                "gate-1": GateAdapterResult(
+                    False, ("waived-evidence",), "still failed"
+                ),
                 "gate-2": GateAdapterResult(True, ("post-waiver",), "passed"),
             }
         )

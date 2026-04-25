@@ -47,7 +47,9 @@ class OpenRouterBackend(ILLMBackend):
     ) -> None:
         key = api_key or os.environ.get("OPENROUTER_API_KEY")
         if not key:
-            raise BackendUnavailableError("OPENROUTER_API_KEY not set and no api_key passed")
+            raise BackendUnavailableError(
+                "OPENROUTER_API_KEY not set and no api_key passed"
+            )
 
         default_headers: dict[str, str] = {}
         if site_url:
@@ -74,7 +76,9 @@ class OpenRouterBackend(ILLMBackend):
     ) -> BackendResponse:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "temperature": temperature,
         }
         if max_tokens is not None:
@@ -111,7 +115,9 @@ class OpenRouterBackend(ILLMBackend):
     ) -> AsyncIterator[str]:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "temperature": temperature,
             "stream": True,
         }
@@ -142,7 +148,9 @@ class OpenRouterBackend(ILLMBackend):
     def capabilities(self, model: str) -> BackendCapabilities:
         # OpenRouter hosts hundreds of models; we can't enumerate them all.
         # Return sensible defaults — vision/tool-use depend on the underlying model.
-        vision_hint = any(kw in model.lower() for kw in ("vision", "gpt-4o", "claude-3", "gemini"))
+        vision_hint = any(
+            kw in model.lower() for kw in ("vision", "gpt-4o", "claude-3", "gemini")
+        )
         return BackendCapabilities(
             supports_streaming=True,
             supports_tool_use=True,

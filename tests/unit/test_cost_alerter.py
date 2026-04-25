@@ -40,7 +40,9 @@ def _spend(ledger: CostLedger, amount: float, ts: datetime) -> None:
 class TestEvaluate:
     def test_no_limit_never_alerts(self, ledger: CostLedger) -> None:
         _spend(ledger, 500, datetime(2026, 4, 5, tzinfo=timezone.utc))
-        alerter = CostAlerter(BudgetEnforcer(BudgetConfig(), ledger), webhook_url="http://ex")
+        alerter = CostAlerter(
+            BudgetEnforcer(BudgetConfig(), ledger), webhook_url="http://ex"
+        )
         assert alerter.evaluate(now=datetime(2026, 4, 15, tzinfo=timezone.utc)) is None
 
     def test_no_webhook_never_alerts(self, ledger: CostLedger) -> None:

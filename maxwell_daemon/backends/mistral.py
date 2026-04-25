@@ -42,7 +42,9 @@ class MistralBackend(ILLMBackend):
     ) -> None:
         key = api_key or os.environ.get("MISTRAL_API_KEY")
         if not key:
-            raise BackendUnavailableError("MISTRAL_API_KEY not set and no api_key passed")
+            raise BackendUnavailableError(
+                "MISTRAL_API_KEY not set and no api_key passed"
+            )
         try:
             mistral_sdk = cast(Any, import_module("mistralai"))
         except ModuleNotFoundError as exc:
@@ -63,7 +65,9 @@ class MistralBackend(ILLMBackend):
     ) -> BackendResponse:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "temperature": temperature,
         }
         if max_tokens is not None:
@@ -100,7 +104,9 @@ class MistralBackend(ILLMBackend):
     ) -> AsyncIterator[str]:
         params: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": m.role.value, "content": m.content} for m in messages],
+            "messages": [
+                {"role": m.role.value, "content": m.content} for m in messages
+            ],
             "temperature": temperature,
         }
         if max_tokens is not None:

@@ -75,7 +75,9 @@ def client(daemon: Daemon) -> Iterator[TestClient]:
 
 @pytest.fixture
 def auth_client(daemon: Daemon) -> Iterator[TestClient]:
-    with TestClient(create_app(daemon, auth_token="secret-abc")) as c:  # nosec B106 — intentional test fixture, not a real credential
+    with TestClient(
+        create_app(daemon, auth_token="secret-abc")
+    ) as c:  # nosec B106 — intentional test fixture, not a real credential
         yield c
 
 
@@ -92,7 +94,9 @@ class TestHealth:
         r = auth_client.get("/health")
         assert r.status_code == 200
 
-    def test_readyz_reports_ready_when_backend_available(self, client: TestClient) -> None:
+    def test_readyz_reports_ready_when_backend_available(
+        self, client: TestClient
+    ) -> None:
         r = client.get("/readyz")
 
         assert r.status_code == 200
@@ -104,7 +108,9 @@ class TestHealth:
         daemon: Daemon,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(daemon, "state", lambda: SimpleNamespace(backends_available=[]))
+        monkeypatch.setattr(
+            daemon, "state", lambda: SimpleNamespace(backends_available=[])
+        )
 
         r = client.get("/readyz")
 
@@ -169,7 +175,9 @@ class TestBackends:
         fake_registry.register("claude", CatalogBackend)
         fake_registry.register("ollama", CatalogBackend)
         monkeypatch.setattr(api_server, "registry", fake_registry)
-        monkeypatch.setattr(daemon, "state", lambda: SimpleNamespace(backends_available=["cloud"]))
+        monkeypatch.setattr(
+            daemon, "state", lambda: SimpleNamespace(backends_available=["cloud"])
+        )
 
         response = client.get("/api/v1/backends/available")
 
@@ -281,7 +289,9 @@ class TestTaskSubmission:
         assert r.status_code == 200
         assert len(r.json()) >= 3
 
-    def test_list_filters_by_status_kind_and_repo(self, client: TestClient, daemon: Daemon) -> None:
+    def test_list_filters_by_status_kind_and_repo(
+        self, client: TestClient, daemon: Daemon
+    ) -> None:
         matching = Task(
             id="match",
             prompt="owner/repo#7",
@@ -306,13 +316,17 @@ class TestTaskSubmission:
         daemon._task_store.save(matching)
         daemon._task_store.save(other)
 
-        r = client.get("/api/v1/tasks?status=running&kind=issue&repo=owner/repo&limit=10")
+        r = client.get(
+            "/api/v1/tasks?status=running&kind=issue&repo=owner/repo&limit=10"
+        )
 
         assert r.status_code == 200
         body = r.json()
         assert [task["id"] for task in body] == ["match"]
 
-    def test_list_filters_by_completed_before(self, client: TestClient, daemon: Daemon) -> None:
+    def test_list_filters_by_completed_before(
+        self, client: TestClient, daemon: Daemon
+    ) -> None:
         old_done = Task(
             id="old-done",
             prompt="old",
@@ -368,7 +382,9 @@ class TestTaskSubmission:
         assert [task["id"] for task in r.json()] == [old_done.id]
 
     def test_get_task_by_id(self, client: TestClient) -> None:
-        submitted = client.post("/api/v1/tasks", json={"prompt": "test-prompt-fetch"}).json()
+        submitted = client.post(
+            "/api/v1/tasks", json={"prompt": "test-prompt-fetch"}
+        ).json()
         r = client.get(f"/api/v1/tasks/{submitted['id']}")
         assert r.status_code == 200
         assert r.json()["id"] == submitted["id"]
@@ -443,7 +459,10 @@ class TestControlPlaneGauntlet:
         assert item["delegates"][0]["status"] == "running"
         assert item["resource_routing"]["selected_backend"] == "primary"
         assert item["resource_routing"]["selected_model"] == "gpt-4.1"
-        assert item["resource_routing"]["selection_reason"] == "repo override for owner/repo"
+        assert (
+            item["resource_routing"]["selection_reason"]
+            == "repo override for owner/repo"
+        )
 
     def test_failed_task_surfaces_blocker_before_notes(
         self,
@@ -525,7 +544,9 @@ class TestControlPlaneGauntlet:
         service.record_checkpoint(
             "session-91",
             current_plan="Render the current gate and real delegate checkpoint.",
-            failures_and_learnings=("Keep blocker detail visible near the action controls.",),
+            failures_and_learnings=(
+                "Keep blocker detail visible near the action controls.",
+            ),
         )
 
         r = client.get("/api/v1/control-plane/gauntlet", params={"task_id": task.id})
@@ -556,7 +577,9 @@ class TestControlPlaneGauntlet:
         daemon._task_store.save(matching)
         daemon._task_store.save(other)
 
-        r = client.get("/api/v1/control-plane/gauntlet", params={"task_id": "task-match"})
+        r = client.get(
+            "/api/v1/control-plane/gauntlet", params={"task_id": "task-match"}
+        )
 
         assert r.status_code == 200
         assert [row["task_id"] for row in r.json()] == ["task-match"]
@@ -598,9 +621,14 @@ class TestControlPlaneGauntlet:
         assert r.status_code == 200
         item = next(row for row in r.json() if row["task_id"] == "cancelled")
         assert item["final_decision"] == "cancelled"
-        assert item["next_action"] == "No action required unless the task should be requeued"
+        assert (
+            item["next_action"]
+            == "No action required unless the task should be requeued"
+        )
         assert item["gates"][1]["status"] == "waived"
-        assert "cancelled by policy or operator action" in item["gates"][1]["next_action"]
+        assert (
+            "cancelled by policy or operator action" in item["gates"][1]["next_action"]
+        )
         assert item["gates"][2]["status"] == "blocked"
 
     def test_unknown_status_falls_back_to_blocked_gate_and_default_next_action(
@@ -871,7 +899,9 @@ class TestCostEndpoint:
 
 
 class TestAdminPruneEndpoint:
-    def test_prune_endpoint_runs_retention(self, client: TestClient, daemon: Daemon) -> None:
+    def test_prune_endpoint_runs_retention(
+        self, client: TestClient, daemon: Daemon
+    ) -> None:
         old_done = Task(
             id="old-prune",
             prompt="old",
@@ -899,7 +929,9 @@ class _FakeGraphExecutor:
 
 
 class TestTaskGraphEndpoints:
-    def test_create_list_and_get_task_graph(self, client: TestClient, daemon: Daemon) -> None:
+    def test_create_list_and_get_task_graph(
+        self, client: TestClient, daemon: Daemon
+    ) -> None:
         daemon.create_work_item(
             WorkItem(
                 id="wi-graph",
@@ -937,7 +969,9 @@ class TestTaskGraphEndpoints:
             "reviewer",
         ]
 
-    def test_create_task_graph_rejects_missing_work_item(self, client: TestClient) -> None:
+    def test_create_task_graph_rejects_missing_work_item(
+        self, client: TestClient
+    ) -> None:
         response = client.post(
             "/api/v1/task-graphs",
             json={"work_item_id": "missing"},
@@ -1049,7 +1083,9 @@ class TestArtifactEndpoints:
 
 
 class TestActionEndpoints:
-    def test_lists_and_fetches_task_actions(self, client: TestClient, daemon: Daemon) -> None:
+    def test_lists_and_fetches_task_actions(
+        self, client: TestClient, daemon: Daemon
+    ) -> None:
         action = daemon.propose_action(
             task_id="task-action",
             kind=ActionKind.FILE_WRITE,
@@ -1065,7 +1101,9 @@ class TestActionEndpoints:
         assert detail.status_code == 200
         assert detail.json()["summary"] == "write file"
 
-    def test_lists_actions_queue_across_tasks(self, client: TestClient, daemon: Daemon) -> None:
+    def test_lists_actions_queue_across_tasks(
+        self, client: TestClient, daemon: Daemon
+    ) -> None:
         proposed = daemon.propose_action(
             task_id="task-action-a",
             work_item_id="wi-approval",
@@ -1091,7 +1129,9 @@ class TestActionEndpoints:
         assert [item["id"] for item in listed.json()] == [proposed.id]
         assert listed.json()[0]["approval_contract"] == "proposal_only"
 
-    def test_approve_and_reject_actions(self, client: TestClient, daemon: Daemon) -> None:
+    def test_approve_and_reject_actions(
+        self, client: TestClient, daemon: Daemon
+    ) -> None:
         approved = daemon.propose_action(
             task_id="task-action",
             kind=ActionKind.FILE_WRITE,
@@ -1120,22 +1160,30 @@ class TestActionEndpoints:
 
 
 class TestJwtAuthEndpoint:
-    def test_whoami_returns_static_token_identity(self, auth_client: TestClient) -> None:
+    def test_whoami_returns_static_token_identity(
+        self, auth_client: TestClient
+    ) -> None:
         r = auth_client.get(
             "/api/v1/auth/me",
-            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
+            headers={
+                "Authorization": "Bearer secret-abc"
+            },  # nosec B106 — test fixture token matching auth_client fixture
         )
 
         assert r.status_code == 200
         assert r.json() == {"sub": "static-token", "role": "admin", "exp": None}
 
-    def test_whoami_returns_anonymous_without_auth(self, auth_client: TestClient) -> None:
+    def test_whoami_returns_anonymous_without_auth(
+        self, auth_client: TestClient
+    ) -> None:
         r = auth_client.get("/api/v1/auth/me")
 
         assert r.status_code == 200
         assert r.json() == {"sub": "anonymous", "role": None, "exp": None}
 
-    def test_whoami_rejects_wrong_static_token_identity(self, auth_client: TestClient) -> None:
+    def test_whoami_rejects_wrong_static_token_identity(
+        self, auth_client: TestClient
+    ) -> None:
         r = auth_client.get(
             "/api/v1/auth/me",
             headers={"Authorization": "Bearer wrong"},
@@ -1266,7 +1314,9 @@ repos:
             "discovery_interval_seconds": 120,
         }
         maxwell, other = body["repos"]
-        assert maxwell["github_url"] == "https://github.com/D-sorganization/Maxwell-Daemon"
+        assert (
+            maxwell["github_url"] == "https://github.com/D-sorganization/Maxwell-Daemon"
+        )
         assert maxwell["slots"] == 4
         assert maxwell["budget_per_story"] == 1.25
         assert maxwell["pr_target_branch"] == "main"
@@ -1314,7 +1364,9 @@ class TestFleetCapabilityRegistryEndpoint:
                 node_id="node-a",
                 hostname="alpha",
                 capabilities=(
-                    NodeCapability(name="gpu", observed_at=datetime.now(timezone.utc), value=8),
+                    NodeCapability(
+                        name="gpu", observed_at=datetime.now(timezone.utc), value=8
+                    ),
                     NodeCapability(
                         name="secret-capability",
                         observed_at=datetime.now(timezone.utc),
@@ -1376,7 +1428,9 @@ class TestFleetCapabilityRegistryEndpoint:
             FleetNode(
                 node_id="node-a",
                 hostname="alpha",
-                capabilities=(NodeCapability(name="gpu", observed_at=datetime.now(timezone.utc)),),
+                capabilities=(
+                    NodeCapability(name="gpu", observed_at=datetime.now(timezone.utc)),
+                ),
                 resource_snapshot=NodeResourceSnapshot(
                     captured_at=datetime.now(timezone.utc),
                     heartbeat_at=datetime.now(timezone.utc),
@@ -1416,13 +1470,17 @@ class TestFleetCapabilityRegistryEndpoint:
 
 
 class TestAuditEndpoint:
-    def test_audit_log_reports_disabled_when_not_configured(self, client: TestClient) -> None:
+    def test_audit_log_reports_disabled_when_not_configured(
+        self, client: TestClient
+    ) -> None:
         r = client.get("/api/v1/audit")
 
         assert r.status_code == 200
         assert r.json() == {"entries": [], "audit_enabled": False}
 
-    def test_audit_verify_reports_clean_when_not_configured(self, client: TestClient) -> None:
+    def test_audit_verify_reports_clean_when_not_configured(
+        self, client: TestClient
+    ) -> None:
         r = client.get("/api/v1/audit/verify")
 
         assert r.status_code == 200
@@ -1430,7 +1488,9 @@ class TestAuditEndpoint:
 
 
 class TestWebhookEndpoint:
-    def test_github_webhook_reports_disabled_without_secret(self, client: TestClient) -> None:
+    def test_github_webhook_reports_disabled_without_secret(
+        self, client: TestClient
+    ) -> None:
         r = client.post(
             "/api/v1/webhooks/github",
             content=b"{}",
@@ -1442,7 +1502,9 @@ class TestWebhookEndpoint:
 
 
 class TestAuth:
-    def test_protected_endpoint_rejects_missing_token(self, auth_client: TestClient) -> None:
+    def test_protected_endpoint_rejects_missing_token(
+        self, auth_client: TestClient
+    ) -> None:
         r = auth_client.get("/api/v1/backends")
         assert r.status_code == 401
 
@@ -1463,7 +1525,9 @@ class TestAuth:
     def test_accepts_correct_token(self, auth_client: TestClient) -> None:
         r = auth_client.get(
             "/api/v1/backends",
-            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
+            headers={
+                "Authorization": "Bearer secret-abc"
+            },  # nosec B106 — test fixture token matching auth_client fixture
         )
         assert r.status_code == 200
 
@@ -1477,7 +1541,9 @@ class TestSSHEndpointsWithoutAsyncSSH:
     the None sentinel is set correctly and the 503 guard fires.
     """
 
-    def test_ssh_sessions_returns_503_when_asyncssh_absent(self, daemon: Daemon) -> None:
+    def test_ssh_sessions_returns_503_when_asyncssh_absent(
+        self, daemon: Daemon
+    ) -> None:
         import sys
         from unittest.mock import patch
 

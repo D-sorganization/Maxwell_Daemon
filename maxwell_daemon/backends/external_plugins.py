@@ -52,12 +52,16 @@ class ExternalAgentPluginDescriptor:
         _require_descriptor(
             _PLUGIN_NAME_RE.match(self.name) is not None, "plugin name must be stable"
         )
-        _require_descriptor(self.kind == "external-agent", "plugin kind must be 'external-agent'")
+        _require_descriptor(
+            self.kind == "external-agent", "plugin kind must be 'external-agent'"
+        )
         _require_descriptor(
             _ENTRYPOINT_RE.match(self.entrypoint) is not None,
             "plugin entrypoint must be 'module:attribute'",
         )
-        _require_descriptor(bool(self.version.strip()), "plugin version must be non-empty")
+        _require_descriptor(
+            bool(self.version.strip()), "plugin version must be non-empty"
+        )
         _require_descriptor(
             len(set(self.capabilities)) == len(self.capabilities),
             "plugin capabilities must not contain duplicates",
@@ -82,7 +86,9 @@ class ExternalAgentPluginDescriptor:
                 capabilities=tuple(str(item) for item in capabilities),
             )
         except KeyError as exc:
-            raise ExternalAgentAdapterError(f"plugin descriptor missing {exc.args[0]!r}") from exc
+            raise ExternalAgentAdapterError(
+                f"plugin descriptor missing {exc.args[0]!r}"
+            ) from exc
 
 
 def load_external_agent_plugin_descriptor(
@@ -111,7 +117,9 @@ def load_external_agent_plugin_descriptors(
     if root.is_file():
         return (load_external_agent_plugin_descriptor(root),)
     if not root.is_dir():
-        raise ExternalAgentAdapterError(f"plugin descriptor path does not exist: {root}")
+        raise ExternalAgentAdapterError(
+            f"plugin descriptor path does not exist: {root}"
+        )
     descriptors = tuple(
         load_external_agent_plugin_descriptor(candidate)
         for candidate in sorted(root.iterdir(), key=lambda item: item.name)
@@ -180,5 +188,7 @@ def _reject_duplicate_plugin_names(
     seen: set[str] = set()
     for descriptor in descriptors:
         if descriptor.name in seen:
-            raise ExternalAgentAdapterError(f"duplicate plugin descriptor {descriptor.name!r}")
+            raise ExternalAgentAdapterError(
+                f"duplicate plugin descriptor {descriptor.name!r}"
+            )
         seen.add(descriptor.name)
