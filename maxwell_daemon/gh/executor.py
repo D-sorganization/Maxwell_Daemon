@@ -546,7 +546,9 @@ class IssueExecutor:
         Returns the final (plan, diff, test_result). Raises if tests still fail
         after ``max_retries`` refinements.
         """
-        assert self._test_runner is not None
+        from maxwell_daemon.contracts import require
+        require(self._test_runner is not None, "IssueExecutor: test_runner must be configured")
+        assert self._test_runner is not None  # for mypy
         attempt = 0
         current_plan, current_diff = plan, diff
         repo_path = self._workspace_path(repo, task_id)
