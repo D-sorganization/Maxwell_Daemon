@@ -14,9 +14,37 @@ permissions:
   contents: read
 
 jobs:
+
+
+
+
+  pick-runner:
+    runs-on: d-sorg-fleet
+    timeout-minutes: 2
+    outputs:
+      runner: ${{ steps.check.outputs.runner }}
+    steps:
+      - name: Check for self-hosted runner
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.RUNNER_CHECK_TOKEN }}
+        run: |
+          ONLINE=$(gh api -H "Accept: application/vnd.github+json" /orgs/${{ github.repository_owner }}/actions/runners --paginate \
+            --jq 'if .runners then [.runners[] | select(.status == "online") | select(.labels[].name == "d-sorg-fleet")] | length else 0 end' \
+            2>/dev/null || echo "0")
+          if ! [[ "$ONLINE" =~ ^[0-9]+$ ]]; then ONLINE=0; fi
+          if [[ "$ONLINE" -gt 0 ]]; then
+            echo "runner=d-sorg-fleet" >> $GITHUB_OUTPUT
+            echo "Self-hosted runner online - routing locally"
+          else
+            echo "::error::No local self-hosted runner available; failing closed"
+            exit 1
+          fi
+
   lint:
     name: Lint (ruff)
-    runs-on: d-sorg-fleet
+    needs: pick-runner
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -37,8 +65,8 @@ jobs:
 
   typecheck:
     name: Typecheck (mypy --strict)
-    needs: lint
-    runs-on: d-sorg-fleet
+    needs: [pick-runner, lint]
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -59,8 +87,8 @@ jobs:
 
   test:
     name: Test (py${{ matrix.python-version }})
-    needs: typecheck
-    runs-on: d-sorg-fleet
+    needs: [pick-runner, typecheck]
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -90,9 +118,9 @@ jobs:
 
   coverage-floor:
     name: Coverage floor (ratchet)
-    needs: test
+    needs: [pick-runner, test]
     if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'dependabot/github_actions/') }}
-    runs-on: d-sorg-fleet
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -110,8 +138,8 @@ jobs:
 
   file-size-budget:
     name: File size budget
-    needs: coverage-floor
-    runs-on: d-sorg-fleet
+    needs: [pick-runner, coverage-floor]
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -126,8 +154,8 @@ jobs:
 
   todo-fixme:
     name: No untracked TODO/FIXME
-    needs: file-size-budget
-    runs-on: d-sorg-fleet
+    needs: [pick-runner, file-size-budget]
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -142,8 +170,8 @@ jobs:
 
   security:
     name: Security scans
-    needs: todo-fixme
-    runs-on: d-sorg-fleet
+    needs: [pick-runner, todo-fixme]
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -164,8 +192,8 @@ jobs:
 
   dependency-locks:
     name: Dependency locks
-    needs: security
-    runs-on: d-sorg-fleet
+    needs: [pick-runner, security]
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -190,8 +218,8 @@ jobs:
 
   build:
     name: Build distribution
-    needs: dependency-locks
-    runs-on: d-sorg-fleet
+    needs: [pick-runner, dependency-locks]
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
