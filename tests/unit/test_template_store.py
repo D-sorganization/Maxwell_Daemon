@@ -40,3 +40,10 @@ def test_template_render() -> None:
     rendered = t.render({"repo": "D-sorganization/Maxwell-Daemon"})
     assert "D-sorganization/Maxwell-Daemon" in rendered
     assert "{{" not in rendered
+
+
+def test_template_store_skips_malformed_json(tmp_path: Path) -> None:
+    (tmp_path / "bad.json").write_text("not valid json")
+    store = TemplateStore(tmp_path)
+    # builtins still loaded despite malformed file
+    assert store.get_template("audit-repo-todos") is not None

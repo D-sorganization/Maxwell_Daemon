@@ -9,13 +9,16 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
+import maxwell_daemon.api.server as server_module
 from maxwell_daemon.api import create_app
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.evals.storage import EvalRunStore
 
 # ---------------------------------------------------------------------------
 # Fixtures (mirrors test_api.py pattern)
@@ -120,10 +123,11 @@ class TestApiHealth:
     ) -> None:
         """Health must be orthogonal — even a broken daemon state returns a response."""
 
-        def _broken_state() -> None:
+        def _broken_state(self: Daemon) -> None:
             raise RuntimeError("daemon internals on fire")
 
-        monkeypatch.setattr(daemon, "state", _broken_state)
+        monkeypatch.setattr(Daemon, "state", _broken_state)
+        monkeypatch.setattr(server_module, "log", MagicMock())
         r = client.get("/api/health")
         assert r.status_code == 200
         assert r.json()["status"] == "degraded"
@@ -159,6 +163,26 @@ class TestApiStatus:
     def test_does_not_require_auth(self, auth_client: TestClient) -> None:
         r = auth_client.get("/api/status")
         assert r.status_code == 200
+
+    def test_status_handles_state_exception(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Status must degrade gracefully when daemon.state() raises."""
+
+        def _broken_state(self: Daemon) -> None:
+            raise RuntimeError("daemon internals on fire")
+
+        monkeypatch.setattr(Daemon, "state", _broken_state)
+        monkeypatch.setattr(server_module, "log", MagicMock())
+        r = client.get("/api/status")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["pipeline_state"] == "error"
+        assert body["gate"] == "closed"
+        assert body["sandbox"] == "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -306,3 +330,56 @@ class TestApiControl:
         body = auth_client.post("/api/control/pause", json=self._payload()).json()
         assert "applied_at" in body
         assert "previous_state" in body
+
+    def test_abort_handles_state_exception(
+        self,
+        auth_client: TestClient,
+        daemon: Daemon,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def _raise() -> None:
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(daemon, "state", _raise)
+        monkeypatch.setattr(server_module, "log", MagicMock())
+        r = auth_client.post("/api/control/abort", json=self._payload())
+        assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/evals/leaderboard
+# ---------------------------------------------------------------------------
+
+
+class TestApiEvalLeaderboard:
+    def test_leaderboard_handles_load_run_exception(
+        self,
+        auth_client: TestClient,
+        daemon: Daemon,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        evals_dir = workspace / "evals"
+        run_dir = evals_dir / "run-001"
+        run_dir.mkdir(parents=True)
+
+        monkeypatch.setattr(daemon._config.memory, "workspace_path", workspace)
+
+        # Mock load_run to raise exception, triggering the except block
+        def _mock_load_run(self, run_id: str) -> None:
+            raise RuntimeError("corrupted run")
+
+        monkeypatch.setattr(EvalRunStore, "load_run", _mock_load_run)
+
+        mock_log = MagicMock()
+        monkeypatch.setattr(server_module, "log", mock_log)
+
+        r = auth_client.get(
+            "/api/v1/evals/leaderboard?suite_id=test-suite",
+            headers=_bearer(),
+        )
+        assert r.status_code == 200
+        assert r.json()["suite_id"] == "test-suite"
+        assert r.json()["entries"] == []
+        mock_log.warning.assert_called_once()

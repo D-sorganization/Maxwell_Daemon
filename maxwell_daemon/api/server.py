@@ -2881,6 +2881,8 @@ def create_app(
             for run_dir in output_root.iterdir():
                 if not run_dir.is_dir():
                     continue
+                backend = "unknown"
+                model = "unknown"
                 try:
                     run = store.load_run(run_dir.name)
                     if suite_id in run.scenario_ids:
