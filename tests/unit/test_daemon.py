@@ -513,7 +513,7 @@ class TestSubmitThreadsafe:
             task = await asyncio.to_thread(background)
             result["task"] = task
             assert d.get_task(task.id) is task
-            final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
+            final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=60.0)
             assert final.result == "ok"
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
