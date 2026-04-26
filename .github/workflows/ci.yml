@@ -56,7 +56,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - run: uv venv .venv
+      - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
       - name: Ruff check
         run: .venv/bin/python -m ruff check . --output-format=github
@@ -78,7 +78,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - run: uv venv .venv
+      - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
       - run: .venv/bin/python -m mypy maxwell_daemon
       - name: Mypy on tests
@@ -105,7 +105,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - run: uv venv .venv
+      - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
       - name: Run tests
         run: .venv/bin/python -m pytest -p no:xvfb --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
@@ -183,7 +183,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - run: uv venv .venv
+      - run: uv venv .venv --python $(which python)
       - run: uv pip install bandit pip-audit
       - name: Bandit (static analysis)
         run: .venv/bin/python -m bandit -r maxwell_daemon -c pyproject.toml
@@ -231,7 +231,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - run: uv venv .venv
+      - run: uv venv .venv --python $(which python)
       - run: uv pip install build
       - run: .venv/bin/python -m build
       - uses: actions/upload-artifact@v7

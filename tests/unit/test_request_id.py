@@ -27,6 +27,11 @@ def client(minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path) -> I
             yield c
     finally:
         loop.run_until_complete(d.stop())
+        pending = asyncio.all_tasks(loop)
+        for task in pending:
+            task.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         loop.close()
         asyncio.set_event_loop(None)
 
