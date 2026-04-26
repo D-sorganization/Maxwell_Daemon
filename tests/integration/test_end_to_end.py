@@ -66,6 +66,11 @@ def live_system(
             yield daemon, client, loop
         finally:
             loop.run_until_complete(daemon.stop())
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             loop.close()
             asyncio.set_event_loop(None)
 

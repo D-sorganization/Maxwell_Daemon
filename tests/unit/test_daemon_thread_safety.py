@@ -113,6 +113,11 @@ class TestTasksDictThreadSafety:
         finally:
             loop.call_soon_threadsafe(loop.stop)
             loop_thread.join(timeout=5.0)
+            pending = asyncio.all_tasks(loop)
+            for t in pending:
+                t.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             loop.close()
 
     def test_reprioritize_routes_queue_put_onto_daemon_loop_thread(
@@ -154,6 +159,11 @@ class TestTasksDictThreadSafety:
         finally:
             loop.call_soon_threadsafe(loop.stop)
             loop_thread.join(timeout=5.0)
+            pending = asyncio.all_tasks(loop)
+            for t in pending:
+                t.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             loop.close()
 
     def test_submit_before_daemon_loop_starts_queues_directly_and_skips_event(
