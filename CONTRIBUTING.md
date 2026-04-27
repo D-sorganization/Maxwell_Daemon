@@ -45,6 +45,15 @@ The `ClaudeBackend` and `OllamaBackend` adapters are good reference implementati
 - [ ] Commits are squashed or logically grouped (one concept per commit)
 - [ ] PR description explains the *why*, not just the *what*
 
+## Coverage floor policy
+
+Coverage is enforced by two independent mechanisms:
+
+1. **pytest `--cov-fail-under`** — set in `pyproject.toml`. This fails the test suite if line coverage drops below the threshold.
+2. **ratchet script** — `scripts/check_coverage_floor.py` reads `scripts/config/coverage_floor.json` and ensures coverage never regresses. The floor only moves upward.
+
+If you add code that lowers coverage, add tests to bring it back above the floor. Do **not** lower the floor value to make CI pass.
+
 ## Code style
 
 - Python 3.10+, type-hinted, async where it touches I/O.

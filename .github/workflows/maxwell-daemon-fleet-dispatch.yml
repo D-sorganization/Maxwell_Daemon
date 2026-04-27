@@ -15,9 +15,9 @@ on:
           - full-run   # discover + deliver: dispatch-batch --all with the deliver label
           - discover   # dispatch-batch in plan mode (no PR body diff)
           - deliver    # dispatch-batch in implement mode
-          - status     # placeholder — see follow-up issue
-          - stop       # placeholder — see follow-up issue
-          - cleanup    # placeholder — see follow-up issue
+          - status     # placeholder - see follow-up issue
+          - stop       # placeholder - see follow-up issue
+          - cleanup    # placeholder - see follow-up issue
       repos:
         description: 'Comma-separated repo names, or "all" to read fleet.yaml'
         required: false
@@ -34,7 +34,7 @@ on:
         default: "0"
         type: string
       dry_run:
-        description: "Dry run — print plan without submitting"
+        description: "Dry run - print plan without submitting"
         required: false
         default: false
         type: boolean
@@ -100,7 +100,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Schedule runs have no workflow_dispatch inputs — fall back to sane defaults.
+          # Schedule runs have no workflow_dispatch inputs - fall back to sane defaults.
           ACTION="${{ inputs.action || 'full-run' }}"
           REPOS="${{ inputs.repos || 'all' }}"
           LABEL="${{ inputs.label || 'maxwell:ready' }}"
@@ -150,7 +150,7 @@ jobs:
                 ${{ steps.inputs.outputs.dry_flag }}
               ;;
             status|stop|cleanup)
-              echo "::notice::action '${{ steps.inputs.outputs.action }}' is a placeholder — tracked in follow-up issue."
+              echo "::notice::action '${{ steps.inputs.outputs.action }}' is a placeholder â€” tracked in follow-up issue."
               ;;
             *)
               echo "::error::unknown action '${{ steps.inputs.outputs.action }}'"
