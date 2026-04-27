@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -12,12 +13,7 @@ import pytest
 
 from maxwell_daemon.audit import AuditLogger, verify_chain
 
-try:
-    import prometheus_client  # noqa: F401
-
-    _HAS_API_DEPS = True
-except ModuleNotFoundError:
-    _HAS_API_DEPS = False
+_HAS_API_DEPS = importlib.util.find_spec("prometheus_client") is not None
 
 
 @pytest.fixture
