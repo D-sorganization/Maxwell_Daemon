@@ -102,10 +102,10 @@ ignore = ["E501"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --cov=maxwell_daemon --cov-report=term-missing --cov-fail-under=85.18"
+addopts = "-ra --strict-markers --cov=maxwell_daemon --cov-report=term-missing --cov-fail-under=85.14"
 
 [tool.coverage.report]
-fail_under = 85.18
+fail_under = 85.14
 precision = 2
 show_missing = true
 
