@@ -295,7 +295,7 @@ class TestCapabilities:
 class TestRegistry:
     def test_registered_under_codex_cli(self) -> None:
         # Import side-effect registers the backend.
-        import maxwell_daemon.backends.codex_cli  # noqa: F401
+        import maxwell_daemon.backends.codex_cli  # noqa: F401 — import registers backend via side effect
         from maxwell_daemon.backends.registry import registry
 
         assert "codex-cli" in registry.available()

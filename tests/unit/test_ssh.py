@@ -14,10 +14,7 @@ import pytest
 asyncssh = pytest.importorskip("asyncssh")
 
 from maxwell_daemon.ssh.keys import SSHKeyStore
-from maxwell_daemon.ssh.session import (
-    SSHSession,
-    SSHSessionPool,
-)
+from maxwell_daemon.ssh.session import SSHSession, SSHSessionPool
 
 # ── SSHKeyStore ──────────────────────────────────────────────────────────────
 
