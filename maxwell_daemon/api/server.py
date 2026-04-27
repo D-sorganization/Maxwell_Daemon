@@ -1326,6 +1326,21 @@ def create_app(
 
     install_correlation_middleware(app)
 
+    # HTTP request metrics middleware (Issue #705)
+    @app.middleware("http")
+    async def http_metrics_middleware(request: Request, call_next: Any) -> Response:
+        """Record per-request HTTP metrics for Prometheus scraping."""
+        from maxwell_daemon.metrics import HTTP_REQUEST_DURATION, HTTP_REQUESTS_TOTAL
+
+        path = request.url.path
+        method = request.method
+        with HTTP_REQUEST_DURATION.labels(endpoint=path).time():
+            response = await call_next(request)
+        HTTP_REQUESTS_TOTAL.labels(
+            method=method, endpoint=path, status=str(response.status_code)
+        ).inc()
+        return response
+
     # Rate-limit middleware — installs only when config declares a default group.
     api_cfg = daemon._config.api
     if api_cfg.rate_limit_default is not None:
@@ -1522,6 +1537,11 @@ def create_app(
             "version": state.version,
             "uptime_seconds": (datetime.now(timezone.utc) - state.started_at).total_seconds(),
         }
+
+    @app.get("/healthz")
+    async def healthz() -> dict[str, Any]:
+        """Load-balancer liveness probe — lightweight, no DB calls."""
+        return {"status": "ok"}
 
     @app.get("/readyz")
     async def readyz() -> dict[str, Any]:

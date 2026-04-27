@@ -19,6 +19,8 @@ from prometheus_client import (
 )
 
 __all__ = [
+    "HTTP_REQUESTS_TOTAL",
+    "HTTP_REQUEST_DURATION",
     "MAXWELL_CACHE_HIT_RATE",
     "MAXWELL_CACHE_HIT_TOKENS_TOTAL",
     "MAXWELL_COST_FORECAST_USD",
@@ -135,6 +137,21 @@ MAXWELL_GATE_VERDICTS_TOTAL = Counter(
 MAXWELL_CACHE_HIT_RATE = Gauge(
     "maxwell_daemon_cache_hit_rate",
     "Prompt cache hit rate (0.0 to 1.0)",
+)
+
+# ── HTTP-level Prometheus metrics (Issue #705) ─────────────────────────────
+
+HTTP_REQUESTS_TOTAL = Counter(
+    "maxwell_http_requests_total",
+    "Total HTTP requests by method, endpoint, and status",
+    labelnames=("method", "endpoint", "status"),
+)
+
+HTTP_REQUEST_DURATION = Histogram(
+    "maxwell_http_request_duration_seconds",
+    "HTTP request latency by endpoint",
+    labelnames=("endpoint",),
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
 )
 
 
