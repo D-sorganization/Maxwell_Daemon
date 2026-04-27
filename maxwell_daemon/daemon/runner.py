@@ -676,7 +676,7 @@ class Daemon:
                 result.set_result(None)
 
         self._loop.call_soon_threadsafe(_put)
-        result.result(timeout=5.0)
+        result.result(timeout=15.0)
 
     def submit(
         self,
