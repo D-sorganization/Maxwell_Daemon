@@ -13,8 +13,8 @@ import pytest
 
 asyncssh = pytest.importorskip("asyncssh")
 
-from maxwell_daemon.ssh.keys import SSHKeyStore  # noqa: E402
-from maxwell_daemon.ssh.session import (  # noqa: E402
+from maxwell_daemon.ssh.keys import SSHKeyStore
+from maxwell_daemon.ssh.session import (
     SSHSession,
     SSHSessionPool,
 )
