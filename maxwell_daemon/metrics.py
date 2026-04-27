@@ -19,6 +19,8 @@ from prometheus_client import (
 )
 
 __all__ = [
+    "HTTP_REQUESTS_TOTAL",
+    "HTTP_REQUEST_DURATION",
     "MAXWELL_CACHE_HIT_RATE",
     "MAXWELL_CACHE_HIT_TOKENS_TOTAL",
     "MAXWELL_COST_FORECAST_USD",
@@ -35,6 +37,7 @@ __all__ = [
     "MAXWELL_TOKENS_TOTAL",
     "MAXWELL_TOKEN_BUDGET_ALLOCATION",
     "build_registry",
+    "http_metrics_middleware",
     "mount_metrics_endpoint",
     "record_cache_hit",
     "record_gate_verdict",
@@ -137,6 +140,19 @@ MAXWELL_CACHE_HIT_RATE = Gauge(
     "Prompt cache hit rate (0.0 to 1.0)",
 )
 
+HTTP_REQUESTS_TOTAL = Counter(
+    "maxwell_daemon_http_requests_total",
+    "Total HTTP requests by method, endpoint, and status code",
+    labelnames=("method", "endpoint", "status"),
+)
+
+HTTP_REQUEST_DURATION = Histogram(
+    "maxwell_daemon_http_request_duration_seconds",
+    "HTTP request latency by endpoint",
+    labelnames=("endpoint",),
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+)
+
 
 def record_request(
     *,
@@ -187,6 +203,26 @@ def mount_metrics_endpoint(app: FastAPI, *, path: str = "/metrics") -> None:
             content=generate_latest(),
             media_type="text/plain; version=0.0.4; charset=utf-8",
         )
+
+
+def http_metrics_middleware(app: FastAPI) -> None:
+    """Attach HTTP-level Prometheus middleware to a FastAPI app."""
+
+    @app.middleware("http")
+    async def _metrics_middleware(request, call_next):  # type: ignore[no-untyped-def]
+        from time import perf_counter
+
+        start = perf_counter()
+        response = await call_next(request)
+        duration = perf_counter() - start
+        endpoint = request.url.path
+        HTTP_REQUEST_DURATION.labels(endpoint=endpoint).observe(duration)
+        HTTP_REQUESTS_TOTAL.labels(
+            method=request.method,
+            endpoint=endpoint,
+            status=str(response.status_code),
+        ).inc()
+        return response
 
 
 def record_cache_hit(hit_rate: float) -> None:

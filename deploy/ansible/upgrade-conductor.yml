@@ -49,7 +49,7 @@
 
     - name: Wait for health endpoint
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ conductor_port }}/api/v1/health"
+        url: "http://127.0.0.1:{{ conductor_port }}/healthz"
         status_code: 200
         timeout: 5
       retries: 12
@@ -82,7 +82,7 @@
 
     - name: Wait for health endpoint
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ conductor_port }}/api/v1/health"
+        url: "http://127.0.0.1:{{ conductor_port }}/healthz"
         status_code: 200
         timeout: 5
       retries: 12

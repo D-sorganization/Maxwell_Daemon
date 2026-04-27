@@ -131,3 +131,26 @@ class TestEndToEnd:
         metrics = client.get("/metrics").text
         assert "maxwell_daemon_requests_total" in metrics
         assert 'status="success"' in metrics
+
+    def test_healthz_endpoint_returns_200_when_backends_available(
+        self, live_system: tuple[Daemon, TestClient, asyncio.AbstractEventLoop]
+    ) -> None:
+        _, client, _ = live_system
+        r = client.get("/healthz")
+        assert r.status_code == 200, r.json()
+        assert r.json()["status"] == "ready"
+
+    def test_metrics_endpoint_records_http_requests(
+        self, live_system: tuple[Daemon, TestClient, asyncio.AbstractEventLoop]
+    ) -> None:
+        _, client, _ = live_system
+
+        # Trigger an HTTP request
+        r = client.get("/healthz")
+        assert r.status_code == 200
+
+        metrics = client.get("/metrics").text
+        assert "maxwell_daemon_http_requests_total" in metrics
+        assert 'method="GET"' in metrics
+        assert 'endpoint="/healthz"' in metrics
+        assert "maxwell_daemon_http_request_duration_seconds" in metrics
