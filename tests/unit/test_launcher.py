@@ -133,6 +133,7 @@ def test_launcher_subprocess_env_preserves_explicit_overrides(monkeypatch) -> No
     assert env["PYTHONUTF8"] == "0"
     assert env["PYTHONIOENCODING"] == "utf-16"
 
+
 def test_main_dry_run(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     argv = ["--repo-root", str(tmp_path), "--dry-run"]
 
@@ -202,4 +203,3 @@ def test_open_dashboard_when_ready_retries(monkeypatch) -> None:  # type: ignore
 
     assert len(attempts) == 2
     assert opened == ["http://127.0.0.1:8080/ui/"]
-
