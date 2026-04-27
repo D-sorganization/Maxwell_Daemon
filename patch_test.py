@@ -1,6 +1,4 @@
-import re
-
-with open("tests/unit/test_daemon.py", "r") as f:
+with open("tests/unit/test_daemon.py") as f:
     content = f.read()
 
 # Increase to 60s

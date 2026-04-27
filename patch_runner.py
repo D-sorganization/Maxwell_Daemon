@@ -1,6 +1,4 @@
-import re
-
-with open("maxwell_daemon/daemon/runner.py", "r") as f:
+with open("maxwell_daemon/daemon/runner.py") as f:
     content = f.read()
 
 # Instead of timeout=10.0, we just use wait_for with asyncio.shield ? No, it's a concurrent.futures.Future
