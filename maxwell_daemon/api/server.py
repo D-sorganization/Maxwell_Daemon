@@ -1509,7 +1509,7 @@ def create_app(
                 }
             except Exception:
                 # invalid/expired JWT, fall through to static token check
-                pass
+                pass  # nosec B110
         if auth_token is not None and authorization:
             raw = authorization.removeprefix("Bearer ").strip()
             if hmac.compare_digest(raw.encode(), auth_token.encode()):
