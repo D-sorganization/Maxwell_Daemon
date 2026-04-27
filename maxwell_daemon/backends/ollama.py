@@ -39,10 +39,12 @@ class OllamaBackend(ILLMBackend):
     def __init__(
         self,
         endpoint: str | None = None,
+        base_url: str | None = None,
         timeout: float = 300.0,
+        **_extra: Any,  # absorb router-injected config fields (tier_map, etc.)
     ) -> None:
         self._endpoint = _normalize_endpoint(
-            endpoint or os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
+            endpoint or base_url or os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
         )
         self._client = httpx.AsyncClient(timeout=timeout)
 

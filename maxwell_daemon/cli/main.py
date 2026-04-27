@@ -463,17 +463,22 @@ def serve(
 
     daemon = Daemon(cfg)
 
-    async def _boot() -> None:
+    async def _run_all() -> None:
+        # Start daemon workers (including task recovery) in the SAME event loop
+        # that uvicorn will use.  Previously this ran in a separate asyncio.run()
+        # call, which caused the workers to be cancelled before uvicorn started —
+        # meaning tasks submitted via the API were never picked up.
         await daemon.start(worker_count=workers)
-
-    asyncio.run(_boot())
-
-    try:
         fastapi_app = create_app(daemon, auth_token=cfg.api.auth_token)
         console.print(f"[green]✓[/green] Maxwell-Daemon serving on http://{host}:{port}")
-        uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
-    finally:
-        asyncio.run(daemon.stop())
+        uvi_config = uvicorn.Config(fastapi_app, host=host, port=port, log_level="info")
+        server = uvicorn.Server(uvi_config)
+        try:
+            await server.serve()
+        finally:
+            await daemon.stop()
+
+    asyncio.run(_run_all())
 
 
 @app.command()
