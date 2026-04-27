@@ -50,7 +50,7 @@ class TaskTemplate(BaseModel):
         try:
             from jinja2 import Template
 
-            t = Template(self.prompt_template)
+            t = Template(self.prompt_template, autoescape=True)
             rendered: str = t.render(**kwargs)
             return rendered
         except ImportError:
