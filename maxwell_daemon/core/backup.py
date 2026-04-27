@@ -461,7 +461,7 @@ class BackupManager:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             for (table_name,) in cursor.fetchall():
                 quoted_table = _quote_sqlite_identifier(str(table_name))
-                rows = conn.execute(f"SELECT * FROM {quoted_table}").fetchall()
+                rows = conn.execute(f"SELECT * FROM {quoted_table}").fetchall()  # nosec B608
                 tables[table_name] = [dict(r) for r in rows]
         finally:
             conn.close()

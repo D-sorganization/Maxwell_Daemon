@@ -273,7 +273,7 @@ class TaskStore:
                     args.append(value)
             args.append(task_id)
             conn.execute(
-                f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?",
+                f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?",  # nosec B608
                 args,
             )
 

@@ -281,7 +281,7 @@ class ArtifactStore:
     ) -> list[Artifact]:
         if owner_column not in {"task_id", "work_item_id"}:
             raise ValueError(f"unsupported artifact owner column: {owner_column}")
-        query = f"SELECT * FROM artifacts WHERE {owner_column} = ?"
+        query = f"SELECT * FROM artifacts WHERE {owner_column} = ?"  # nosec B608
         args: list[object] = [owner_id]
         if kind is not None:
             query += " AND kind = ?"

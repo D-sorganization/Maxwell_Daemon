@@ -139,7 +139,7 @@ def _open_dashboard_when_ready(
 ) -> None:
     for _ in range(attempts):
         try:
-            with request.urlopen(ui_url, timeout=0.5):
+            with request.urlopen(ui_url, timeout=0.5):  # nosec B310
                 opener(ui_url)
                 return
         except (error.URLError, TimeoutError, OSError):

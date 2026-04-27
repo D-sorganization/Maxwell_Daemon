@@ -234,7 +234,7 @@ class ActionStore:
             assignments = ", ".join(f"{key} = ?" for key in updates)
             args = [*updates.values(), action_id, action.status.value]
             cursor = conn.execute(
-                f"UPDATE actions SET {assignments} WHERE id = ? AND status = ?",
+                f"UPDATE actions SET {assignments} WHERE id = ? AND status = ?",  # nosec B608
                 args,
             )
             if cursor.rowcount != 1:
