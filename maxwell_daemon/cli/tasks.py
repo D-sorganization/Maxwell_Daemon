@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import httpx
 import typer
@@ -38,7 +38,7 @@ def _headers(token: str | None) -> dict[str, str]:
     return {"authorization": f"Bearer {token}"} if token else {}
 
 
-def _fail(message: str) -> None:
+def _fail(message: str) -> NoReturn:
     console.print(f"[red]✗[/red] {message}")
     raise typer.Exit(1)
 
@@ -69,10 +69,6 @@ def list_tasks(
         p = _preset_store().get(preset)
         if p is None:
             _fail(f"preset {preset!r} not found — try `maxwell-daemon tasks preset list`")
-        from maxwell_daemon.contracts import require
-
-        require(p is not None, "internal logic error: preset must exist after check")
-        assert p is not None  # for mypy
         status = status or p.status
         kind = kind or p.kind
         repo = repo or p.repo

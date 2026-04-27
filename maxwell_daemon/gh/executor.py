@@ -549,13 +549,13 @@ class IssueExecutor:
         from maxwell_daemon.contracts import require
 
         require(self._test_runner is not None, "IssueExecutor: test_runner must be configured")
-        assert self._test_runner is not None  # for mypy
+        test_runner = cast(TestRunner, self._test_runner)
         attempt = 0
         current_plan, current_diff = plan, diff
         repo_path = self._workspace_path(repo, task_id)
 
         while True:
-            result = await self._test_runner.detect_and_run(
+            result = await test_runner.detect_and_run(
                 repo_path,
                 timeout=self._test_timeout,
                 command=test_command,

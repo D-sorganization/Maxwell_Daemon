@@ -115,7 +115,7 @@ async def _retry_ctx(
                 raise
             delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
             if jitter:
-                delay = delay * (0.5 + random.random() * 0.5)
+                delay = delay * (0.5 + random.random() * 0.5)  # noqa: S311
             log.warning(
                 "backend_rate_limited",
                 attempt=attempt,
@@ -160,7 +160,7 @@ def retry_on_rate_limit(
                         raise
                     delay = min(base_delay * math.pow(2, attempt - 1), max_delay)
                     if jitter:
-                        delay = delay * (0.5 + random.random() * 0.5)
+                        delay = delay * (0.5 + random.random() * 0.5)  # noqa: S311
                     log.warning(
                         "backend_rate_limited",
                         fn=fn.__qualname__,

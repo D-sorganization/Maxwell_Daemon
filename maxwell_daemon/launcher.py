@@ -20,6 +20,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from urllib import error, request
+from maxwell_daemon.logging import configure_logging, get_logger
+
+log = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +100,7 @@ def build_plan(
 
 
 def _run(args: Sequence[str], *, cwd: Path) -> None:
-    subprocess.run(args, cwd=cwd, check=True, env=_subprocess_env())
+    subprocess.run(args, cwd=cwd, check=True, env=_subprocess_env())  # noqa: S603
 
 
 def _subprocess_env() -> dict[str, str]:
@@ -134,7 +137,7 @@ def _open_dashboard_when_ready(
 ) -> None:
     for _ in range(attempts):
         try:
-            with request.urlopen(ui_url, timeout=0.5):  # nosec B310
+            with request.urlopen(ui_url, timeout=0.5):  # noqa: S310
                 opener(ui_url)
                 return
         except (error.URLError, TimeoutError, OSError):
@@ -187,6 +190,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--dry-run", action="store_true", help="Print the launch plan and exit.")
     args = parser.parse_args(argv)
+    configure_logging(level="INFO")
 
     plan = build_plan(
         repo_root=args.repo_root,
@@ -195,14 +199,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         port=args.port,
     )
     if args.dry_run:
-        print(f"repo_root={plan.repo_root}")
-        print(f"venv={plan.venv_path}")
-        print(f"python={plan.python_path}")
-        print(f"install={' '.join(plan.install_args)}")
-        print(f"init={' '.join(plan.init_args)}")
-        print(f"doctor={' '.join(plan.doctor_args)}")
-        print(f"serve={' '.join(plan.serve_args)}")
-        print(f"ui={plan.ui_url}")
+        log.info("repo_root=%s", plan.repo_root)
+        log.info("venv=%s", plan.venv_path)
+        log.info("python=%s", plan.python_path)
+        log.info("install=%s", " ".join(plan.install_args))
+        log.info("init=%s", " ".join(plan.init_args))
+        log.info("doctor=%s", " ".join(plan.doctor_args))
+        log.info("serve=%s", " ".join(plan.serve_args))
+        log.info("ui=%s", plan.ui_url)
         return 0
 
     execute_plan(plan, skip_install=args.skip_install, open_browser=not args.no_open_browser)
