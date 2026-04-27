@@ -55,16 +55,20 @@ function escapeHtml(s) {
 function fmtUsd(n) { return `$${(n || 0).toFixed(4)}`; }
 function fmtUsdShort(n) { return `$${(n || 0).toFixed(2)}`; }
 
+// ⚡ Bolt: Cache Intl.DateTimeFormat instances to avoid extremely slow
+// initialization and object allocations on every format call, especially
+// important during rapid WebSocket event streams where dates are heavily formatted.
+const FORMATTER_LONG = new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "medium" });
+const FORMATTER_SHORT = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
+
 function fmtTs(iso) {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "medium" });
+  return FORMATTER_LONG.format(new Date(iso));
 }
 
 function fmtTsShort(iso) {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, { timeStyle: "short" });
+  return FORMATTER_SHORT.format(new Date(iso));
 }
 
 // ⚡ Bolt: Extracted to avoid object allocation on every sort comparison
