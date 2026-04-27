@@ -53,6 +53,8 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v6
+      - name: Purge stale untracked files (self-hosted runner hygiene)
+        run: git clean -fdx --exclude=.venv
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
