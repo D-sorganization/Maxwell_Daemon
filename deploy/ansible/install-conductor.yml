@@ -22,7 +22,7 @@
 
     - name: Wait for API to become reachable
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ conductor_port }}/api/v1/health"
+        url: "http://127.0.0.1:{{ conductor_port }}/healthz"
         status_code: 200
       retries: 10
       delay: 3

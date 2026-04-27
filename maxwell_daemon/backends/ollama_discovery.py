@@ -197,8 +197,8 @@ if __name__ == "__main__":
     # Quick CLI smoke test: python -m maxwell_daemon.backends.ollama_discovery
     models = discover_ollama_models()
     if not models:
-        print("No Ollama models found (is Ollama running?)")
+        log.warning("No Ollama models found (is Ollama running?)")
     else:
-        print(f"Found {len(models)} Ollama model(s):")
+        log.info("Found %d Ollama model(s):", len(models))
         for m in models:
-            print(f"  {m.name:<40} {m.size_gb:>6.2f} GB  family={m.family}")
+            log.info("  %-40s %6.2f GB  family=%s", m.name, m.size_gb, m.family)

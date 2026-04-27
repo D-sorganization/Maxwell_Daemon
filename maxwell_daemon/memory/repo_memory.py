@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from maxwell_daemon.contracts import require
 
@@ -153,7 +153,7 @@ class MemoryEntry:
             isinstance(confidence, (float, int, str)),
             "confidence must be a float-compatible value",
         )
-        assert isinstance(confidence, (float, int, str))  # for mypy
+        confidence = cast("float | int | str", confidence)
         return cls(
             id=_required_str(payload, "id"),
             scope=_required_str(payload, "scope"),
@@ -663,7 +663,7 @@ def _read_jsonl(path: Path) -> list[dict[str, object]]:
 def _required_str(payload: dict[str, object], key: str) -> str:
     value = payload.get(key)
     require(isinstance(value, str), f"{key} must be a string")
-    assert isinstance(value, str)  # for mypy
+    value = cast(str, value)
     require(bool(value.strip()), f"{key} must be non-empty")
     return value
 
@@ -673,13 +673,13 @@ def _optional_str(payload: dict[str, object], key: str) -> str | None:
     if value is None:
         return None
     require(isinstance(value, str), f"{key} must be a string or null")
-    assert isinstance(value, str)  # for mypy
+    value = cast(str, value)
     return value
 
 
 def _str_list(value: object, key: str) -> list[str]:
     require(isinstance(value, list), f"{key} must be a list")
-    assert isinstance(value, list)  # for mypy
+    value = cast(list[Any], value)
     result: list[str] = []
     for item in value:
         require(isinstance(item, str), f"{key} items must be strings")
@@ -704,7 +704,7 @@ def _parse_optional_datetime(value: object) -> datetime | None:
     if value is None:
         return None
     require(isinstance(value, str), "datetime value must be a string or null")
-    assert isinstance(value, str)  # for mypy
+    value = cast(str, value)
     return _parse_datetime(value)
 
 

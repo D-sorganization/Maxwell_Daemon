@@ -1,91 +1,52 @@
 # Next Agent: Continue PR/Issue Resolution
 
-## Current State (2026-04-24 ~2:00 PM PT)
+## Completed This Session
 
-### Already Merged to main
-- **PR #653** — `codex/emergency-local-only-runners-20260424` ✅
+### PR #630 (feat/481-cost-estimator) — RESOLVED ✅
+- **Action**: Merged `origin/main` into `feat/481-cost-estimator`
+- **Strategy**: Used `git checkout --theirs` for conflicting files (`api/server.py`, `core/backup.py`, `core/token_budget.py`) to prefer main's structural changes
+- **Conflicts resolved**:
+  - `api/server.py`: Removed duplicate `WebhookTriggerRequest` class; kept main's `status_filter` parameter naming in `list_tasks`
+  - `core/backup.py`: Kept main's `_extract_tar_safely()` and stricter `_quote_sqlite_identifier()` with regex validation
+  - `core/token_budget.py`: Kept main's improved model recommendation logic
+- **Tests updated**: `tests/unit/test_backup.py` updated to match new error messages from main's security-hardened backup code
+- **Verification**: All tests pass (15 cost_estimator + 8 backup/token_budget)
+- **Pushed**: `feat/481-cost-estimator` force-pushed with resolved merge commit
+- **Status**: `mergeable: true`, auto-merge enabled (squash), will merge once CI passes
 
-### Auto-merge Queued (will merge once CI passes + reviews)
-These PRs had merge conflicts resolved and auto-merge enabled:
-- **#645** `fix/issue-632-guard-pyjwt-imports` — Guard optional PyJWT imports
-- **#649** `feat/issue-477-mcp` — MCP support
-- **#650** `chore/issue-497-supply-chain-hardening` — Supply-chain hardening
-- **#651** `feat/issue-499-multimodal-attachments` — Multimodal attachments
-- **#652** `feat/issue-601-token-budgeting` — Token budgeting
-- **#654** `feat/issue-480-model-routing-complexity` — Complexity routing
-- **#640** `feat/480-model-routing` — Model routing heuristic
+### PR #648 (fix/test-suite-stabilization) — BLOCKED 🚫
+- **Root cause**: GraphQL rate limit exceeded (`gh issue create` failed)
+- **Status**: Cannot create GitHub issue until rate limit resets
+- **Local tracking**: See `docs/development/issue-648-rebase-tracker.md` for full analysis
+- **Problem**: 15-file deep conflicts across heavily refactored files (`daemon/runner.py`, `core/ledger.py`, `core/task_store.py`, `logging.py`, `api/validation.py`, etc.)
+- **Recommendation**: Split into 2 smaller PRs (test stabilization + token optimization)
+- **Rate limit recovery**: Wait for GraphQL reset before any `gh issue create` / `gh pr create` / `gh pr merge` operations
 
-### Still DIRTY (needs conflict resolution)
-| PR | Branch | Blocker |
-|---|---|---|
-| **#630** | `feat/481-cost-estimator` | **Real content conflicts** with PR #653's merge to main: `api/server.py`, `core/backup.py`, `core/token_budget.py`. Needs interactive rebase + conflict resolution. |
-| **#648** | `fix/test-suite-stabilization` | **15-file deep conflict** across `daemon/runner.py`, `core/ledger.py`, `core/task_store.py`, `logging.py`, `api/validation.py` and 7 test files. Cherry-pick fails. Needs author-level rebase. |
+## Rate Limit Status
+- **GraphQL**: EXHAUSTED — do NOT use `gh issue create`, `gh pr create`, `gh pr merge`, or any `gh * --json` commands
+- **REST**: Likely still available — safe for single lookups like `gh api rate_limit`
+- **Check**: `gh api rate_limit` (REST endpoint, does not consume GraphQL quota)
 
----
+## Auto-merge Queued PRs (from previous session)
+These had auto-merge enabled and should merge automatically once CI passes:
+- #645 fix/issue-632-guard-pyjwt-imports
+- #649 feat/issue-477-mcp (may still have conflicts — check)
+- #650 chore/issue-497-supply-chain-hardening
+- #651 feat/issue-499-multimodal-attachments
+- #652 feat/issue-601-token-budgeting
+- #654 feat/issue-480-model-routing-complexity
+- #640 feat/480-model-routing
 
-## Instructions for Next Agent
+## Next Steps (in priority order)
+1. **Wait for GraphQL rate limit reset** (~60+ minutes from now)
+2. **Create GitHub issue for PR #648** using the content from `docs/development/issue-648-rebase-tracker.md`
+3. **Check auto-queued PRs** with `gh api repos/D-sorganization/Maxwell-Daemon/pulls?state=open` to see which merged
+4. **Verify PR #630 merged** once CI completes
 
-### 1. Check which auto-queued PRs merged
-```bash
-gh pr list --state open --json number,title,mergeStateStatus
-```
-If any show `mergeStateStatus: CLEAN`, they should merge automatically. If still `BLOCKED`/`UNKNOWN`, wait for CI.
-
-### 2. Re-resolve PR #630 (cost estimator)
-PR #653 merged to main and introduced new conflicts. Fetch latest:
-```bash
-git fetch origin feat/481-cost-estimator
-git checkout -B feat/481-cost-estimator origin/feat/481-cost-estimator
-git merge origin/main
-```
-Resolve conflicts in:
-- `maxwell_daemon/api/server.py`
-- `maxwell_daemon/core/backup.py`
-- `maxwell_daemon/core/token_budget.py`
-
-Strategy: The cost estimator PR adds `core/cost_estimator.py` and modifies budget/metrics. PR #653 added local-runner guards. Prefer **incoming** (cost estimator) for new feature code, **main** for structural changes. After resolving, push and enable auto-merge.
-
-### 3. PR #648 (test stabilization) — Requires Deep Work
-This PR is the most complex. The branch has 4 commits:
-1. `dff085f` — fix: stabilize test suite and resolve flaky mocks
-2. `8792402` — chore: enforce 85% test coverage in CI
-3. `68ae951` — test: add missing coverage for builtins
-4. `093b1f0` — feat: token optimization and aggressive compression
-
-These touch heavily refactored files. Options:
-- **Option A**: Cherry-pick only the test coverage commits (`8792402`, `68ae951`) which may apply cleaner
-- **Option B**: Create a new branch from main and manually port the changes
-- **Option C**: Close PR #648 and open smaller focused PRs for each commit
-
-### 4. Create Issues for Blocked PRs
-If PR #648 cannot be resolved quickly:
-```bash
-gh issue create --title "PR #648 needs rebase after daemon/runner.py refactoring" \
-  --body "The fix/test-suite-stabilization branch has 15-file conflicts with main due to recent changes in daemon/runner.py, core/ledger.py, core/task_store.py, logging.py, and api/validation.py. The author needs to rebase onto current main."
-```
-
-### 5. Rate Limit Compliance
-- **ALWAYS** check rate limits first: `gh api rate_limit`
-- **NEVER** use `gh pr list --json` in loops — it uses GraphQL
-- **ALWAYS** use `git branch -a` (local) for branch discovery
-- **REST over GraphQL** for status checks: `gh api repos/OWNER/REPO/pulls/NUMBER` not `gh pr view --json`
-
----
-
-## Key Files Changed Recently on main
-- `maxwell_daemon/metrics.py` — `__all__` sorted (RUF022 fix)
-- `test_diff.py` — import order fixed (I001 fix)
-- `.github/workflows/ci.yml` — new local-only runner guard
-- `scripts/check_local_only_workflows.py` — new file
-- `maxwell_daemon/core/backup.py` — updated by PR #653
-- `maxwell_daemon/api/server.py` — updated by PR #653
-
----
-
-## GitHub API Quotas (from AGENTS.md)
-| API | Quota | Note |
-|---|---|---|
-| REST | 5,000/hr | Safe for single lookups |
-| GraphQL | 5,000/hr | **Avoid** — shared across fleet |
-
-If rate limit hit: halt all API calls, use local git only, check again after 60+ minutes.
+## Files Modified This Session
+- `maxwell_daemon/api/server.py` (conflict resolution — main's version)
+- `maxwell_daemon/core/backup.py` (conflict resolution — main's version)
+- `maxwell_daemon/core/token_budget.py` (conflict resolution — main's version)
+- `tests/unit/test_backup.py` (updated test assertions for new error messages)
+- `docs/development/issue-648-rebase-tracker.md` (new — local tracking)
+- `docs/development/next-agent-prompt.md` (this file)

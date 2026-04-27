@@ -1,0 +1,19 @@
+tests\unit\test_api.py:83:    with TestClient(create_app(daemon, auth_token="secret-abc")) as c:  # nosec B106 — intentional test fixture, not a real credential
+tests\unit\test_api.py:1131:            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
+tests\unit\test_api.py:1471:            headers={"Authorization": "Bearer secret-abc"},  # nosec B106 — test fixture token matching auth_client fixture
+tests\unit\test_api_contract.py:27:AUTH_TOKEN = "contract-test-secret"  # nosec B105 — test fixture, not a real credential
+tests\unit\test_api_contract.py:73:    with TestClient(create_app(daemon, auth_token=AUTH_TOKEN)) as c:  # nosec B106
+tests\unit\test_backend_claude.py:21:    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")  # nosec B105 — intentional test fixture; env var is monkeypatched, not a real key
+tests\unit\test_backend_claude.py:31:        backend = ClaudeBackend(api_key="sk-test-explicit")  # nosec B106 — intentional test fixture, not a real API key
+tests\unit\test_backend_claude.py:153:        backend = ClaudeBackend(api_key="x")  # nosec B106 — intentional test fixture; real client is monkeypatched
+tests\unit\test_backend_claude.py:185:        backend = ClaudeBackend(api_key="x")  # nosec B106 — intentional test fixture; real client is monkeypatched
+maxwell_daemon\ssh\session.py:213:                except Exception:  # nosec B110
+maxwell_daemon\launcher.py:137:            with request.urlopen(ui_url, timeout=0.5):  # nosec B310
+maxwell_daemon\core\task_store.py:276:                f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?",  # nosec B608
+maxwell_daemon\core\gauntlets.py:50:    PASS = "pass"  # nosec B105 - gate verdict literal, not a password.
+maxwell_daemon\core\backup.py:464:                rows = conn.execute(f"SELECT * FROM {quoted_table}").fetchall()  # nosec B608
+maxwell_daemon\core\artifacts.py:284:        query = f"SELECT * FROM artifacts WHERE {owner_column} = ?"  # nosec B608
+maxwell_daemon\core\action_store.py:237:                f"UPDATE actions SET {assignments} WHERE id = ? AND status = ?",  # nosec B608
+maxwell_daemon\api\server.py:832:    except Exception:  # nosec B110 - invalid WebSocket token, close below.
+maxwell_daemon\api\server.py:1509:            except Exception:  # nosec B110 — invalid/expired JWT, fall through to token check
+maxwell_daemon\checks\models.py:37:    PASS = "pass"  # nosec B105 - check conclusion literal, not a password

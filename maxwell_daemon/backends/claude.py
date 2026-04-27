@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 import anthropic
 
@@ -78,7 +78,7 @@ class ClaudeBackend(ILLMBackend):
         resp = await self._client.messages.create(
             model=model,
             messages=msgs,  # type: ignore[arg-type]
-            system=system or anthropic.NOT_GIVEN,  # type: ignore[arg-type]
+            system=cast(Any, system or anthropic.NOT_GIVEN),
             temperature=temperature,
             max_tokens=max_tokens or 4096,
             tools=tools or anthropic.NOT_GIVEN,  # type: ignore[arg-type]
@@ -119,7 +119,7 @@ class ClaudeBackend(ILLMBackend):
         async with self._client.messages.stream(
             model=model,
             messages=msgs,  # type: ignore[arg-type]
-            system=system or anthropic.NOT_GIVEN,  # type: ignore[arg-type]
+            system=cast(Any, system or anthropic.NOT_GIVEN),
             temperature=temperature,
             max_tokens=max_tokens or 4096,
             tools=tools or anthropic.NOT_GIVEN,  # type: ignore[arg-type]

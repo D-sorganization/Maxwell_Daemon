@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pydantic import (
     BaseModel,
@@ -1039,7 +1039,7 @@ class DelegateLifecycleService:
         session = self._require_session(session_id)
         lease = self._store.current_lease(session_id)
         require(lease is not None, f"session {session_id!r} does not have an active lease")
-        assert lease is not None  # for mypy
+        lease = cast(AssignmentLease, lease)
         now = self._now()
         next_status = (
             DelegateSessionStatus.ABANDONED
@@ -1080,7 +1080,7 @@ class DelegateLifecycleService:
             latest_checkpoint is not None,
             "recovery requires at least one checkpoint",
         )
-        assert latest_checkpoint is not None  # for mypy
+        latest_checkpoint = cast(Checkpoint, latest_checkpoint)
         now = self._now()
         recovered = DelegateSession.recover_from(
             prior,
@@ -1129,13 +1129,13 @@ class DelegateLifecycleService:
     def _require_session(self, session_id: str) -> DelegateSession:
         session = self._store.get_session(session_id)
         require(session is not None, f"delegate session {session_id!r} not found")
-        assert session is not None  # for mypy
+        session = cast(DelegateSession, session)
         return session
 
     def _require_active_lease(self, session_id: str, *, owner_id: str) -> AssignmentLease:
         lease = self._store.current_lease(session_id)
         require(lease is not None, f"session {session_id!r} does not have an active lease")
-        assert lease is not None  # for mypy
+        lease = cast(AssignmentLease, lease)
         require(
             lease.owner_id == owner_id,
             "only the current lease owner may update the session",

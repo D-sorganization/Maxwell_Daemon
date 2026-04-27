@@ -29,6 +29,57 @@ with bind_context(request_id=req.id, repo="my-repo"):
 
 Every log line inside the `with` block carries `request_id` and `repo` — even from library code that's unaware of the context.
 
+### Log Levels
+
+| Environment | Level | Rationale |
+|-------------|-------|-----------|
+| Development | `DEBUG` | Maximum visibility for debugging |
+| Staging | `INFO` | Balanced noise/signal ratio |
+| Production | `INFO` or `WARNING` | Reduce volume, focus on anomalies |
+
+### Output Sinks
+
+- **Console (TTY):** Pretty-printed, human-readable output
+- **Console (non-TTY):** JSON-formatted, machine-parseable
+- **File:** Rotating file handler with JSON formatting for log aggregation
+
+### Configuration Examples
+
+**Development (pretty console):**
+
+```bash
+export MAXWELL_LOG_LEVEL=DEBUG
+export MAXWELL_LOG_FORMAT=console
+```
+
+**Production (JSON to file):**
+
+```bash
+export MAXWELL_LOG_LEVEL=INFO
+export MAXWELL_LOG_FORMAT=json
+export MAXWELL_LOG_FILE=/var/log/maxwell-daemon/app.log
+```
+
+**Redaction control:**
+
+```bash
+# Disable secret redaction (NOT recommended in production)
+export MAXWELL_REDACT_LOGS=0
+```
+
+### Log Fields
+
+Every log line includes:
+- `timestamp` — ISO 8601 format
+- `level` — log level
+- `logger` — logger name
+- `event` — log message
+- Custom bound context variables
+
+### Audit Log
+
+See `maxwell_daemon/audit.py` for the append-only JSONL audit log with SHA-256 chaining. This is separate from application logging and provides tamper-evident records of all significant operations.
+
 ## Events
 
 `GET /api/v1/events` is a WebSocket that streams task lifecycle events as JSON:

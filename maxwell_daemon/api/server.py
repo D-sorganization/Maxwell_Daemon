@@ -87,7 +87,7 @@ from maxwell_daemon.director import (
     TaskGraphTemplate,
 )
 from maxwell_daemon.logging import bind_context, get_logger
-from maxwell_daemon.metrics import mount_metrics_endpoint
+from maxwell_daemon.metrics import http_metrics_middleware, mount_metrics_endpoint
 
 _UI_DIR = _Path(__file__).parent / "ui"
 log = get_logger(__name__)
@@ -1257,6 +1257,7 @@ def create_app(
         description="Remote control plane for Maxwell-Daemon daemons.",
     )
     mount_metrics_endpoint(app)
+    http_metrics_middleware(app)
     _mount_web_ui(app)
 
     from fastapi.responses import JSONResponse
@@ -1506,7 +1507,8 @@ def create_app(
                     "role": claims.role.value,
                     "exp": claims.exp.isoformat(),
                 }
-            except Exception:  # nosec B110 — invalid/expired JWT, fall through to token check
+            except Exception:
+                # invalid/expired JWT, fall through to static token check
                 pass
         if auth_token is not None and authorization:
             raw = authorization.removeprefix("Bearer ").strip()
@@ -1525,6 +1527,13 @@ def create_app(
 
     @app.get("/readyz")
     async def readyz() -> dict[str, Any]:
+        state = daemon.state()
+        if not state.backends_available:
+            raise HTTPException(status_code=503, detail="no backends available")
+        return {"status": "ready"}
+
+    @app.get("/healthz")
+    async def healthz() -> dict[str, Any]:
         state = daemon.state()
         if not state.backends_available:
             raise HTTPException(status_code=503, detail="no backends available")
@@ -2983,6 +2992,8 @@ def create_app(
     def _ssh_pool() -> Any:
         if "pool" not in _ssh_pool_ref:
             try:
+                # This import is a presence check for optional SSH dependencies.
+                # It is assigned to a private name to avoid unused-import warning.
                 import asyncssh as _asyncssh  # noqa: F401 — presence check only
 
                 from maxwell_daemon.ssh.session import SSHSessionPool

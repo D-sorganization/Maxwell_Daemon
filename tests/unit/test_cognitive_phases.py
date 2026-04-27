@@ -1,7 +1,11 @@
+from __future__ import annotations
+
+import typing
+
 import pytest
 
 from maxwell_daemon.core.cognitive_phases import CognitivePipeline, PhaseDecision
-from maxwell_daemon.core.roles import Job, Role
+from maxwell_daemon.core.roles import Job, Role, RolePlayer
 
 
 class DummyRolePlayer:
@@ -23,15 +27,15 @@ class DummyRolePlayer:
 
 
 @pytest.mark.asyncio
-async def test_cognitive_pipeline_execution():  # type: ignore[no-untyped-def]
+async def test_cognitive_pipeline_execution() -> None:
     strategist = DummyRolePlayer(Role("Strategist", "plan", False), content="Here is the plan.")
     implementer = DummyRolePlayer(Role("Implementer", "code", False), content="Here is the code.")
     validator = DummyRolePlayer(Role("Validator", "check", False), content="PASS")
 
     pipeline = CognitivePipeline(
-        strategist=strategist,
-        implementer=implementer,
-        validator=validator,  # type: ignore[arg-type]
+        strategist=typing.cast(RolePlayer, strategist),
+        implementer=typing.cast(RolePlayer, implementer),
+        validator=typing.cast(RolePlayer, validator),
     )
 
     initial_job = Job(instructions="Fix the bug")
@@ -43,7 +47,7 @@ async def test_cognitive_pipeline_execution():  # type: ignore[no-untyped-def]
 
 
 @pytest.mark.asyncio
-async def test_cognitive_pipeline_failure():  # type: ignore[no-untyped-def]
+async def test_cognitive_pipeline_failure() -> None:
     strategist = DummyRolePlayer(Role("Strategist", "plan", False), content="Here is the plan.")
     implementer = DummyRolePlayer(Role("Implementer", "code", False), content="Here is bad code.")
     validator = DummyRolePlayer(
@@ -51,9 +55,9 @@ async def test_cognitive_pipeline_failure():  # type: ignore[no-untyped-def]
     )
 
     pipeline = CognitivePipeline(
-        strategist=strategist,
-        implementer=implementer,
-        validator=validator,  # type: ignore[arg-type]
+        strategist=typing.cast(RolePlayer, strategist),
+        implementer=typing.cast(RolePlayer, implementer),
+        validator=typing.cast(RolePlayer, validator),
     )
 
     initial_job = Job(instructions="Fix the bug")

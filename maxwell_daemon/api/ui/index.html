@@ -411,10 +411,10 @@
     </div>
   </div>
 
-  <dialog id="new-task-dialog">
+  <dialog id="new-task-dialog" aria-labelledby="new-task-title">
     <form id="new-task-form" method="dialog">
-      <h3>Dispatch a task</h3>
-      <fieldset class="kind-switch">
+      <h3 id="new-task-title">Dispatch a task</h3>
+      <fieldset class="kind-switch" aria-label="Task type">
         <label><input type="radio" name="kind" value="issue" checked> GitHub issue</label>
         <label><input type="radio" name="kind" value="prompt"> One-shot prompt</label>
       </fieldset>
@@ -448,10 +448,10 @@
     </form>
   </dialog>
 
-  <dialog id="command-palette">
+  <dialog id="command-palette" aria-labelledby="command-palette-title">
     <form method="dialog" id="command-palette-form">
-      <h3>Command Palette</h3>
-      <input id="command-palette-input" type="search" placeholder="Search commands..." autocomplete="off">
+      <h3 id="command-palette-title">Command Palette</h3>
+      <input id="command-palette-input" type="search" placeholder="Search commands..." autocomplete="off" aria-label="Search commands">
       <ul id="command-palette-results" class="command-results"></ul>
     </form>
   </dialog>

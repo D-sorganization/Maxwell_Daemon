@@ -58,7 +58,8 @@ npx @openapitools/openapi-generator-cli generate \
 
 The schema includes these route families:
 
-- Health and readiness: `/health`, `/readyz`
+- Health and readiness: `/health`, `/healthz`, `/readyz`
+- Metrics (Prometheus): `/metrics`
 - Auth and RBAC identity: `/api/v1/auth/token`, `/api/v1/auth/me`
 - Backends and task execution: `/api/v1/backends`, `/api/v1/backends/available`, `/api/v1/tasks`
 - Gate control plane: `/api/v1/control-plane/gauntlet`
@@ -148,4 +149,5 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 | `/api/v1/work-items/{item_id}/transition` | `POST` | Work items |
 | `/api/v1/workers` | `GET, PUT` | Workers |
 | `/health` | `GET` | Health |
+| `/healthz` | `GET` | Health |
 | `/readyz` | `GET` | Health |

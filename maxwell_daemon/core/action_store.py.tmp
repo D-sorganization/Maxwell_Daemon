@@ -1,0 +1,2 @@
+        inverse_payload=json.loads(row["inverse_payload"]) if row["inverse_payload"] else None,
+    )

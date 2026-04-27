@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -248,7 +249,7 @@ class TestApiTaskDetail:
 
 
 class TestApiDispatch:
-    def _payload(self, token: str = AUTH_TOKEN) -> dict:
+    def _payload(self, token: str = AUTH_TOKEN) -> dict[str, Any]:
         return {
             "confirmation_token": token,
             "prompt": "Do something useful",
@@ -298,7 +299,7 @@ class TestApiDispatch:
 
 
 class TestApiControl:
-    def _payload(self, token: str = AUTH_TOKEN) -> dict:
+    def _payload(self, token: str = AUTH_TOKEN) -> dict[str, Any]:
         return {"confirmation_token": token, "reason": "test run"}
 
     def test_pause_with_valid_token_returns_200(self, auth_client: TestClient) -> None:
@@ -372,7 +373,7 @@ class TestApiEvalLeaderboard:
         monkeypatch.setattr(daemon._config.memory, "workspace_path", workspace)
 
         # Mock load_run to raise exception, triggering the except block
-        def _mock_load_run(self, run_id: str) -> None:
+        def _mock_load_run(self: EvalRunStore, run_id: str) -> None:
             raise RuntimeError("corrupted run")
 
         monkeypatch.setattr(EvalRunStore, "load_run", _mock_load_run)
