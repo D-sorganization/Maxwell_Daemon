@@ -295,7 +295,6 @@ def _row_to_action(row: sqlite3.Row) -> Action:
         created_at=_parse_iso_required(row["created_at"]),
         updated_at=_parse_iso_required(row["updated_at"]),
         inverse_payload=(
-        inverse_payload=(
             json.loads(row["inverse_payload"]) if row["inverse_payload"] else None
         ),
     )
