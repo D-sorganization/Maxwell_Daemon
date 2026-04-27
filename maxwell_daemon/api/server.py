@@ -653,7 +653,7 @@ class TokenRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: str = "bearer"  # noqa: S105
+    token_type: str = "bearer"
     expires_in: int
     role: str
     refresh_token: str | None = None
@@ -1507,7 +1507,7 @@ def create_app(
                     "role": claims.role.value,
                     "exp": claims.exp.isoformat(),
                 }
-            except Exception:  # noqa: S110
+            except Exception:
                 # invalid/expired JWT, fall through to static token check
                 pass
         if auth_token is not None and authorization:

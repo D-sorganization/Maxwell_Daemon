@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from maxwell_daemon.contracts import require
 
@@ -153,7 +153,7 @@ class MemoryEntry:
             isinstance(confidence, (float, int, str)),
             "confidence must be a float-compatible value",
         )
-        confidence = cast(object, confidence)
+        confidence = cast("float | int | str", confidence)
         return cls(
             id=_required_str(payload, "id"),
             scope=_required_str(payload, "scope"),
@@ -679,7 +679,7 @@ def _optional_str(payload: dict[str, object], key: str) -> str | None:
 
 def _str_list(value: object, key: str) -> list[str]:
     require(isinstance(value, list), f"{key} must be a list")
-    value = cast(list, value)
+    value = cast(list[Any], value)
     result: list[str] = []
     for item in value:
         require(isinstance(item, str), f"{key} items must be strings")

@@ -47,7 +47,7 @@ class GateRunStatus(str, Enum):
 
 
 class GateDecisionVerdict(str, Enum):
-    PASS = "pass"  # noqa: S105
+    PASS = "pass"
     FAIL = "fail"
     NEEDS_HUMAN = "needs_human"
     WAIVED = "waived"

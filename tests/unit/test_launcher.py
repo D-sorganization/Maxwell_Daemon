@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
+
 from maxwell_daemon.launcher import (
     _open_dashboard_when_ready,
     _subprocess_env,
@@ -63,7 +65,7 @@ def test_root_wrappers_delegate_to_python_launcher() -> None:
     assert "maxwell_daemon.launcher" in (repo / "Launch-Maxwell.command").read_text()
 
 
-def test_open_dashboard_when_ready_uses_browser_opener(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_open_dashboard_when_ready_uses_browser_opener(monkeypatch: pytest.MonkeyPatch) -> None:
     opened: list[str] = []
 
     class _Response:
@@ -87,7 +89,9 @@ def test_open_dashboard_when_ready_uses_browser_opener(monkeypatch) -> None:  # 
     assert opened == ["http://127.0.0.1:8080/ui/"]
 
 
-def test_execute_plan_can_skip_browser_open(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+def test_execute_plan_can_skip_browser_open(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     plan = build_plan(repo_root=tmp_path)
     calls: list[tuple[str, ...]] = []
 
@@ -114,7 +118,7 @@ def test_pyproject_no_longer_advertises_pyqt_desktop_extra() -> None:
     assert "PyQt6>=" not in pyproject
 
 
-def test_launcher_subprocess_env_defaults_to_utf8(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_launcher_subprocess_env_defaults_to_utf8(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PYTHONUTF8", raising=False)
     monkeypatch.delenv("PYTHONIOENCODING", raising=False)
 
@@ -124,7 +128,9 @@ def test_launcher_subprocess_env_defaults_to_utf8(monkeypatch) -> None:  # type:
     assert env["PYTHONIOENCODING"] == "utf-8"
 
 
-def test_launcher_subprocess_env_preserves_explicit_overrides(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_launcher_subprocess_env_preserves_explicit_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("PYTHONUTF8", "0")
     monkeypatch.setenv("PYTHONIOENCODING", "utf-16")
 
@@ -134,7 +140,7 @@ def test_launcher_subprocess_env_preserves_explicit_overrides(monkeypatch) -> No
     assert env["PYTHONIOENCODING"] == "utf-16"
 
 
-def test_main_dry_run(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_main_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     argv = ["--repo-root", str(tmp_path), "--dry-run"]
 
     # Mock execute_plan to ensure it's not called
@@ -149,7 +155,7 @@ def test_main_dry_run(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-u
     assert len(execute_calls) == 0
 
 
-def test_main_execute(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_main_execute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     argv = ["--repo-root", str(tmp_path), "--skip-install", "--no-open-browser"]
 
     execute_calls = []
@@ -165,7 +171,7 @@ def test_main_execute(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-u
     assert execute_calls[0]["open_browser"] is False
 
 
-def test_ensure_venv_skips_if_exists(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_ensure_venv_skips_if_exists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     plan = build_plan(repo_root=tmp_path)
     plan.python_path.parent.mkdir(parents=True, exist_ok=True)
     plan.python_path.touch()
@@ -179,7 +185,7 @@ def test_ensure_venv_skips_if_exists(tmp_path: Path, monkeypatch) -> None:  # ty
     assert len(venv_calls) == 0
 
 
-def test_open_dashboard_when_ready_retries(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_open_dashboard_when_ready_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts = []
 
     def mock_urlopen(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -193,7 +199,7 @@ def test_open_dashboard_when_ready_retries(monkeypatch) -> None:  # type: ignore
     monkeypatch.setattr("maxwell_daemon.launcher.request.urlopen", mock_urlopen)
     monkeypatch.setattr("time.sleep", lambda x: None)
 
-    opened = []
+    opened: list[str] = []
     _open_dashboard_when_ready(
         "http://127.0.0.1:8080/ui/",
         opener=opened.append,  # type: ignore[arg-type]

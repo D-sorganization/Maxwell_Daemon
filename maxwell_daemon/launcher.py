@@ -21,9 +21,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from urllib import error, request
-from maxwell_daemon.logging import configure_logging, get_logger
-
-log = get_logger(__name__)
 
 from maxwell_daemon.logging import configure_logging, get_logger
 
@@ -105,7 +102,7 @@ def build_plan(
 
 
 def _run(args: Sequence[str], *, cwd: Path) -> None:
-    subprocess.run(args, cwd=cwd, check=True, env=_subprocess_env())  # noqa: S603
+    subprocess.run(args, cwd=cwd, check=True, env=_subprocess_env())
 
 
 def _subprocess_env() -> dict[str, str]:
@@ -142,7 +139,7 @@ def _open_dashboard_when_ready(
 ) -> None:
     for _ in range(attempts):
         try:
-            with request.urlopen(ui_url, timeout=0.5):  # noqa: S310
+            with request.urlopen(ui_url, timeout=0.5):
                 opener(ui_url)
                 return
         except (error.URLError, TimeoutError, OSError):

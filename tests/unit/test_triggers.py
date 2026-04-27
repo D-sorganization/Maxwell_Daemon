@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from maxwell_daemon.triggers.cron import _matches
 from maxwell_daemon.triggers.webhook import (
@@ -22,7 +23,7 @@ def test_cron_matches() -> None:
     assert _matches(dt, "* * * * *") is True
 
 
-def test_webhook_trigger_enqueue(mocker) -> None:
+def test_webhook_trigger_enqueue(mocker: Any) -> None:
     payload = WebhookTriggerPayload(prompt="hello")
     daemon_mock = mocker.Mock()
     task_mock = mocker.Mock()
@@ -36,14 +37,14 @@ def test_webhook_trigger_enqueue(mocker) -> None:
     daemon_mock.submit.assert_called_once_with("hello", repo=None, backend=None, priority=100)
 
 
-def test_webhook_trigger_empty_prompt(mocker) -> None:
+def test_webhook_trigger_empty_prompt(mocker: Any) -> None:
     payload = WebhookTriggerPayload(prompt="   ")
     res = enqueue_webhook_task(payload, daemon=mocker.Mock())
     assert res.task_id is None
-    assert "prompt must not be empty" in res.error
+    assert res.error is not None and "prompt must not be empty" in res.error
 
 
-def test_webhook_trigger_dedup(mocker) -> None:
+def test_webhook_trigger_dedup(mocker: Any) -> None:
     payload1 = WebhookTriggerPayload(prompt="hello", idempotency_key="key1")
     payload2 = WebhookTriggerPayload(prompt="hello again", idempotency_key="key1")
     daemon_mock = mocker.Mock()

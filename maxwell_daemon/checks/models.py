@@ -34,7 +34,7 @@ class CheckSeverity(str, Enum):
 class CheckConclusion(str, Enum):
     """Structured conclusion for one check run."""
 
-    PASS = "pass"  # noqa: S105
+    PASS = "pass"
     FAIL = "fail"
     ERROR = "error"
     SKIPPED = "skipped"

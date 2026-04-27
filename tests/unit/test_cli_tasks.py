@@ -44,8 +44,8 @@ def patch_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     def get(
         url: str,
         *,
-        headers: dict | None = None,
-        timeout: float | None = None,  # type: ignore[type-arg]
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
     ) -> _FakeResponse:
         calls.append({"method": "GET", "url": url, "headers": headers})
         return _Holder.response
@@ -53,8 +53,8 @@ def patch_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     def post(
         url: str,
         *,
-        json: dict | None = None,  # type: ignore[type-arg]
-        headers: dict | None = None,  # type: ignore[type-arg]
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
         timeout: float | None = None,
     ) -> _FakeResponse:
         calls.append({"method": "POST", "url": url, "json": json, "headers": headers})
