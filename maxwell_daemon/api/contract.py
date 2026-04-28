@@ -1,4 +1,4 @@
-"""Stable operator-facing API contract models (surface version 1.0.0).
+"""Stable operator-facing API contract models (surface version 2.0.0).
 
 These Pydantic models define the JSON shapes for the ``/api/`` endpoints
 that runner-dashboard (and any other operator tooling) relies on.  The
@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-CONTRACT_VERSION = "1.0.0"
+CONTRACT_VERSION = "2.0.0"
 
 
 class VersionResponse(BaseModel):
@@ -32,6 +32,42 @@ class StatusResponse(BaseModel):
     active_task_id: str | None = None
     gate: str
     sandbox: str  # "enabled" or "disabled"
+
+
+class StatusV2Tokens(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
+class StatusV2RunningTask(BaseModel):
+    task_id: str
+    session_id: str | None = None
+    run_count: int = 0
+    last_event: str
+    started_at: str | None = None
+    dispatched_to: str | None = None
+    tokens: StatusV2Tokens
+
+
+class StatusV2RetryingTask(BaseModel):
+    task_id: str
+    attempt: int = 0
+    due_at: str | None = None
+    error: str | None = None
+
+
+class StatusV2Totals(StatusV2Tokens):
+    seconds_running: float = 0.0
+
+
+class StatusV2Response(BaseModel):
+    generated_at: str
+    counts: dict[str, int]
+    running: list[StatusV2RunningTask]
+    retrying: list[StatusV2RetryingTask]
+    codex_totals: StatusV2Totals
+    rate_limits: dict[str, Any] | None = None
 
 
 class TaskSummary(BaseModel):

@@ -52,6 +52,37 @@ class TestLedger:
         assert by["claude"] == pytest.approx(1.50)
         assert by["ollama"] == pytest.approx(0.0)
 
+    def test_token_totals(self, ledger: CostLedger) -> None:
+        ledger.record(_record())
+        ledger.record(_record())
+
+        totals = ledger.token_totals()
+
+        assert totals.prompt_tokens == 200
+        assert totals.completion_tokens == 100
+        assert totals.total_tokens == 300
+
+    def test_token_totals_by_agent(self, ledger: CostLedger) -> None:
+        ledger.record(_record())
+        ledger.record(
+            CostRecord(
+                ts=datetime.now(timezone.utc),
+                backend="claude",
+                model="claude-sonnet-4-6",
+                usage=TokenUsage(prompt_tokens=3, completion_tokens=4, total_tokens=7),
+                cost_usd=0.01,
+                repo="UpstreamDrift",
+                agent_id="other-agent",
+            )
+        )
+
+        totals = ledger.token_totals_by_agent({"test-agent", "missing-agent"})
+
+        assert totals["test-agent"].prompt_tokens == 100
+        assert totals["test-agent"].completion_tokens == 50
+        assert "missing-agent" not in totals
+        assert "other-agent" not in totals
+
     def test_excludes_prior_periods(self, ledger: CostLedger) -> None:
         old = datetime.now(timezone.utc) - timedelta(days=60)
         ledger.record(_record(cost=99.0, ts=old))

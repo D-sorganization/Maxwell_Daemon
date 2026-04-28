@@ -183,6 +183,54 @@ class CostLedger:
             row = conn.execute(query, tuple(params)).fetchone()
             return int(row[0]), int(row[1]), int(row[2]), int(row[3])
 
+    def _token_totals_sync(self) -> TokenUsage:
+        with self._get_conn() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    COALESCE(SUM(prompt_tokens), 0),
+                    COALESCE(SUM(completion_tokens), 0)
+                FROM cost_records
+                """
+            ).fetchone()
+        prompt_tokens = int(row[0])
+        completion_tokens = int(row[1])
+        return TokenUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+        )
+
+    def _token_totals_by_agent_sync(self, agent_ids: set[str]) -> dict[str, TokenUsage]:
+        if not agent_ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in agent_ids)
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    agent_id,
+                    COALESCE(SUM(prompt_tokens), 0),
+                    COALESCE(SUM(completion_tokens), 0)
+                FROM cost_records
+                WHERE agent_id IN ({placeholders})
+                GROUP BY agent_id
+                """,
+                tuple(sorted(agent_ids)),
+            ).fetchall()
+
+        totals: dict[str, TokenUsage] = {}
+        for agent_id, prompt_tokens, completion_tokens in rows:
+            prompt_total = int(prompt_tokens)
+            completion_total = int(completion_tokens)
+            totals[str(agent_id)] = TokenUsage(
+                prompt_tokens=prompt_total,
+                completion_tokens=completion_total,
+                total_tokens=prompt_total + completion_total,
+            )
+        return totals
+
     def _prune_sync(self, older_than_days: int, *, now: datetime | None = None) -> int:
         if older_than_days < 0:
             raise ValueError(f"older_than_days must be >= 0, got {older_than_days}")
@@ -209,6 +257,12 @@ class CostLedger:
         self, since: datetime, end: datetime | None = None
     ) -> tuple[int, int, int, int]:
         return self._cache_metrics_raw_sync(since, end)
+
+    def token_totals(self) -> TokenUsage:
+        return self._token_totals_sync()
+
+    def token_totals_by_agent(self, agent_ids: set[str]) -> dict[str, TokenUsage]:
+        return self._token_totals_by_agent_sync(agent_ids)
 
     def prune(self, older_than_days: int, *, now: datetime | None = None) -> int:
         """Delete ledger records older than the retention cutoff."""

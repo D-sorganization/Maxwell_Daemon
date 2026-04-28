@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -17,8 +18,11 @@ from fastapi.testclient import TestClient
 
 import maxwell_daemon.api.server as server_module
 from maxwell_daemon.api import create_app
+from maxwell_daemon.backends import TokenUsage
 from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.core import CostRecord
 from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.daemon.runner import DaemonState, Task, TaskStatus
 from maxwell_daemon.evals.storage import EvalRunStore
 
 # ---------------------------------------------------------------------------
@@ -94,9 +98,9 @@ class TestApiVersion:
         assert "daemon" in body
         assert "contract" in body
 
-    def test_contract_version_is_1_0_0(self, client: TestClient) -> None:
+    def test_contract_version_is_2_0_0(self, client: TestClient) -> None:
         body = client.get("/api/version").json()
-        assert body["contract"] == "1.0.0"
+        assert body["contract"] == "2.0.0"
 
     def test_does_not_require_auth(self, auth_client: TestClient) -> None:
         r = auth_client.get("/api/version")
@@ -162,6 +166,10 @@ class TestApiStatus:
         assert "pipeline_state" in body
         assert "gate" in body
 
+    def test_shape_stays_pinned(self, client: TestClient) -> None:
+        body = client.get("/api/status").json()
+        assert set(body) == {"pipeline_state", "active_task_id", "gate", "sandbox"}
+
     def test_has_sandbox_key(self, client: TestClient) -> None:
         body = client.get("/api/status").json()
         assert "sandbox" in body
@@ -189,6 +197,106 @@ class TestApiStatus:
         assert body["pipeline_state"] == "error"
         assert body["gate"] == "closed"
         assert body["sandbox"] == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v2/status
+# ---------------------------------------------------------------------------
+
+
+class TestApiV2Status:
+    def test_returns_symphony_style_envelope(self, client: TestClient) -> None:
+        r = client.get("/api/v2/status")
+        assert r.status_code == 200
+        body = r.json()
+        assert set(body) == {
+            "generated_at",
+            "counts",
+            "running",
+            "retrying",
+            "codex_totals",
+            "rate_limits",
+        }
+        assert body["counts"]["running"] == 0
+        assert body["retrying"] == []
+        assert body["rate_limits"] is None
+
+    def test_does_not_require_auth(self, auth_client: TestClient) -> None:
+        r = auth_client.get("/api/v2/status")
+        assert r.status_code == 200
+
+    def test_running_rows_include_task_tokens(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        started_at = datetime.now(timezone.utc)
+        task = Task(
+            id="task-running",
+            prompt="implement issue",
+            status=TaskStatus.RUNNING,
+            started_at=started_at,
+            dispatched_to="worker-a",
+        )
+        daemon._ledger.record(
+            CostRecord(
+                ts=started_at,
+                backend="codex",
+                model="gpt-5",
+                usage=TokenUsage(prompt_tokens=120, completion_tokens=80, total_tokens=200),
+                cost_usd=0.01,
+                repo="D-sorganization/Maxwell-Daemon",
+                agent_id=task.id,
+            )
+        )
+
+        def _state(self: Daemon) -> DaemonState:
+            return DaemonState(
+                version="1.0.0",
+                config_path=None,
+                tasks={task.id: task},
+                started_at=started_at,
+                backends_available=["codex"],
+            )
+
+        monkeypatch.setattr(Daemon, "state", _state)
+        body = client.get("/api/v2/status").json()
+
+        assert body["counts"]["running"] == 1
+        assert body["running"] == [
+            {
+                "task_id": "task-running",
+                "session_id": "task-running",
+                "run_count": 0,
+                "last_event": "running",
+                "started_at": started_at.isoformat(),
+                "dispatched_to": "worker-a",
+                "tokens": {
+                    "input_tokens": 120,
+                    "output_tokens": 80,
+                    "total_tokens": 200,
+                },
+            }
+        ]
+        assert body["codex_totals"]["input_tokens"] == 120
+        assert body["codex_totals"]["output_tokens"] == 80
+        assert body["codex_totals"]["total_tokens"] == 200
+
+    def test_status_handles_state_exception(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def _broken_state(self: Daemon) -> None:
+            raise RuntimeError("daemon internals on fire")
+
+        monkeypatch.setattr(Daemon, "state", _broken_state)
+        body = client.get("/api/v2/status").json()
+
+        assert body["counts"]["running"] == 0
+        assert body["running"] == []
+        assert body["codex_totals"]["total_tokens"] == 0
 
 
 # ---------------------------------------------------------------------------

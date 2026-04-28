@@ -46,6 +46,10 @@ from maxwell_daemon.api.contract import (
     DispatchResponse,
     HealthResponse,
     StatusResponse,
+    StatusV2Response,
+    StatusV2RunningTask,
+    StatusV2Tokens,
+    StatusV2Totals,
     TaskDetail,
     TaskListResponse,
     TaskSummary,
@@ -61,6 +65,7 @@ from maxwell_daemon.api.validation import (
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role, is_jwt_auth_failure
 from maxwell_daemon.backends import BackendManifest, registry
+from maxwell_daemon.backends.base import TokenUsage
 from maxwell_daemon.config.loader import _default_secret_store, save_config
 from maxwell_daemon.config.models import BackendConfig
 from maxwell_daemon.core.actions import Action, ActionStatus
@@ -492,6 +497,31 @@ class TaskView(BaseModel):
             finished_at=t.finished_at,
             dry_run=getattr(t, "dry_run", False),
         )
+
+
+def _status_v2_tokens(usage: TokenUsage | None) -> StatusV2Tokens:
+    if usage is None:
+        return StatusV2Tokens()
+    return StatusV2Tokens(
+        input_tokens=usage.prompt_tokens,
+        output_tokens=usage.completion_tokens,
+        total_tokens=usage.total_tokens,
+    )
+
+
+def _status_v2_counts(tasks: list[Task]) -> dict[str, int]:
+    counts = {
+        "running": 0,
+        "retrying": 0,
+        "queued": 0,
+        "dispatched": 0,
+        "completed": 0,
+        "failed": 0,
+        "cancelled": 0,
+    }
+    for task in tasks:
+        counts[task.status.value] = counts.get(task.status.value, 0) + 1
+    return counts
 
 
 class BackendCatalogEntryView(BaseModel):
@@ -1599,6 +1629,60 @@ def create_app(
             active_task_id=active_task_id,
             gate=gate,
             sandbox="enabled" if sandbox_enabled else "disabled",
+        )
+
+    @app.get("/api/v2/status")
+    async def api_v2_status() -> StatusV2Response:
+        generated_at = datetime.now(timezone.utc)
+        try:
+            state = daemon.state()
+        except Exception:
+            return StatusV2Response(
+                generated_at=generated_at.isoformat(),
+                counts=_status_v2_counts([]),
+                running=[],
+                retrying=[],
+                codex_totals=StatusV2Totals(),
+                rate_limits=None,
+            )
+
+        tasks = list(state.tasks.values())
+        running_tasks = [t for t in tasks if t.status is TaskStatus.RUNNING]
+        token_totals_by_task = daemon._ledger.token_totals_by_agent({t.id for t in running_tasks})
+        running_since = [t.started_at for t in running_tasks if t.started_at is not None]
+        earliest_started_at = min(running_since) if running_since else None
+        seconds_running = (
+            (generated_at - earliest_started_at).total_seconds()
+            if earliest_started_at is not None
+            else 0.0
+        )
+
+        running = [
+            StatusV2RunningTask(
+                task_id=t.id,
+                session_id=t.id,
+                run_count=0,
+                last_event=t.status.value,
+                started_at=t.started_at.isoformat() if t.started_at is not None else None,
+                dispatched_to=t.dispatched_to,
+                tokens=_status_v2_tokens(token_totals_by_task.get(t.id)),
+            )
+            for t in running_tasks
+        ]
+
+        totals = _status_v2_tokens(daemon._ledger.token_totals())
+        return StatusV2Response(
+            generated_at=generated_at.isoformat(),
+            counts=_status_v2_counts(tasks),
+            running=running,
+            retrying=[],
+            codex_totals=StatusV2Totals(
+                input_tokens=totals.input_tokens,
+                output_tokens=totals.output_tokens,
+                total_tokens=totals.total_tokens,
+                seconds_running=seconds_running,
+            ),
+            rate_limits=None,
         )
 
     @app.get("/api/tasks", dependencies=[Depends(_require_viewer())])
