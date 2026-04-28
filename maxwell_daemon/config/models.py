@@ -93,6 +93,11 @@ class AgentConfig(BaseModel):
     max_turns: int = Field(200, ge=1)
     discovery_interval_seconds: int = Field(300, ge=10)
     delivery_interval_seconds: int = Field(60, ge=10)
+    stall_timeout_seconds: int = Field(
+        300,
+        ge=0,
+        description="Cancel and retry RUNNING tasks that emit no progress events for this many seconds. 0 disables stall detection.",
+    )
     task_retention_days: int = Field(
         30,
         ge=0,

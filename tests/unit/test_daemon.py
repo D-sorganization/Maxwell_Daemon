@@ -180,6 +180,86 @@ class TestTaskExecution:
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=4, body=body))
 
+    def test_stalled_issue_task_is_cancelled_and_retried(
+        self, isolated_ledger_path: Path, minimal_config: MaxwellDaemonConfig
+    ) -> None:
+        class _RetryingIssueExecutor:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def execute_issue(self, **kwargs: Any) -> Any:
+                self.calls += 1
+                if self.calls == 1:
+                    await asyncio.Event().wait()
+                return type(
+                    "Result", (), {"pr_url": "https://example.invalid/pr/762", "plan": "done"}
+                )()
+
+        async def body() -> None:
+            cfg = minimal_config.model_copy(
+                update={
+                    "agent": minimal_config.agent.model_copy(update={"stall_timeout_seconds": 1})
+                }
+            )
+            executor = _RetryingIssueExecutor()
+            d = Daemon(
+                cfg,
+                ledger_path=isolated_ledger_path,
+                task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
+            )
+            d._issue_executor_factory = lambda gh, ws, be: executor
+            await d.start(worker_count=1)
+            try:
+                task = d.submit_issue(repo="D-sorganization/Maxwell-Daemon", issue_number=762)
+                final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
+                assert final.pr_url == "https://example.invalid/pr/762"
+                assert executor.calls == 2
+            finally:
+                await d.stop()
+
+        _run(body())
+
+    def test_issue_stream_activity_prevents_stall_retry(
+        self, isolated_ledger_path: Path, minimal_config: MaxwellDaemonConfig
+    ) -> None:
+        class _StreamingIssueExecutor:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def execute_issue(self, **kwargs: Any) -> Any:
+                self.calls += 1
+                on_test_output = kwargs["on_test_output"]
+                for _ in range(4):
+                    await asyncio.sleep(0.4)
+                    await on_test_output("ok", "stdout")
+                return type(
+                    "Result", (), {"pr_url": "https://example.invalid/pr/763", "plan": "streamed"}
+                )()
+
+        async def body() -> None:
+            cfg = minimal_config.model_copy(
+                update={
+                    "agent": minimal_config.agent.model_copy(update={"stall_timeout_seconds": 1})
+                }
+            )
+            executor = _StreamingIssueExecutor()
+            d = Daemon(
+                cfg,
+                ledger_path=isolated_ledger_path,
+                task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
+            )
+            d._issue_executor_factory = lambda gh, ws, be: executor
+            await d.start(worker_count=1)
+            try:
+                task = d.submit_issue(repo="D-sorganization/Maxwell-Daemon", issue_number=763)
+                final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
+                assert final.result == "streamed"
+                assert executor.calls == 1
+            finally:
+                await d.stop()
+
+        _run(body())
+
     def test_cost_is_recorded_in_ledger(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
