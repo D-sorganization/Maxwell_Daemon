@@ -15,12 +15,19 @@ permissions:
   contents: read
 
 jobs:
-
-
-
+  local-only-workflows:
+    name: Reject hosted runner routing
+    runs-on: d-sorg-fleet
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run local-only workflow guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check_local_only_workflows.py
 
   pick-runner:
-    runs-on: ubuntu-latest
+    runs-on: d-sorg-fleet
     timeout-minutes: 2
     outputs:
       runner: ${{ steps.check.outputs.runner }}
@@ -38,8 +45,8 @@ jobs:
             echo "runner=d-sorg-fleet" >> $GITHUB_OUTPUT
             echo "Self-hosted runner online - routing locally"
           else
-            echo "runner=ubuntu-latest" >> $GITHUB_OUTPUT
-            echo "::warning::No local self-hosted runner available; falling back to ubuntu-latest"
+            echo "::error::No local self-hosted runner available; failing closed"
+            exit 1
           fi
 
   lint:
@@ -274,13 +281,17 @@ jobs:
           name: dist
           path: dist
       - name: Install built wheel
-        shell: pwsh
+        shell: python
         run: |
-          $wheel = Get-ChildItem -Path dist -Filter *.whl | Select-Object -First 1
-          if (-not $wheel) {
-            throw "No wheel artifact found in dist/"
-          }
-          python -m pip install $wheel.FullName
+          import glob
+          import os
+          import subprocess
+          import sys
+          wheels = glob.glob(os.path.join("dist", "*.whl"))
+          if not wheels:
+              print("No wheel artifact found in dist/")
+              sys.exit(1)
+          subprocess.check_call([sys.executable, "-m", "pip", "install", wheels[0]])
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
