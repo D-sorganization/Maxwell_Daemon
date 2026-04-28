@@ -8,7 +8,6 @@ External callers (CLI, REST API, gRPC) interact through `Daemon.submit()` and
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import signal
 import threading
 import uuid
@@ -822,24 +821,15 @@ class Daemon:
             self._loop.call_soon_threadsafe(_put_inline)
             return
 
-        result: concurrent.futures.Future[None] = concurrent.futures.Future()
+        try:
+            self._queue.put_nowait(item)
+        except asyncio.QueueFull as exc:
+            raise QueueSaturationError(
+                "Task queue is full, please try again later", backoff_seconds=60
+            ) from exc
 
-        def _put() -> None:
-            try:
-                self._queue.put_nowait(item)
-            except asyncio.QueueFull:
-                result.set_exception(
-                    QueueSaturationError(
-                        "Task queue is full, please try again later", backoff_seconds=60
-                    )
-                )
-            except BaseException as exc:  # pragma: no cover - surfaced via Future
-                result.set_exception(exc)
-            else:
-                result.set_result(None)
-
-        self._loop.call_soon_threadsafe(_put)
-        result.result(timeout=60.0)
+        # Wake the daemon loop so sleeping workers re-check the queue promptly.
+        self._loop.call_soon_threadsafe(lambda: None)
 
     def submit(
         self,
@@ -927,30 +917,21 @@ class Daemon:
             raise RuntimeError("daemon must be started before submit_threadsafe()")
 
         resolved_task_id = uuid.uuid4().hex[:12]
-        if len(prompt) > 50000:
-            main_req = prompt[:10000]
-            remainder = prompt[10000:]
-            artifact = self._artifact_store.put_text(
-                kind=ArtifactKind.METADATA,
-                name="prompt_overflow.txt",
-                text=remainder,
-                task_id=resolved_task_id,
-            )
-            prompt = f"{main_req}\n\n[PROMPT TRUNCATED. Remainder stored in artifact_id:///{artifact.id}]"
-
         task = Task(
             id=resolved_task_id,
-            prompt=prompt,
+            prompt=self._offload_prompt_if_needed(resolved_task_id, prompt),
             kind=TaskKind.PROMPT,
             repo=repo,
             backend=backend,
             model=model,
             dry_run=dry_run,
         )
-        self._task_store.save(task)
         with self._tasks_lock:
+            self._task_store.save(task)
             self._tasks[task.id] = task
             try:
+                # Route queue mutation through the daemon-loop helper so
+                # background threads cannot race the PriorityQueue internals.
                 self._enqueue_task_entry(task.priority, task)
             except QueueSaturationError:
                 del self._tasks[task.id]
