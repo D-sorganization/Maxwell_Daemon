@@ -293,10 +293,6 @@ class Daemon:
         # Fleet coordination: track last-seen time per worker machine for heartbeat.
         # Keys are machine names; values are the UTC datetime of last contact.
         self._worker_last_seen: dict[str, datetime] = {}
-        self._active_execution_tasks: dict[str, asyncio.Task[None]] = {}
-        self._last_stream_event_at: dict[str, datetime] = {}
-        self._last_stream_event_kind: dict[str, str] = {}
-        self._stalled_task_ids: set[str] = set()
 
     @property
     def events(self) -> EventBus:
@@ -351,71 +347,6 @@ class Daemon:
 
         log.info("config reloaded from %s", path)
         return path
-
-    @staticmethod
-    def _task_kind_key(task: Task) -> str:
-        if task.kind is TaskKind.ISSUE and task.issue_mode:
-            return task.issue_mode
-        return task.kind.value
-
-    def _kind_cap_for(self, task: Task) -> int | None:
-        key = self._task_kind_key(task)
-        with self._config_lock:
-            return self._config.agent.concurrency_by_kind.get(key)
-
-    def _count_running_tasks_locked(self, *, kind_key: str) -> int:
-        return sum(
-            1
-            for running in self._tasks.values()
-            if running.status is TaskStatus.RUNNING and self._task_kind_key(running) == kind_key
-        )
-
-    async def _claim_next_queued_task(self) -> tuple[bool, Task | None]:
-        deferred: list[tuple[int, Task]] = []
-        while True:
-            try:
-                if deferred:
-                    priority, task = self._queue.get_nowait()
-                else:
-                    priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
-            except asyncio.TimeoutError:
-                break
-            except asyncio.QueueEmpty:
-                break
-
-            if task is None:
-                for deferred_item in deferred:
-                    self._queue.put_nowait(deferred_item)
-                return True, None
-
-            kind_cap = self._kind_cap_for(task)
-            with self._tasks_lock:
-                if task.status is not TaskStatus.QUEUED:
-                    continue
-                if task.depends_on:
-                    unfinished = [
-                        dep
-                        for dep in task.depends_on
-                        if self._tasks.get(dep) is None
-                        or self._tasks[dep].status is not TaskStatus.COMPLETED
-                    ]
-                    if unfinished:
-                        deferred.append((priority, task))
-                        continue
-                if kind_cap is not None:
-                    kind_key = self._task_kind_key(task)
-                    if self._count_running_tasks_locked(kind_key=kind_key) >= kind_cap:
-                        deferred.append((priority, task))
-                        continue
-                task.status = TaskStatus.RUNNING
-                task.started_at = datetime.now(timezone.utc)
-                for deferred_item in deferred:
-                    self._queue.put_nowait(deferred_item)
-                return False, task
-
-        for deferred_item in deferred:
-            self._queue.put_nowait(deferred_item)
-        return False, None
 
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
@@ -481,13 +412,6 @@ class Daemon:
             )
             self._bg_tasks.add(evict_task)
             evict_task.add_done_callback(self._bg_tasks.discard)
-        if self._config.agent.stall_timeout_seconds > 0:
-            stall_task = asyncio.create_task(
-                self._stall_reconcile_loop(),
-                name="stall-reconcile",
-            )
-            self._bg_tasks.add(stall_task)
-            stall_task.add_done_callback(self._bg_tasks.discard)
 
         log.info("daemon started with %d workers", self._worker_count)
 
@@ -656,93 +580,6 @@ class Daemon:
             except Exception:
                 log.warning("live eviction loop failed", exc_info=True)
             await asyncio.sleep(60.0)
-
-    async def _stall_reconcile_loop(self) -> None:
-        """Periodically cancel and retry RUNNING tasks that go silent."""
-        while self._running:
-            try:
-                await self._reconcile_stalled_runs()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                log.warning("stall reconcile loop failed", exc_info=True)
-            timeout = self._config.agent.stall_timeout_seconds
-            interval = 1.0 if timeout <= 2 else min(timeout / 2.0, 30.0)
-            await asyncio.sleep(interval)
-
-    async def _reconcile_stalled_runs(self) -> int:
-        """Cancel RUNNING tasks that have exceeded the configured silence window."""
-        timeout = self._config.agent.stall_timeout_seconds
-        if timeout <= 0:
-            return 0
-        now = datetime.now(timezone.utc)
-        stalled: list[tuple[Task, asyncio.Task[None], float, str | None]] = []
-        with self._tasks_lock:
-            for task_id, handle in self._active_execution_tasks.items():
-                if handle.done():
-                    continue
-                task = self._tasks.get(task_id)
-                if task is None or task.status is not TaskStatus.RUNNING:
-                    continue
-                anchor = self._last_stream_event_at.get(task_id) or task.started_at
-                if anchor is None:
-                    continue
-                elapsed_seconds = (now - anchor).total_seconds()
-                if elapsed_seconds <= timeout:
-                    continue
-                stalled.append(
-                    (
-                        task,
-                        handle,
-                        elapsed_seconds,
-                        self._last_stream_event_kind.get(task_id),
-                    )
-                )
-                self._stalled_task_ids.add(task_id)
-        for task, handle, elapsed_seconds, last_event_kind in stalled:
-            log.warning(
-                "stall_detected",
-                task_id=task.id,
-                elapsed_seconds=round(elapsed_seconds, 3),
-                last_event_kind=last_event_kind,
-            )
-            handle.cancel()
-        return len(stalled)
-
-    def _record_stream_event(self, task_id: str, kind: str) -> None:
-        self._last_stream_event_at[task_id] = datetime.now(timezone.utc)
-        self._last_stream_event_kind[task_id] = kind
-
-    def _clear_execution_tracking(self, task_id: str) -> None:
-        self._active_execution_tasks.pop(task_id, None)
-        self._last_stream_event_at.pop(task_id, None)
-        self._last_stream_event_kind.pop(task_id, None)
-
-    async def _handle_stalled_task(self, task: Task) -> None:
-        message = (
-            "Task exceeded agent.stall_timeout_seconds without progress; "
-            "cancelling and re-queueing."
-        )
-        task.status = TaskStatus.FAILED
-        task.error = message
-        task.finished_at = datetime.now(timezone.utc)
-        try:
-            self._task_store.save(task)
-        except Exception:
-            log.exception("task store write failed while recording stalled task=%s", task.id)
-        await self._events.publish(
-            Event(
-                kind=EventKind.TASK_FAILED,
-                payload=attach_observability(
-                    {"id": task.id, "error": message, "reason": "stalled"},
-                    task_id=task.id,
-                    backend=task.backend,
-                    model=task.model,
-                ),
-            )
-        )
-        retried = self.retry_task(task.id, expected_status=TaskStatus.FAILED)
-        self._enqueue_task_entry(retried.priority, retried)
 
     async def _dream_cycle_loop(self) -> None:
         """Periodically consolidate raw markdown memory when explicitly enabled."""
@@ -1670,13 +1507,42 @@ class Daemon:
 
         log.info("worker %d ready", worker_id)
         while self._running or not self._queue.empty():
-            should_exit, task = await self._claim_next_queued_task()
-            if should_exit:
+            try:
+                _priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
+            except asyncio.TimeoutError:
+                continue
+            # Sentinel value (None task) signals this worker to exit — used by
+            # set_worker_count() when scaling down.
+            if task is None:
                 log.info("worker %d received stop sentinel; exiting", worker_id)
                 break
-            if task is None:
-                await asyncio.sleep(0.05)
-                continue
+            # Reprioritization leaves stale queue entries behind. Only the first
+            # worker that atomically claims a still-queued task may execute it.
+            with self._tasks_lock:
+                if task.status is not TaskStatus.QUEUED:
+                    continue
+                # DAG dependency check: if any upstream task is not yet in a
+                # terminal-success state, requeue and wait for the next tick.
+                if task.depends_on:
+                    unfinished = [
+                        dep
+                        for dep in task.depends_on
+                        if self._tasks.get(dep, None) is None
+                        or self._tasks[dep].status is not TaskStatus.COMPLETED
+                    ]
+                    if unfinished:
+                        log.debug(
+                            "task %s waiting for dependencies %s; re-queuing",
+                            task.id,
+                            unfinished,
+                        )
+                        # Re-enqueue without changing status so the task stays QUEUED
+                        # and will be retried once the dependencies finish.
+                        self._queue.put_nowait((task.priority, task))
+                        self._queue.task_done()
+                        continue
+                task.status = TaskStatus.RUNNING
+                task.started_at = datetime.now(timezone.utc)
             with bind_context(task_id=task.id, worker_id=worker_id):
                 # Attempt to mark the task RUNNING in the durable store before
                 # executing.  If that write fails (disk full, lock contention),
@@ -1701,21 +1567,7 @@ class Daemon:
                     await self._queue.put((task.priority, task))
                     continue
                 snapshot = self._capture_config_snapshot()
-                execution = asyncio.create_task(
-                    self._execute(task, snapshot),
-                    name=f"task-exec-{task.id}",
-                )
-                self._active_execution_tasks[task.id] = execution
-                try:
-                    await execution
-                except asyncio.CancelledError:
-                    if task.id in self._stalled_task_ids:
-                        self._stalled_task_ids.discard(task.id)
-                        await self._handle_stalled_task(task)
-                        continue
-                    raise
-                finally:
-                    self._clear_execution_tracking(task.id)
+                await self._execute(task, snapshot)
 
     async def _execute(self, task: Task, snapshot: ConfigSnapshot) -> None:
         task.status = TaskStatus.RUNNING
@@ -1736,7 +1588,6 @@ class Daemon:
                     ),
                 )
             )
-            self._record_stream_event(task.id, EventKind.TASK_STARTED.value)
             snapshot.budget.require_under_budget()
             decision = snapshot.router.route(
                 repo=task.repo,
@@ -1967,7 +1818,6 @@ class Daemon:
             )
 
         async def _emit_test_output(chunk: str, stream: str) -> None:
-            self._record_stream_event(task.id, f"{EventKind.TEST_OUTPUT.value}:{stream}")
             await self._events.publish(
                 Event(
                     kind=EventKind.TEST_OUTPUT,

@@ -39,11 +39,5 @@ mypy_output.txt
 output.txt
 runner_log.txt
 
-# Agent remediation artifacts
-.agent_remediation_state.json
-fix_mypy*.py
-mypy_final.txt
-mypy_test_errors*.txt
-
 # Ansible
 *.retry
