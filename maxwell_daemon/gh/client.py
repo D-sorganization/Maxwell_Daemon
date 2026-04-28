@@ -423,3 +423,43 @@ class GitHubClient:
         out = await self._request_with_retry(*argv)
         url = out.decode().strip().splitlines()[-1]
         return PullRequest.from_url(url, draft=draft)
+
+    async def create_comment(
+        self,
+        repo: str,
+        *,
+        issue_number: int,
+        body: str,
+    ) -> str:
+        """Create a comment on an issue or PR and return the comment URL."""
+        self._validate_repo(repo)
+        out = await self._request_with_retry(
+            "issue",
+            "comment",
+            str(int(issue_number)),
+            "--repo",
+            repo,
+            "--body",
+            body,
+        )
+        return out.decode().strip()
+
+    async def set_issue_state(
+        self,
+        repo: str,
+        issue_number: int,
+        state: str,
+    ) -> str:
+        """Close or reopen an issue and return the issue URL."""
+        self._validate_repo(repo)
+        if state not in {"open", "closed"}:
+            raise ValueError(f"state must be 'open' or 'closed', got {state!r}")
+        out = await self._request_with_retry(
+            "issue",
+            "edit",
+            str(int(issue_number)),
+            "--repo",
+            repo,
+            f"--state={state}",
+        )
+        return out.decode().strip()

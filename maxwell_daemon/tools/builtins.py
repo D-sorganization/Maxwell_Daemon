@@ -40,6 +40,8 @@ from maxwell_daemon.tools.mcp import (
 
 if TYPE_CHECKING:
     from maxwell_daemon.core.action_service import ActionService
+    from maxwell_daemon.gh import GitHubClient
+    from maxwell_daemon.tools.gh_proxy import GhProxyAllowlist
 
 __all__ = [
     "BashRunner",
@@ -47,6 +49,7 @@ __all__ = [
     "build_default_registry",
     "make_browser_screenshot",
     "make_edit_file",
+    "make_gh_proxy",
     "make_glob_files",
     "make_grep_files",
     "make_open_browser_url",
@@ -615,6 +618,28 @@ def make_browser_screenshot(
     return browser_screenshot
 
 
+# ── gh_proxy ────────────────────────────────────────────────────────────────
+def make_gh_proxy(
+    *,
+    github_client: GitHubClient,
+    allowlist: GhProxyAllowlist | None = None,
+    task_id: str | None = None,
+) -> Callable[..., Awaitable[str]]:
+    """Factory returning the ``gh_proxy`` tool bound to a GitHubClient."""
+    from typing import cast
+
+    from maxwell_daemon.tools.gh_proxy import make_gh_proxy as _make_gh_proxy
+
+    return cast(
+        Callable[..., Awaitable[str]],
+        _make_gh_proxy(
+            client=github_client,
+            allowlist=allowlist,
+            task_id=task_id,
+        ),
+    )
+
+
 # ── default registry ────────────────────────────────────────────────────────
 def build_default_registry(
     root: Path,
@@ -626,6 +651,7 @@ def build_default_registry(
     policy: ToolPolicy | None = None,
     invocation_store: ToolInvocationStore | None = None,
     browser_service: BrowserService | None = None,
+    github_client: GitHubClient | None = None,
     dry_run: bool = False,
 ) -> ToolRegistry:
     """Return a ``ToolRegistry`` with built-in tools bound to ``root``.
@@ -663,4 +689,6 @@ def build_default_registry(
     if browser_service is not None:
         reg.register_from_function(make_open_browser_url(browser_service))
         reg.register_from_function(make_browser_screenshot(browser_service))
+    if github_client is not None:
+        reg.register_from_function(make_gh_proxy(github_client=github_client, task_id=task_id))
     return reg
