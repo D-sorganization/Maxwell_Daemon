@@ -159,7 +159,7 @@ class TestReloadConfig:
         assert d._config_path == config_file
 
     def test_daemon_from_config_path_none_stores_default(
-        self, register_recording_backend: None
+        self, tmp_path: Path, register_recording_backend: None
     ) -> None:
         """When path=None the daemon stores None so reload falls back to default_config_path."""
 
@@ -172,10 +172,14 @@ class TestReloadConfig:
         d = Daemon(config)
         assert d._config_path is None
 
-        # reload_config should try default path and raise FileNotFoundError when
-        # no config file exists at the default location (CI / tmp env).
-        # May also raise ValidationError if a stale config exists at the default path.
-        with pytest.raises((FileNotFoundError, ValueError)):
+        missing_default = tmp_path / "missing-default-config.yaml"
+
+        # Patch the default path so this assertion stays hermetic even when the
+        # runner machine already has a real config in its home directory.
+        with (
+            patch("maxwell_daemon.daemon.runner.default_config_path", return_value=missing_default),
+            pytest.raises(FileNotFoundError),
+        ):
             d.reload_config()
 
 

@@ -234,7 +234,7 @@ def _parse_requires(path: Path, raw: Any) -> RecipeRequires:
     if max_turns is not None and (not isinstance(max_turns, int) or isinstance(max_turns, bool)):
         raise RecipeLoadError(f"{path}: 'requires.max_turns' must be an integer")
     budget = raw.get("budget_per_story_usd")
-    if budget is not None and (isinstance(budget, bool) or not isinstance(budget, (int, float))):
+    if budget is not None and (isinstance(budget, bool) or not isinstance(budget, int | float)):
         # bool is a subclass of int in Python — we don't want ``True`` to
         # silently become 1.0, so check bool first.
         raise RecipeLoadError(f"{path}: 'requires.budget_per_story_usd' must be a number")
@@ -296,7 +296,7 @@ def _type_matches(value: Any, declared: ParamType) -> bool:
     if declared == "integer":
         return isinstance(value, int) and not isinstance(value, bool)
     if declared == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
+        return isinstance(value, int | float) and not isinstance(value, bool)
     return False
 
 

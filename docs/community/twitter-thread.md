@@ -1,8 +1,8 @@
 # Beta Launch Twitter Thread
 
 **Tweet 1/6**
-🚀 We are thrilled to announce the Beta release of **Maxwell-Daemon (1.0.0-beta.1)**! 
-Maxwell-Daemon is the ultimate local-first, privacy-respecting autonomous code agent orchestrator. It acts as a control tower for your repo. 
+🚀 We are thrilled to announce the Beta release of **Maxwell-Daemon (1.0.0-beta.1)**!
+Maxwell-Daemon is the ultimate local-first, privacy-respecting autonomous code agent orchestrator. It acts as a control tower for your repo.
 #AI #DevTools #OpenSource
 
 **Tweet 2/6**
@@ -24,5 +24,5 @@ Watch what the agents are thinking in real-time. With Action Ledgers, comprehens
 **Tweet 6/6**
 🤝 Join the Beta!
 We are looking for early adopters to push the limits of local orchestration. Check out the docs, give us a star, and submit your feedback!
-🔗 https://d-sorganization.github.io/Maxwell-Daemon/ 
+🔗 https://d-sorganization.github.io/Maxwell-Daemon/
 #MaxwellDaemon #Agents #Coding

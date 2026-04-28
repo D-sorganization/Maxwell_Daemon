@@ -1,6 +1,6 @@
 # Maxwell-Daemon 1.0.0-beta.1: The Ultimate Home-User Autonomous Agent
 
-We're incredibly excited to announce the first public beta of **Maxwell-Daemon (1.0.0-beta.1)**, a multi-backend autonomous code agent orchestrator designed exclusively for the modern home user and indie developer. 
+We're incredibly excited to announce the first public beta of **Maxwell-Daemon (1.0.0-beta.1)**, a multi-backend autonomous code agent orchestrator designed exclusively for the modern home user and indie developer.
 
 ## What is Maxwell-Daemon?
 

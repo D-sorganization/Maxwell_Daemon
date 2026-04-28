@@ -4,7 +4,7 @@ Maxwell Daemon binds to `127.0.0.1` by default to prevent unauthorized access. I
 
 ## ⚠️ Security Warning
 
-**Never expose the Maxwell Daemon directly to the public internet without authentication.** 
+**Never expose the Maxwell Daemon directly to the public internet without authentication.**
 The daemon has the ability to execute code, run commands, and modify your filesystem. If exposed without authentication, an attacker could take complete control of your host machine.
 
 The daemon explicitly refuses to bind to non-loopback interfaces (e.g. `0.0.0.0`) unless `api.jwt_secret` is configured in `maxwell-daemon.yaml`.

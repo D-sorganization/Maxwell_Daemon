@@ -71,7 +71,7 @@ class ExternalAgentPluginDescriptor:
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> ExternalAgentPluginDescriptor:
         capabilities = data.get("capabilities", ())
-        if not isinstance(capabilities, (list, tuple)):
+        if not isinstance(capabilities, list | tuple):
             raise ExternalAgentAdapterError("plugin capabilities must be a list")
         try:
             return cls(

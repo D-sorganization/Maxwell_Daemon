@@ -1,8 +1,8 @@
 # Pragmatic A–O Repository Assessment — D-Sorganization Fleet
-**Date:** 2026-04-26  
-**Assessor:** pragmatic-ao-assessment-agent  
-**Scope:** 22 repositories under github.com/D-sorganization  
-**Method:** 16 weighted criteria (A–O) grounded in 8 Pragmatic Programmer principles  
+**Date:** 2026-04-26
+**Assessor:** pragmatic-ao-assessment-agent
+**Scope:** 22 repositories under github.com/D-sorganization
+**Method:** 16 weighted criteria (A–O) grounded in 8 Pragmatic Programmer principles
 **Sample strategy:** Full assessment of backend/src Python files; frontend and docs spot-checked. Repos >5k LOC were sampled.
 
 ---
@@ -24,9 +24,9 @@
 | UpstreamDrift | 5.2 | 8 | 7 | 5 | 6 | 5 | **0** | 6 | **4** | 7 | **3** | **3** | 4 | 5 | 8 | 7 | 225 |
 | Worksheet-Workshop | 5.2 | 8 | 6 | 5 | 6 | 5 | **0** | 4 | 7 | 6 | 5 | 4 | 4 | 5 | 6 | 7 | 18 |
 
-> **Fleet average:** 5.3 / 10  
-> **Strongest dimension:** N (Compliance / Governance) — avg 6.7  
-> **Weakest dimension:** F (Code Craftsmanship) — avg 1.9  
+> **Fleet average:** 5.3 / 10
+> **Strongest dimension:** N (Compliance / Governance) — avg 6.7
+> **Weakest dimension:** F (Code Craftsmanship) — avg 1.9
 > **Most common gap:** No lockfile (G), no benchmarks (E), no .coverage (C), no ADRs (B).
 
 ---
@@ -34,41 +34,41 @@
 ## 2. Cross-Fleet Patterns (The Broken Windows)
 
 ### P0 — Fleet-wide structural debt
-1. **God files** (F = 0–3)  
-   - runner-dashboard: `server.py` (6,476 lines), `agent_remediation.py` (914), `dispatch_contract.py` (645)  
-   - Games: `game.py` (944), `ui_renderer.py` (893), `raycaster.py` (812), and 8 others  
-   - Drake_Models: `body_model.py` (814 lines)  
-   - Tools_Private, UpstreamDrift, Worksheet-Workshop: multiple files >500 lines  
+1. **God files** (F = 0–3)
+   - runner-dashboard: `server.py` (6,476 lines), `agent_remediation.py` (914), `dispatch_contract.py` (645)
+   - Games: `game.py` (944), `ui_renderer.py` (893), `raycaster.py` (812), and 8 others
+   - Drake_Models: `body_model.py` (814 lines)
+   - Tools_Private, UpstreamDrift, Worksheet-Workshop: multiple files >500 lines
    **Principle:** PP1 (DRY), PP2 (Orthogonality), PP8 (Broken Windows)
 
-2. **No dependency lockfiles** (G <= 4 in 10/12 repos)  
-   Only UpstreamDrift and Games have lockfiles. All others are vulnerable to supply-chain drift.  
+2. **No dependency lockfiles** (G <= 4 in 10/12 repos)
+   Only UpstreamDrift and Games have lockfiles. All others are vulnerable to supply-chain drift.
    **Principle:** PP3 (Reversibility)
 
-3. **No performance benchmarks** (E = 5 in all repos)  
-   Not a single `benchmarks/` directory exists. Performance regressions cannot be caught in CI.  
+3. **No performance benchmarks** (E = 5 in all repos)
+   Not a single `benchmarks/` directory exists. Performance regressions cannot be caught in CI.
    **Principle:** PP4 (Tracer Bullets)
 
 ### P1 — Notable but not blocking
-4. **Low docstring coverage** (B scores 5–6)  
-   Sampled public functions: ~24% have docstrings. Target: >=80%.  
+4. **Low docstring coverage** (B scores 5–6)
+   Sampled public functions: ~24% have docstrings. Target: >=80%.
    **Principle:** PP4, "It's all writing"
 
-5. **Missing .coverage artifacts** (C scores 5)  
-   No repo has a `.coverage` file committed or generated in CI.  
+5. **Missing .coverage artifacts** (C scores 5)
+   No repo has a `.coverage` file committed or generated in CI.
    **Principle:** PP7 (Test Early, Test Often)
 
-6. **Missing ADRs** (B scores reduced)  
-   Only UpstreamDrift has ADRs. All others lack architectural decision records.  
+6. **Missing ADRs** (B scores reduced)
+   Only UpstreamDrift has ADRs. All others lack architectural decision records.
    **Principle:** PP3 (Reversibility)
 
 ### P2 — Polish and hygiene
-7. **Missing `.env.example`** (I scores 6–7)  
-   Required environment variables are not documented.  
-8. **Missing `Dockerfile`** (I scores 6–7)  
-   Dev environment is not containerized.  
-9. **Missing `CONTRIBUTING.md`** (N scores reduced in Bitnet_Launcher, MLProjects, Playground, QuatEngine, Worksheet-Workshop)  
-10. **No `deploy/` directory or rollback runbook** (M scores 5–6)  
+7. **Missing `.env.example`** (I scores 6–7)
+   Required environment variables are not documented.
+8. **Missing `Dockerfile`** (I scores 6–7)
+   Dev environment is not containerized.
+9. **Missing `CONTRIBUTING.md`** (N scores reduced in Bitnet_Launcher, MLProjects, Playground, QuatEngine, Worksheet-Workshop)
+10. **No `deploy/` directory or rollback runbook** (M scores 5–6)
     **Principle:** PP3 (Reversibility)
 
 ---

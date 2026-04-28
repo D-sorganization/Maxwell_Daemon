@@ -135,7 +135,7 @@ def invariant(check: Callable[[Any], bool], message: str) -> Callable[[C], C]:
         for name, member in list(vars(cls).items()):
             if name.startswith("_"):
                 continue
-            if not callable(member) or isinstance(member, (staticmethod, classmethod)):
+            if not callable(member) or isinstance(member, staticmethod | classmethod):
                 continue
             if inspect.iscoroutinefunction(member):
                 setattr(cls, name, _wrap_async_invariant(member, check, message))
