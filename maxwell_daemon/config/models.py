@@ -116,6 +116,10 @@ class AgentConfig(BaseModel):
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
     temperature: float = Field(1.0, ge=0.0, le=2.0)
     default_backend: str = "claude"
+    concurrency_by_kind: dict[str, int] = Field(
+        default_factory=dict,
+        description="Optional per-kind concurrency caps applied on top of the global worker pool. Keys typically use issue modes such as 'plan' or 'implement'.",
+    )
     max_queue_depth: int = Field(
         1000,
         ge=1,

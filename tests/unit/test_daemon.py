@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 import pytest
+import yaml
 
 from maxwell_daemon.backends import registry
 from maxwell_daemon.config import MaxwellDaemonConfig
@@ -179,6 +180,161 @@ class TestTaskExecution:
             assert all(d.get_task(t.id).status == TaskStatus.COMPLETED for t in tasks)  # type: ignore[union-attr]
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=4, body=body))
+
+    def test_issue_mode_concurrency_cap_serializes_implement_tasks(
+        self, isolated_ledger_path: Path, minimal_config: MaxwellDaemonConfig
+    ) -> None:
+        async def body() -> None:
+            cfg = minimal_config.model_copy(
+                update={
+                    "agent": minimal_config.agent.model_copy(
+                        update={"concurrency_by_kind": {"implement": 1}}
+                    )
+                }
+            )
+            d = Daemon(
+                cfg,
+                ledger_path=isolated_ledger_path,
+                task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
+            )
+            active = 0
+            max_active = 0
+
+            async def fake_execute(executed: Task, snapshot: object) -> None:
+                nonlocal active, max_active
+                active += 1
+                max_active = max(max_active, active)
+                await asyncio.sleep(0.05)
+                active -= 1
+                executed.status = TaskStatus.COMPLETED
+                executed.result = executed.issue_mode or executed.kind.value
+
+            d._execute = fake_execute  # type: ignore[method-assign]
+            await d.start(worker_count=3)
+            try:
+                tasks = [
+                    d.submit_issue(
+                        repo="D-sorganization/Maxwell-Daemon",
+                        issue_number=764 + index,
+                        mode="implement",
+                    )
+                    for index in range(3)
+                ]
+                for task in tasks:
+                    await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
+                assert max_active == 1
+            finally:
+                await d.stop()
+
+        _run(body())
+
+    def test_unconfigured_kind_falls_back_to_global_worker_cap(
+        self, isolated_ledger_path: Path, minimal_config: MaxwellDaemonConfig
+    ) -> None:
+        async def body() -> None:
+            cfg = minimal_config.model_copy(
+                update={
+                    "agent": minimal_config.agent.model_copy(
+                        update={"concurrency_by_kind": {"implement": 1}}
+                    )
+                }
+            )
+            d = Daemon(
+                cfg,
+                ledger_path=isolated_ledger_path,
+                task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
+            )
+            active = 0
+            max_active = 0
+
+            async def fake_execute(executed: Task, snapshot: object) -> None:
+                nonlocal active, max_active
+                active += 1
+                max_active = max(max_active, active)
+                await asyncio.sleep(0.05)
+                active -= 1
+                executed.status = TaskStatus.COMPLETED
+                executed.result = executed.prompt
+
+            d._execute = fake_execute  # type: ignore[method-assign]
+            await d.start(worker_count=2)
+            try:
+                tasks = [d.submit(f"prompt-{index}") for index in range(2)]
+                for task in tasks:
+                    await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
+                assert max_active == 2
+            finally:
+                await d.stop()
+
+        _run(body())
+
+    def test_reload_config_updates_future_issue_mode_dispatch_caps(
+        self, isolated_ledger_path: Path, tmp_path: Path, minimal_config: MaxwellDaemonConfig
+    ) -> None:
+        async def body() -> None:
+            config_path = tmp_path / "maxwell-daemon.yaml"
+            base_payload = minimal_config.model_dump(mode="json", exclude_none=True)
+            base_payload["agent"]["concurrency_by_kind"] = {"implement": 1}
+            config_path.write_text(yaml.safe_dump(base_payload, sort_keys=False), encoding="utf-8")
+
+            d = Daemon.from_config_path(config_path)
+            d._ledger = d._ledger.__class__(isolated_ledger_path)
+            d._task_store = d._task_store.__class__(isolated_ledger_path.with_suffix(".tasks.db"))
+            active = 0
+            max_active = 0
+            release_first = asyncio.Event()
+            started = asyncio.Event()
+
+            async def fake_execute(executed: Task, snapshot: object) -> None:
+                nonlocal active, max_active
+                active += 1
+                max_active = max(max_active, active)
+                if executed.issue_number == 764:
+                    started.set()
+                    await release_first.wait()
+                else:
+                    await asyncio.sleep(0.05)
+                active -= 1
+                executed.status = TaskStatus.COMPLETED
+                executed.result = executed.issue_mode or executed.kind.value
+
+            d._execute = fake_execute  # type: ignore[method-assign]
+            await d.start(worker_count=2)
+            try:
+                first = d.submit_issue(
+                    repo="D-sorganization/Maxwell-Daemon", issue_number=764, mode="implement"
+                )
+                second = d.submit_issue(
+                    repo="D-sorganization/Maxwell-Daemon", issue_number=765, mode="implement"
+                )
+                await started.wait()
+                await asyncio.sleep(0.2)
+                assert d.get_task(second.id).status is TaskStatus.QUEUED  # type: ignore[union-attr]
+
+                base_payload["agent"]["concurrency_by_kind"] = {"implement": 2}
+                config_path.write_text(
+                    yaml.safe_dump(base_payload, sort_keys=False), encoding="utf-8"
+                )
+                d.reload_config()
+
+                deadline = asyncio.get_event_loop().time() + 5.0
+                while asyncio.get_event_loop().time() < deadline:
+                    second_task = d.get_task(second.id)
+                    if second_task is not None and second_task.status is TaskStatus.RUNNING:
+                        break
+                    await asyncio.sleep(0.02)
+                else:
+                    raise AssertionError("second implement task did not start after reload")
+
+                assert max_active == 2
+                release_first.set()
+                await _wait_for_status(d, first.id, TaskStatus.COMPLETED)
+                await _wait_for_status(d, second.id, TaskStatus.COMPLETED)
+            finally:
+                release_first.set()
+                await d.stop()
+
+        _run(body())
 
     def test_stalled_issue_task_is_cancelled_and_retried(
         self, isolated_ledger_path: Path, minimal_config: MaxwellDaemonConfig

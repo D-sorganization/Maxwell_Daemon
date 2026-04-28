@@ -352,6 +352,71 @@ class Daemon:
         log.info("config reloaded from %s", path)
         return path
 
+    @staticmethod
+    def _task_kind_key(task: Task) -> str:
+        if task.kind is TaskKind.ISSUE and task.issue_mode:
+            return task.issue_mode
+        return task.kind.value
+
+    def _kind_cap_for(self, task: Task) -> int | None:
+        key = self._task_kind_key(task)
+        with self._config_lock:
+            return self._config.agent.concurrency_by_kind.get(key)
+
+    def _count_running_tasks_locked(self, *, kind_key: str) -> int:
+        return sum(
+            1
+            for running in self._tasks.values()
+            if running.status is TaskStatus.RUNNING and self._task_kind_key(running) == kind_key
+        )
+
+    async def _claim_next_queued_task(self) -> tuple[bool, Task | None]:
+        deferred: list[tuple[int, Task]] = []
+        while True:
+            try:
+                if deferred:
+                    priority, task = self._queue.get_nowait()
+                else:
+                    priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
+            except asyncio.TimeoutError:
+                break
+            except asyncio.QueueEmpty:
+                break
+
+            if task is None:
+                for deferred_item in deferred:
+                    self._queue.put_nowait(deferred_item)
+                return True, None
+
+            kind_cap = self._kind_cap_for(task)
+            with self._tasks_lock:
+                if task.status is not TaskStatus.QUEUED:
+                    continue
+                if task.depends_on:
+                    unfinished = [
+                        dep
+                        for dep in task.depends_on
+                        if self._tasks.get(dep) is None
+                        or self._tasks[dep].status is not TaskStatus.COMPLETED
+                    ]
+                    if unfinished:
+                        deferred.append((priority, task))
+                        continue
+                if kind_cap is not None:
+                    kind_key = self._task_kind_key(task)
+                    if self._count_running_tasks_locked(kind_key=kind_key) >= kind_cap:
+                        deferred.append((priority, task))
+                        continue
+                task.status = TaskStatus.RUNNING
+                task.started_at = datetime.now(timezone.utc)
+                for deferred_item in deferred:
+                    self._queue.put_nowait(deferred_item)
+                return False, task
+
+        for deferred_item in deferred:
+            self._queue.put_nowait(deferred_item)
+        return False, None
+
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
             return
@@ -1605,42 +1670,13 @@ class Daemon:
 
         log.info("worker %d ready", worker_id)
         while self._running or not self._queue.empty():
-            try:
-                _priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
-            except asyncio.TimeoutError:
-                continue
-            # Sentinel value (None task) signals this worker to exit — used by
-            # set_worker_count() when scaling down.
-            if task is None:
+            should_exit, task = await self._claim_next_queued_task()
+            if should_exit:
                 log.info("worker %d received stop sentinel; exiting", worker_id)
                 break
-            # Reprioritization leaves stale queue entries behind. Only the first
-            # worker that atomically claims a still-queued task may execute it.
-            with self._tasks_lock:
-                if task.status is not TaskStatus.QUEUED:
-                    continue
-                # DAG dependency check: if any upstream task is not yet in a
-                # terminal-success state, requeue and wait for the next tick.
-                if task.depends_on:
-                    unfinished = [
-                        dep
-                        for dep in task.depends_on
-                        if self._tasks.get(dep, None) is None
-                        or self._tasks[dep].status is not TaskStatus.COMPLETED
-                    ]
-                    if unfinished:
-                        log.debug(
-                            "task %s waiting for dependencies %s; re-queuing",
-                            task.id,
-                            unfinished,
-                        )
-                        # Re-enqueue without changing status so the task stays QUEUED
-                        # and will be retried once the dependencies finish.
-                        self._queue.put_nowait((task.priority, task))
-                        self._queue.task_done()
-                        continue
-                task.status = TaskStatus.RUNNING
-                task.started_at = datetime.now(timezone.utc)
+            if task is None:
+                await asyncio.sleep(0.05)
+                continue
             with bind_context(task_id=task.id, worker_id=worker_id):
                 # Attempt to mark the task RUNNING in the durable store before
                 # executing.  If that write fails (disk full, lock contention),
