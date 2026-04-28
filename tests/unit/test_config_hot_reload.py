@@ -176,9 +176,10 @@ class TestReloadConfig:
 
         # Patch the default path so this assertion stays hermetic even when the
         # runner machine already has a real config in its home directory.
-        with patch(
-            "maxwell_daemon.daemon.runner.default_config_path", return_value=missing_default
-        ), pytest.raises(FileNotFoundError):
+        with (
+            patch("maxwell_daemon.daemon.runner.default_config_path", return_value=missing_default),
+            pytest.raises(FileNotFoundError),
+        ):
             d.reload_config()
 
 
