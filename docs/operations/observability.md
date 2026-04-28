@@ -76,6 +76,8 @@ Every log line includes:
 - `event` — log message
 - Custom bound context variables
 
+When `agent.stall_timeout_seconds` is enabled, the daemon emits `event="stall_detected"` with `task_id`, `elapsed_seconds`, and `last_event_kind` before it cancels and retries a silent run.
+
 ### Audit Log
 
 See `maxwell_daemon/audit.py` for the append-only JSONL audit log with SHA-256 chaining. This is separate from application logging and provides tamper-evident records of all significant operations.

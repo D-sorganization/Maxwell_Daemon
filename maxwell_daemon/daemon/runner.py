@@ -293,6 +293,10 @@ class Daemon:
         # Fleet coordination: track last-seen time per worker machine for heartbeat.
         # Keys are machine names; values are the UTC datetime of last contact.
         self._worker_last_seen: dict[str, datetime] = {}
+        self._active_execution_tasks: dict[str, asyncio.Task[None]] = {}
+        self._last_stream_event_at: dict[str, datetime] = {}
+        self._last_stream_event_kind: dict[str, str] = {}
+        self._stalled_task_ids: set[str] = set()
 
     @property
     def events(self) -> EventBus:
@@ -412,6 +416,13 @@ class Daemon:
             )
             self._bg_tasks.add(evict_task)
             evict_task.add_done_callback(self._bg_tasks.discard)
+        if self._config.agent.stall_timeout_seconds > 0:
+            stall_task = asyncio.create_task(
+                self._stall_reconcile_loop(),
+                name="stall-reconcile",
+            )
+            self._bg_tasks.add(stall_task)
+            stall_task.add_done_callback(self._bg_tasks.discard)
 
         log.info("daemon started with %d workers", self._worker_count)
 
@@ -580,6 +591,93 @@ class Daemon:
             except Exception:
                 log.warning("live eviction loop failed", exc_info=True)
             await asyncio.sleep(60.0)
+
+    async def _stall_reconcile_loop(self) -> None:
+        """Periodically cancel and retry RUNNING tasks that go silent."""
+        while self._running:
+            try:
+                await self._reconcile_stalled_runs()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.warning("stall reconcile loop failed", exc_info=True)
+            timeout = self._config.agent.stall_timeout_seconds
+            interval = 1.0 if timeout <= 2 else min(timeout / 2.0, 30.0)
+            await asyncio.sleep(interval)
+
+    async def _reconcile_stalled_runs(self) -> int:
+        """Cancel RUNNING tasks that have exceeded the configured silence window."""
+        timeout = self._config.agent.stall_timeout_seconds
+        if timeout <= 0:
+            return 0
+        now = datetime.now(timezone.utc)
+        stalled: list[tuple[Task, asyncio.Task[None], float, str | None]] = []
+        with self._tasks_lock:
+            for task_id, handle in self._active_execution_tasks.items():
+                if handle.done():
+                    continue
+                task = self._tasks.get(task_id)
+                if task is None or task.status is not TaskStatus.RUNNING:
+                    continue
+                anchor = self._last_stream_event_at.get(task_id) or task.started_at
+                if anchor is None:
+                    continue
+                elapsed_seconds = (now - anchor).total_seconds()
+                if elapsed_seconds <= timeout:
+                    continue
+                stalled.append(
+                    (
+                        task,
+                        handle,
+                        elapsed_seconds,
+                        self._last_stream_event_kind.get(task_id),
+                    )
+                )
+                self._stalled_task_ids.add(task_id)
+        for task, handle, elapsed_seconds, last_event_kind in stalled:
+            log.warning(
+                "stall_detected",
+                task_id=task.id,
+                elapsed_seconds=round(elapsed_seconds, 3),
+                last_event_kind=last_event_kind,
+            )
+            handle.cancel()
+        return len(stalled)
+
+    def _record_stream_event(self, task_id: str, kind: str) -> None:
+        self._last_stream_event_at[task_id] = datetime.now(timezone.utc)
+        self._last_stream_event_kind[task_id] = kind
+
+    def _clear_execution_tracking(self, task_id: str) -> None:
+        self._active_execution_tasks.pop(task_id, None)
+        self._last_stream_event_at.pop(task_id, None)
+        self._last_stream_event_kind.pop(task_id, None)
+
+    async def _handle_stalled_task(self, task: Task) -> None:
+        message = (
+            "Task exceeded agent.stall_timeout_seconds without progress; "
+            "cancelling and re-queueing."
+        )
+        task.status = TaskStatus.FAILED
+        task.error = message
+        task.finished_at = datetime.now(timezone.utc)
+        try:
+            self._task_store.save(task)
+        except Exception:
+            log.exception("task store write failed while recording stalled task=%s", task.id)
+        await self._events.publish(
+            Event(
+                kind=EventKind.TASK_FAILED,
+                payload=attach_observability(
+                    {"id": task.id, "error": message, "reason": "stalled"},
+                    task_id=task.id,
+                    backend=task.backend,
+                    model=task.model,
+                ),
+            )
+        )
+        retried = self.retry_task(task.id, expected_status=TaskStatus.FAILED)
+        self._enqueue_task_entry(retried.priority, retried)
 
     async def _dream_cycle_loop(self) -> None:
         """Periodically consolidate raw markdown memory when explicitly enabled."""
@@ -1567,7 +1665,21 @@ class Daemon:
                     await self._queue.put((task.priority, task))
                     continue
                 snapshot = self._capture_config_snapshot()
-                await self._execute(task, snapshot)
+                execution = asyncio.create_task(
+                    self._execute(task, snapshot),
+                    name=f"task-exec-{task.id}",
+                )
+                self._active_execution_tasks[task.id] = execution
+                try:
+                    await execution
+                except asyncio.CancelledError:
+                    if task.id in self._stalled_task_ids:
+                        self._stalled_task_ids.discard(task.id)
+                        await self._handle_stalled_task(task)
+                        continue
+                    raise
+                finally:
+                    self._clear_execution_tracking(task.id)
 
     async def _execute(self, task: Task, snapshot: ConfigSnapshot) -> None:
         task.status = TaskStatus.RUNNING
@@ -1588,6 +1700,7 @@ class Daemon:
                     ),
                 )
             )
+            self._record_stream_event(task.id, EventKind.TASK_STARTED.value)
             snapshot.budget.require_under_budget()
             decision = snapshot.router.route(
                 repo=task.repo,
@@ -1818,6 +1931,7 @@ class Daemon:
             )
 
         async def _emit_test_output(chunk: str, stream: str) -> None:
+            self._record_stream_event(task.id, f"{EventKind.TEST_OUTPUT.value}:{stream}")
             await self._events.publish(
                 Event(
                     kind=EventKind.TEST_OUTPUT,
