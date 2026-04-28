@@ -966,6 +966,15 @@ function renderTasks() {
   // ⚡ Bolt: Fast ISO 8601 sort. String operators are ~3x faster than localeCompare.
   const sorted = [...state.tasks.values()].sort(sortTaskCreatedAtDesc);
 
+  if (sorted.length === 0) {
+    const statusFilter = document.getElementById("status-filter")?.value;
+    const msg = statusFilter
+      ? `No tasks found matching status "${statusFilter}".`
+      : "No tasks yet. Press 'N' or click '+ New' to dispatch your first task.";
+    setTableMessage("tasks-body", 10, msg);
+    return;
+  }
+
   // ⚡ Bolt: Replace O(n²) nested loop lookup with O(n) hash map lookup.
   // Pre-compute control plane map for O(1) lookups during rendering.
   const controlPlaneMap = new Map();

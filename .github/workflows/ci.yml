@@ -15,9 +15,16 @@ permissions:
   contents: read
 
 jobs:
-
-
-
+  local-only-workflows:
+    name: Reject hosted runner routing
+    runs-on: d-sorg-fleet
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run local-only workflow guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check_local_only_workflows.py
 
   pick-runner:
     runs-on: d-sorg-fleet
@@ -28,7 +35,7 @@ jobs:
       - name: Check for self-hosted runner
         id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RUNNER_CHECK_TOKEN }}
         run: |
           ONLINE=$(gh api -H "Accept: application/vnd.github+json" /orgs/${{ github.repository_owner }}/actions/runners --paginate \
             --jq 'if .runners then [.runners[] | select(.status == "online") | select(.labels[].name == "d-sorg-fleet")] | length else 0 end' \
@@ -86,6 +93,8 @@ jobs:
       - run: .venv/bin/python -m mypy maxwell_daemon
       - name: Mypy on tests
         run: .venv/bin/python -m mypy tests --no-strict-optional
+      - name: Mypy on examples
+        run: .venv/bin/python -m mypy examples --no-strict-optional
         continue-on-error: true  # Tighten iteratively
 
   test:
