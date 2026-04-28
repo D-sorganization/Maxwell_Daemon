@@ -1,9 +1,11 @@
 from unittest.mock import MagicMock
 
+from pytest import MonkeyPatch
+
 from maxwell_daemon.core.cost_evaluator import CostEvaluator
 
 
-def test_estimate_complexity():
+def test_estimate_complexity() -> None:
     evaluator = CostEvaluator(snapshot=MagicMock())
 
     # Test simple
@@ -20,7 +22,7 @@ def test_estimate_complexity():
     assert evaluator._estimate_complexity(task) == "moderate"
 
 
-def test_choose_model_explicit_override():
+def test_choose_model_explicit_override() -> None:
     evaluator = CostEvaluator(snapshot=MagicMock())
     task = MagicMock()
     task.model = "gpt-4"
@@ -31,11 +33,11 @@ def test_choose_model_explicit_override():
     assert choice.reasoning == "Explicit user override"
 
 
-def test_token_budget_for_task(monkeypatch):
+def test_token_budget_for_task(monkeypatch: MonkeyPatch) -> None:
     # Mock get_rates to return fixed pricing
     import maxwell_daemon.backends.pricing as pricing
 
-    def mock_get_rates(provider, model):
+    def mock_get_rates(provider: str, model: str) -> tuple[float, float]:
         return (10.0, 20.0)
 
     monkeypatch.setattr(pricing, "get_rates", mock_get_rates)

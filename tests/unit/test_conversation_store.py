@@ -4,7 +4,7 @@ from maxwell_daemon.backends.base import Message, MessageRole
 from maxwell_daemon.conversation.store import JsonConversationStore, SqliteConversationStore
 
 
-def test_json_conversation_store(tmp_path: Path):
+def test_json_conversation_store(tmp_path: Path) -> None:
     store = JsonConversationStore(tmp_path)
 
     # Test load non-existent
@@ -37,7 +37,7 @@ def test_json_conversation_store(tmp_path: Path):
     assert store.list_ids() == []
 
 
-def test_sqlite_conversation_store(tmp_path: Path):
+def test_sqlite_conversation_store(tmp_path: Path) -> None:
     store = SqliteConversationStore(tmp_path / "test.db")
 
     # Test load non-existent
