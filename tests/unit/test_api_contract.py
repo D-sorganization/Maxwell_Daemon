@@ -238,6 +238,9 @@ class TestApiV2Status:
             status=TaskStatus.RUNNING,
             started_at=started_at,
             dispatched_to="worker-a",
+            thread_id="thread-running",
+            turn_count=3,
+            max_turns=20,
         )
         daemon._ledger.record(
             CostRecord(
@@ -267,8 +270,8 @@ class TestApiV2Status:
         assert body["running"] == [
             {
                 "task_id": "task-running",
-                "session_id": "task-running",
-                "run_count": 0,
+                "session_id": "thread-running-3",
+                "run_count": 3,
                 "last_event": "running",
                 "started_at": started_at.isoformat(),
                 "dispatched_to": "worker-a",

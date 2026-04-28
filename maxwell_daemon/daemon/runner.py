@@ -106,6 +106,11 @@ class Task:
     issue_mode: str | None = None  # "plan" | "implement"
     # A/B grouping: sibling tasks share an ab_group so the UI pairs them.
     ab_group: str | None = None
+    # Continuation-turn identity for multi-turn task iteration.
+    # ``thread_id`` groups turns; ``turn_count`` is the active zero-based turn id.
+    thread_id: str | None = None
+    turn_count: int = 0
+    max_turns: int = 20
     # DAG dependencies: list of task IDs that must reach COMPLETED before this
     # task is allowed to start.  An empty list (the default) means "no deps".
     depends_on: list[str] = field(default_factory=list)
@@ -125,6 +130,26 @@ class Task:
     finished_at: datetime | None = None
     # Fleet dispatch tracking: set when a coordinator sends this task to a remote worker.
     dispatched_to: str | None = None  # machine name of the worker that received this task
+
+    @property
+    def continuation_thread_id(self) -> str:
+        """Stable logical thread id used for continuation session naming."""
+        return self.thread_id or self.id
+
+    @property
+    def turn_session_id(self) -> str:
+        """Return the Symphony-style ``<thread_id>-<turn_id>`` session id."""
+        return f"{self.continuation_thread_id}-{self.turn_count}"
+
+    @property
+    def is_continuation_turn(self) -> bool:
+        """Whether the active turn should send continuation guidance only."""
+        return self.turn_count > 0
+
+    @property
+    def has_turn_budget(self) -> bool:
+        """Whether another turn may start without exceeding ``max_turns``."""
+        return self.turn_count < self.max_turns
 
     def __lt__(self, other: object) -> bool:
         """Support PriorityQueue ordering — compare by (priority, created_at)."""

@@ -451,6 +451,11 @@ class TaskView(BaseModel):
     issue_number: int | None = None
     issue_mode: str | None = None
     ab_group: str | None = None
+    thread_id: str | None = None
+    turn_count: int = 0
+    max_turns: int = 20
+    session_id: str
+    continuation: bool = False
     depends_on: list[str] = Field(default_factory=list)
     priority: int = 100
     pr_url: str | None = None
@@ -481,6 +486,11 @@ class TaskView(BaseModel):
             issue_number=t.issue_number,
             issue_mode=t.issue_mode,
             ab_group=t.ab_group,
+            thread_id=t.thread_id,
+            turn_count=t.turn_count,
+            max_turns=t.max_turns,
+            session_id=t.turn_session_id,
+            continuation=t.is_continuation_turn,
             depends_on=list(getattr(t, "depends_on", [])),
             priority=getattr(t, "priority", 100),
             pr_url=t.pr_url,
@@ -1660,8 +1670,8 @@ def create_app(
         running = [
             StatusV2RunningTask(
                 task_id=t.id,
-                session_id=t.id,
-                run_count=0,
+                session_id=t.turn_session_id,
+                run_count=t.turn_count,
                 last_event=t.status.value,
                 started_at=t.started_at.isoformat() if t.started_at is not None else None,
                 dispatched_to=t.dispatched_to,

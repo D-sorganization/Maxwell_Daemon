@@ -67,6 +67,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     issue_number INTEGER,
     issue_mode TEXT,
     ab_group TEXT,
+    thread_id TEXT,
+    turn_count INTEGER NOT NULL DEFAULT 0,
+    max_turns INTEGER NOT NULL DEFAULT 20,
     priority INTEGER NOT NULL DEFAULT 100,
     result TEXT,
     error TEXT,
@@ -103,6 +106,9 @@ _MIGRATIONS = [
     ("waiver_reason", "ALTER TABLE tasks ADD COLUMN waiver_reason TEXT"),
     ("waived_at", "ALTER TABLE tasks ADD COLUMN waived_at TEXT"),
     ("route_reason", "ALTER TABLE tasks ADD COLUMN route_reason TEXT"),
+    ("thread_id", "ALTER TABLE tasks ADD COLUMN thread_id TEXT"),
+    ("turn_count", "ALTER TABLE tasks ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0"),
+    ("max_turns", "ALTER TABLE tasks ADD COLUMN max_turns INTEGER NOT NULL DEFAULT 20"),
 ]
 
 _TERMINAL_STATUS_VALUES = ("completed", "failed", "cancelled")
@@ -184,6 +190,9 @@ class TaskStore:
             task.issue_number,
             task.issue_mode,
             task.ab_group,
+            task.thread_id,
+            task.turn_count,
+            task.max_turns,
             task.priority,
             task.result,
             task.error,
@@ -204,9 +213,10 @@ class TaskStore:
                     id, created_at, updated_at, kind, status, prompt,
                     repo, backend, model, route_reason,
                     issue_repo, issue_number, issue_mode, ab_group,
+                    thread_id, turn_count, max_turns,
                     priority, result, error, waived_by, waiver_reason, waived_at, pr_url, cost_usd, started_at,
                     finished_at, dispatched_to, completed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     updated_at=excluded.updated_at,
                     status=excluded.status,
@@ -219,6 +229,9 @@ class TaskStore:
                     issue_number=excluded.issue_number,
                     issue_mode=excluded.issue_mode,
                     ab_group=excluded.ab_group,
+                    thread_id=excluded.thread_id,
+                    turn_count=excluded.turn_count,
+                    max_turns=excluded.max_turns,
                     priority=excluded.priority,
                     result=excluded.result, error=excluded.error,
                     waived_by=excluded.waived_by,
@@ -554,6 +567,18 @@ def _row_to_task(row: sqlite3.Row) -> Task:
     except (IndexError, KeyError):
         route_reason = None
     try:
+        thread_id = row["thread_id"]
+    except (IndexError, KeyError):
+        thread_id = None
+    try:
+        turn_count = row["turn_count"]
+    except (IndexError, KeyError):
+        turn_count = 0
+    try:
+        max_turns = row["max_turns"]
+    except (IndexError, KeyError):
+        max_turns = 20
+    try:
         waived_by = row["waived_by"]
     except (IndexError, KeyError):
         waived_by = None
@@ -579,6 +604,9 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         issue_number=row["issue_number"],
         issue_mode=row["issue_mode"],
         ab_group=ab_group,
+        thread_id=thread_id,
+        turn_count=turn_count if turn_count is not None else 0,
+        max_turns=max_turns if max_turns is not None else 20,
         priority=priority if priority is not None else 100,
         result=row["result"],
         error=row["error"],

@@ -49,6 +49,20 @@ class TestSaveAndGet:
         assert loaded.model == "gpt-4.1"
         assert loaded.route_reason == "repo override for owner/repo"
 
+    def test_preserves_continuation_turn_metadata(self, store: TaskStore) -> None:
+        task = _fresh_task(thread_id="thread-alpha", turn_count=2, max_turns=7)
+        store.save(task)
+
+        loaded = store.get(task.id)
+
+        assert loaded is not None
+        assert loaded.thread_id == "thread-alpha"
+        assert loaded.turn_count == 2
+        assert loaded.max_turns == 7
+        assert loaded.turn_session_id == "thread-alpha-2"
+        assert loaded.is_continuation_turn is True
+        assert loaded.has_turn_budget is True
+
     def test_get_missing_returns_none(self, store: TaskStore) -> None:
         assert store.get("nope") is None
 
