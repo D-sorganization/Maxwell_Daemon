@@ -6,7 +6,7 @@ pytest.skip(
     allow_module_level=True,
 )
 
-from pytest_bdd import given, scenarios, then, when
+from pytest_bdd import given, scenarios, then, when  # type: ignore[import-not-found]
 
 scenarios("/tmp/pytest-of-dieterolson/pytest-1161/test_writes_scaffold_to_defaul0/login.feature")
 
