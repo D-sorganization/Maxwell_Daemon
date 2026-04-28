@@ -1,0 +1,74 @@
+name: Local-Only Workflow Runner Guard
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check_local_only_workflows.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check_local_only_workflows.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+
+
+
+
+  pick-runner:
+    runs-on: d-sorg-fleet
+    timeout-minutes: 2
+    outputs:
+      runner: ${{ steps.check.outputs.runner }}
+    steps:
+      - name: Check for self-hosted runner
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.RUNNER_CHECK_TOKEN }}
+        run: |
+          ONLINE=$(gh api -H "Accept: application/vnd.github+json" /orgs/${{ github.repository_owner }}/actions/runners --paginate \
+            --jq 'if .runners then [.runners[] | select(.status == "online") | select(.labels[].name == "d-sorg-fleet")] | length else 0 end' \
+            2>/dev/null || echo "0")
+          if ! [[ "$ONLINE" =~ ^[0-9]+$ ]]; then ONLINE=0; fi
+          if [[ "$ONLINE" -gt 0 ]]; then
+            mkdir -p "$(dirname "$GITHUB_OUTPUT")"
+            echo "runner=d-sorg-fleet" >> "$GITHUB_OUTPUT"
+            echo "Self-hosted runner online - routing locally"
+          else
+            echo "::error::No local self-hosted runner available; failing closed"
+            exit 1
+          fi
+
+  local-only-workflows:
+    name: Reject hosted runner routing
+    needs: pick-runner
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
+    steps:
+      - name: Checkout repository without external actions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          auth_header="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+          git init "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          git remote remove origin 2>/dev/null || true
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --force FETCH_HEAD
+          git clean -ffdx
+      - name: Run local-only workflow guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v python3 >/dev/null 2>&1; then
+            python3 scripts/check_local_only_workflows.py
+          else
+            python scripts/check_local_only_workflows.py
+          fi
