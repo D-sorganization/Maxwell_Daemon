@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/check_local_only_workflows.py
+          python3 scripts/check_local_only_workflows.py
 
   pick-runner:
     runs-on: d-sorg-fleet
@@ -34,20 +34,16 @@ jobs:
     steps:
       - name: Check for self-hosted runner
         id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
-          ONLINE=$(gh api -H "Accept: application/vnd.github+json" /orgs/${{ github.repository_owner }}/actions/runners --paginate \
-            --jq 'if .runners then [.runners[] | select(.status == "online") | select(.labels[].name == "d-sorg-fleet")] | length else 0 end' \
-            2>/dev/null || echo "0")
-          if ! [[ "$ONLINE" =~ ^[0-9]+$ ]]; then ONLINE=0; fi
-          if [[ "$ONLINE" -gt 0 ]]; then
-            echo "runner=d-sorg-fleet" >> $GITHUB_OUTPUT
-            echo "Self-hosted runner online - routing locally"
-          else
-            echo "::error::No local self-hosted runner available; failing closed"
+          set -euo pipefail
+          if [[ -z "${GITHUB_OUTPUT:-}" ]]; then
+            echo "::error::GITHUB_OUTPUT is unavailable"
             exit 1
           fi
+          mkdir -p "$(dirname "$GITHUB_OUTPUT")"
+          echo "runner=d-sorg-fleet" >> "$GITHUB_OUTPUT"
+          echo "Self-hosted runner claimed this job - routing locally"
 
   lint:
     name: Lint (ruff)

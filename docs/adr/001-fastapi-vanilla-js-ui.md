@@ -1,7 +1,7 @@
 # ADR-001: FastAPI + Vanilla JS UI
 
-**Status:** Accepted  
-**Date:** 2026-04-27  
+**Status:** Accepted
+**Date:** 2026-04-27
 **Deciders:** Maxwell-Daemon Core Team
 
 ---

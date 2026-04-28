@@ -83,11 +83,11 @@ Every test should have a docstring explaining the **why**, not the **how**:
 ```python
 def test_estimate_cost_when_unknown_model_then_defaults_to_zero() -> None:
     """Estimate cost defaults to zero for unknown models.
-    
+
     This prevents cost estimation from blocking on novel model names
     (e.g., customer-specific fine-tunes). The allocator will recommend
     the cheapest known model as fallback.
-    
+
     Regression: Issue #612 (model routing should not fail on unknown names)
     """
     allocator = TokenBudgetAllocator(config, ledger)
@@ -152,7 +152,7 @@ class TestAsyncQueue:
         """Queue.full() must be checked before put_nowait()."""
         queue: asyncio.Queue[int] = asyncio.Queue(maxsize=1)
         queue.put_nowait(1)
-        
+
         with pytest.raises(asyncio.QueueFull):
             queue.put_nowait(2)
 
@@ -273,11 +273,11 @@ def test_queue_dequeue_latency() -> None:
     queue = TaskQueue(maxsize=1000)
     for i in range(1000):
         queue.put_nowait(Task(id=f"task-{i}"))
-    
+
     start = time.perf_counter()
     result = queue.get_nowait()
     elapsed_ms = (time.perf_counter() - start) * 1000
-    
+
     assert result is not None
     assert elapsed_ms < 1.0, f"Dequeue took {elapsed_ms:.2f}ms, expected < 1ms"
 ```
@@ -315,7 +315,7 @@ import pytest
 @pytest.mark.skip(reason="Timing-sensitive test; requires refactoring to use fixed time")
 def test_timing_sensitive_operation() -> None:
     """This test is sensitive to system load and timing jitter.
-    
+
     Timing-based assertions are unreliable on CI. Either:
     1. Use mocked time (pytest-freezegun) with fixed delays
     2. Remove timing assertions and test behavior instead

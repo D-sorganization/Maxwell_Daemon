@@ -21,7 +21,7 @@ Each extension follows a standard architecture pattern to interface with the Max
 
 ## Development Standard
 
-All extensions reside within the `extensions/` directory. They should be built as thin clients that delegate all heavy cognitive processing and LLM interaction to the Maxwell Daemon backend. 
+All extensions reside within the `extensions/` directory. They should be built as thin clients that delegate all heavy cognitive processing and LLM interaction to the Maxwell Daemon backend.
 
 * **State**: Do not store complex state in the IDE plugin. Treat the daemon's API as the single source of truth for task progress and ledger history.
 * **UI Matching**: Extensions should map closely to the concepts shown in the canonical browser UI (`maxwell_daemon/api/ui/`), adopting similar task graphs and approval interfaces.

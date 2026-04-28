@@ -325,7 +325,7 @@ def _substitute(command: str, tool_input: dict[str, Any]) -> str:
         if key not in tool_input:
             return match.group(0)
         value = tool_input[key]
-        rendered = json.dumps(value, default=str) if isinstance(value, (dict, list)) else str(value)
+        rendered = json.dumps(value, default=str) if isinstance(value, dict | list) else str(value)
         return shlex.quote(rendered)
 
     return re.sub(r"\{\{([^{}]+)\}\}", replacer, command)

@@ -11,7 +11,7 @@ module.exports = class MaxwellPlugin extends Plugin {
         });
         console.log("Vault-as-memory mode initialized.");
     }
-    
+
     onunload() {
     }
 }

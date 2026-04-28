@@ -905,6 +905,9 @@ async function fetchTaskDetail(id) {
 }
 
 async function cancelTask(id) {
+  if (!confirm(`Cancel task ${id}?`)) {
+    return;
+  }
   const r = await fetch(`/api/v1/tasks/${id}/cancel`, {
     method: "POST",
     headers: headers(),
@@ -984,9 +987,9 @@ function renderTasks() {
       ? `<a href="${t.pr_url}" target="_blank" rel="noopener">PR</a>`
       : "";
     const cancel = t.status === "queued"
-      ? `<button class="cancel" data-cancel="${t.id}">cancel</button>`
+      ? `<button class="cancel" aria-label="Cancel task ${t.id}" data-cancel="${t.id}">cancel</button>`
       : "";
-    const review = `<button data-review="${t.id}">review</button>`;
+    const review = `<button aria-label="Review task ${t.id}" data-review="${t.id}">review</button>`;
     tr.innerHTML = `
       <td>${t.id}</td>
       <td>${t.kind}</td>

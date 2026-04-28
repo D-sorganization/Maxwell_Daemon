@@ -76,7 +76,7 @@ class BrowserRequest(BaseModel):
             return ()
         if isinstance(value, str):
             value = (value,)
-        if not isinstance(value, (list, tuple, set)):
+        if not isinstance(value, list | tuple | set):
             raise ValueError("allowed_hosts must be a string or sequence of strings")
         hosts = tuple(str(item).strip().lower() for item in value)
         if any(not host for host in hosts):

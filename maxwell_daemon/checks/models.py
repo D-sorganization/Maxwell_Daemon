@@ -168,7 +168,7 @@ def _coerce_str_tuple(value: object) -> tuple[str, ...]:
     values: tuple[str, ...]
     if isinstance(value, str):
         values = (value,)
-    elif isinstance(value, (list, tuple)):
+    elif isinstance(value, list | tuple):
         values = tuple(str(item) for item in value)
     else:
         raise TypeError("value must be a string or list/tuple of strings")

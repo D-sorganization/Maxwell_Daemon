@@ -150,7 +150,7 @@ class MemoryEntry:
     def from_json_dict(cls, payload: dict[str, object]) -> MemoryEntry:
         confidence = payload.get("confidence")
         require(
-            isinstance(confidence, (float, int, str)),
+            isinstance(confidence, float | int | str),
             "confidence must be a float-compatible value",
         )
         confidence = cast("float | int | str", confidence)
