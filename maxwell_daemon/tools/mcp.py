@@ -444,12 +444,10 @@ class ToolRegistry:
         # have partially completed (e.g. a half-written file, an SSH command that
         # already launched a remote process).
         if self._on_side_effect is not None and spec.risk_level in _SIDE_EFFECT_RISK_LEVELS:
-            try:
+            import contextlib
+
+            with contextlib.suppress(Exception):
                 self._on_side_effect(name)
-            except Exception:
-                # Callback failures must not block tool execution; the flag is
-                # advisory for the failover subsystem, not a gate for the tool.
-                pass
 
         if self._hook_runner is not None:
             try:
