@@ -24,15 +24,19 @@ RunnerFn = Callable[..., Awaitable[tuple[int, bytes, bytes]]]
 
 
 async def _default_runner(
-    *argv: str, cwd: str | None = None, _stdin: bytes | None = None
+    *argv: str, cwd: str | None = None, stdin: bytes | None = None
 ) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *argv,
         cwd=cwd,
+        stdin=asyncio.subprocess.PIPE if stdin is not None else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+    if stdin is None:
+        stdout, stderr = await proc.communicate()
+    else:
+        stdout, stderr = await proc.communicate(stdin)
     return proc.returncode or 0, stdout, stderr
 
 
@@ -67,11 +71,12 @@ class JulesCLIBackend(ILLMBackend):
         messages: list[Message],
         *,
         model: str,
-        _temperature: float = 1.0,
-        _max_tokens: int | None = None,
-        _tools: list[dict[str, Any]] | None = None,
-        **_kwargs: Any,
+        temperature: float = 1.0,
+        max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
     ) -> BackendResponse:
+        del temperature, max_tokens, tools, kwargs
         prompt = self._format_prompt(messages)
         argv = [
             self._binary,
@@ -119,11 +124,12 @@ class JulesCLIBackend(ILLMBackend):
         model: str,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        _tools: list[dict[str, Any]] | None = None,
-        **_kwargs: Any,
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[str]:
+        del tools, kwargs
         resp = await self.complete(
-            messages, model=model, _temperature=temperature, _max_tokens=max_tokens
+            messages, model=model, temperature=temperature, max_tokens=max_tokens
         )
         yield resp.content
 
@@ -134,7 +140,8 @@ class JulesCLIBackend(ILLMBackend):
             return False
         return rc == 0
 
-    def capabilities(self, _model: str) -> BackendCapabilities:
+    def capabilities(self, model: str) -> BackendCapabilities:
+        del model
         return BackendCapabilities(
             supports_streaming=False,
             supports_tool_use=True,

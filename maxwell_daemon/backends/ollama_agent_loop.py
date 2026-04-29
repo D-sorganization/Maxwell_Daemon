@@ -115,11 +115,12 @@ class OllamaAgentLoopBackend(ILLMBackend):
         model: str | None = None,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        _tools: list[dict[str, Any]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
         workspace_dir: str | None = None,
         max_turns: int | None = None,
         **kwargs: Any,
     ) -> BackendResponse:
+        del tools
         effective_workspace = self._resolve_workspace(workspace_dir)
         effective_model = model or self.default_model
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
@@ -213,9 +214,10 @@ class OllamaAgentLoopBackend(ILLMBackend):
         model: str | None = None,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        _tools: list[dict[str, Any]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
+        del tools
         resp = await self.complete(
             messages,
             model=model,
@@ -246,7 +248,8 @@ class OllamaAgentLoopBackend(ILLMBackend):
             return 200 <= getattr(resp, "status_code", 500) < 300
         return False
 
-    def capabilities(self, _model: str) -> BackendCapabilities:
+    def capabilities(self, model: str) -> BackendCapabilities:
+        del model
         return BackendCapabilities(
             supports_streaming=False,
             supports_tool_use=True,

@@ -116,9 +116,10 @@ class GroqBackend(ILLMBackend):
         model: str,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        _tools: list[dict[str, Any]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
+        del tools
         params: dict[str, Any] = {
             "model": model,
             "messages": [{"role": m.role.value, "content": m.content} for m in messages],

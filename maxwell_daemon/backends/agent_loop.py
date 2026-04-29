@@ -285,9 +285,9 @@ class AgentLoopBackend(ILLMBackend):
         messages: list[Message],
         *,
         model: str | None = None,
-        _temperature: float = 1.0,
+        temperature: float = 1.0,
         max_tokens: int | None = None,
-        _tools: list[dict[str, Any]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
         workspace_dir: str | None = None,
         max_turns: int | None = None,
         repo: str | None = None,
@@ -302,6 +302,7 @@ class AgentLoopBackend(ILLMBackend):
         The caller controls loop budget via ``max_turns`` / constructor
         ``budget_per_story_usd`` / ``wall_clock_timeout_seconds``.
         """
+        del temperature, tools
         effective_model = model or self._default_model
         effective_workspace = self._resolve_workspace(workspace_dir)
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
@@ -459,9 +460,9 @@ class AgentLoopBackend(ILLMBackend):
         messages: list[Message],
         *,
         model: str | None = None,
-        _temperature: float = 1.0,
+        temperature: float = 1.0,
         max_tokens: int | None = None,
-        _tools: list[dict[str, Any]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
         workspace_dir: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
@@ -477,6 +478,7 @@ class AgentLoopBackend(ILLMBackend):
         spec before we can execute the call), but those turns produce no
         user-visible text so the latency difference is unnoticeable.
         """
+        del temperature, tools
         effective_model = model or self._default_model
         effective_workspace = self._resolve_workspace(workspace_dir)
         effective_max_turns = kwargs.pop("max_turns", None)
