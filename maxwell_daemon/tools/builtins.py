@@ -653,6 +653,7 @@ def build_default_registry(
     browser_service: BrowserService | None = None,
     github_client: GitHubClient | None = None,
     dry_run: bool = False,
+    on_side_effect: Callable[[str], None] | None = None,
 ) -> ToolRegistry:
     """Return a ``ToolRegistry`` with built-in tools bound to ``root``.
 
@@ -667,6 +668,7 @@ def build_default_registry(
         hook_runner=hook_runner,
         policy=policy,
         invocation_store=invocation_store,
+        on_side_effect=on_side_effect,
     )
     reg.register_from_function(make_read_file(root))
     reg.register_from_function(

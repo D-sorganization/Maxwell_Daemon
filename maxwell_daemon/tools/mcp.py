@@ -91,6 +91,18 @@ ToolRiskLevel = Literal[
     "destructive",
 ]
 
+#: Risk levels that trigger side_effects_started flag. Symphony Appendix A.2:
+#: once any of these tool types executes, transparent failover is forbidden.
+_SIDE_EFFECT_RISK_LEVELS: frozenset[ToolRiskLevel] = frozenset(
+    {
+        "local_write",
+        "command_execution",
+        "network_write",
+        "external_side_effect",
+        "destructive",
+    }
+)
+
 ToolHandler = Callable[..., Any] | Callable[..., Awaitable[Any]]
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -331,12 +343,14 @@ class ToolRegistry:
         approval_tier: str = "full-auto",
         policy: ToolPolicy | None = None,
         invocation_store: ToolInvocationStore | None = None,
+        on_side_effect: Callable[[str], None] | None = None,
     ) -> None:
         self._specs: dict[str, ToolSpec] = {}
         self._hook_runner = hook_runner
         self._approval_tier = approval_tier
         self._policy = policy
         self._invocation_store = invocation_store
+        self._on_side_effect = on_side_effect
 
     def register(self, spec: ToolSpec) -> None:
         if spec.name in self._specs:
@@ -423,6 +437,19 @@ class ToolRegistry:
                 ),
                 is_error=True,
             )
+
+        # Symphony Appendix A.2: notify caller BEFORE running side-effect tools.
+        # The conservative pre-execution notification ensures that even if the
+        # handler crashes, failover is still forbidden because side effects may
+        # have partially completed (e.g. a half-written file, an SSH command that
+        # already launched a remote process).
+        if self._on_side_effect is not None and spec.risk_level in _SIDE_EFFECT_RISK_LEVELS:
+            try:
+                self._on_side_effect(name)
+            except Exception:
+                # Callback failures must not block tool execution; the flag is
+                # advisory for the failover subsystem, not a gate for the tool.
+                pass
 
         if self._hook_runner is not None:
             try:

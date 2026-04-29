@@ -1529,6 +1529,7 @@ class Daemon:
                 port=m.port,
                 capacity=m.capacity,
                 tags=tuple(m.tags),
+                max_concurrent_agents_per_host=m.max_concurrent_agents_per_host,
             )
             for m in fleet_machines
         )
@@ -1552,6 +1553,39 @@ class Daemon:
             machine_name = t.dispatched_to
             machine_healthy = any(m.name == machine_name and m.healthy for m in machines)
             if not machine_healthy:
+                # Symphony Appendix A.2: once side effects start, transparent failover is forbidden.
+                if t.side_effects_started:
+                    log.error(
+                        "worker %s appears offline for task %s — SIDE EFFECTS ALREADY "
+                        "STARTED; transparent failover REFUSED. Task remains DISPATCHED "
+                        "pending human intervention.",
+                        machine_name,
+                        t.id,
+                    )
+                    # Emit a special event so operators can set up alerts.
+                    try:
+                        loop = asyncio.get_running_loop()
+                        bg = loop.create_task(
+                            self._events.publish(
+                                Event(
+                                    kind=EventKind.TASK_FAILED,
+                                    payload={
+                                        "id": t.id,
+                                        "error": (
+                                            f"worker {machine_name} offline after side effects "
+                                            "started; failover refused per Symphony Appendix A.2"
+                                        ),
+                                        "reason": "failover_refused",
+                                        "machine": machine_name,
+                                    },
+                                )
+                            )
+                        )
+                        self._bg_tasks.add(bg)
+                        bg.add_done_callback(self._bg_tasks.discard)
+                    except RuntimeError:
+                        pass  # no event loop, skip fire-and-forget event
+                    continue
                 last_seen = self._worker_last_seen.get(machine_name)
                 stale = True
                 if last_seen is not None:
@@ -1592,6 +1626,7 @@ class Daemon:
                 tags=m.tags,
                 active_tasks=dispatched_counts.get(m.name, 0),
                 healthy=m.healthy,
+                max_concurrent_agents_per_host=m.max_concurrent_agents_per_host,
             )
             for m in machines
         )
@@ -1803,6 +1838,14 @@ class Daemon:
                 await self._execute_issue(task, decision)
                 return
 
+            def _on_side_effect(tool_name: str) -> None:
+                """Symphony Appendix A.2: mark task as having started side effects."""
+                task.side_effects_started = True
+                try:
+                    self._task_store.save(task)
+                except Exception:
+                    log.warning("failed to persist side_effects_started for task=%s", task.id)
+
             prompt_content = task.prompt
             if task.repo and repo_path:
                 from maxwell_daemon.core.repo_overrides import RepoSchematic
@@ -1814,6 +1857,7 @@ class Daemon:
                 [Message(role=MessageRole.USER, content=prompt_content)],
                 model=decision.model,
                 dry_run=task.dry_run,
+                on_side_effect=_on_side_effect,
             )
             task.result = resp.content
             estimated_cost = decision.backend.estimate_cost(resp.usage, decision.model)

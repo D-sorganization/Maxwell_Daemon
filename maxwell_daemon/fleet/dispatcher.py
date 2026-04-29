@@ -50,13 +50,25 @@ class MachineState:
     healthy: bool = True
     tls: bool = True
     tls_verify: bool = True
+    # Symphony Appendix A.3: optional per-host hard cap on concurrent agents.
+    max_concurrent_agents_per_host: int | None = None
 
     @property
     def available_slots(self) -> int:
-        """Free slots right now. Unhealthy machines report zero regardless of load."""
+        """Free slots right now. Unhealthy machines report zero regardless of load.
+
+        Symphony Appendix A.3: when ``max_concurrent_agents_per_host`` is set,
+        it takes precedence over the generic ``capacity`` field so operators can
+        cap concurrency on SSH targets with limited workspace or memory.
+        """
         if not self.healthy:
             return 0
-        return max(0, self.capacity - self.active_tasks)
+        effective_capacity = (
+            self.max_concurrent_agents_per_host
+            if self.max_concurrent_agents_per_host is not None
+            else self.capacity
+        )
+        return max(0, effective_capacity - self.active_tasks)
 
 
 @dataclass(slots=True, frozen=True)

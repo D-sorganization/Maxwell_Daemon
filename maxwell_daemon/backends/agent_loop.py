@@ -307,8 +307,11 @@ class AgentLoopBackend(ILLMBackend):
         effective_workspace = self._resolve_workspace(workspace_dir)
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
+        on_side_effect = kwargs.pop("on_side_effect", None)
         tool_registry = self._registry_factory(
-            effective_workspace, dry_run=kwargs.get("dry_run", False)
+            effective_workspace,
+            dry_run=kwargs.get("dry_run", False),
+            on_side_effect=on_side_effect,
         )
         if self._mcp_manager is not None:
             self._mcp_manager.attach_tools(tool_registry)

@@ -204,6 +204,16 @@ class MachineConfig(BaseModel):
     tls_verify: bool = Field(
         True, description="Verify TLS certificate (set False for self-signed certs)"
     )
+    max_concurrent_agents_per_host: int | None = Field(
+        None,
+        ge=1,
+        description=(
+            "Symphony Appendix A.3: maximum concurrent agents on this specific host. "
+            "When set, the dispatcher treats this as the hard cap instead of "
+            "the fleet-wide default. Useful for SSH targets with limited "
+            "workspaces or memory."
+        ),
+    )
 
 
 class FleetConfig(BaseModel):
