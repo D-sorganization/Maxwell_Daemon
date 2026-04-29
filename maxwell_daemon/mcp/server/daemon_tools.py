@@ -49,7 +49,7 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
         return json.dumps(res, indent=2)
 
     @mcp_tool(description="List tasks in the daemon.", params=[])
-    async def list_tasks(**kwargs: Any) -> str:
+    async def list_tasks(**_kwargs: Any) -> str:
         res = await client.get("/tasks")
         return json.dumps(res, indent=2)
 
@@ -64,7 +64,7 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
             )
         ],
     )
-    async def get_task(task_id: str, **kwargs: Any) -> str:
+    async def get_task(task_id: str, **_kwargs: Any) -> str:
         res = await client.get(f"/tasks/{task_id}")
         return json.dumps(res, indent=2)
 
@@ -79,22 +79,22 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
             )
         ],
     )
-    async def cancel_task(task_id: str, **kwargs: Any) -> str:
+    async def cancel_task(task_id: str, **_kwargs: Any) -> str:
         res = await client.post(f"/tasks/{task_id}/cancel")
         return json.dumps(res, indent=2)
 
     @mcp_tool(description="List the capabilities of the fleet.", params=[])
-    async def list_fleet(**kwargs: Any) -> str:
+    async def list_fleet(**_kwargs: Any) -> str:
         res = await client.get("/fleet")
         return json.dumps(res, indent=2)
 
     @mcp_tool(description="Get the daemon's cost analytics.", params=[])
-    async def get_cost(**kwargs: Any) -> str:
+    async def get_cost(**_kwargs: Any) -> str:
         res = await client.get("/cost")
         return json.dumps(res, indent=2)
 
     @mcp_tool(description="List work items (issues) in the daemon.", params=[])
-    async def list_work_items(**kwargs: Any) -> str:
+    async def list_work_items(**_kwargs: Any) -> str:
         res = await client.get("/work-items")
         return json.dumps(res, indent=2)
 
@@ -127,7 +127,7 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
         return json.dumps(res, indent=2)
 
     @mcp_tool(description="List pending approvals.", params=[])
-    async def list_approvals(**kwargs: Any) -> str:
+    async def list_approvals(**_kwargs: Any) -> str:
         res = await client.get("/approvals")
         return json.dumps(res, indent=2)
 
@@ -142,7 +142,7 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
             )
         ],
     )
-    async def approve_action(action_id: str, **kwargs: Any) -> str:
+    async def approve_action(action_id: str, **_kwargs: Any) -> str:
         res = await client.post(f"/approvals/{action_id}/approve")
         return json.dumps(res, indent=2)
 
@@ -150,7 +150,7 @@ def build_daemon_registry(client: DaemonClient) -> ToolRegistry:
         description="Search episodic memory.",
         params=[ToolParam(name="query", type="string", description="Search query.", required=True)],
     )
-    async def search_memory(query: str, **kwargs: Any) -> str:
+    async def search_memory(query: str, **_kwargs: Any) -> str:
         res = await client.get("/memory/search", params={"q": query})
         return json.dumps(res, indent=2)
 
