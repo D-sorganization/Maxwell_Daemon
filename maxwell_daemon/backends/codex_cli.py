@@ -31,6 +31,10 @@ RunnerFn = Callable[..., Awaitable[tuple[int, bytes, bytes]]]
 ApprovalMode = Literal["suggest", "auto-edit", "full-auto"]
 
 
+def _ignore_unused(*_values: object) -> None:
+    return None
+
+
 async def _default_runner(
     *argv: str, cwd: str | None = None, stdin: bytes | None = None
 ) -> tuple[int, bytes, bytes]:
@@ -85,6 +89,7 @@ class CodexCLIBackend(ILLMBackend):
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> BackendResponse:
+        _ignore_unused(temperature, max_tokens, tools, kwargs)
         prompt = self._format_prompt(messages)
         if not prompt:
             raise BackendUnavailableError("codex-cli: refusing to send empty prompt")
@@ -129,6 +134,7 @@ class CodexCLIBackend(ILLMBackend):
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
+        _ignore_unused(tools, kwargs)
         # `codex exec` is one-shot; true token streaming would need a different
         # codex subcommand. For now we deliver the full response as one chunk.
         resp = await self.complete(
@@ -144,6 +150,7 @@ class CodexCLIBackend(ILLMBackend):
         return rc == 0
 
     def capabilities(self, model: str) -> BackendCapabilities:
+        _ignore_unused(model)
         return BackendCapabilities(
             supports_streaming=False,
             supports_tool_use=True,
