@@ -1,0 +1,29 @@
+2026-04-29 05:31:29 [warning  ] migrated plaintext backend api_key into keyring-backed secret_ref extra={'backend': 'claude', 'secret_ref': 'maxwell-daemon/backends/claude/api_key'}
+{"event": "recovered 1 pending task(s) from previous run (queued=1 dispatched=0)", "level": "info", "timestamp": "2026-04-29T05:31:29.582393Z"}
+{"event": "daemon started (standalone) with 2 workers", "level": "info", "timestamp": "2026-04-29T05:31:29.582692Z"}
+{"event": "daemon started with 2 workers", "level": "info", "timestamp": "2026-04-29T05:31:29.583081Z"}
+✓ Maxwell-Daemon serving on http://127.0.0.1:8080
+INFO:     Started server process [61428]
+INFO:     Waiting for application startup.
+{"event": "worker 0 ready", "level": "info", "timestamp": "2026-04-29T05:31:30.034034Z"}
+{"event": "worker 1 ready", "level": "info", "timestamp": "2026-04-29T05:31:30.038736Z"}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+{"exc_info": true, "event": "task 7cca50970390 failed", "task_id": "7cca50970390", "worker_id": 0, "level": "error", "timestamp": "2026-04-29T05:31:30.236703Z"}
+INFO:     127.0.0.1:49566 - "GET /ui/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49566 - "GET /ui/style.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49566 - "GET /ui/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49566 - "GET /ui/sw.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49566 - "GET /api/v1/tasks?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49566 - "GET /api/v1/backends HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49578 - "GET /api/v1/control-plane/gauntlet?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49592 - "GET /api/v1/cost HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49596 - "WebSocket /api/v1/events" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49592 - "GET /ui/index.html HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49578 - "GET /ui/manifest.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49592 - "GET /ui/icon-192.svg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49566 - "GET /ui/icon-512.svg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49566 - "GET /api/v1/fleet HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49566 - "GET /api/v1/control-plane/gauntlet?limit=100 HTTP/1.1" 200 OK
+INFO:     connection closed

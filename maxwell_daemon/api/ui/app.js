@@ -196,8 +196,9 @@ function switchView(name) {
   });
 
   // Lazy-load view data
+  if (name === "tasks") renderTasks();
   if (name === "fleet") fetchFleet().catch(console.error);
-  if (name === "gauntlet") fetchGauntlet().catch(console.error);
+  if (name === "gauntlet") { renderGauntlet(); fetchGauntlet().catch(console.error); }
   if (name === "work-items") fetchWorkItems().catch(console.error);
   if (name === "approvals") fetchApprovals().catch(console.error);
   if (name === "graphs") fetchTaskGraphs().catch(console.error);
@@ -490,6 +491,7 @@ async function fetchGauntlet() {
 }
 
 function renderGauntlet() {
+  if (state.currentView !== "gauntlet") return;
   const board = document.getElementById("gauntlet-board");
   if (!board) return;
   board.innerHTML = "";
@@ -960,6 +962,7 @@ async function submitGateAction(action, item) {
 // ---- rendering -------------------------------------------------------------
 
 function renderTasks() {
+  if (state.currentView !== "tasks") return;
   const tbody = document.getElementById("tasks-body");
   if (!tbody) return;
   tbody.innerHTML = "";
