@@ -55,7 +55,7 @@ _TITLE_RULES: tuple[tuple[re.Pattern[str], IssueKind], ...] = (
 )
 
 
-def classify_issue(*, title: str, body: str, labels: list[str]) -> IssueKind:
+def classify_issue(*, title: str, _body: str, labels: list[str]) -> IssueKind:
     if not isinstance(title, str):
         raise TypeError("title must be str")
     for label in labels:

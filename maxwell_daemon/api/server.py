@@ -1132,7 +1132,7 @@ def _delegate_snapshots_for_task(
 
 
 def _delegate_views_for_task(
-    daemon: Daemon, task: Task, snapshots: tuple[DelegateSessionSnapshot, ...]
+    _daemon: Daemon, task: Task, snapshots: tuple[DelegateSessionSnapshot, ...]
 ) -> tuple[DelegateSessionView, ...]:
     if snapshots:
         views: list[DelegateSessionView] = []
@@ -1306,7 +1306,7 @@ def create_app(
 
     @app.exception_handler(QueueSaturationError)
     async def queue_saturation_exception_handler(
-        request: Request, exc: QueueSaturationError
+        request: Request, exc: QueueSaturationError  # noqa: ARG001
     ) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -1698,7 +1698,7 @@ def create_app(
     @app.get("/api/tasks", dependencies=[Depends(_require_viewer())])
     async def api_list_tasks(
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-        cursor: Annotated[str | None, Query()] = None,
+        cursor: Annotated[str | None, Query()] = None,  # noqa: ARG001
     ) -> TaskListResponse:
         tasks = await daemon._task_store.alist_tasks(limit=limit)
         summaries = [

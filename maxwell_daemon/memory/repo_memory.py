@@ -403,7 +403,8 @@ class RepoMemoryStore:
                 )
 
             # Rewrite scope if it doesn't match? Or just enforce they match target_scope?
-            # Issue says: "Import respects the scope; refuses to promote personal memory into repo:* without an explicit flag."
+            # Issue says: "Import respects the scope; refuses to promote
+            # personal memory into repo:* without an explicit flag."
             # We'll rewrite the scope to target_scope
             if entry.scope != target_scope:
                 object.__setattr__(entry, "scope", target_scope)

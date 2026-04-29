@@ -136,7 +136,7 @@ class TokenBucketLimiter:
         return self._bucket(key, group).retry_after_seconds()
 
 
-def _classify(method: str, path: str) -> str:
+def _classify(method: str, _path: str) -> str:
     """Map a request to a rate-limit group. Writes get their own budget so
     that a burst of GETs can't starve actual work submissions."""
     if method in {"POST", "PUT", "DELETE", "PATCH"}:
