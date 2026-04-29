@@ -390,6 +390,7 @@ class TestTaskSubmission:
             issue_number=9,
             status=TaskStatus.DISPATCHED,
             dispatched_to="worker-west",
+            side_effects_started=True,
         )
         with daemon._tasks_lock:
             daemon._tasks[task.id] = task
@@ -400,6 +401,7 @@ class TestTaskSubmission:
         assert r.status_code == 200
         assert r.json()["status"] == "dispatched"
         assert r.json()["dispatched_to"] == "worker-west"
+        assert r.json()["side_effects_started"] is True
 
     def test_get_nonexistent_returns_404(self, client: TestClient) -> None:
         r = client.get("/api/v1/tasks/nonexistent-id")

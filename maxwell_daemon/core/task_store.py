@@ -80,7 +80,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     cost_usd REAL NOT NULL DEFAULT 0,
     started_at TEXT,
     finished_at TEXT,
-    dispatched_to TEXT
+    dispatched_to TEXT,
+    side_effects_started INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
@@ -109,6 +110,10 @@ _MIGRATIONS = [
     ("thread_id", "ALTER TABLE tasks ADD COLUMN thread_id TEXT"),
     ("turn_count", "ALTER TABLE tasks ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0"),
     ("max_turns", "ALTER TABLE tasks ADD COLUMN max_turns INTEGER NOT NULL DEFAULT 20"),
+    (
+        "side_effects_started",
+        "ALTER TABLE tasks ADD COLUMN side_effects_started INTEGER NOT NULL DEFAULT 0",
+    ),
 ]
 
 _TERMINAL_STATUS_VALUES = ("completed", "failed", "cancelled")
@@ -204,6 +209,7 @@ class TaskStore:
             _iso(task.started_at),
             _iso(task.finished_at),
             task.dispatched_to,
+            int(task.side_effects_started),
             _completed_at(task),
         )
         with self._lock, self._connect() as conn:
@@ -215,8 +221,8 @@ class TaskStore:
                     issue_repo, issue_number, issue_mode, ab_group,
                     thread_id, turn_count, max_turns,
                     priority, result, error, waived_by, waiver_reason, waived_at, pr_url, cost_usd, started_at,
-                    finished_at, dispatched_to, completed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    finished_at, dispatched_to, side_effects_started, completed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     updated_at=excluded.updated_at,
                     status=excluded.status,
@@ -241,6 +247,7 @@ class TaskStore:
                     cost_usd=excluded.cost_usd,
                     started_at=excluded.started_at, finished_at=excluded.finished_at,
                     dispatched_to=excluded.dispatched_to,
+                    side_effects_started=excluded.side_effects_started,
                     completed_at=excluded.completed_at
                 """,
                 row,
@@ -563,6 +570,10 @@ def _row_to_task(row: sqlite3.Row) -> Task:
     except (IndexError, KeyError):
         dispatched_to = None
     try:
+        side_effects_started = bool(row["side_effects_started"])
+    except (IndexError, KeyError):
+        side_effects_started = False
+    try:
         route_reason = row["route_reason"]
     except (IndexError, KeyError):
         route_reason = None
@@ -619,4 +630,5 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         started_at=_parse_iso(row["started_at"]),
         finished_at=_parse_iso(row["finished_at"]),
         dispatched_to=dispatched_to,
+        side_effects_started=side_effects_started,
     )

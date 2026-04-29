@@ -36,10 +36,12 @@ class ActionService:
         *,
         policy: ActionPolicy | None = None,
         events: EventBus | None = None,
+        on_side_effect_started: Callable[[str], None] | None = None,
     ) -> None:
         self._store = store
         self._policy = policy or ActionPolicy()
         self._events = events
+        self._on_side_effect_started = on_side_effect_started
         self._event_tasks: set[asyncio.Task[None]] = set()
 
     def propose(
@@ -192,6 +194,8 @@ class ActionService:
 
     def mark_running(self, action_id: str) -> Action:
         action = self._store.transition(action_id, ActionStatus.RUNNING)
+        if self._on_side_effect_started is not None:
+            self._on_side_effect_started(action.task_id)
         self._publish(EventKind.ACTION_RUNNING, action)
         return action
 

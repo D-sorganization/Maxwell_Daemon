@@ -130,6 +130,7 @@ class Task:
     finished_at: datetime | None = None
     # Fleet dispatch tracking: set when a coordinator sends this task to a remote worker.
     dispatched_to: str | None = None  # machine name of the worker that received this task
+    side_effects_started: bool = False
 
     @property
     def continuation_thread_id(self) -> str:
@@ -244,6 +245,7 @@ class Daemon:
                 workspace_root=self._workspace_root,
             ),
             events=self._events,
+            on_side_effect_started=self.mark_task_side_effects_started,
         )
         default_delegate_store = (
             delegate_lifecycle_store_path
@@ -1286,6 +1288,17 @@ class Daemon:
             limit=limit,
         )
 
+    def mark_task_side_effects_started(self, task_id: str) -> None:
+        """Persist that a task has crossed the transparent-failover boundary."""
+        with self._tasks_lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                return
+            if task.side_effects_started:
+                return
+            task.side_effects_started = True
+        self._task_store.save(task)
+
     def approve_action(
         self,
         action_id: str,
@@ -1556,14 +1569,7 @@ class Daemon:
                     elapsed = (now - last_seen).total_seconds()
                     stale = elapsed > stale_threshold
                 if stale:
-                    log.warning(
-                        "worker %s appears offline; requeueing task %s",
-                        machine_name,
-                        t.id,
-                    )
-                    t.status = TaskStatus.QUEUED
-                    t.dispatched_to = None
-                    self._enqueue_task_entry(t.priority, t)
+                    self._handle_stale_dispatched_task(t, machine_name)
 
         # Collect tasks still QUEUED after potential requeuing above.
         with self._tasks_lock:
@@ -1657,6 +1663,32 @@ class Daemon:
                 len(plan.unassigned),
                 plan.unassigned,
             )
+
+    def _handle_stale_dispatched_task(self, task: Task, machine_name: str) -> None:
+        if task.side_effects_started:
+            log.warning(
+                "worker %s appears offline after task %s started side effects; failing instead of transparent failover",
+                machine_name,
+                task.id,
+            )
+            task.status = TaskStatus.FAILED
+            task.error = (
+                f"worker {machine_name} became stale after side effects started; "
+                "retry as a new attempt"
+            )
+            task.finished_at = datetime.now(timezone.utc)
+            self._task_store.save(task)
+            return
+
+        log.warning(
+            "worker %s appears offline before task %s started side effects; requeueing",
+            machine_name,
+            task.id,
+        )
+        task.status = TaskStatus.QUEUED
+        task.dispatched_to = None
+        self._task_store.save(task)
+        self._enqueue_task_entry(task.priority, task)
 
     async def _reload_config_signal(self) -> None:
         """Signal handler wrapper — logs errors rather than crashing the event loop."""

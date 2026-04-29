@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.core import ActionKind
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
@@ -153,7 +154,7 @@ class TestRecovery:
         assert d.get_task("missing-worker").status is TaskStatus.QUEUED  # type: ignore[union-attr]
         assert d._queue.qsize() == 1
 
-    def test_task_store_round_trips_priority_and_dispatched_to(self, tmp_path: Path) -> None:
+    def test_task_store_round_trips_fleet_failover_fields(self, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"
         store = TaskStore(task_store_path)
         task = Task(
@@ -163,6 +164,7 @@ class TestRecovery:
             priority=5,
             status=TaskStatus.DISPATCHED,
             dispatched_to="worker-b",
+            side_effects_started=True,
             created_at=datetime.now(timezone.utc),
         )
 
@@ -172,9 +174,10 @@ class TestRecovery:
         assert loaded is not None
         assert loaded.priority == 5
         assert loaded.dispatched_to == "worker-b"
+        assert loaded.side_effects_started is True
         assert loaded.status is TaskStatus.DISPATCHED
 
-    def test_existing_task_db_migrates_priority_and_dispatched_to(self, tmp_path: Path) -> None:
+    def test_existing_task_db_migrates_fleet_failover_fields(self, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"
         with sqlite3.connect(task_store_path) as conn:
             conn.executescript(
@@ -211,6 +214,88 @@ class TestRecovery:
 
         assert "priority" in columns
         assert "dispatched_to" in columns
+        assert "side_effects_started" in columns
+
+    def test_action_running_marks_task_side_effects_started(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
+        task_store_path = tmp_path / "tasks.db"
+        d = Daemon(
+            cfg,
+            ledger_path=tmp_path / "l.db",
+            task_store_path=task_store_path,
+            action_store_path=tmp_path / "actions.db",
+        )
+        task = d.submit("touch a file")
+        action = d.propose_action(
+            task_id=task.id,
+            kind=ActionKind.FILE_WRITE,
+            summary="write output.txt",
+            payload={"path": "output.txt"},
+        )
+
+        d._actions.approve(action.id, actor="policy")
+        d._actions.mark_running(action.id)
+
+        assert d.get_task(task.id).side_effects_started is True  # type: ignore[union-attr]
+        persisted = TaskStore(task_store_path).get(task.id)
+        assert persisted is not None
+        assert persisted.side_effects_started is True
+
+    def test_stale_dispatched_task_with_side_effects_fails_instead_of_requeueing(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
+        d = Daemon(
+            cfg,
+            ledger_path=tmp_path / "l.db",
+            task_store_path=tmp_path / "tasks.db",
+            action_store_path=tmp_path / "actions.db",
+        )
+        task = Task(
+            id="remote-side-effects",
+            prompt="opened a PR",
+            kind=TaskKind.PROMPT,
+            priority=10,
+            status=TaskStatus.DISPATCHED,
+            dispatched_to="worker-a",
+            side_effects_started=True,
+            created_at=datetime.now(timezone.utc),
+        )
+        with d._tasks_lock:
+            d._tasks[task.id] = task
+
+        d._handle_stale_dispatched_task(task, "worker-a")
+
+        assert task.status is TaskStatus.FAILED
+        assert task.dispatched_to == "worker-a"
+        assert task.error is not None
+        assert "side effects started" in task.error
+        assert d._queue.qsize() == 0
+
+    def test_stale_dispatched_task_without_side_effects_requeues(
+        self, cfg: MaxwellDaemonConfig, tmp_path: Path
+    ) -> None:
+        d = Daemon(
+            cfg,
+            ledger_path=tmp_path / "l.db",
+            task_store_path=tmp_path / "tasks.db",
+            action_store_path=tmp_path / "actions.db",
+        )
+        task = Task(
+            id="remote-no-side-effects",
+            prompt="not started",
+            kind=TaskKind.PROMPT,
+            priority=10,
+            status=TaskStatus.DISPATCHED,
+            dispatched_to="worker-a",
+            created_at=datetime.now(timezone.utc),
+        )
+
+        d._handle_stale_dispatched_task(task, "worker-a")
+
+        assert task.status is TaskStatus.QUEUED
+        assert task.dispatched_to is None
+        assert d._queue.qsize() == 1
 
     def test_submit_persists_immediately(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"

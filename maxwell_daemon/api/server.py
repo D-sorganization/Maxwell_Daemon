@@ -460,6 +460,7 @@ class TaskView(BaseModel):
     priority: int = 100
     pr_url: str | None = None
     dispatched_to: str | None = None
+    side_effects_started: bool = False
     status: str
     result: str | None
     error: str | None
@@ -495,6 +496,7 @@ class TaskView(BaseModel):
             priority=getattr(t, "priority", 100),
             pr_url=t.pr_url,
             dispatched_to=t.dispatched_to,
+            side_effects_started=t.side_effects_started,
             status=t.status.value,
             result=t.result,
             error=t.error,
