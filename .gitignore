@@ -32,3 +32,5 @@ maxwell-daemon.yaml
 
 # Ansible
 *.retry
+.gaai/project/contexts/backlog/.delivery-locks/
+.gaai/project/contexts/backlog/.delivery-logs/
