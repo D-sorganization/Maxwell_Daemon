@@ -201,8 +201,8 @@ class TestCleanupOld:
         assert task_dir in removed
 
     def test_cleanup_keeps_new_dirs(self, tmp_path: Path) -> None:
-        from datetime import timedelta
         import asyncio
+        from datetime import timedelta
 
         ws = Workspace(root=tmp_path)
         repo_dir = tmp_path / "repo"
@@ -213,8 +213,8 @@ class TestCleanupOld:
         assert task_dir not in removed
 
     def test_cleanup_skips_non_dirs_at_repo_level(self, tmp_path: Path) -> None:
-        from datetime import timedelta
         import asyncio
+        from datetime import timedelta
 
         ws = Workspace(root=tmp_path)
         (tmp_path / "not-a-dir.txt").write_text("noise")

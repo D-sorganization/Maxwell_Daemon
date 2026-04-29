@@ -116,6 +116,7 @@ class TestCleanup:
         os.utime(old, (stale_mtime, stale_mtime))
 
         import asyncio
+
         removed = asyncio.run(ws.cleanup_old(max_age=timedelta(days=7)))
         assert old in removed
         assert new not in removed
@@ -124,6 +125,7 @@ class TestCleanup:
 
     def test_cleanup_returns_empty_when_all_fresh(self, tmp_path: Path) -> None:
         import asyncio
+
         ws = Workspace(root=tmp_path)
         (tmp_path / "repo" / "fresh").mkdir(parents=True)
         assert asyncio.run(ws.cleanup_old(max_age=timedelta(days=7))) == []
