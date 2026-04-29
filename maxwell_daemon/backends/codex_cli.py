@@ -80,10 +80,10 @@ class CodexCLIBackend(ILLMBackend):
         messages: list[Message],
         *,
         model: str,
-        temperature: float = 1.0,
-        max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
-        **kwargs: Any,
+        _temperature: float = 1.0,
+        _max_tokens: int | None = None,
+        _tools: list[dict[str, Any]] | None = None,
+        **_kwargs: Any,
     ) -> BackendResponse:
         prompt = self._format_prompt(messages)
         if not prompt:
@@ -126,13 +126,13 @@ class CodexCLIBackend(ILLMBackend):
         model: str,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
-        **kwargs: Any,
+        _tools: list[dict[str, Any]] | None = None,
+        **_kwargs: Any,
     ) -> AsyncIterator[str]:
         # `codex exec` is one-shot; true token streaming would need a different
         # codex subcommand. For now we deliver the full response as one chunk.
         resp = await self.complete(
-            messages, model=model, temperature=temperature, max_tokens=max_tokens
+            messages, model=model, _temperature=temperature, _max_tokens=max_tokens
         )
         yield resp.content
 
@@ -143,7 +143,7 @@ class CodexCLIBackend(ILLMBackend):
             return False
         return rc == 0
 
-    def capabilities(self, model: str) -> BackendCapabilities:
+    def capabilities(self, _model: str) -> BackendCapabilities:
         return BackendCapabilities(
             supports_streaming=False,
             supports_tool_use=True,

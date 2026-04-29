@@ -30,7 +30,7 @@ RunnerFn = Callable[..., Awaitable[tuple[int, bytes, bytes]]]
 
 
 async def _default_runner(
-    *argv: str, cwd: str | None = None, stdin: bytes | None = None
+    *argv: str, cwd: str | None = None, _stdin: bytes | None = None
 ) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *argv,
@@ -75,10 +75,10 @@ class ClaudeCodeCLIBackend(ILLMBackend):
         messages: list[Message],
         *,
         model: str,
-        temperature: float = 1.0,
-        max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
-        **kwargs: Any,
+        _temperature: float = 1.0,
+        _max_tokens: int | None = None,
+        _tools: list[dict[str, Any]] | None = None,
+        **_kwargs: Any,
     ) -> BackendResponse:
         prompt = self._format_prompt(messages)
         argv = [
@@ -128,15 +128,15 @@ class ClaudeCodeCLIBackend(ILLMBackend):
         messages: list[Message],
         *,
         model: str,
-        temperature: float = 1.0,
-        max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
-        **kwargs: Any,
+        _temperature: float = 1.0,
+        _max_tokens: int | None = None,
+        _tools: list[dict[str, Any]] | None = None,
+        **_kwargs: Any,
     ) -> AsyncIterator[str]:
         # One-shot: call complete() and yield once. True streaming would need
         # `--output-format stream-json` — future work.
         resp = await self.complete(
-            messages, model=model, temperature=temperature, max_tokens=max_tokens
+            messages, model=model, temperature=_temperature, max_tokens=_max_tokens
         )
         yield resp.content
 
@@ -147,7 +147,7 @@ class ClaudeCodeCLIBackend(ILLMBackend):
             return False
         return rc == 0
 
-    def capabilities(self, model: str) -> BackendCapabilities:
+    def capabilities(self, _model: str) -> BackendCapabilities:
         # Claude Code's built-in tool use is the main reason to pick this
         # backend over the raw API adapter.
         return BackendCapabilities(
