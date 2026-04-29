@@ -13,3 +13,7 @@
 ## 2024-04-28 - Contextual ARIA Labels for Table Actions
 **Learning:** Generic button text like "cancel" or "review" in tables becomes ambiguous when a screen reader navigates to them out of context. The `role="status"` and `aria-live="polite"` attributes are necessary for dynamic status span elements to be announced to screen readers.
 **Action:** Always provide descriptive `aria-label` attributes on table buttons (e.g., `aria-label="Cancel task 123"`) and use proper live region attributes for dynamic status elements. Ensure destructive actions have native or custom confirmation dialogs.
+
+## 2024-04-29 - Added ARIA labels to action approval buttons
+**Learning:** Tables often contain repetitive action buttons ("Approve", "Reject") in every row. Screen reader users navigating by interactive elements (e.g., using "B" in NVDA or JAWS to jump between buttons) will just hear "Approve, button", "Reject, button" without the context of the row. By appending the row's specific summary to the `aria-label` (e.g., "Approve: Update deployment script"), the interface becomes significantly more accessible and less confusing for non-visual users.
+**Action:** When creating repetitive list or table actions, always ensure the button's accessible name includes the context of the item it affects, either via `aria-label` or by visually hiding the context within the button text.

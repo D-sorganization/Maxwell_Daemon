@@ -691,8 +691,8 @@ function renderApprovals(actions) {
       <td>${escapeHtml(action.summary)}</td>
       <td>${escapeHtml(fmtTs(action.created_at))}</td>
       <td class="row-actions">
-        <button data-action-approve="${escapeHtml(action.id)}">approve</button>
-        <button data-action-reject="${escapeHtml(action.id)}">reject</button>
+        <button aria-label="Approve: ${escapeHtml(action.summary)}" data-action-approve="${escapeHtml(action.id)}">approve</button>
+        <button aria-label="Reject: ${escapeHtml(action.summary)}" data-action-reject="${escapeHtml(action.id)}">reject</button>
       </td>
     `;
     fragment.appendChild(tr);
