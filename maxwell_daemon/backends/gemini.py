@@ -76,7 +76,7 @@ class GeminiBackend(ILLMBackend):
         model: str,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
+        _tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> BackendResponse:
         system_instruction, contents = self._build_contents(messages)
@@ -113,7 +113,7 @@ class GeminiBackend(ILLMBackend):
         model: str,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
+        _tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         system_instruction, contents = self._build_contents(messages)

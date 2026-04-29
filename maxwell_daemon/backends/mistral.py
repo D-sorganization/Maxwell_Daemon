@@ -95,7 +95,7 @@ class MistralBackend(ILLMBackend):
         model: str,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
+        _tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         params: dict[str, Any] = {

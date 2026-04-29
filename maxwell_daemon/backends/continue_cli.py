@@ -32,7 +32,7 @@ RunnerFn = Callable[..., Awaitable[tuple[int, bytes, bytes]]]
 
 
 async def _default_runner(
-    *argv: str, cwd: str | None = None, stdin: bytes | None = None
+    *argv: str, cwd: str | None = None, _stdin: bytes | None = None
 ) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *argv,
@@ -78,10 +78,10 @@ class ContinueCLIBackend(ILLMBackend):
         messages: list[Message],
         *,
         model: str,
-        temperature: float = 1.0,
-        max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
-        **kwargs: Any,
+        _temperature: float = 1.0,
+        _max_tokens: int | None = None,
+        _tools: list[dict[str, Any]] | None = None,
+        **_kwargs: Any,
     ) -> BackendResponse:
         prompt = self._format_prompt(messages)
         argv: list[str] = [self._binary, "ask", prompt]
@@ -118,12 +118,12 @@ class ContinueCLIBackend(ILLMBackend):
         model: str,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
-        **kwargs: Any,
+        _tools: list[dict[str, Any]] | None = None,
+        **_kwargs: Any,
     ) -> AsyncIterator[str]:
         # One-shot: delegate to complete() and yield once.
         resp = await self.complete(
-            messages, model=model, temperature=temperature, max_tokens=max_tokens
+            messages, model=model, _temperature=temperature, _max_tokens=max_tokens
         )
         yield resp.content
 
@@ -134,7 +134,7 @@ class ContinueCLIBackend(ILLMBackend):
             return False
         return rc == 0
 
-    def capabilities(self, model: str) -> BackendCapabilities:
+    def capabilities(self, _model: str) -> BackendCapabilities:
         # Continue manages tool use internally; we can't pass function
         # schemas through `cn ask`.
         return BackendCapabilities(

@@ -96,8 +96,8 @@ class OllamaBackend(ILLMBackend):
         model: str,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
-        **kwargs: Any,
+        _tools: list[dict[str, Any]] | None = None,
+        **_kwargs: Any,
     ) -> AsyncIterator[str]:
         payload: dict[str, Any] = {
             "model": model,

@@ -115,7 +115,7 @@ class OllamaAgentLoopBackend(ILLMBackend):
         model: str | None = None,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
+        _tools: list[dict[str, Any]] | None = None,
         workspace_dir: str | None = None,
         max_turns: int | None = None,
         **kwargs: Any,
@@ -213,7 +213,7 @@ class OllamaAgentLoopBackend(ILLMBackend):
         model: str | None = None,
         temperature: float = 1.0,
         max_tokens: int | None = None,
-        tools: list[dict[str, Any]] | None = None,
+        _tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         resp = await self.complete(
@@ -246,7 +246,7 @@ class OllamaAgentLoopBackend(ILLMBackend):
             return 200 <= getattr(resp, "status_code", 500) < 300
         return False
 
-    def capabilities(self, model: str) -> BackendCapabilities:
+    def capabilities(self, _model: str) -> BackendCapabilities:
         return BackendCapabilities(
             supports_streaming=False,
             supports_tool_use=True,
