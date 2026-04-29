@@ -416,8 +416,7 @@ def verify_chain(path: Path) -> list[dict[str, Any]]:
                     {
                         "line": lineno,
                         "error": (
-                            f"chain broken: expected prev_hash={prev_hash!r}, "
-                            f"got {stored_prev!r}"
+                            f"chain broken: expected prev_hash={prev_hash!r}, got {stored_prev!r}"
                         ),
                         "entry": obj,
                     }

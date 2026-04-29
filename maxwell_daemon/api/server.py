@@ -1306,7 +1306,8 @@ def create_app(
 
     @app.exception_handler(QueueSaturationError)
     async def queue_saturation_exception_handler(
-        request: Request, exc: QueueSaturationError  # noqa: ARG001
+        request: Request,
+        exc: QueueSaturationError,
     ) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -1698,7 +1699,7 @@ def create_app(
     @app.get("/api/tasks", dependencies=[Depends(_require_viewer())])
     async def api_list_tasks(
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-        cursor: Annotated[str | None, Query()] = None,  # noqa: ARG001
+        cursor: Annotated[str | None, Query()] = None,
     ) -> TaskListResponse:
         tasks = await daemon._task_store.alist_tasks(limit=limit)
         summaries = [

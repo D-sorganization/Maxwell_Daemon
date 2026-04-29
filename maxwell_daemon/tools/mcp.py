@@ -368,7 +368,7 @@ class ToolRegistry:
         self,
         name: str,
         arguments: dict[str, Any],
-        approval_tier: str | None = None,  # noqa: ARG002
+        approval_tier: str | None = None,
     ) -> ToolResult:
         """Call the handler for ``name`` with ``arguments``.
 
