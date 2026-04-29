@@ -764,7 +764,7 @@ class IssueExecutor:
     ) -> tuple[str, str]:
         # Pick a specialised system prompt for this kind of issue. Falls back
         # to the default prompt when the classifier can't decide.
-        kind = classify_issue(title=issue_title, body=issue_body, labels=labels or [])
+        kind = classify_issue(title=issue_title, _body=issue_body, labels=labels or [])
         base_prompt = render_system_prompt(kind)
         # If a per-repo system prompt override was provided, it has already been
         # prepended (in _build_system_prompt); otherwise use the classified prompt.
