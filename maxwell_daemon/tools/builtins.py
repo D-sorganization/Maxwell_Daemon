@@ -15,6 +15,7 @@ These rules apply to every path argument across every tool.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import subprocess
@@ -40,6 +41,7 @@ from maxwell_daemon.tools.mcp import (
 
 if TYPE_CHECKING:
     from maxwell_daemon.core.action_service import ActionService
+    from maxwell_daemon.gh.client import GitHubClient
 
 __all__ = [
     "BashRunner",
@@ -47,6 +49,7 @@ __all__ = [
     "build_default_registry",
     "make_browser_screenshot",
     "make_edit_file",
+    "make_gh_proxy",
     "make_glob_files",
     "make_grep_files",
     "make_open_browser_url",
@@ -615,6 +618,110 @@ def make_browser_screenshot(
     return browser_screenshot
 
 
+# ── gh_proxy ─────────────────────────────────────────────────────────────────
+def make_gh_proxy(
+    gh_client: GitHubClient,
+    allowed_operations: frozenset[str],
+    *,
+    action_service: ActionService | None = None,
+    task_id: str | None = None,
+    dry_run: bool = False,
+) -> Callable[..., Awaitable[str]]:
+    @mcp_tool(
+        name="gh_proxy",
+        description=(
+            "Safely proxy GitHub API calls. Accepts an operation and JSON-encoded params. "
+            "Available operations: create_pr, comment, set_state. Restricted by an allowlist."
+        ),
+        capabilities=frozenset({"network"}),
+        risk_level="network_write",
+        requires_approval=True,
+        params=[
+            ToolParam(
+                name="operation",
+                type="string",
+                description="GitHub operation name (e.g. create_pr, comment)",
+            ),
+            ToolParam(
+                name="params_json",
+                type="string",
+                description="JSON-encoded parameters for the operation",
+            ),
+        ],
+    )
+    async def gh_proxy(operation: str, params_json: str) -> str:
+        if operation not in allowed_operations:
+            return f"Error: operation {operation!r} is not in the allowlist {allowed_operations!r}"
+
+        try:
+            params = json.loads(params_json)
+        except json.JSONDecodeError as e:
+            return f"Error: invalid JSON params: {e}"
+
+        action_id: str | None = None
+        if action_service is not None and task_id is not None:
+            action, decision = action_service.propose(
+                task_id=task_id,
+                kind=ActionKind.EXTERNAL_CALL,
+                summary=f"gh {operation}",
+                payload={"operation": operation, "params": params},
+                risk_level=ActionRiskLevel.HIGH,
+                dry_run=dry_run,
+            )
+            action_id = action.id
+            if not decision.allowed:
+                action_service.skip(action.id, reason=decision.reason)
+                return f"action {action.id} skipped: {decision.reason}"
+            if decision.requires_approval:
+                return (
+                    f"action {action.id} pending approval: {action.summary} "
+                    "(approval records the proposal only)"
+                )
+            action_service.approve(action.id, actor="policy")
+            action_service.mark_running(action.id)
+
+        try:
+            result_summary = ""
+            if operation == "create_pr":
+                pr = await gh_client.create_pull_request(
+                    repo=params["repo"],
+                    head=params["head"],
+                    base=params["base"],
+                    title=params["title"],
+                    body=params.get("body", ""),
+                    draft=params.get("draft", True),
+                )
+                result_summary = f"Created PR #{pr.number} at {pr.url}"
+            elif operation == "comment":
+                out = await gh_client.create_comment(
+                    repo=params["repo"], number=params["number"], body=params["body"]
+                )
+                result_summary = f"Comment created: {out}"
+            elif operation == "set_state":
+                out = await gh_client.set_state(
+                    repo=params["repo"],
+                    number=params["number"],
+                    is_pr=params["is_pr"],
+                    state=params["state"],
+                )
+                result_summary = f"State set to {params['state']}: {out}"
+            else:
+                raise ValueError(f"Unknown operation: {operation}")
+
+            if action_id is not None and action_service is not None:
+                action_service.mark_applied(
+                    action_id,
+                    result={"summary": result_summary},
+                )
+            return result_summary
+        except Exception as e:
+            if action_id is not None and action_service is not None:
+                action_service.mark_failed(action_id, error=str(e))
+            return f"Error: {e}"
+
+    return gh_proxy
+
+
 # ── default registry ────────────────────────────────────────────────────────
 def build_default_registry(
     root: Path,
@@ -626,6 +733,8 @@ def build_default_registry(
     policy: ToolPolicy | None = None,
     invocation_store: ToolInvocationStore | None = None,
     browser_service: BrowserService | None = None,
+    gh_client: GitHubClient | None = None,
+    gh_allowed_operations: frozenset[str] | None = None,
     dry_run: bool = False,
 ) -> ToolRegistry:
     """Return a ``ToolRegistry`` with built-in tools bound to ``root``.
@@ -663,4 +772,14 @@ def build_default_registry(
     if browser_service is not None:
         reg.register_from_function(make_open_browser_url(browser_service))
         reg.register_from_function(make_browser_screenshot(browser_service))
+    if gh_client is not None and gh_allowed_operations is not None:
+        reg.register_from_function(
+            make_gh_proxy(
+                gh_client,
+                gh_allowed_operations,
+                action_service=action_service,
+                task_id=task_id,
+                dry_run=dry_run,
+            )
+        )
     return reg

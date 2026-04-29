@@ -1777,6 +1777,8 @@ class Daemon:
                 [Message(role=MessageRole.USER, content=prompt_content)],
                 model=decision.model,
                 dry_run=task.dry_run,
+                task_kind=task.kind.value,
+                issue_mode=task.issue_mode,
             )
             task.result = resp.content
             estimated_cost = decision.backend.estimate_cost(resp.usage, decision.model)

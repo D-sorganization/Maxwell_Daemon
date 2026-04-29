@@ -306,8 +306,29 @@ class AgentLoopBackend(ILLMBackend):
         effective_workspace = self._resolve_workspace(workspace_dir)
         effective_max_turns = max_turns if max_turns is not None else self._max_turns
 
+        task_kind = kwargs.get("task_kind")
+        issue_mode = kwargs.get("issue_mode")
+
+        gh_allowed_operations: frozenset[str] = frozenset()
+        if task_kind == "issue":
+            if issue_mode == "implement":
+                gh_allowed_operations = frozenset({"create_pr", "comment", "set_state"})
+            else:
+                gh_allowed_operations = frozenset({"comment"})
+        else:
+            gh_allowed_operations = frozenset({"create_pr", "comment", "set_state"})
+
+        from maxwell_daemon.gh.client import GitHubClient
+
+        gh_client = GitHubClient()
+
         tool_registry = self._registry_factory(
-            effective_workspace, dry_run=kwargs.get("dry_run", False)
+            effective_workspace,
+            dry_run=kwargs.get("dry_run", False),
+            gh_client=gh_client,
+            gh_allowed_operations=gh_allowed_operations,
+            action_service=kwargs.get("action_service"),
+            task_id=agent_id,
         )
         if self._mcp_manager is not None:
             self._mcp_manager.attach_tools(tool_registry)
@@ -483,15 +504,37 @@ class AgentLoopBackend(ILLMBackend):
         if effective_max_turns is None:
             effective_max_turns = self._max_turns
 
+        task_kind = kwargs.get("task_kind")
+        issue_mode = kwargs.get("issue_mode")
+
+        gh_allowed_operations: frozenset[str] = frozenset()
+        if task_kind == "issue":
+            if issue_mode == "implement":
+                gh_allowed_operations = frozenset({"create_pr", "comment", "set_state"})
+            else:
+                gh_allowed_operations = frozenset({"comment"})
+        else:
+            gh_allowed_operations = frozenset({"create_pr", "comment", "set_state"})
+
+        from maxwell_daemon.gh.client import GitHubClient
+
+        gh_client = GitHubClient()
+
+        agent_id = kwargs.pop("agent_id", None)
+
         tool_registry = self._registry_factory(
-            effective_workspace, dry_run=kwargs.get("dry_run", False)
+            effective_workspace,
+            dry_run=kwargs.get("dry_run", False),
+            gh_client=gh_client,
+            gh_allowed_operations=gh_allowed_operations,
+            action_service=kwargs.get("action_service"),
+            task_id=agent_id,
         )
         if self._mcp_manager is not None:
             self._mcp_manager.attach_tools(tool_registry)
         tool_defs = tool_registry.to_anthropic()
 
         repo = kwargs.pop("repo", None)
-        agent_id = kwargs.pop("agent_id", None)
         issue_title = kwargs.pop("issue_title", "")
         issue_body = kwargs.pop("issue_body", "")
 

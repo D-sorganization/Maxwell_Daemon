@@ -120,10 +120,13 @@ class PullRequest:
         return cls(number=int(match.group(1)), url=url, draft=draft)
 
 
-async def _default_runner(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
+async def _default_runner(
+    *argv: str, cwd: str | None = None, env: dict[str, str] | None = None
+) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *argv,
         cwd=cwd,
+        env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -151,8 +154,21 @@ def _parse_wait_seconds(err_text: str, *, default: int = 60) -> int:
 
 
 class GitHubClient:
-    def __init__(self, *, runner: RunnerFn | None = None) -> None:
+    def __init__(
+        self, *, runner: RunnerFn | None = None, env: dict[str, str] | None = None
+    ) -> None:
         self._run = runner or _default_runner
+        if env is None:
+            import os
+
+            env = os.environ.copy()
+            gh_token = os.environ.pop("GH_TOKEN", None)
+            github_token = os.environ.pop("GITHUB_TOKEN", None)
+            if gh_token:
+                env["GH_TOKEN"] = gh_token
+            if github_token:
+                env["GITHUB_TOKEN"] = github_token
+        self._env = env
 
     def _validate_repo(self, repo: str) -> None:
         if not _REPO_RE.match(repo):
@@ -177,7 +193,7 @@ class GitHubClient:
         exceeds that ceiling.
         """
         for attempt, backoff in enumerate(_BACKOFF_SECONDS):
-            rc, out, err = await self._run("gh", *argv, cwd=cwd)
+            rc, out, err = await self._run("gh", *argv, cwd=cwd, env=self._env)
             if rc == 0:
                 return out
 
@@ -222,7 +238,7 @@ class GitHubClient:
             )
 
         # Exhausted all backoff attempts (should not normally be reached).
-        rc, out, err = await self._run("gh", *argv, cwd=cwd)
+        rc, out, err = await self._run("gh", *argv, cwd=cwd, env=self._env)
         if rc != 0:
             raise GhCliError(
                 f"gh {' '.join(argv)} failed (rc={rc}): {err.decode(errors='replace').strip()}"
@@ -236,7 +252,7 @@ class GitHubClient:
         ``None`` if the call fails or the output is unparseable.
         """
         try:
-            rc, out, _ = await self._run("gh", "api", "rate_limit")
+            rc, out, _ = await self._run("gh", "api", "rate_limit", env=self._env)
             if rc != 0 or not out:
                 return None
             data = json.loads(out)
@@ -268,7 +284,7 @@ class GitHubClient:
         last_err: GhCliError | None = None
 
         for attempt in range(max_retries + 1):
-            rc, out, err = await self._run("gh", *argv, cwd=cwd)
+            rc, out, err = await self._run("gh", *argv, cwd=cwd, env=self._env)
             err_text = err.decode(errors="replace")
 
             # Log remaining quota at DEBUG level for proactive visibility.
@@ -311,7 +327,7 @@ class GitHubClient:
         raise GhCliError(f"gh {' '.join(argv)} failed after {max_retries} retries")
 
     async def check_auth(self) -> bool:
-        rc, _, _ = await self._run("gh", "auth", "status")
+        rc, _, _ = await self._run("gh", "auth", "status", env=self._env)
         return rc == 0
 
     async def list_issues(self, repo: str, *, state: str = "open", limit: int = 50) -> list[Issue]:
@@ -423,3 +439,22 @@ class GitHubClient:
         out = await self._request_with_retry(*argv)
         url = out.decode().strip().splitlines()[-1]
         return PullRequest.from_url(url, draft=draft)
+
+    async def create_comment(self, repo: str, number: int, body: str) -> str:
+        self._validate_repo(repo)
+        if not body.strip():
+            raise ValueError("body required")
+        out = await self._request_with_retry(
+            "issue", "comment", str(int(number)), "--repo", repo, "--body", body
+        )
+        return out.decode().strip()
+
+    async def set_state(self, repo: str, number: int, is_pr: bool, state: str) -> str:
+        self._validate_repo(repo)
+        state = state.lower()
+        if state not in ("open", "closed"):
+            raise ValueError(f"State must be open or closed, got {state!r}")
+        cmd = "pr" if is_pr else "issue"
+        action = "reopen" if state == "open" else "close"
+        out = await self._request_with_retry(cmd, action, str(int(number)), "--repo", repo)
+        return out.decode().strip()
