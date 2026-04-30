@@ -49,6 +49,7 @@ from maxwell_daemon.core.delegate_lifecycle import (
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.core.work_item_store import WorkItemStore
 from maxwell_daemon.core.work_items import WorkItem, WorkItemStatus
+from maxwell_daemon.daemon.retry_policy import DEFAULT_RETRY_POLICY
 from maxwell_daemon.director import (
     GraphNodeExecutor,
     GraphStatus,
@@ -817,7 +818,8 @@ class Daemon:
         if self._queue.full():
             log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
             raise QueueSaturationError(
-                "Task queue is full, please try again later", backoff_seconds=60
+                "Task queue is full, please try again later",
+                backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
             )
 
         if self._loop is None or not self._loop.is_running():
@@ -825,7 +827,8 @@ class Daemon:
                 self._queue.put_nowait(item)
             except asyncio.QueueFull as exc:
                 raise QueueSaturationError(
-                    "Task queue is full, please try again later", backoff_seconds=60
+                    "Task queue is full, please try again later",
+                    backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
                 ) from exc
             return
         try:
@@ -857,7 +860,8 @@ class Daemon:
             except asyncio.QueueFull:
                 result.set_exception(
                     QueueSaturationError(
-                        "Task queue is full, please try again later", backoff_seconds=60
+                        "Task queue is full, please try again later",
+                        backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
                     )
                 )
             except BaseException as exc:  # pragma: no cover - surfaced via Future  # noqa: BLE001

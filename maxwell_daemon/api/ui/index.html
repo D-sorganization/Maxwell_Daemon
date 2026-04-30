@@ -13,6 +13,32 @@
   <link rel="icon" href="/ui/icon-192.svg" type="image/svg+xml">
   <link rel="manifest" href="/ui/manifest.json">
   <link rel="stylesheet" href="/ui/style.css">
+  <script>
+    // Pre-paint theme bootstrap. Reads localStorage["maxwell-theme"] and
+    // falls back to prefers-color-scheme. Runs before <body> paints to
+    // avoid a flash of the wrong theme.
+    (function () {
+      try {
+        var stored = localStorage.getItem("maxwell-theme");
+        var prefersDark = window.matchMedia
+          && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var theme = (stored === "dark" || stored === "light")
+          ? stored
+          : (prefersDark ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) {
+        var prefersDarkFallback = false;
+        try {
+          prefersDarkFallback = !!(window.matchMedia
+            && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        } catch (e2) { /* matchMedia also unavailable; default to light */ }
+        document.documentElement.setAttribute(
+          "data-theme",
+          prefersDarkFallback ? "dark" : "light"
+        );
+      }
+    })();
+  </script>
 </head>
 <body>
   <header>
@@ -21,8 +47,9 @@
       <button id="new-task-btn" title="Dispatch a task (shortcut: N)">+ New</button>
       <button id="command-palette-btn" title="Open command palette (shortcut: Ctrl+K)">Command</button>
       <button id="enable-notifications-btn" title="Enable push notifications" hidden>🔔 Notifications</button>
-      <span id="connection" class="pill">connecting…</span>
-      <span id="cost-summary" class="pill"></span>
+      <button id="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode" aria-pressed="false">🌙</button>
+      <span id="connection" class="pill" role="status" aria-live="polite">connecting…</span>
+      <span id="cost-summary" class="pill" aria-live="polite"></span>
     </div>
   </header>
 
@@ -458,15 +485,12 @@
 
   <footer class="status-bar" aria-label="Status Bar">
     <span id="status-operation" role="status" aria-live="polite">Ready</span>
-    <span id="status-resources">Tasks 0 | Cost $0.00</span>
+    <span id="status-resources" aria-live="polite">Tasks 0 | Cost $0.00</span>
     <span class="hint">Press <kbd>N</kbd> to dispatch, <kbd>Ctrl</kbd>+<kbd>K</kbd> for commands.</span>
   </footer>
 
   <script src="/ui/app.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/ui/sw.js', { scope: '/ui/' });
-    }
-  </script>
+  <script src="/ui/bootstrap.js" defer></script>
+  <script src="/ui/sw-register.js"></script>
 </body>
 </html>

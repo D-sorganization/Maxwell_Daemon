@@ -95,4 +95,7 @@ Subscribers get their own bounded queue; slow subscribers are dropped rather tha
 
 ## Grafana dashboard
 
-A starter dashboard JSON is planned (Phase 7, [issue #15](https://github.com/D-sorganization/Maxwell-Daemon/issues/15)).
+A starter Grafana dashboard ships at
+[`deploy/grafana/maxwell-daemon-dashboard.json`](https://github.com/D-sorganization/Maxwell-Daemon/blob/main/deploy/grafana/maxwell-daemon-dashboard.json).
+For the full operator-facing metrics catalogue, alerting rules, and
+import instructions, see [`monitoring.md`](monitoring.md).

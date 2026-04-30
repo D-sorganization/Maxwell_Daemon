@@ -117,7 +117,12 @@ max-complexity = 15
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --cov=maxwell_daemon --cov-report=term-missing --cov-fail-under=85.0"
+# ``tests/benchmarks/`` is intentionally excluded from the default run.
+# Performance benchmarks are timing-sensitive and must be invoked
+# explicitly via ``pytest tests/benchmarks/ --benchmark-only``; including
+# them in the standard unit/integration lane would bias coverage and
+# potentially cause flakes on slow runners.
+addopts = "-ra --strict-markers --cov=maxwell_daemon --cov-report=term-missing --cov-fail-under=85.0 --ignore=tests/benchmarks"
 
 [tool.mypy]
 python_version = "3.10"

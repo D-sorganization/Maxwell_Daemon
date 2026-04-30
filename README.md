@@ -84,6 +84,25 @@ so it always tracks the live code. The contract version
 **append-only** semantics within a major version — see
 [`SPEC.md`](SPEC.md) for details.
 
+## 🚢 Deploying to production
+
+Operator-facing guides live under [`docs/operations/`](docs/operations/):
+
+- [`deployment.md`](docs/operations/deployment.md) — system requirements,
+  install paths (pip / source / Docker), the `MAXWELL_*` environment
+  variable reference, filesystem layout, an nginx reverse-proxy snippet
+  with WebSocket upgrade and `X-Forwarded-For`, the systemd unit at
+  [`deploy/systemd/maxwell-daemon.service`](deploy/systemd/maxwell-daemon.service),
+  health probes, SQLite backup/restore under WAL, and the upgrade
+  procedure with the `/api/version` contract check.
+- [`monitoring.md`](docs/operations/monitoring.md) — Prometheus metrics
+  catalogue, structlog field reference, the starter Grafana dashboard
+  ([`deploy/grafana/maxwell-daemon-dashboard.json`](deploy/grafana/maxwell-daemon-dashboard.json)),
+  and the starter alert rules
+  ([`deploy/prometheus/alerts.yml`](deploy/prometheus/alerts.yml)).
+- [`observability.md`](docs/operations/observability.md) — developer-side
+  logging API and the `/api/v1/events` WebSocket schema.
+
 ## 🧠 Architectural Highlights
 - **RepoSchematic**: Generates highly compressed file-and-symbol trees, saving massive token budgets compared to dumping raw files.
 - **Memory Annealer**: Automatically compresses verbose agent logs into dense `architectural_state.md` files, responsibly purging raw logs to save disk space.

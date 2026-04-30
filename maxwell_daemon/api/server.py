@@ -44,7 +44,6 @@ from maxwell_daemon.api.contract import (
     ControlResponse,
     DispatchRequest,
     DispatchResponse,
-    HealthResponse,
     StatusResponse,
     StatusV2Response,
     StatusV2RunningTask,
@@ -53,7 +52,6 @@ from maxwell_daemon.api.contract import (
     TaskDetail,
     TaskListResponse,
     TaskSummary,
-    VersionResponse,
 )
 from maxwell_daemon.api.validation import (
     PriorityField,
@@ -1408,6 +1406,17 @@ def create_app(  # noqa: C901
         else None
     )
 
+    # Security-headers middleware — attaches conservative defaults
+    # (X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
+    # Permissions-Policy, Content-Security-Policy, optional HSTS) to every
+    # response. Installed at the front of the middleware stack so it runs
+    # closest to the route handler and decorates every outgoing response
+    # before outer middleware (correlation-id, rate-limit, request-id) add
+    # their own headers (#797 Phase 1).
+    from maxwell_daemon.api.security_headers import install_security_headers
+
+    install_security_headers(app)
+
     # Correlation-ID middleware — attaches a UUID to every request, propagates
     # it through structlog context-vars, and echoes it in X-Correlation-ID.
     from maxwell_daemon.api.correlation import install_correlation_middleware
@@ -1428,6 +1437,36 @@ def create_app(  # noqa: C901
                 for name, g in api_cfg.rate_limit_groups.items()
             },
         )
+
+    # Phase-1 per-endpoint rate limit for POST /api/dispatch (issue #796).
+    # Build the dependency unconditionally so the route signature is stable;
+    # when the feature is disabled the dep is a cheap no-op.
+    dispatch_rl_cfg = api_cfg.dispatch_rate_limit
+    if dispatch_rl_cfg.enabled:
+        from maxwell_daemon.api.rate_limit import (
+            InMemoryRateLimitStore,
+            RateLimitPolicy,
+            build_rate_limit_dependency,
+            install_rate_limit_headers_middleware,
+        )
+
+        _dispatch_rl_store = InMemoryRateLimitStore()
+        _dispatch_rl_policy = RateLimitPolicy(
+            limit=dispatch_rl_cfg.limit,
+            window_seconds=float(dispatch_rl_cfg.window_seconds),
+        )
+        dispatch_rate_limit_dep: Any = build_rate_limit_dependency(
+            endpoint="dispatch",
+            policy=_dispatch_rl_policy,
+            store=_dispatch_rl_store,
+        )
+        install_rate_limit_headers_middleware(app)
+    else:
+
+        async def _noop_dispatch_rate_limit() -> None:
+            return None
+
+        dispatch_rate_limit_dep = _noop_dispatch_rate_limit
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next: Any) -> Response:
@@ -1630,30 +1669,12 @@ def create_app(  # noqa: C901
     # These endpoints form the versioned contract consumed by runner-dashboard
     # and other operator tooling.  Shape changes require bumping CONTRACT_VERSION
     # in maxwell_daemon/api/contract.py.
+    #
+    # ``/api/version`` and ``/api/health`` live in maxwell_daemon.api.routes.health
+    # as the first phase of decomposing this module (issue #793).
+    from maxwell_daemon.api.routes import health as _health_routes
 
-    @app.get("/api/version")
-    async def api_version() -> VersionResponse:
-        return VersionResponse(daemon=__version__, contract=CONTRACT_VERSION)
-
-    @app.get("/api/health")
-    async def api_health() -> HealthResponse:
-        try:
-            state = daemon.state()
-            uptime = (datetime.now(timezone.utc) - state.started_at).total_seconds()
-            # "gate" concept: open when backends are available, closed otherwise.
-            gate = "open" if state.backends_available else "closed"
-            return HealthResponse(
-                status="ok",
-                uptime_seconds=uptime,
-                gate=gate,
-            )
-        except Exception:
-            log.exception("api_health: daemon.state() raised; returning degraded")
-            return HealthResponse(
-                status="degraded",
-                uptime_seconds=0.0,
-                gate="closed",
-            )
+    _health_routes.register(app, daemon)
 
     @app.get("/api/status")
     async def api_status() -> StatusResponse:
@@ -1778,7 +1799,11 @@ def create_app(  # noqa: C901
             artifacts=[],
         )
 
-    @app.post("/api/dispatch", status_code=status.HTTP_202_ACCEPTED)
+    @app.post(
+        "/api/dispatch",
+        status_code=status.HTTP_202_ACCEPTED,
+        dependencies=[Depends(dispatch_rate_limit_dep)],
+    )
     async def api_dispatch(payload: DispatchRequest) -> DispatchResponse:
         expected_token = auth_token or ""
         if not expected_token or not hmac.compare_digest(

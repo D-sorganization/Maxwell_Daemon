@@ -115,6 +115,15 @@ jobs:
       - run: uv sync --all-extras
       - name: Run tests
         run: .venv/bin/python -m pytest -p no:xvfb --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
+      - name: Run integration tests (PR only)
+        # Phase 1 of #800 - gated to pull_request events so the unit-test
+        # fast lane on push/main stays untouched. The default ``pytest``
+        # invocation above already exercises ``tests/integration/`` via
+        # ``testpaths = ["tests"]`` in ``pyproject.toml``; this step is an
+        # explicit, named re-run that surfaces integration failures
+        # separately in PR checks for easier triage.
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.12'
+        run: .venv/bin/python -m pytest tests/integration/ --no-cov -p no:xvfb
       - name: Upload coverage artifact
         if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@v7

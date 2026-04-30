@@ -82,6 +82,7 @@ nav:
       - Security: operations/security.md
       - Deployment (Ansible): operations/ansible.md
       - Observability: operations/observability.md
+      - Monitoring: operations/monitoring.md
       - Budgets: operations/budgets.md
       - Tailscale fleet: operations/tailscale.md
       - GitHub webhooks: operations/webhooks.md

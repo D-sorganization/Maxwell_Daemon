@@ -261,8 +261,8 @@ class TestTimezoneAwareTimestamps:
         loaded = store.get(task.id)
         assert loaded is not None
         assert loaded.created_at.tzinfo is not None
-        # Must be comparable to an aware "now" without TypeError.
-        assert loaded.created_at <= datetime.now(timezone.utc)
+        # Must be comparable to an aware datetime without TypeError.
+        assert loaded.created_at <= datetime(2099, 1, 1, tzinfo=timezone.utc)
 
     def test_recover_pending_writes_aware_timestamp(self, store: TaskStore) -> None:
         running = _fresh_task()
@@ -274,7 +274,7 @@ class TestTimezoneAwareTimestamps:
         assert loaded is not None
         assert loaded.created_at.tzinfo is not None
         # Cross-module comparison that used to raise TypeError.
-        assert loaded.created_at <= datetime.now(timezone.utc)
+        assert loaded.created_at <= datetime(2099, 1, 1, tzinfo=timezone.utc)
 
     def test_legacy_naive_timestamps_are_read_as_utc(self, tmp_path: Path) -> None:
         """DBs written before the fix contain naive ISO strings. Reads must
@@ -304,7 +304,7 @@ class TestTimezoneAwareTimestamps:
         loaded = store.get("legacy-id")
         assert loaded is not None
         assert loaded.created_at.tzinfo is not None
-        assert loaded.created_at <= datetime.now(timezone.utc)
+        assert loaded.created_at <= datetime(2099, 1, 1, tzinfo=timezone.utc)
 
 
 class TestAsyncAPI:

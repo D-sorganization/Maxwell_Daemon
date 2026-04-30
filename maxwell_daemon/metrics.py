@@ -36,6 +36,7 @@ __all__ = [
     "MAXWELL_REQUEST_DURATION",
     "MAXWELL_TOKENS_TOTAL",
     "MAXWELL_TOKEN_BUDGET_ALLOCATION",
+    "RATE_LIMIT_EXCEEDED_TOTAL",
     "build_registry",
     "http_metrics_middleware",
     "mount_metrics_endpoint",
@@ -144,6 +145,12 @@ HTTP_REQUESTS_TOTAL = Counter(
     "maxwell_daemon_http_requests_total",
     "Total HTTP requests by method, endpoint, and status code",
     labelnames=("method", "endpoint", "status"),
+)
+
+RATE_LIMIT_EXCEEDED_TOTAL = Counter(
+    "rate_limit_exceeded_total",
+    "Number of HTTP requests rejected by the per-endpoint rate limiter",
+    labelnames=("endpoint",),
 )
 
 HTTP_REQUEST_DURATION = Histogram(

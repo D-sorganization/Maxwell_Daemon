@@ -1684,8 +1684,46 @@ async function submitNewTask(ev) {
   await fetchTasks();
 }
 
+// ---- theme toggle --------------------------------------------------------
+
+// The data-theme attribute is set pre-paint by the inline bootstrap in
+// index.html. This function only handles the runtime toggle + persistence.
+function applyTheme(theme) {
+  const next = theme === "dark" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    btn.textContent = next === "dark" ? "☀️" : "🌙";
+    btn.setAttribute("aria-pressed", next === "dark" ? "true" : "false");
+    btn.setAttribute(
+      "aria-label",
+      next === "dark" ? "Switch to light mode" : "Switch to dark mode",
+    );
+  }
+}
+
+function initThemeToggle() {
+  const btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  // Sync icon + aria state with whatever the pre-paint bootstrap chose.
+  const current = document.documentElement.getAttribute("data-theme") || "light";
+  applyTheme(current);
+  btn.addEventListener("click", () => {
+    const now = document.documentElement.getAttribute("data-theme") === "dark"
+      ? "light"
+      : "dark";
+    applyTheme(now);
+    try {
+      localStorage.setItem("maxwell-theme", now);
+    } catch (_) {
+      // localStorage may be unavailable (private browsing); toggle still works.
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   wireKindSwitch();
+  initThemeToggle();
   document.getElementById("new-task-btn").addEventListener("click", openNewTaskDialog);
   document.getElementById("new-task-cancel").addEventListener("click", closeNewTaskDialog);
   document.getElementById("new-task-form").addEventListener("submit", submitNewTask);
@@ -1693,14 +1731,27 @@ document.addEventListener("DOMContentLoaded", () => {
   // N opens the dialog when it's closed and no input is focused.
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape") {
-      const dialogs = document.querySelectorAll("dialog");
-      const isDialogOpen = Array.from(dialogs).some(d => d.open);
-      if (!isDialogOpen) {
-        const detailCard = document.getElementById("detail-card");
-        if (detailCard && !detailCard.hidden) {
-          detailCard.hidden = true;
-          state.selected = null;
-        }
+      // Global Escape handler: close any open <dialog> (modal/non-modal) or
+      // any open .modal[open] / dialog[open] element. Falls through to the
+      // detail-card close behaviour when nothing modal is open.
+      const openModals = document.querySelectorAll(
+        "dialog[open], .modal[open]"
+      );
+      if (openModals.length > 0) {
+        ev.preventDefault();
+        openModals.forEach((el) => {
+          if (typeof el.close === "function") {
+            try { el.close(); } catch (_) { el.removeAttribute("open"); }
+          } else {
+            el.removeAttribute("open");
+          }
+        });
+        return;
+      }
+      const detailCard = document.getElementById("detail-card");
+      if (detailCard && !detailCard.hidden) {
+        detailCard.hidden = true;
+        state.selected = null;
       }
       return;
     }

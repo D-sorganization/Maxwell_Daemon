@@ -210,3 +210,293 @@ Before promoting a deployment:
 - Budget thresholds are configured for paid backends.
 - Logs include task lifecycle events but do not include secrets.
 - Rollback instructions are documented for the selected deployment path.
+
+## Production Operations
+
+The remainder of this page is the operator-facing guide for running
+Maxwell-Daemon in production: requirements, install paths, environment
+variables, filesystem layout, reverse-proxy configuration, systemd,
+health probes, SQLite backup/restore, and the upgrade procedure.
+
+For the metrics catalogue and alert rule reference, see
+[`monitoring.md`](monitoring.md).
+
+### System requirements
+
+- Python `>=3.10` (declared in [`pyproject.toml`](https://github.com/D-sorganization/Maxwell-Daemon/blob/main/pyproject.toml)).
+- POSIX-like filesystem capable of holding the SQLite WAL files (Linux,
+  macOS, or WSL2).  Pure NFS is not recommended — SQLite WAL relies on
+  byte-range locking that some NFS implementations handle poorly.
+- Outbound HTTPS to whichever LLM providers you enable
+  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.).  All other dependencies
+  are pulled in by `pip install`.
+- A writable data directory (default: `~/.maxwell` for source checkouts,
+  `/var/lib/maxwell-daemon` for the systemd layout below).
+
+Capacity sizing is workload-specific.  As a starting point, allocate
+1 vCPU and 1 GiB RAM per concurrent task; the SQLite ledger grows ~1 KB
+per agent request and should not exceed a few GiB even at heavy use.
+
+### Install
+
+#### From PyPI / pip
+
+```bash
+python -m venv /opt/maxwell-daemon/.venv
+/opt/maxwell-daemon/.venv/bin/pip install --upgrade pip
+/opt/maxwell-daemon/.venv/bin/pip install maxwell-daemon
+```
+
+The `maxwell-daemon` console script is installed into the venv's `bin/`
+directory.  Verify with `/opt/maxwell-daemon/.venv/bin/maxwell-daemon --version`.
+
+#### From source
+
+```bash
+git clone https://github.com/D-sorganization/Maxwell_Daemon.git
+cd Maxwell_Daemon
+python -m venv .venv
+.venv/bin/pip install -e .
+```
+
+For a developer-style install with extra tooling:
+
+```bash
+.venv/bin/pip install -e ".[dev]"
+```
+
+Production installs should pin to a tagged release rather than tracking
+`main`.
+
+#### Docker
+
+The repo ships a [`Dockerfile`](https://github.com/D-sorganization/Maxwell-Daemon/blob/main/Dockerfile) and
+[`docker-compose.yml`](https://github.com/D-sorganization/Maxwell-Daemon/blob/main/docker-compose.yml).
+Build and run with:
+
+```bash
+docker build -t maxwell-daemon:local .
+docker run --rm -p 8080:8080 \
+  -v $HOME/.config/maxwell-daemon:/root/.config/maxwell-daemon:ro \
+  -v maxwell-workspace:/workspace \
+  --env-file .env \
+  maxwell-daemon:local
+```
+
+Or via Docker Compose, which already wires the workspace volume, config
+mount, and `/api/health` healthcheck:
+
+```bash
+docker compose up -d
+docker compose logs -f maxwell-daemon
+```
+
+### Environment variables
+
+Maxwell-Daemon reads these `MAXWELL_*` variables directly from the
+running code.  The list below is exhaustive for the daemon itself; LLM
+backend keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) are documented
+in [`.env.example`](https://github.com/D-sorganization/Maxwell-Daemon/blob/main/.env.example).
+
+| Variable | Default | Source | Purpose |
+|----------|---------|--------|---------|
+| `MAXWELL_CONFIG` | XDG default | `maxwell_daemon/config/loader.py` | Path to the main `config.toml`. |
+| `MAXWELL_FLEET_CONFIG` | `fleet.yaml` in cwd | `maxwell_daemon/config/fleet.py` | Path to the fleet manifest. |
+| `MAXWELL_API_TOKEN` | unset | `maxwell_daemon/cli/work_items.py` | Bearer token used by the CLI when calling the daemon's HTTP API. |
+| `MAXWELL_DAEMON_URL` | unset | `maxwell_daemon/cli/work_items.py` | Base URL the CLI uses to reach the daemon. |
+| `MAXWELL_ALLOW_ENV` | empty | `maxwell_daemon/tools/builtins.py` | Comma-separated allow-list of env vars exposed to sandboxed tools. |
+| `MAXWELL_REDACT_LOGS` | `1` | `maxwell_daemon/logging.py` | Set to `0` to disable secret redaction in logs (do not do this in production). |
+| `MAXWELL_AGGRESSIVE_COMPRESSION` | unset | `maxwell_daemon/core/repo_overrides.py` | Set to `1` to enable aggressive context compression. |
+| `MAXWELL_CONTRACTS` | `on` | `maxwell_daemon/contracts.py` | Set to `off` to disable design-by-contract enforcement. |
+| `MAXWELL_RATELIMIT_DEFAULT_PER_MIN` | `120` | `maxwell_daemon/api/rate_limit.py` | Per-IP request budget for read endpoints. |
+| `MAXWELL_RATELIMIT_WRITE_PER_MIN` | `30` | `maxwell_daemon/api/rate_limit.py` | Per-IP request budget for write endpoints. |
+
+### Filesystem layout
+
+The systemd layout in this guide assumes:
+
+```
+/opt/maxwell-daemon/                  # install root
+├── .venv/                            # virtualenv created by the operator
+└── bin/maxwell-daemon                # console script (symlink into .venv)
+
+/etc/maxwell-daemon.env               # EnvironmentFile for the systemd unit
+/etc/maxwell-daemon/                  # operator-managed config
+└── config.toml
+
+/var/lib/maxwell-daemon/              # WorkingDirectory + ReadWritePaths
+├── tasks.db                          # task store (SQLite, WAL mode)
+├── tasks.db-wal                      # WAL frames
+├── tasks.db-shm                      # shared-memory index
+└── ledger.db                         # cost ledger (SQLite, WAL mode)
+
+/var/log/maxwell-daemon/              # rotating structlog JSON output
+└── app.log
+```
+
+For source checkouts using the launchers, the equivalent paths default
+to `~/.config/maxwell-daemon/` for config and `~/.maxwell/` for the
+ledger and task store.
+
+### Reverse proxy (nginx)
+
+Terminate TLS at nginx and forward to the daemon over loopback.  The
+config below preserves client IPs and upgrades the `/api/v1/events`
+WebSocket connection.
+
+```nginx
+upstream maxwell_daemon {
+    server 127.0.0.1:8080;
+    keepalive 32;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name maxwell.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/maxwell.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/maxwell.example.com/privkey.pem;
+
+    # Generous timeout for long-running agent requests.
+    proxy_read_timeout  600s;
+    proxy_send_timeout  600s;
+    client_max_body_size 16m;
+
+    location / {
+        proxy_pass http://maxwell_daemon;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket upgrade for /api/v1/events
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Keep /metrics on an internal listener if you don't want it
+    # publicly reachable.  This block forbids external scrapes.
+    location = /metrics {
+        allow 10.0.0.0/8;
+        allow 127.0.0.1;
+        deny all;
+        proxy_pass http://maxwell_daemon;
+    }
+}
+```
+
+### systemd
+
+A reference unit lives at
+[`deploy/systemd/maxwell-daemon.service`](https://github.com/D-sorganization/Maxwell-Daemon/blob/main/deploy/systemd/maxwell-daemon.service).
+Install it with:
+
+```bash
+sudo useradd --system --home-dir /var/lib/maxwell-daemon --shell /usr/sbin/nologin maxwell
+sudo install -d -o maxwell -g maxwell /var/lib/maxwell-daemon /var/log/maxwell-daemon
+sudo install -m 0644 deploy/systemd/maxwell-daemon.service /etc/systemd/system/maxwell-daemon.service
+sudo install -m 0640 -o root -g maxwell /dev/null /etc/maxwell-daemon.env
+$EDITOR /etc/maxwell-daemon.env   # populate MAXWELL_CONFIG, API keys, etc.
+sudo systemctl daemon-reload
+sudo systemctl enable --now maxwell-daemon
+sudo systemctl status maxwell-daemon
+```
+
+Hot reload of config is not supported; restart the unit after editing
+`/etc/maxwell-daemon/config.toml`.
+
+### Health probes
+
+Three first-party endpoints are intended for orchestrators:
+
+| Endpoint | Use as | Notes |
+|----------|--------|-------|
+| `GET /health` | Liveness | Cheapest possible probe; returns immediately. |
+| `GET /api/health` | Liveness | Reports gate state too — preferred for Kubernetes `livenessProbe`. |
+| `GET /api/status` | Readiness | Pipeline state and active task summary; safe for `readinessProbe`. |
+| `GET /api/version` | Contract | Semver + contract version (used for upgrade checks). |
+
+`/api/health` and `/api/version` are exempted from the env-driven rate
+limiter (Phase 1 of #796) by default, so orchestrator probes will not
+trigger 429s. Deployments that explicitly enable the YAML-configured
+limiter via `api.rate_limit_default` should add these paths to its
+`exempt_paths` list — `install_rate_limiter()` currently defaults its
+exemption list to `/health` and `/metrics` only. See
+[`monitoring.md`](monitoring.md) for the full breakdown; a follow-up
+under #796 will align that limiter's defaults.
+
+### SQLite backup and restore
+
+Maxwell-Daemon's SQLite databases (task store and cost ledger) run in
+WAL mode.  Do not copy the `.db` file with `cp` — you will get a
+torn snapshot.  Instead use the SQLite online backup API:
+
+```bash
+# Create a consistent point-in-time backup.
+sqlite3 /var/lib/maxwell-daemon/tasks.db ".backup '/var/backups/maxwell/tasks-$(date +%F).db'"
+sqlite3 /var/lib/maxwell-daemon/ledger.db ".backup '/var/backups/maxwell/ledger-$(date +%F).db'"
+```
+
+This is safe to run while the daemon is live; the backup command takes
+the appropriate locks and copies the database in pages.
+
+A simple cron entry for daily backups with 14-day retention:
+
+```cron
+15 3 * * * maxwell sqlite3 /var/lib/maxwell-daemon/tasks.db  ".backup '/var/backups/maxwell/tasks-$(date +\%F).db'" && find /var/backups/maxwell -name 'tasks-*.db'  -mtime +14 -delete
+20 3 * * * maxwell sqlite3 /var/lib/maxwell-daemon/ledger.db ".backup '/var/backups/maxwell/ledger-$(date +\%F).db'" && find /var/backups/maxwell -name 'ledger-*.db' -mtime +14 -delete
+```
+
+To restore, stop the daemon, replace the `.db` files (and remove any
+stale `*-wal` / `*-shm` companions), then restart:
+
+```bash
+sudo systemctl stop maxwell-daemon
+sudo -u maxwell cp /var/backups/maxwell/tasks-2026-04-30.db /var/lib/maxwell-daemon/tasks.db
+sudo -u maxwell rm -f /var/lib/maxwell-daemon/tasks.db-wal /var/lib/maxwell-daemon/tasks.db-shm
+sudo systemctl start maxwell-daemon
+```
+
+The cost ledger is append-only for audit integrity; restoring from
+backup will roll back recorded spend to the backup timestamp.  Reconcile
+against your provider's billing dashboard if that gap matters.
+
+### Upgrade procedure
+
+Maxwell-Daemon advertises an HTTP contract version at `GET /api/version`.
+The contract is **append-only within a major version** (see
+[`SPEC.md`](https://github.com/D-sorganization/Maxwell-Daemon/blob/main/SPEC.md)
+and [`CLAUDE.md`](https://github.com/D-sorganization/Maxwell-Daemon/blob/main/CLAUDE.md)).
+Use that endpoint to detect breaking upgrades before rolling them out.
+
+1. **Snapshot the database.**
+   ```bash
+   sqlite3 /var/lib/maxwell-daemon/tasks.db  ".backup '/var/backups/maxwell/tasks-pre-upgrade.db'"
+   sqlite3 /var/lib/maxwell-daemon/ledger.db ".backup '/var/backups/maxwell/ledger-pre-upgrade.db'"
+   ```
+2. **Record the current contract version.**
+   ```bash
+   curl -fsS http://127.0.0.1:8080/api/version | tee /tmp/maxwell-version-before.json
+   ```
+3. **Stop the daemon and upgrade the package.**
+   ```bash
+   sudo systemctl stop maxwell-daemon
+   sudo -u maxwell /opt/maxwell-daemon/.venv/bin/pip install --upgrade maxwell-daemon
+   sudo systemctl start maxwell-daemon
+   ```
+4. **Verify the contract version.**
+   ```bash
+   curl -fsS http://127.0.0.1:8080/api/version | tee /tmp/maxwell-version-after.json
+   ```
+   Confirm the major version number has not changed.  If it has, audit
+   the dashboard and CLI integrations against the new contract before
+   declaring the upgrade successful.
+5. **Smoke-test the API.**
+   ```bash
+   curl -fsS http://127.0.0.1:8080/api/health
+   curl -fsS http://127.0.0.1:8080/api/status
+   ```
+6. **Roll back** by reinstalling the previous version and restoring the
+   pre-upgrade database snapshot if smoke tests fail.

@@ -155,3 +155,28 @@ class TestEndToEnd:
         assert 'method="GET"' in metrics
         assert 'endpoint="/healthz"' in metrics
         assert "maxwell_daemon_http_request_duration_seconds" in metrics
+
+
+class TestPhase1Smoke:
+    """Phase-1 of #800 — minimum-viable smoke test for the integration suite.
+
+    Dispatches a trivial task through the in-process daemon (recording backend
+    from ``conftest.py``) and asserts the task reaches a terminal state.  Kept
+    deliberately small so the integration suite always has at least one fast,
+    deterministic happy-path check that fails loudly when wiring breaks.
+    """
+
+    def test_dispatched_task_reaches_terminal_state(
+        self,
+        live_system: tuple[Daemon, TestClient, asyncio.AbstractEventLoop],
+    ) -> None:
+        _, client, loop = live_system
+
+        response = client.post("/api/v1/tasks", json={"prompt": "smoke-test"})
+        assert response.status_code == 202, response.json()
+        task_id = response.json()["id"]
+
+        final = _wait_for_completion(client, loop, task_id)
+        assert final["status"] in {"completed", "failed"}, (
+            f"task {task_id} did not reach a terminal state: {final}"
+        )

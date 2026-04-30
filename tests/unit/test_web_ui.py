@@ -105,7 +105,13 @@ class TestHTMLContent:
 
         assert 'rel="manifest" href="/ui/manifest.json"' in html
         assert 'rel="icon" href="/ui/icon-192.svg"' in html
-        assert "navigator.serviceWorker.register('/ui/sw.js'" in html
+        # SW registration was extracted from an inline <script> into
+        # /ui/bootstrap.js so the page complies with ``script-src 'self'``.
+        # Assert both: the HTML wires the bootstrap module, and the module
+        # actually performs the registration.
+        assert '<script src="/ui/bootstrap.js"' in html
+        bootstrap = client.get("/ui/bootstrap.js").text
+        assert "navigator.serviceWorker.register('/ui/sw.js'" in bootstrap
 
     def test_manifest_ships_installability_metadata(self, client: TestClient) -> None:
         manifest = client.get("/ui/manifest.json")
