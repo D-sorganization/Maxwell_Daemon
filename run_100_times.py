@@ -50,7 +50,7 @@ print(f"Total time: {total_elapsed:.1f}s  Avg per run: {total_elapsed/RUNS:.2f}s
 print("=" * 60)
 
 if failures:
-    print(f"\n--- First failure details ---\n")
+    print("\n--- First failure details ---\n")
     f = failures[0]
     print(f"Run #{f['run']} ({f['elapsed']:.2f}s):")
     print("STDOUT:", f["stdout"][:2000])
