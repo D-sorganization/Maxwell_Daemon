@@ -1429,9 +1429,12 @@ def create_app(
             },
         )
 
-    # Env-driven per-IP rate limiter (Phase 1 of #796). Always on with sane
-    # defaults, tunable via MAXWELL_RATELIMIT_{DEFAULT,WRITE}_PER_MIN. Exempts
+    # Env-driven per-IP rate limiter (Phase 1 of #796). Provides a default
+    # safety net tunable via MAXWELL_RATELIMIT_{DEFAULT,WRITE}_PER_MIN; exempts
     # /api/health and /api/version so liveness/contract probes never 429.
+    # No-ops when the config-driven limiter above already attached middleware,
+    # so deployments that set ``api.rate_limit_default`` keep their tuned
+    # buckets without a second token-bucket layer underneath.
     from maxwell_daemon.api.rate_limit import install_env_rate_limiter
 
     install_env_rate_limiter(app)

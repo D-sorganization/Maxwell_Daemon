@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
@@ -31,6 +32,7 @@ from maxwell_daemon.metrics import record_ratelimit_rejection
 __all__ = [
     "DEFAULT_EXEMPT_PATHS",
     "ENV_DEFAULT_PER_MIN",
+    "ENV_TRUST_PROXY",
     "ENV_WRITE_PER_MIN",
     "RateLimitGroup",
     "TokenBucket",
@@ -44,11 +46,26 @@ _log = get_logger(__name__)
 # Env-var knobs. Values are integers (requests per minute).
 ENV_DEFAULT_PER_MIN = "MAXWELL_RATELIMIT_DEFAULT_PER_MIN"
 ENV_WRITE_PER_MIN = "MAXWELL_RATELIMIT_WRITE_PER_MIN"
+# When set to a truthy value ("1" / "true" / "yes" / "on", case-insensitive),
+# the limiter trusts the left-most ``X-Forwarded-For`` entry as the client IP.
+# Off by default so direct callers can't spoof a fresh IP per request to evade
+# the bucket and force unbounded memory growth.
+ENV_TRUST_PROXY = "MAXWELL_TRUST_PROXY"
 
 # Sane defaults — generous enough for a polling dashboard, strict enough on
 # state-mutating endpoints to prevent dispatch / control floods.
 _DEFAULT_PER_MIN_FALLBACK = 120
 _WRITE_PER_MIN_FALLBACK = 30
+
+# Hard cap on the in-memory bucket dict. The env limiter keys by client IP;
+# even with the XFF default tightened, a misbehaving NAT could still surface
+# many distinct peers. Once we exceed the cap, evict oldest first (FIFO) so
+# memory stays bounded.
+_MAX_BUCKETS = 10_000
+# Log one warning per N evictions to surface pressure without flooding.
+_EVICTION_LOG_INTERVAL = 100
+# Truthy strings honored by ``MAXWELL_TRUST_PROXY``.
+_TRUTHY_ENV_VALUES: frozenset[str] = frozenset({"1", "true", "yes", "on"})
 
 # Liveness/contract probes must never be throttled — the dashboard polls these
 # constantly and an outage of /api/health would make a noisy daemon look dead.
@@ -117,7 +134,12 @@ class RateLimitGroup:
 
 
 class TokenBucketLimiter:
-    """Per-(key, group) token bucket registry."""
+    """Per-(key, group) token bucket registry.
+
+    The internal bucket dict is bounded at ``max_buckets`` entries; on overflow
+    the oldest-inserted bucket is evicted (FIFO). This protects against memory
+    DOS when an attacker spoofs many distinct keys.
+    """
 
     def __init__(
         self,
@@ -125,14 +147,18 @@ class TokenBucketLimiter:
         default_rate: float,
         default_burst: int,
         groups: Mapping[str, Mapping[str, float]] | None = None,
+        max_buckets: int = _MAX_BUCKETS,
     ) -> None:
         self._default = RateLimitGroup(rate=default_rate, burst=default_burst)
         self._groups: dict[str, RateLimitGroup] = {
             name: RateLimitGroup(rate=float(cfg["rate"]), burst=int(cfg["burst"]))
             for name, cfg in (groups or {}).items()
         }
-        self._buckets: dict[tuple[str, str], TokenBucket] = {}
+        # OrderedDict so we can FIFO-evict the oldest inserted bucket cheaply.
+        self._buckets: OrderedDict[tuple[str, str], TokenBucket] = OrderedDict()
         self._lock = threading.Lock()
+        self._max_buckets = max(1, int(max_buckets))
+        self._evictions = 0
 
     def _group(self, name: str) -> RateLimitGroup:
         return self._groups.get(name, self._default)
@@ -140,12 +166,27 @@ class TokenBucketLimiter:
     def _bucket(self, key: str, group: str) -> TokenBucket:
         g = self._group(group)
         cache_key = (key, group)
+        evicted_key: tuple[str, str] | None = None
+        evictions_so_far = 0
         with self._lock:
             bucket = self._buckets.get(cache_key)
             if bucket is None:
                 bucket = TokenBucket(capacity=g.burst, refill_per_second=g.rate)
                 self._buckets[cache_key] = bucket
-            return bucket
+                if len(self._buckets) > self._max_buckets:
+                    evicted_key, _ = self._buckets.popitem(last=False)
+                    self._evictions += 1
+                    evictions_so_far = self._evictions
+            return_bucket = bucket
+        if evicted_key is not None and evictions_so_far % _EVICTION_LOG_INTERVAL == 1:
+            _log.warning(
+                "ratelimit_bucket_evicted",
+                evicted_key=evicted_key[0],
+                evicted_group=evicted_key[1],
+                total_evictions=evictions_so_far,
+                max_buckets=self._max_buckets,
+            )
+        return return_bucket
 
     def check(self, key: str, *, group: str = "default") -> bool:
         return self._bucket(key, group).try_consume()
@@ -207,6 +248,10 @@ def install_rate_limiter(
         default_burst=default_burst,
         groups=groups,
     )
+    # Sentinels so a later ``install_env_rate_limiter()`` call can detect the
+    # config-driven middleware and skip stacking a second token bucket.
+    app.state.rate_limiter = limiter
+    app.state.rate_limiter_installed = True
     exempt = frozenset(exempt_paths)
 
     @app.middleware("http")
@@ -250,21 +295,36 @@ def install_rate_limiter(
 # ---------------------------------------------------------------------------
 
 
+def _trust_proxy_enabled() -> bool:
+    """Return True iff ``MAXWELL_TRUST_PROXY`` is set to a truthy value.
+
+    Defaults to False so the limiter ignores ``X-Forwarded-For`` unless the
+    operator explicitly opts in (i.e. has a trusted reverse proxy in front).
+    Without this gate, any direct caller could rotate the XFF header to mint
+    a fresh bucket per request and bypass the limiter entirely.
+    """
+    raw = os.environ.get(ENV_TRUST_PROXY)
+    if raw is None:
+        return False
+    return raw.strip().lower() in _TRUTHY_ENV_VALUES
+
+
 def _ip_key(request: Request) -> str:
     """Resolve the client IP for rate-limit keying.
 
-    Order of preference:
-    1. First IP in ``X-Forwarded-For`` (left-most = original client when the
-       daemon sits behind a trusted reverse proxy).
-    2. ``request.client.host`` (direct connection).
-    3. Literal ``"unknown"`` so we still produce a stable bucket key when the
-       transport doesn't expose a peer (test client, ASGI lifespan, …).
+    By default we use the direct ASGI peer (``request.client.host``). The
+    left-most ``X-Forwarded-For`` value is honored only when
+    ``MAXWELL_TRUST_PROXY`` is enabled; this prevents header spoofing from
+    evading per-IP rate limits or driving unbounded bucket-dict growth.
+    Falls back to ``"unknown"`` when the transport exposes no peer (test
+    client, ASGI lifespan, …).
     """
-    xff = request.headers.get("x-forwarded-for", "")
-    if xff:
-        first = xff.split(",", 1)[0].strip()
-        if first:
-            return f"ip:{first}"
+    if _trust_proxy_enabled():
+        xff = request.headers.get("x-forwarded-for", "")
+        if xff:
+            first = xff.split(",", 1)[0].strip()
+            if first:
+                return f"ip:{first}"
     if request.client and request.client.host:
         return f"ip:{request.client.host}"
     return "ip:unknown"
@@ -318,7 +378,7 @@ def install_env_rate_limiter(
     exempt_paths: Iterable[str] = DEFAULT_EXEMPT_PATHS,
     default_per_min: int | None = None,
     write_per_min: int | None = None,
-) -> TokenBucketLimiter:
+) -> TokenBucketLimiter | None:
     """Install the per-IP rate-limit middleware described in #796 (Phase 1).
 
     The limiter is intentionally separate from :func:`install_rate_limiter` so
@@ -328,8 +388,23 @@ def install_env_rate_limiter(
     keyword argument is ``None`` — explicit kwargs win, which keeps tests
     hermetic.
 
-    Returns the underlying limiter so tests can introspect bucket state.
+    Honors ``MAXWELL_TRUST_PROXY`` (off by default) for the keying decision —
+    see :func:`_ip_key`.
+
+    No-op when :func:`install_rate_limiter` has already attached its own
+    middleware (detected via ``app.state.rate_limiter_installed``); this
+    prevents double-stacking buckets so the env limiter's stricter defaults
+    can't 429 traffic the operator-configured limiter would have allowed.
+
+    Returns the underlying limiter, or ``None`` when the call was skipped.
     """
+    if getattr(app.state, "rate_limiter_installed", False):
+        _log.info(
+            "env_rate_limiter_skipped",
+            reason="config_driven_limiter_present",
+        )
+        return None
+
     default_rpm = (
         default_per_min
         if default_per_min is not None
@@ -350,6 +425,10 @@ def install_env_rate_limiter(
             "write": {"rate": write_rpm / 60.0, "burst": max(1, write_rpm)},
         },
     )
+    # Set the sentinel so a subsequent call (or a config-driven install layered
+    # on top) can detect that a limiter is already in place.
+    app.state.rate_limiter = limiter
+    app.state.rate_limiter_installed = True
     exempt = frozenset(exempt_paths)
 
     @app.middleware("http")

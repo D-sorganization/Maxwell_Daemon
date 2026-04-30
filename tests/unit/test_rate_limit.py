@@ -280,8 +280,13 @@ class TestEnvRateLimiter:
         ctl = client.post("/api/control/pause")
         assert ctl.status_code == 429
 
-    def test_per_ip_isolation(self) -> None:
+    def test_per_ip_isolation(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         from fastapi.testclient import TestClient
+
+        from maxwell_daemon.api.rate_limit import ENV_TRUST_PROXY
+
+        # XFF-based per-IP isolation requires the trust-proxy opt-in.
+        monkeypatch.setenv(ENV_TRUST_PROXY, "1")
 
         app = _build_env_app(default_per_min=1, write_per_min=1)
         client = TestClient(app)
@@ -298,11 +303,14 @@ class TestEnvRateLimiter:
 
         from maxwell_daemon.api.rate_limit import (
             ENV_DEFAULT_PER_MIN,
+            ENV_TRUST_PROXY,
             ENV_WRITE_PER_MIN,
         )
 
         monkeypatch.setenv(ENV_DEFAULT_PER_MIN, "3")
         monkeypatch.setenv(ENV_WRITE_PER_MIN, "1")
+        # Trust proxy so XFF in the test below isolates the two pseudo-clients.
+        monkeypatch.setenv(ENV_TRUST_PROXY, "1")
 
         # No explicit kwargs → middleware reads env vars.
         app = _build_env_app()
@@ -363,18 +371,54 @@ class TestRouteClass:
 
 
 class TestIpKey:
-    def test_x_forwarded_for_first_ip_wins(self) -> None:
+    def test_xff_ignored_by_default(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        """X-Forwarded-For must be ignored unless ``MAXWELL_TRUST_PROXY`` is set.
+
+        Otherwise any direct client could mint a fresh bucket per request.
+        """
         from unittest.mock import MagicMock
 
-        from maxwell_daemon.api.rate_limit import _ip_key
+        from maxwell_daemon.api.rate_limit import ENV_TRUST_PROXY, _ip_key
+
+        monkeypatch.delenv(ENV_TRUST_PROXY, raising=False)
 
         req = MagicMock()
-        # MagicMock.headers.get must respect real header lookups.
         req.headers.get.side_effect = lambda name, default="": {
             "x-forwarded-for": "203.0.113.7, 10.0.0.1",
         }.get(name, default)
         req.client.host = "10.0.0.99"
+        # Direct ASGI peer wins; XFF is dropped on the floor.
+        assert _ip_key(req) == "ip:10.0.0.99"
+
+    def test_xff_honored_when_trust_proxy_set(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        from unittest.mock import MagicMock
+
+        from maxwell_daemon.api.rate_limit import ENV_TRUST_PROXY, _ip_key
+
+        monkeypatch.setenv(ENV_TRUST_PROXY, "1")
+
+        req = MagicMock()
+        req.headers.get.side_effect = lambda name, default="": {
+            "x-forwarded-for": "203.0.113.7, 10.0.0.1",
+        }.get(name, default)
+        req.client.host = "10.0.0.99"
+        # First XFF entry wins when trust-proxy is enabled.
         assert _ip_key(req) == "ip:203.0.113.7"
+
+    def test_xff_invalid_trust_proxy_falls_back_to_default(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        """A non-truthy ``MAXWELL_TRUST_PROXY`` value behaves like the default."""
+        from unittest.mock import MagicMock
+
+        from maxwell_daemon.api.rate_limit import ENV_TRUST_PROXY, _ip_key
+
+        monkeypatch.setenv(ENV_TRUST_PROXY, "maybe")
+
+        req = MagicMock()
+        req.headers.get.side_effect = lambda name, default="": {
+            "x-forwarded-for": "203.0.113.7",
+        }.get(name, default)
+        req.client.host = "10.0.0.99"
+        assert _ip_key(req) == "ip:10.0.0.99"
 
     def test_falls_back_to_client_host(self) -> None:
         from unittest.mock import MagicMock
@@ -386,12 +430,111 @@ class TestIpKey:
         req.client.host = "192.0.2.5"
         assert _ip_key(req) == "ip:192.0.2.5"
 
-    def test_returns_unknown_when_no_client(self) -> None:
+    def test_returns_unknown_when_no_client(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         from unittest.mock import MagicMock
 
-        from maxwell_daemon.api.rate_limit import _ip_key
+        from maxwell_daemon.api.rate_limit import ENV_TRUST_PROXY, _ip_key
+
+        monkeypatch.delenv(ENV_TRUST_PROXY, raising=False)
 
         req = MagicMock()
         req.headers.get.side_effect = lambda name, default="": default
         req.client = None
         assert _ip_key(req) == "ip:unknown"
+
+
+class TestBucketEviction:
+    """Bound the bucket dict so attackers can't drive memory growth."""
+
+    def test_bucket_dict_evicts_when_full(self) -> None:
+        from maxwell_daemon.api.rate_limit import TokenBucketLimiter
+
+        # Tiny cap so we can observe eviction without bursting 10k requests.
+        lim = TokenBucketLimiter(default_rate=1.0, default_burst=1, max_buckets=3)
+
+        # Fill to capacity with three distinct keys.
+        for ip in ("1.1.1.1", "2.2.2.2", "3.3.3.3"):
+            lim.check(ip)
+        # The internal dict carries one entry per (key, group) pair.
+        assert len(lim._buckets) == 3
+
+        # The next distinct key must trigger eviction of the oldest entry.
+        lim.check("4.4.4.4")
+        assert len(lim._buckets) == 3
+        # The oldest key (1.1.1.1) must be gone; newest must remain.
+        assert ("1.1.1.1", "default") not in lim._buckets
+        assert ("4.4.4.4", "default") in lim._buckets
+
+    def test_eviction_does_not_affect_existing_keys(self) -> None:
+        """Re-touching an existing key shouldn't evict anyone."""
+        from maxwell_daemon.api.rate_limit import TokenBucketLimiter
+
+        lim = TokenBucketLimiter(default_rate=10.0, default_burst=10, max_buckets=2)
+        lim.check("a")
+        lim.check("b")
+        # Re-touching "a" should be a hit, not an insert → nothing evicted.
+        for _ in range(5):
+            lim.check("a")
+        assert len(lim._buckets) == 2
+        assert ("a", "default") in lim._buckets
+        assert ("b", "default") in lim._buckets
+
+
+class TestEnvLimiterSkipsWhenConfigDriven:
+    """Codex P1 #1 — env limiter must not stack on top of the config one."""
+
+    def test_env_limiter_noop_when_config_limiter_present(self) -> None:
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from maxwell_daemon.api.rate_limit import (
+            install_env_rate_limiter,
+            install_rate_limiter,
+        )
+
+        app = FastAPI()
+
+        @app.get("/api/status")
+        async def _status() -> dict[str, str]:
+            return {"state": "idle"}
+
+        # Generous YAML-driven limiter. If the env limiter stacked underneath
+        # with its strict 120/min default, we'd see a 429 well before request 50.
+        install_rate_limiter(
+            app,
+            default_rate=1000.0,
+            default_burst=1000,
+            groups={},
+        )
+        middleware_after_config = len(app.user_middleware)
+
+        # The env limiter call should be a no-op and return None.
+        result = install_env_rate_limiter(app)
+        assert result is None
+        # And it must NOT have registered a second middleware.
+        assert len(app.user_middleware) == middleware_after_config
+
+        # Behavior check: bursting under the config-driven budget all succeeds.
+        client = TestClient(app)
+        for _ in range(50):
+            assert client.get("/api/status").status_code == 200
+
+    def test_env_limiter_installs_when_no_config_limiter(self) -> None:
+        """Sanity check: if the config-driven path didn't run, the env one engages."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from maxwell_daemon.api.rate_limit import install_env_rate_limiter
+
+        app = FastAPI()
+
+        @app.get("/api/status")
+        async def _status() -> dict[str, str]:
+            return {"state": "idle"}
+
+        limiter = install_env_rate_limiter(app, default_per_min=1, write_per_min=1)
+        assert limiter is not None
+
+        client = TestClient(app)
+        assert client.get("/api/status").status_code == 200
+        assert client.get("/api/status").status_code == 429
