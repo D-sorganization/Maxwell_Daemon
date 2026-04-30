@@ -288,7 +288,7 @@ class APIConfig(BaseModel):
     # Always present so callers can read .enabled without a None check; the
     # default is disabled so adding this field is a no-op upgrade.
     dispatch_rate_limit: DispatchRateLimitConfig = Field(
-        default_factory=lambda: DispatchRateLimitConfig(),
+        default_factory=DispatchRateLimitConfig,
         description="Per-endpoint rate limit for POST /api/dispatch. Disabled by default.",
     )
 

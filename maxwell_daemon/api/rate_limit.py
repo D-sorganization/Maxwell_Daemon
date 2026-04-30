@@ -21,7 +21,6 @@ proxy or swap ``InMemoryRateLimitStore`` for a Redis-backed implementation
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import threading
 import time
 from collections import deque
@@ -294,7 +293,6 @@ class RateLimitStore(Protocol):
 
     async def hit(self, key: str, policy: RateLimitPolicy) -> RateLimitResult:
         """Record one request and return whether it's permitted under ``policy``."""
-        ...
 
 
 class InMemoryRateLimitStore:
