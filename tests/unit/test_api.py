@@ -1510,3 +1510,37 @@ class TestSSHEndpointsWithoutAsyncSSH:
                 json={"host": "srv", "user": "ubuntu"},
             )
         assert r.status_code == 503
+
+
+class TestOpenAPIMetadata:
+    """OpenAPI / Swagger schema is exposed and carries curated metadata."""
+
+    def test_openapi_json_is_served(self, client: TestClient) -> None:
+        r = client.get("/openapi.json")
+        assert r.status_code == 200
+        body = r.json()
+        info = body["info"]
+        assert info["title"] == "Maxwell-Daemon API"
+        # Curated description should mention the contract version & docs links.
+        assert "Contract version" in info["description"]
+        assert "/docs" in info["description"]
+        assert info["license"]["name"] == "MIT"
+        assert "github.com/D-sorganization/Maxwell-Daemon" in info["contact"]["url"]
+
+    def test_swagger_ui_is_served(self, client: TestClient) -> None:
+        r = client.get("/docs")
+        assert r.status_code == 200
+        assert "swagger" in r.text.lower()
+
+    def test_redoc_ui_is_served(self, client: TestClient) -> None:
+        r = client.get("/redoc")
+        assert r.status_code == 200
+        # ReDoc HTML page references the redoc bundle.
+        assert "redoc" in r.text.lower()
+
+    def test_openapi_declares_known_tags(self, client: TestClient) -> None:
+        r = client.get("/openapi.json")
+        body = r.json()
+        tag_names = {tag["name"] for tag in body.get("tags", [])}
+        # A representative subset — full list is curated in create_app().
+        assert {"health", "tasks", "control", "cost"} <= tag_names

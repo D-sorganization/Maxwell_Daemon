@@ -1296,7 +1296,51 @@ def create_app(
     app = FastAPI(
         title="Maxwell-Daemon API",
         version=__version__,
-        description="Remote control plane for Maxwell-Daemon daemons.",
+        summary="Autonomous AI control plane orchestrating agent tasks.",
+        description=(
+            "Maxwell-Daemon exposes a stable HTTP + WebSocket API for "
+            "orchestrating agent tasks, observing pipeline state, and "
+            "controlling the daemon lifecycle.\n\n"
+            f"**Contract version:** `{CONTRACT_VERSION}` (advertised at "
+            "`GET /api/version`).  The contract is **append-only**: new "
+            "fields and endpoints may appear, but existing request and "
+            "response shapes are stable within a major version.\n\n"
+            "## Authentication\n\n"
+            "Most endpoints require a bearer token in the `Authorization` "
+            "header:\n\n"
+            "```\nAuthorization: Bearer <your_token>\n```\n\n"
+            "When JWT auth is configured, role-based access control "
+            "(viewer / operator / admin) is enforced per endpoint.\n\n"
+            "## WebSockets\n\n"
+            "Real-time event streams are exposed under `/ws/*`.  See the "
+            "`AGENTS.md` and `SPEC.md` documents in the source repository "
+            "for the event schema.\n\n"
+            "## Interactive docs\n\n"
+            "* Swagger UI: [`/docs`](/docs)\n"
+            "* ReDoc: [`/redoc`](/redoc)\n"
+            "* OpenAPI JSON: [`/openapi.json`](/openapi.json)\n"
+        ),
+        contact={
+            "name": "Maxwell-Daemon",
+            "url": "https://github.com/D-sorganization/Maxwell-Daemon",
+        },
+        license_info={
+            "name": "MIT",
+            "url": "https://github.com/D-sorganization/Maxwell-Daemon/blob/main/LICENSE",
+        },
+        openapi_tags=[
+            {"name": "health", "description": "Liveness and readiness probes."},
+            {"name": "version", "description": "Daemon and contract version metadata."},
+            {"name": "tasks", "description": "Submit, list, and inspect agent tasks."},
+            {
+                "name": "control",
+                "description": "Privileged daemon control (pause / resume / abort).",
+            },
+            {"name": "cost", "description": "Cost ledger queries and aggregates."},
+            {"name": "backends", "description": "LLM backend discovery and configuration."},
+            {"name": "auth", "description": "Authentication and session management."},
+            {"name": "fleet", "description": "Multi-repo fleet manifest and dispatch."},
+        ],
     )
     mount_metrics_endpoint(app)
     http_metrics_middleware(app)
