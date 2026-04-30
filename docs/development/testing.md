@@ -282,6 +282,27 @@ def test_queue_dequeue_latency() -> None:
     assert elapsed_ms < 1.0, f"Dequeue took {elapsed_ms:.2f}ms, expected < 1ms"
 ```
 
+### Phase-1 Benchmark Smoke Suite (`tests/benchmarks/`)
+
+A lightweight `pytest-benchmark` suite lives at `tests/benchmarks/` and
+covers three hot-path operations (Phase 1 of #800):
+
+- `GET /api/status` — HTTP read p50.
+- `DispatchRequest` Pydantic envelope validation throughput.
+- `TaskStore.save` SQLite write throughput.
+
+This suite is **excluded from the default `pytest` invocation** (via
+`--ignore=tests/benchmarks` in `pyproject.toml`) because timing
+benchmarks can flake on contended runners and would bias coverage.
+Run it locally on demand:
+
+```bash
+pytest tests/benchmarks/ --benchmark-only --no-cov
+```
+
+CI does not run this suite; the existing `pytest benchmarks/`
+top-level invocation is unchanged.
+
 ## Coverage Exclusions
 
 Mark code that cannot/should not be tested with `# pragma: no cover`:
