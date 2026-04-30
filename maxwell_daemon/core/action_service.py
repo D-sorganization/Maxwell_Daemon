@@ -114,7 +114,7 @@ class ActionService:
                         f"Action {action.id} exceeded {_ACTION_EXECUTOR_TIMEOUT_SECONDS:.0f}s timeout"
                     ) from None
             return self.mark_applied(running.id, result=result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self.mark_failed(running.id, error=str(exc))
 
     def get(self, action_id: str) -> Action | None:

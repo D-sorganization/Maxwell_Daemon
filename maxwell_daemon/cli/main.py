@@ -184,7 +184,7 @@ def health(
                 table.add_row(name, "[green]healthy[/green]" if ok else "[red]unreachable[/red]")
                 if not ok:
                     failures += 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 table.add_row(name, f"[red]error: {e}[/red]")
                 failures += 1
         console.print(table)

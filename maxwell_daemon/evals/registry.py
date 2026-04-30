@@ -120,7 +120,7 @@ def list_scenarios() -> list[EvalScenario]:
                         data.setdefault("fixture_repo_ref", "fixture://local")
                         data.setdefault("task_prompt", "Run benchmark")
                         scenarios.append(EvalScenario(**data))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 import logging
 
                 logging.getLogger(__name__).warning(f"Failed to load suite {suite_file}: {e}")

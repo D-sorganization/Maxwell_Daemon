@@ -132,7 +132,7 @@ def load_hooks_config(
                 data = yaml.safe_load(f)
             if isinstance(data, dict):
                 return WorkspaceHooksConfig.from_dict(data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Failed to load local workspace hooks from {local_file}: {e}")
 
     # Fallback to global config if available
