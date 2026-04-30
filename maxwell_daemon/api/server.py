@@ -44,7 +44,6 @@ from maxwell_daemon.api.contract import (
     ControlResponse,
     DispatchRequest,
     DispatchResponse,
-    HealthResponse,
     StatusResponse,
     StatusV2Response,
     StatusV2RunningTask,
@@ -53,7 +52,6 @@ from maxwell_daemon.api.contract import (
     TaskDetail,
     TaskListResponse,
     TaskSummary,
-    VersionResponse,
 )
 from maxwell_daemon.api.validation import (
     PriorityField,
@@ -1660,30 +1658,12 @@ def create_app(  # noqa: C901
     # These endpoints form the versioned contract consumed by runner-dashboard
     # and other operator tooling.  Shape changes require bumping CONTRACT_VERSION
     # in maxwell_daemon/api/contract.py.
+    #
+    # ``/api/version`` and ``/api/health`` live in maxwell_daemon.api.routes.health
+    # as the first phase of decomposing this module (issue #793).
+    from maxwell_daemon.api.routes import health as _health_routes
 
-    @app.get("/api/version")
-    async def api_version() -> VersionResponse:
-        return VersionResponse(daemon=__version__, contract=CONTRACT_VERSION)
-
-    @app.get("/api/health")
-    async def api_health() -> HealthResponse:
-        try:
-            state = daemon.state()
-            uptime = (datetime.now(timezone.utc) - state.started_at).total_seconds()
-            # "gate" concept: open when backends are available, closed otherwise.
-            gate = "open" if state.backends_available else "closed"
-            return HealthResponse(
-                status="ok",
-                uptime_seconds=uptime,
-                gate=gate,
-            )
-        except Exception:
-            log.exception("api_health: daemon.state() raised; returning degraded")
-            return HealthResponse(
-                status="degraded",
-                uptime_seconds=0.0,
-                gate="closed",
-            )
+    _health_routes.register(app, daemon)
 
     @app.get("/api/status")
     async def api_status() -> StatusResponse:
