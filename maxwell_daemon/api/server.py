@@ -1429,6 +1429,36 @@ def create_app(  # noqa: C901
             },
         )
 
+    # Phase-1 per-endpoint rate limit for POST /api/dispatch (issue #796).
+    # Build the dependency unconditionally so the route signature is stable;
+    # when the feature is disabled the dep is a cheap no-op.
+    dispatch_rl_cfg = api_cfg.dispatch_rate_limit
+    if dispatch_rl_cfg.enabled:
+        from maxwell_daemon.api.rate_limit import (
+            InMemoryRateLimitStore,
+            RateLimitPolicy,
+            build_rate_limit_dependency,
+            install_rate_limit_headers_middleware,
+        )
+
+        _dispatch_rl_store = InMemoryRateLimitStore()
+        _dispatch_rl_policy = RateLimitPolicy(
+            limit=dispatch_rl_cfg.limit,
+            window_seconds=float(dispatch_rl_cfg.window_seconds),
+        )
+        dispatch_rate_limit_dep: Any = build_rate_limit_dependency(
+            endpoint="dispatch",
+            policy=_dispatch_rl_policy,
+            store=_dispatch_rl_store,
+        )
+        install_rate_limit_headers_middleware(app)
+    else:
+
+        async def _noop_dispatch_rate_limit() -> None:
+            return None
+
+        dispatch_rate_limit_dep = _noop_dispatch_rate_limit
+
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next: Any) -> Response:
         """Attach a UUID request-id to every request + response + log line."""
@@ -1778,7 +1808,11 @@ def create_app(  # noqa: C901
             artifacts=[],
         )
 
-    @app.post("/api/dispatch", status_code=status.HTTP_202_ACCEPTED)
+    @app.post(
+        "/api/dispatch",
+        status_code=status.HTTP_202_ACCEPTED,
+        dependencies=[Depends(dispatch_rate_limit_dep)],
+    )
     async def api_dispatch(payload: DispatchRequest) -> DispatchResponse:
         expected_token = auth_token or ""
         if not expected_token or not hmac.compare_digest(

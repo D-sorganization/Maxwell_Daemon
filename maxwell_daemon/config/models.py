@@ -236,6 +236,32 @@ class RateLimitConfig(BaseModel):
     burst: int = Field(50, ge=1, description="Bucket capacity (max burst)")
 
 
+class DispatchRateLimitConfig(BaseModel):
+    """Phase-1 per-endpoint rate limiter for ``POST /api/dispatch``.
+
+    Disabled by default so adding this config block is non-breaking. Operators
+    opt in by setting ``enabled: true`` in ``maxwell-daemon.yaml`` under
+    ``api.dispatch_rate_limit``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(
+        False,
+        description="Enable the sliding-window rate limit on POST /api/dispatch.",
+    )
+    limit: int = Field(
+        10,
+        ge=1,
+        description="Maximum POST /api/dispatch requests per client per window.",
+    )
+    window_seconds: int = Field(
+        60,
+        ge=1,
+        description="Sliding-window length in seconds. Counts roll off after this.",
+    )
+
+
 class APIConfig(BaseModel):
     enabled: bool = True
     host: str = "127.0.0.1"
@@ -258,6 +284,13 @@ class APIConfig(BaseModel):
     # Rate limiting. Absent = disabled entirely.
     rate_limit_default: RateLimitConfig | None = None
     rate_limit_groups: dict[str, RateLimitConfig] = Field(default_factory=dict)
+    # Phase-1 per-endpoint rate limit for POST /api/dispatch (issue #796).
+    # Always present so callers can read .enabled without a None check; the
+    # default is disabled so adding this field is a no-op upgrade.
+    dispatch_rate_limit: DispatchRateLimitConfig = Field(
+        default_factory=DispatchRateLimitConfig,
+        description="Per-endpoint rate limit for POST /api/dispatch. Disabled by default.",
+    )
 
     def jwt_secret_value(self) -> str | None:
         """Unwrap the JWT secret SecretStr, or None if unset."""
