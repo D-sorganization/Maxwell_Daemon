@@ -316,7 +316,7 @@ class ContextBuilder:
                 token_budget=1_000,
                 max_chars=4_000,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             return ""
 
     @staticmethod

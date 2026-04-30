@@ -181,7 +181,7 @@ class CrossAuditService:
             )
             response = await player.execute(Job(instructions=prompt))
             return self._success_result(target.role.name, decision.backend_name, response)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return CrossAuditResult(
                 role_name=target.role.name,
                 backend_name=backend_label,

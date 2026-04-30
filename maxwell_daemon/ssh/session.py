@@ -210,7 +210,7 @@ class SSHSessionPool:
                 try:
                     priv, _ = self._key_store.get_or_generate(host)
                     connect_kwargs["client_keys"] = [priv]
-                except Exception:
+                except Exception:  # noqa: BLE001
                     pass  # nosec B110 fall through to agent/default key resolution
 
             conn = await asyncssh.connect(**connect_kwargs)

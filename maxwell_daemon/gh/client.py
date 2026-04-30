@@ -242,7 +242,7 @@ class GitHubClient:
             data = json.loads(out)
             reset = data.get("resources", {}).get("core", {}).get("reset")
             return float(reset) if reset is not None else None
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None
 
     async def _request_with_retry(
