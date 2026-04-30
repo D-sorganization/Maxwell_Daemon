@@ -412,7 +412,9 @@ def _record_exceeded(endpoint: str) -> None:
         from maxwell_daemon.metrics import RATE_LIMIT_EXCEEDED_TOTAL
 
         RATE_LIMIT_EXCEEDED_TOTAL.labels(endpoint=endpoint).inc()
-    except Exception:  # noqa: BLE001 — metrics must never break the request path
+    except Exception:
+        # Metrics must never break the request path. Swallow any registry /
+        # import / labelling error so the 429 still fires correctly.
         pass
 
 

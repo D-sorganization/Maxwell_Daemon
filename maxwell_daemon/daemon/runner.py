@@ -47,9 +47,9 @@ from maxwell_daemon.core.delegate_lifecycle import (
     DelegateSessionStore,
 )
 from maxwell_daemon.core.task_store import TaskStore
-from maxwell_daemon.daemon.retry_policy import DEFAULT_RETRY_POLICY
 from maxwell_daemon.core.work_item_store import WorkItemStore
 from maxwell_daemon.core.work_items import WorkItem, WorkItemStatus
+from maxwell_daemon.daemon.retry_policy import DEFAULT_RETRY_POLICY
 from maxwell_daemon.director import (
     GraphNodeExecutor,
     GraphStatus,

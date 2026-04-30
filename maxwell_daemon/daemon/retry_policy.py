@@ -116,7 +116,7 @@ class RetryPolicy:
         from ``base_delay_seconds`` to keep one source of truth, and rounded
         deterministically (no jitter) so the public retry hint is stable.
         """
-        return int(round(self.base_delay_seconds))
+        return round(self.base_delay_seconds)
 
 
 # Module-level default used at the existing call sites. Wrapping the dataclass
