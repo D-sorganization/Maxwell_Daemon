@@ -145,7 +145,7 @@ class RemoteDaemonClient:
         url = f"{self._base_url(machine)}{_HEALTH_PATH}"
         try:
             response = await self._http.get(url, headers=self._headers())
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
         return response.status_code == 200
 
@@ -192,7 +192,7 @@ def _extract_error_detail(response: HTTPResponseProtocol) -> str:
                 if body.get(key):
                     return f"HTTP {status}: {body[key]}"
         return f"HTTP {status}: {body!r}"
-    except Exception:
+    except Exception:  # noqa: BLE001
         text = getattr(response, "text", "") or ""
         if text:
             return f"HTTP {status}: {text}"

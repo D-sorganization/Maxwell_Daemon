@@ -127,7 +127,7 @@ class SandboxGateAdapter:
                 network_enabled=network_enabled,
                 allow_gpu=allow_gpu,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self._failure(
                 "invalid sandbox policy",
                 (
@@ -152,7 +152,7 @@ class SandboxGateAdapter:
                 gate_name=gate.name,
                 policy_name=policy_name,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self._failure(
                 "sandbox command execution error",
                 (

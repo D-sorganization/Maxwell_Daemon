@@ -566,7 +566,7 @@ class BackupManager:
             import yaml
 
             raw = yaml.safe_load(self._config_path.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except Exception:  # noqa: BLE001
             return
 
         lines = [

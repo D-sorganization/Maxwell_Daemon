@@ -122,7 +122,7 @@ class RepoSchematicProvider:
         try:
             map_block = build_repo_schematic(self.workspace).to_prompt(max_chars=budget_chars)
             return ContextProviderResult(name=self.name, text=map_block, size_chars=len(map_block))
-        except Exception:
+        except Exception:  # noqa: BLE001
             return ContextProviderResult(name=self.name, text="", size_chars=0)
 
 

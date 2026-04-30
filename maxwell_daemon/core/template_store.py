@@ -348,7 +348,7 @@ class TemplateStore:
                 data = json.loads(child.read_text("utf-8"))
                 template = TaskTemplate.model_validate(data)
                 self._templates[template.id] = template
-            except Exception:
+            except Exception:  # noqa: BLE001
                 log.warning("Failed to load template from %s", child.name, exc_info=True)
 
     def list_templates(self) -> list[TaskTemplate]:

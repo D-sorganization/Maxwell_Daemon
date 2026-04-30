@@ -624,7 +624,7 @@ class AgentLoopBackend(ILLMBackend):
                 messages=[{"role": "user", "content": "."}],
             )
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
 
     def capabilities(self, model: str) -> BackendCapabilities:

@@ -129,7 +129,7 @@ class BatchDispatchPlanner:
     ) -> tuple[list[BatchItem], RepoBatchSummary]:
         try:
             issues = await self._list_issues(repo, state=state, limit=limit)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return [], RepoBatchSummary(repo=repo, eligible=0, submitted=0, skipped=0)
 
         filtered = [i for i in issues if label is None or label in i.labels]

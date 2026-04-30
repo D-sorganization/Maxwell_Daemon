@@ -196,7 +196,7 @@ class TestTasksDictThreadSafety:
                 d.submit("hi")
             except QueueSaturationError:
                 pass
-            except BaseException as e:
+            except BaseException as e:  # noqa: BLE001
                 errors.append(e)
 
         def _read(_: int) -> None:
@@ -204,7 +204,7 @@ class TestTasksDictThreadSafety:
                 # state() copies self._tasks — the bug surfaces here when a
                 # concurrent submit() mutates the dict mid-copy.
                 d.state()
-            except BaseException as e:
+            except BaseException as e:  # noqa: BLE001
                 errors.append(e)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
@@ -241,7 +241,7 @@ class TestTasksDictThreadSafety:
                 while not stop:
                     with contextlib.suppress(QueueSaturationError):
                         d.submit("hi")
-            except BaseException as e:
+            except BaseException as e:  # noqa: BLE001
                 errors.append(e)
 
         def _reader() -> None:
@@ -251,7 +251,7 @@ class TestTasksDictThreadSafety:
                     # Force full iteration — catches torn snapshots.
                     for _tid, _task in snap.tasks.items():
                         pass
-            except BaseException as e:
+            except BaseException as e:  # noqa: BLE001
                 errors.append(e)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:

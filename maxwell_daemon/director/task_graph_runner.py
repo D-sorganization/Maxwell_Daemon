@@ -203,7 +203,7 @@ class GraphRunner:
                     cost_usd=output.cost_usd,
                     attempts=attempts,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 last_error = str(exc) or repr(exc)
 
         finished_at = _now()
