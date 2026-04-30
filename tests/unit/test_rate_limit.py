@@ -281,16 +281,28 @@ class TestExtractClientId:
         req.headers.get.return_value = ""
         assert extract_client_id(req) == "user:alice"
 
-    def test_falls_back_to_bearer_hash(self) -> None:
+    def test_unverified_bearer_token_is_ignored(self) -> None:
+        """An ``Authorization: Bearer`` header that no auth middleware has
+        validated must NOT influence the bucket key — otherwise a caller
+        can rotate fake tokens to bypass throttling. Falls through to IP."""
         req = MagicMock()
-        # No jwt_sub on state.
+        # No verified identity attached to state.
         req.state = MagicMock(spec=[])
         req.headers.get.side_effect = lambda name, default="": {
             "authorization": "Bearer s3cret",
         }.get(name, default)
+        req.client.host = "10.0.0.5"
         cid = extract_client_id(req)
-        assert cid.startswith("tok:")
+        assert cid == "ip:10.0.0.5"
+        assert "tok:" not in cid
         assert "s3cret" not in cid
+
+    def test_uses_verified_static_token_id(self) -> None:
+        req = MagicMock()
+        req.state = MagicMock(spec=["auth_token_id"])
+        req.state.auth_token_id = "ops-bot"
+        req.headers.get.return_value = ""
+        assert extract_client_id(req) == "token:ops-bot"
 
     def test_falls_back_to_forwarded_for(self) -> None:
         req = MagicMock()

@@ -370,25 +370,31 @@ class InMemoryRateLimitStore:
 def extract_client_id(request: Request) -> str:
     """Best-effort identity for rate-limit bucketing.
 
+    Only **verified** identities — those attached to ``request.state`` by an
+    upstream auth middleware after validating the credential — may key a
+    bucket. Unverified credentials (e.g. an arbitrary ``Authorization: Bearer``
+    header on an endpoint that authorizes via a body field instead) MUST NOT
+    influence the key, otherwise an attacker can rotate fake tokens to mint a
+    fresh bucket per request and bypass throttling.
+
     Order of precedence:
-    1. ``request.state.jwt_sub`` (set by JWT auth middleware when a verified
-       token has a ``sub`` claim) — see follow-up note about full per-user
-       extraction in the PR description.
-    2. Hash of the bearer token (without ever logging the raw value).
+    1. ``request.state.jwt_sub`` — verified JWT subject claim.
+    2. ``request.state.auth_token_id`` — verified static-token identifier.
     3. ``X-Forwarded-For`` left-most entry, when the daemon trusts a proxy.
     4. ``request.client.host`` (direct connection).
-    5. The literal string ``"unknown"`` so we never raise on weird clients.
+    5. The literal string ``"ip:unknown"`` so we never raise on weird clients.
     """
-    # 1. Authenticated JWT subject, when middleware attached it.
-    sub = getattr(getattr(request, "state", None), "jwt_sub", None)
+    state = getattr(request, "state", None)
+
+    # 1. Authenticated JWT subject, attached by the JWT auth middleware.
+    sub = getattr(state, "jwt_sub", None)
     if isinstance(sub, str) and sub:
         return f"user:{sub}"
 
-    # 2. Bearer token hash — keeps the keyspace bounded without leaking secrets.
-    auth = request.headers.get("authorization", "")
-    if auth.startswith("Bearer "):
-        digest = hashlib.sha256(auth.encode()).hexdigest()[:16]
-        return f"tok:{digest}"
+    # 2. Verified static-token identifier, attached by static-token auth.
+    token_id = getattr(state, "auth_token_id", None)
+    if isinstance(token_id, str) and token_id:
+        return f"token:{token_id}"
 
     # 3. Trust the proxy chain only if the daemon has been told to (via the
     #    standard ``X-Forwarded-For`` header). We take the left-most entry.
