@@ -135,5 +135,5 @@ class McpClientManager:
             try:
                 registry.register(spec)
                 log.debug("Attached MCP tool %r", spec.name)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 log.warning("Failed to attach MCP tool %r: %s", spec.name, e)

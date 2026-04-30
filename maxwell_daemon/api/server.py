@@ -722,7 +722,7 @@ def _auth_dep(token: str | None) -> Any:
     return _check
 
 
-def _make_rbac_dep(
+def _make_rbac_dep(  # noqa: C901
     minimum: Role,
     static_token: str | None,
     jwt_config: JWTConfig | None,
@@ -739,7 +739,7 @@ def _make_rbac_dep(
     (open/dev mode — same behaviour as the existing ``_auth_dep(None)``).
     """
 
-    async def _dep(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:
+    async def _dep(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:  # noqa: C901
         # Open mode — nothing to enforce.
         if static_token is None and jwt_config is None:
             return
@@ -869,7 +869,7 @@ async def _websocket_auth_or_close(
 
     try:
         claims = jwt_config.decode_token(presented)
-    except Exception:  # nosec B110 - invalid WebSocket token, close below.
+    except Exception:  # nosec B110 - invalid WebSocket token, close below.  # noqa: BLE001
         if audit:
             audit.log_auth_decision(
                 subject="unknown",
@@ -1278,7 +1278,7 @@ class EvalLeaderboardEntry(BaseModel):
     pass_rate: float
 
 
-def create_app(
+def create_app(  # noqa: C901
     daemon: Daemon,
     *,
     auth_token: str | None = None,
@@ -1592,7 +1592,7 @@ def create_app(
                     "role": claims.role.value,
                     "exp": claims.exp.isoformat(),
                 }
-            except Exception:
+            except Exception:  # noqa: BLE001
                 # invalid/expired JWT, fall through to static token check
                 pass  # nosec B110
         if auth_token is not None and authorization:
@@ -1639,7 +1639,7 @@ def create_app(
     async def api_status() -> StatusResponse:
         try:
             state = daemon.state()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return StatusResponse(
                 pipeline_state="error",
                 gate="closed",
@@ -1673,7 +1673,7 @@ def create_app(
         generated_at = datetime.now(timezone.utc)
         try:
             state = daemon.state()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return StatusV2Response(
                 generated_at=generated_at.isoformat(),
                 counts=_status_v2_counts([]),
@@ -1812,7 +1812,7 @@ def create_app(
             state = daemon.state()
             running_tasks = [t for t in state.tasks.values() if t.status.value == "running"]
             previous_state = "running" if running_tasks else "idle"
-        except Exception:
+        except Exception:  # noqa: BLE001
             previous_state = "unknown"
 
         if action == "abort":
@@ -1823,7 +1823,7 @@ def create_app(
                     if task_obj.status.value in ("running", "queued"):
                         with contextlib.suppress(Exception):
                             daemon.cancel_task(task_obj.id)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 log.warning("Error during abort: cancel tasks failed", exc_info=True)
 
         return ControlResponse(
@@ -1924,13 +1924,13 @@ def create_app(
                 raise HTTPException(status_code=404, detail=f"Backend '{name}' not configured")
             try:
                 backend = daemon._router._get_or_create(name, daemon._config.backends[name])
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 return BackendTestResponse(success=False, error=str(e))
 
         start = monotonic()
         try:
             is_healthy = await backend.health_check()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return BackendTestResponse(success=False, error=str(e))
 
         latency = (monotonic() - start) * 1000
@@ -1974,7 +1974,7 @@ def create_app(
                 max_tokens=10,
             )
             return {"status": "success", "response": resp.content}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return {"status": "error", "error": str(e)}
 
     @app.post(
@@ -2576,7 +2576,7 @@ def create_app(
                     priority=item.priority,
                 )
                 dispatched.append(TaskView.from_task(task))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 failures.append({"repo": item.repo, "number": item.number, "error": str(e)})
         return {
             "dispatched": len(dispatched),
@@ -2699,7 +2699,7 @@ def create_app(
             fleet_client = RemoteDaemonClient(auth_token=daemon._config.api_auth_token)
             try:
                 probed = await fleet_client.refresh_all(initial)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 probed = initial  # fall back to config data on probe failure
 
             # Count tasks dispatched to each machine.
@@ -3034,7 +3034,7 @@ def create_app(
                                         pass_rate=1.0 if res.status.value == "passed" else 0.0,
                                     )
                                 )
-                except Exception:
+                except Exception:  # noqa: BLE001
                     log.warning(
                         "Failed to build leaderboard entry for %s/%s",
                         backend,
@@ -3322,7 +3322,7 @@ def create_app(
                 await ws.send_bytes(chunk)
         except WebSocketDisconnect:
             return
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             await ws.send_text(_json_mod.dumps({"error": str(exc)}))
             await ws.close(code=1011)
 
@@ -3349,7 +3349,7 @@ def create_app(
                 await ws.send_text(event.to_json())
         except WebSocketDisconnect:
             return
-        except Exception:
+        except Exception:  # noqa: BLE001
             await ws.close(code=1011)
 
     return app

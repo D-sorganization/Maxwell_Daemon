@@ -427,7 +427,7 @@ class ToolRegistry:
         if self._hook_runner is not None:
             try:
                 pre = await self._hook_runner.run_pre_tool(name, arguments)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self._record_invocation(
                     name,
                     arguments,
@@ -457,7 +457,7 @@ class ToolRegistry:
             if inspect.isawaitable(result):
                 result = await result
             content = _stringify(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self._record_invocation(
                 name,
                 arguments,
@@ -506,7 +506,7 @@ class ToolRegistry:
                 result_summary=result_summary,
                 error=error,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             import structlog
 
             log = structlog.get_logger(__name__)

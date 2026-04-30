@@ -117,14 +117,14 @@ class MistralBackend(ILLMBackend):
         try:
             await self._client.models.list_async()
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
 
     async def list_models(self) -> list[str]:
         try:
             result = await self._client.models.list_async()
             return [m.id for m in result.data]
-        except Exception:
+        except Exception:  # noqa: BLE001
             return []
 
     def capabilities(self, model: str) -> BackendCapabilities:
