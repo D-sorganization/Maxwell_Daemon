@@ -114,7 +114,7 @@ class DiscoveryScheduler:
         try:
             raw = json.loads(self._dedup_path.read_text())
             return {repo: set(nums) for repo, nums in raw.items() if isinstance(nums, list)}
-        except Exception:
+        except Exception:  # noqa: BLE001
             log.warning("discovery dedup file unreadable; starting fresh", exc_info=True)
             return {}
 
@@ -126,7 +126,7 @@ class DiscoveryScheduler:
             self._dedup_path.parent.mkdir(parents=True, exist_ok=True)
             payload = {repo: sorted(nums) for repo, nums in self._dispatched.items()}
             self._dedup_path.write_text(json.dumps(payload))
-        except Exception:
+        except Exception:  # noqa: BLE001
             log.warning("failed to persist discovery dedup", exc_info=True)
 
     async def run_once(self) -> DiscoveryTick:
@@ -143,7 +143,7 @@ class DiscoveryScheduler:
                 # — list_issues is cheap and the alternative would be
                 # threading a mutable out-param through discover_issues.
                 current_issues = await self._github.list_issues(spec.repo, state="open", limit=50)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 log.warning("discovery list failed for repo=%s", spec.repo, exc_info=True)
                 continue
 
@@ -156,7 +156,7 @@ class DiscoveryScheduler:
                     mode=spec.mode,
                     already_dispatched=seen,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 log.warning("discovery tick failed for repo=%s", spec.repo, exc_info=True)
                 continue
 
@@ -217,7 +217,7 @@ class DiscoveryScheduler:
         while not self._stop_event.is_set():
             try:
                 await self.run_once()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 log.warning("discovery tick raised; continuing", exc_info=True)
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self._interval)

@@ -240,7 +240,7 @@ class PrMergeDaemon:
         for pr in prs:
             try:
                 results.append(await self.shepherd(pr, gh=gh))
-            except Exception:
+            except Exception:  # noqa: BLE001
                 log.warning("shepherd raised for pr=%s/%s", pr.repo, pr.number, exc_info=True)
                 results.append(
                     PrShepherdResult(

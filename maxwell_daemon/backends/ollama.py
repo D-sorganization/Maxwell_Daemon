@@ -123,7 +123,7 @@ class OllamaBackend(ILLMBackend):
         try:
             r = await self._client.get(f"{self._endpoint}/api/tags", timeout=5.0)
             return r.status_code == 200
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
 
     async def list_models(self) -> list[str]:
@@ -132,7 +132,7 @@ class OllamaBackend(ILLMBackend):
             r.raise_for_status()
             data = r.json()
             return [m["name"] for m in data.get("models", [])]
-        except Exception:
+        except Exception:  # noqa: BLE001
             return []
 
     def capabilities(self, model: str) -> BackendCapabilities:
