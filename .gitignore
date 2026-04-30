@@ -49,3 +49,6 @@ mypy_test_errors*.txt
 *.retry
 .gaai/project/contexts/backlog/.delivery-locks/
 .gaai/project/contexts/backlog/.delivery-logs/
+
+# Claude Code agent worktrees (per-agent, ephemeral)
+.claude/worktrees/
