@@ -1,0 +1,156 @@
+# Prometheus alert rules for Maxwell-Daemon.
+#
+# Drop this file into your Prometheus rule_files configuration, e.g.:
+#
+#   rule_files:
+#     - /etc/prometheus/maxwell-daemon-alerts.yml
+#
+# Each alert assumes a Prometheus scrape job named "maxwell-daemon" pointed at
+# the daemon's `/metrics` endpoint.  Tune thresholds to your traffic profile —
+# the values below are starting points, not vetted production SLOs.
+
+groups:
+  - name: maxwell-daemon.availability
+    interval: 30s
+    rules:
+      - alert: MaxwellDaemonDown
+        expr: up{job="maxwell-daemon"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: maxwell-daemon
+        annotations:
+          summary: "Maxwell-Daemon target is down"
+          description: |
+            The Prometheus scrape target for {{ $labels.instance }} has been
+            unreachable for more than 2 minutes.  Check the systemd unit, the
+            container, and the reverse proxy in front of /api/health.
+          runbook_url: "https://github.com/D-sorganization/Maxwell_Daemon/blob/main/docs/operations/troubleshooting.md"
+
+      - alert: MaxwellDaemonHealthEndpointFailing
+        # Synthetic blackbox probe — assumes a probe job that scrapes
+        # /api/health and exposes `probe_success`.  Remove if you don't run one.
+        expr: probe_success{job="maxwell-daemon-blackbox"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: maxwell-daemon
+        annotations:
+          summary: "Maxwell-Daemon /api/health probe failing"
+          description: |
+            The blackbox probe against /api/health on {{ $labels.instance }}
+            has been failing for 5 minutes.  The process may be up but unable
+            to serve requests (gate stuck closed, ledger lock, etc.).
+
+  - name: maxwell-daemon.errors
+    interval: 30s
+    rules:
+      - alert: MaxwellDaemonHigh5xxRate
+        expr: |
+          (
+            sum by (instance) (rate(maxwell_daemon_http_requests_total{status=~"5.."}[5m]))
+            /
+            sum by (instance) (rate(maxwell_daemon_http_requests_total[5m]))
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          component: maxwell-daemon
+        annotations:
+          summary: "5xx error rate above 5% on {{ $labels.instance }}"
+          description: |
+            More than 5% of HTTP responses on {{ $labels.instance }} have been
+            5xx for the last 10 minutes.  Inspect structlog output for
+            stacktraces and recent deploys.
+
+      - alert: MaxwellDaemonAgentRequestErrors
+        expr: |
+          sum by (backend) (rate(maxwell_daemon_requests_total{status="error"}[5m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: maxwell-daemon
+        annotations:
+          summary: "Agent request errors elevated on backend {{ $labels.backend }}"
+          description: |
+            Backend {{ $labels.backend }} is returning errors at >0.5 rps.
+            Check upstream provider status (Anthropic, OpenAI, Ollama, etc.)
+            before assuming a daemon-side regression.
+
+  - name: maxwell-daemon.gate
+    interval: 30s
+    rules:
+      - alert: MaxwellDaemonGateStuckClosed
+        # The gate is "stuck closed" when only deny verdicts are recorded for
+        # an extended window.  Adjust the lookback to match your dispatch
+        # cadence; long-idle daemons will trip this on naive thresholds.
+        expr: |
+          (
+            sum(increase(maxwell_daemon_gate_verdicts_total{verdict="deny"}[15m]))
+            > 0
+          )
+          and on()
+          (
+            sum(increase(maxwell_daemon_gate_verdicts_total{verdict="allow"}[15m]))
+            == 0
+          )
+        for: 15m
+        labels:
+          severity: warning
+          component: maxwell-daemon
+        annotations:
+          summary: "Maxwell-Daemon gate has been deny-only for 15m"
+          description: |
+            No allow verdicts have been recorded in the last 15 minutes while
+            deny verdicts are still being recorded.  The gate may be stuck
+            closed — review structlog `event="gate_verdict"` lines and the
+            policy configuration.
+
+  - name: maxwell-daemon.queue
+    interval: 30s
+    rules:
+      - alert: MaxwellDaemonQueueDepthGrowing
+        expr: |
+          deriv(maxwell_daemon_queue_depth[10m]) > 0
+          and
+          maxwell_daemon_queue_depth > 25
+        for: 15m
+        labels:
+          severity: warning
+          component: maxwell-daemon
+        annotations:
+          summary: "Maxwell-Daemon queue depth growing on {{ $labels.instance }}"
+          description: |
+            Queue depth is above 25 and trending up over the last 15 minutes.
+            Workers may be saturated, stalled, or rate-limited upstream.
+
+      - alert: MaxwellDaemonQueueDepthHigh
+        expr: maxwell_daemon_queue_depth > 200
+        for: 10m
+        labels:
+          severity: critical
+          component: maxwell-daemon
+        annotations:
+          summary: "Maxwell-Daemon queue depth above 200"
+          description: |
+            Queue depth has exceeded 200 for more than 10 minutes.  Throughput
+            is likely capped by backend latency or by daemon-side concurrency
+            limits.  Consider scaling out or pausing dispatch.
+
+  - name: maxwell-daemon.cost
+    interval: 1m
+    rules:
+      - alert: MaxwellDaemonCostForecastHigh
+        # Threshold is intentionally a placeholder.  Replace 500 with the USD
+        # ceiling that actually matches your monthly budget.
+        expr: maxwell_daemon_cost_forecast_usd > 500
+        for: 30m
+        labels:
+          severity: warning
+          component: maxwell-daemon
+        annotations:
+          summary: "Month-end spend forecast exceeds budget threshold"
+          description: |
+            Linear month-end forecast is {{ $value }} USD.  Review
+            `maxwell_daemon_request_cost_usd_total` by backend and tighten
+            per-task budgets if needed.
