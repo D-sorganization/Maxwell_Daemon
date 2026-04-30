@@ -1,7 +1,45 @@
 /* Maxwell-Daemon web UI — vanilla CSS, no framework. */
 
+/*
+ * Theme is controlled exclusively by `data-theme` on <html>. The JS bootstrap
+ * sets it from localStorage["maxwell-theme"], falling back to
+ * prefers-color-scheme. We intentionally do NOT use a `prefers-color-scheme`
+ * media query here because that would override the user's explicit choice.
+ */
+
 :root {
   color-scheme: dark light;
+  /* Light theme defaults — applied if no data-theme is ever set. */
+  --bg: #f8f9fc;
+  --panel: #ffffff;
+  --panel-alt: #eef1f7;
+  --text: #20232b;
+  --muted: #5b6577;
+  --border: #d9dde5;
+  --accent: #2e5fd6;
+  --ok: #2f8f3f;
+  --warn: #b57a00;
+  --err: #c13f4a;
+  --pill-bg: #e4e8f1;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f8f9fc;
+  --panel: #ffffff;
+  --panel-alt: #eef1f7;
+  --text: #20232b;
+  --muted: #5b6577;
+  --border: #d9dde5;
+  --accent: #2e5fd6;
+  --ok: #2f8f3f;
+  --warn: #b57a00;
+  --err: #c13f4a;
+  --pill-bg: #e4e8f1;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0f1115;
   --panel: #171a21;
   --panel-alt: #1e2230;
@@ -13,22 +51,6 @@
   --warn: #e0af68;
   --err: #f7768e;
   --pill-bg: #232834;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f8f9fc;
-    --panel: #ffffff;
-    --panel-alt: #eef1f7;
-    --text: #20232b;
-    --muted: #5b6577;
-    --border: #d9dde5;
-    --accent: #2e5fd6;
-    --ok: #2f8f3f;
-    --warn: #b57a00;
-    --err: #c13f4a;
-    --pill-bg: #e4e8f1;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -70,6 +92,19 @@ header h1 {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* Theme toggle button (icon-only). Icon flips via JS textContent. */
+#theme-toggle {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+  line-height: 1;
+}
+#theme-toggle:hover { background: var(--border); }
 .pill.ok    { color: var(--ok); }
 .pill.warn  { color: var(--warn); }
 .pill.err   { color: var(--err); }
