@@ -1408,6 +1408,17 @@ def create_app(
         else None
     )
 
+    # Security-headers middleware — attaches conservative defaults
+    # (X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
+    # Permissions-Policy, Content-Security-Policy, optional HSTS) to every
+    # response. Installed at the front of the middleware stack so it runs
+    # closest to the route handler and decorates every outgoing response
+    # before outer middleware (correlation-id, rate-limit, request-id) add
+    # their own headers (#797 Phase 1).
+    from maxwell_daemon.api.security_headers import install_security_headers
+
+    install_security_headers(app)
+
     # Correlation-ID middleware — attaches a UUID to every request, propagates
     # it through structlog context-vars, and echoes it in X-Correlation-ID.
     from maxwell_daemon.api.correlation import install_correlation_middleware
