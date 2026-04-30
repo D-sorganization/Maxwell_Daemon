@@ -66,6 +66,24 @@ python -m venv .venv
 pip install -e ".[dev]"
 ```
 
+## 📖 API Documentation
+
+When the daemon is running locally, an interactive OpenAPI 3 reference is
+served alongside the API:
+
+| URL | Purpose |
+| --- | --- |
+| `http://127.0.0.1:8080/docs` | Swagger UI — explore and try endpoints. |
+| `http://127.0.0.1:8080/redoc` | ReDoc — browseable reference. |
+| `http://127.0.0.1:8080/openapi.json` | Raw OpenAPI 3 schema (machine-readable). |
+
+The schema is auto-generated from the FastAPI route definitions and the
+Pydantic models in [`maxwell_daemon/api/contract.py`](maxwell_daemon/api/contract.py),
+so it always tracks the live code. The contract version
+(`CONTRACT_VERSION`) is advertised at `GET /api/version` and follows
+**append-only** semantics within a major version — see
+[`SPEC.md`](SPEC.md) for details.
+
 ## 🧠 Architectural Highlights
 - **RepoSchematic**: Generates highly compressed file-and-symbol trees, saving massive token budgets compared to dumping raw files.
 - **Memory Annealer**: Automatically compresses verbose agent logs into dense `architectural_state.md` files, responsibly purging raw logs to save disk space.
