@@ -1,0 +1,55 @@
+[Unit]
+Description=Maxwell-Daemon autonomous AI control plane
+Documentation=https://github.com/D-sorganization/Maxwell_Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=maxwell
+Group=maxwell
+
+# Working directory holds the SQLite ledger, task store, and logs.
+# Override via EnvironmentFile if /var/lib/maxwell-daemon is not used.
+WorkingDirectory=/var/lib/maxwell-daemon
+
+# Operator-supplied environment.  Populate /etc/maxwell-daemon.env with
+# values such as MAXWELL_CONFIG, MAXWELL_API_TOKEN, ANTHROPIC_API_KEY, etc.
+# See docs/operations/deployment.md for the full list of supported vars.
+EnvironmentFile=-/etc/maxwell-daemon.env
+
+# Use the maxwell-daemon entrypoint installed by `pip install .`.
+# Point --config at the config rendered by the operator (or rely on the
+# MAXWELL_CONFIG env var picked up from EnvironmentFile).
+ExecStart=/opt/maxwell-daemon/.venv/bin/maxwell-daemon serve
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+
+# Hardening — drop privileges and limit filesystem reach.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# The daemon needs to write the SQLite ledger and rotating log files.
+ReadWritePaths=/var/lib/maxwell-daemon /var/log/maxwell-daemon
+
+# Networking — listen on the loopback or LAN interface as configured by
+# the operator.  Reverse proxies should terminate TLS in front of this.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Resource ceilings.  Tune for your workload.
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
