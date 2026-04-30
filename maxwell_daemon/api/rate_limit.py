@@ -15,6 +15,7 @@ Design
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections.abc import Iterable, Mapping
@@ -24,12 +25,38 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
+from maxwell_daemon.logging import get_logger
+from maxwell_daemon.metrics import record_ratelimit_rejection
+
 __all__ = [
+    "DEFAULT_EXEMPT_PATHS",
+    "ENV_DEFAULT_PER_MIN",
+    "ENV_WRITE_PER_MIN",
     "RateLimitGroup",
     "TokenBucket",
     "TokenBucketLimiter",
+    "install_env_rate_limiter",
     "install_rate_limiter",
 ]
+
+_log = get_logger(__name__)
+
+# Env-var knobs. Values are integers (requests per minute).
+ENV_DEFAULT_PER_MIN = "MAXWELL_RATELIMIT_DEFAULT_PER_MIN"
+ENV_WRITE_PER_MIN = "MAXWELL_RATELIMIT_WRITE_PER_MIN"
+
+# Sane defaults — generous enough for a polling dashboard, strict enough on
+# state-mutating endpoints to prevent dispatch / control floods.
+_DEFAULT_PER_MIN_FALLBACK = 120
+_WRITE_PER_MIN_FALLBACK = 30
+
+# Liveness/contract probes must never be throttled — the dashboard polls these
+# constantly and an outage of /api/health would make a noisy daemon look dead.
+DEFAULT_EXEMPT_PATHS: frozenset[str] = frozenset({"/api/health", "/api/version"})
+
+# Routes whose POSTs get the stricter "write" budget.
+_WRITE_PATH_EXACT: frozenset[str] = frozenset({"/api/dispatch"})
+_WRITE_PATH_PREFIXES: tuple[str, ...] = ("/api/control/",)
 
 
 @dataclass(slots=True)
@@ -211,5 +238,149 @@ def install_rate_limiter(
             limiter.refund(key, group="auth_failures", amount=1.0)
 
         return response
+
+    return limiter
+
+
+# ---------------------------------------------------------------------------
+# Env-driven middleware (Phase 1 of #796) — keyed strictly by client IP so the
+# limiter still bites for unauthenticated callers. The two budgets here ("default"
+# and "write") are tuned for the dashboard polling pattern + dispatch/control
+# write traffic; richer per-route classes live in the YAML-driven limiter above.
+# ---------------------------------------------------------------------------
+
+
+def _ip_key(request: Request) -> str:
+    """Resolve the client IP for rate-limit keying.
+
+    Order of preference:
+    1. First IP in ``X-Forwarded-For`` (left-most = original client when the
+       daemon sits behind a trusted reverse proxy).
+    2. ``request.client.host`` (direct connection).
+    3. Literal ``"unknown"`` so we still produce a stable bucket key when the
+       transport doesn't expose a peer (test client, ASGI lifespan, …).
+    """
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        first = xff.split(",", 1)[0].strip()
+        if first:
+            return f"ip:{first}"
+    if request.client and request.client.host:
+        return f"ip:{request.client.host}"
+    return "ip:unknown"
+
+
+def _route_class(method: str, path: str) -> str:
+    """Map (method, path) to a rate-limit class.
+
+    Only ``POST`` to dispatch / control endpoints is treated as a "write"
+    today — every other request shares the lenient default budget. Keeping
+    the rule explicit (rather than method-only) avoids accidentally
+    throttling future read-only POST endpoints.
+    """
+    if method == "POST":
+        if path in _WRITE_PATH_EXACT:
+            return "write"
+        if any(path.startswith(prefix) for prefix in _WRITE_PATH_PREFIXES):
+            return "write"
+    return "default"
+
+
+def _read_per_min(env_name: str, fallback: int) -> int:
+    """Read a positive int from the environment, falling back on bad input."""
+    raw = os.environ.get(env_name)
+    if raw is None or not raw.strip():
+        return fallback
+    try:
+        value = int(raw)
+    except ValueError:
+        _log.warning(
+            "ratelimit_invalid_env",
+            env=env_name,
+            value=raw,
+            fallback=fallback,
+        )
+        return fallback
+    if value <= 0:
+        _log.warning(
+            "ratelimit_non_positive_env",
+            env=env_name,
+            value=value,
+            fallback=fallback,
+        )
+        return fallback
+    return value
+
+
+def install_env_rate_limiter(
+    app: FastAPI,
+    *,
+    exempt_paths: Iterable[str] = DEFAULT_EXEMPT_PATHS,
+    default_per_min: int | None = None,
+    write_per_min: int | None = None,
+) -> TokenBucketLimiter:
+    """Install the per-IP rate-limit middleware described in #796 (Phase 1).
+
+    The limiter is intentionally separate from :func:`install_rate_limiter` so
+    that operators can opt in via env vars without disturbing config-driven
+    deployments. Reads ``MAXWELL_RATELIMIT_DEFAULT_PER_MIN`` (default 120) and
+    ``MAXWELL_RATELIMIT_WRITE_PER_MIN`` (default 30) when the corresponding
+    keyword argument is ``None`` — explicit kwargs win, which keeps tests
+    hermetic.
+
+    Returns the underlying limiter so tests can introspect bucket state.
+    """
+    default_rpm = (
+        default_per_min
+        if default_per_min is not None
+        else _read_per_min(ENV_DEFAULT_PER_MIN, _DEFAULT_PER_MIN_FALLBACK)
+    )
+    write_rpm = (
+        write_per_min
+        if write_per_min is not None
+        else _read_per_min(ENV_WRITE_PER_MIN, _WRITE_PER_MIN_FALLBACK)
+    )
+
+    # Token-bucket math: rate is per-second, burst tracks the per-minute budget
+    # so a polling client can briefly catch up after a stall without 429-ing.
+    limiter = TokenBucketLimiter(
+        default_rate=default_rpm / 60.0,
+        default_burst=max(1, default_rpm),
+        groups={
+            "write": {"rate": write_rpm / 60.0, "burst": max(1, write_rpm)},
+        },
+    )
+    exempt = frozenset(exempt_paths)
+
+    @app.middleware("http")
+    async def _env_rate_limit_middleware(  # type: ignore[no-untyped-def]
+        request: Request,
+        call_next,
+    ) -> object:
+        path = request.url.path
+        if path in exempt:
+            return await call_next(request)
+
+        route_class = _route_class(request.method, path)
+        key = _ip_key(request)
+
+        if limiter.check(key, group=route_class):
+            return await call_next(request)
+
+        retry = max(1, round(limiter.retry_after(key, group=route_class)))
+        record_ratelimit_rejection(route_class)
+        _log.warning(
+            "ratelimit_rejected",
+            client=key,
+            method=request.method,
+            path=path,
+            route_class=route_class,
+            retry_after=retry,
+        )
+        return JSONResponse(
+            {"detail": "rate limit exceeded", "retry_after": retry},
+            status_code=429,
+            headers={"Retry-After": str(retry)},
+        )
 
     return limiter

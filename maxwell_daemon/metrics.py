@@ -31,6 +31,7 @@ __all__ = [
     "MAXWELL_LEDGER_CONNECTIONS_IN_USE",
     "MAXWELL_QUEUE_DEPTH",
     "MAXWELL_QUEUE_LATENCY_MS",
+    "MAXWELL_RATELIMIT_REJECTED_TOTAL",
     "MAXWELL_REQUESTS_TOTAL",
     "MAXWELL_REQUEST_COST",
     "MAXWELL_REQUEST_DURATION",
@@ -43,6 +44,7 @@ __all__ = [
     "record_gate_verdict",
     "record_queue_depth",
     "record_queue_latency",
+    "record_ratelimit_rejection",
     "record_request",
 ]
 
@@ -138,6 +140,12 @@ MAXWELL_GATE_VERDICTS_TOTAL = Counter(
 MAXWELL_CACHE_HIT_RATE = Gauge(
     "maxwell_daemon_cache_hit_rate",
     "Prompt cache hit rate (0.0 to 1.0)",
+)
+
+MAXWELL_RATELIMIT_REJECTED_TOTAL = Counter(
+    "maxwell_ratelimit_rejected_total",
+    "HTTP requests rejected by the per-IP rate limiter, partitioned by route class",
+    labelnames=("route_class",),
 )
 
 HTTP_REQUESTS_TOTAL = Counter(
@@ -244,3 +252,13 @@ def record_queue_depth(depth: int) -> None:
 def record_queue_latency(latency_ms: float) -> None:
     """Record latency to dequeue a task in milliseconds."""
     MAXWELL_QUEUE_LATENCY_MS.observe(latency_ms)
+
+
+def record_ratelimit_rejection(route_class: str) -> None:
+    """Record an HTTP request rejected by the per-IP rate limiter.
+
+    ``route_class`` is one of ``"default"``, ``"write"``, or any other label
+    set by the middleware — it's intentionally low-cardinality so dashboards
+    can chart abuse per logical endpoint family without per-path explosion.
+    """
+    MAXWELL_RATELIMIT_REJECTED_TOTAL.labels(route_class=route_class).inc()

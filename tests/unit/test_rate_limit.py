@@ -176,3 +176,222 @@ class TestClientKey:
         req.client.host = "1.2.3.4"
         key = _client_key(req)
         assert key == "ip:1.2.3.4"
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 (#796): env-driven per-IP middleware.
+# ---------------------------------------------------------------------------
+
+
+def _build_env_app(
+    *,
+    default_per_min: int | None = None,
+    write_per_min: int | None = None,
+):  # type: ignore[no-untyped-def]
+    """Build a FastAPI app with the env-driven limiter installed."""
+    from fastapi import FastAPI
+
+    from maxwell_daemon.api.rate_limit import install_env_rate_limiter
+
+    app = FastAPI()
+
+    @app.get("/api/health")
+    async def _health() -> dict[str, str]:
+        return {"ok": "yes"}
+
+    @app.get("/api/version")
+    async def _version() -> dict[str, str]:
+        return {"v": "1"}
+
+    @app.get("/api/status")
+    async def _status() -> dict[str, str]:
+        return {"state": "idle"}
+
+    @app.post("/api/dispatch")
+    async def _dispatch() -> dict[str, str]:
+        return {"id": "t1"}
+
+    @app.post("/api/control/{action}")
+    async def _control(action: str) -> dict[str, str]:
+        return {"action": action}
+
+    install_env_rate_limiter(
+        app,
+        default_per_min=default_per_min,
+        write_per_min=write_per_min,
+    )
+    return app
+
+
+class TestEnvRateLimiter:
+    def test_under_limit_allowed(self) -> None:
+        from fastapi.testclient import TestClient
+
+        app = _build_env_app(default_per_min=600, write_per_min=600)
+        client = TestClient(app)
+        for _ in range(10):
+            assert client.get("/api/status").status_code == 200
+
+    def test_over_limit_returns_429_with_retry_after(self) -> None:
+        from fastapi.testclient import TestClient
+
+        app = _build_env_app(default_per_min=2, write_per_min=2)
+        client = TestClient(app)
+
+        # Burst budget == 2 → first two succeed, third must be rejected.
+        assert client.get("/api/status").status_code == 200
+        assert client.get("/api/status").status_code == 200
+
+        resp = client.get("/api/status")
+        assert resp.status_code == 429
+        retry_after = resp.headers.get("retry-after") or resp.headers.get("Retry-After")
+        assert retry_after is not None
+        assert int(retry_after) >= 1
+        body = resp.json()
+        assert body["detail"] == "rate limit exceeded"
+        assert isinstance(body["retry_after"], int)
+        assert body["retry_after"] >= 1
+
+    def test_health_and_version_exempt(self) -> None:
+        from fastapi.testclient import TestClient
+
+        # Tiny budget; even so, exempt paths must keep returning 200 indefinitely.
+        app = _build_env_app(default_per_min=1, write_per_min=1)
+        client = TestClient(app)
+        for _ in range(25):
+            assert client.get("/api/health").status_code == 200
+            assert client.get("/api/version").status_code == 200
+
+    def test_write_bucket_strictness_independent_of_default(self) -> None:
+        from fastapi.testclient import TestClient
+
+        # Write budget 1, default 50 → /api/dispatch trips after one POST while
+        # GETs continue unaffected.
+        app = _build_env_app(default_per_min=50, write_per_min=1)
+        client = TestClient(app)
+
+        assert client.post("/api/dispatch").status_code == 200
+        rejected = client.post("/api/dispatch")
+        assert rejected.status_code == 429
+        # Default bucket is unaffected.
+        assert client.get("/api/status").status_code == 200
+
+        # /api/control/* shares the write bucket too.
+        ctl = client.post("/api/control/pause")
+        assert ctl.status_code == 429
+
+    def test_per_ip_isolation(self) -> None:
+        from fastapi.testclient import TestClient
+
+        app = _build_env_app(default_per_min=1, write_per_min=1)
+        client = TestClient(app)
+
+        # ip A burns its single token.
+        assert client.get("/api/status", headers={"X-Forwarded-For": "10.0.0.1"}).status_code == 200
+        assert client.get("/api/status", headers={"X-Forwarded-For": "10.0.0.1"}).status_code == 429
+
+        # ip B is unaffected.
+        assert client.get("/api/status", headers={"X-Forwarded-For": "10.0.0.2"}).status_code == 200
+
+    def test_env_var_overrides_threshold(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        from fastapi.testclient import TestClient
+
+        from maxwell_daemon.api.rate_limit import (
+            ENV_DEFAULT_PER_MIN,
+            ENV_WRITE_PER_MIN,
+        )
+
+        monkeypatch.setenv(ENV_DEFAULT_PER_MIN, "3")
+        monkeypatch.setenv(ENV_WRITE_PER_MIN, "1")
+
+        # No explicit kwargs → middleware reads env vars.
+        app = _build_env_app()
+        client = TestClient(app)
+
+        # Default bucket: 3 succeed, 4th is rejected.
+        for _ in range(3):
+            assert (
+                client.get("/api/status", headers={"X-Forwarded-For": "10.0.0.7"}).status_code
+                == 200
+            )
+        assert client.get("/api/status", headers={"X-Forwarded-For": "10.0.0.7"}).status_code == 429
+
+        # Write bucket overridden to 1 → second dispatch is rejected.
+        assert (
+            client.post("/api/dispatch", headers={"X-Forwarded-For": "10.0.0.8"}).status_code == 200
+        )
+        assert (
+            client.post("/api/dispatch", headers={"X-Forwarded-For": "10.0.0.8"}).status_code == 429
+        )
+
+    def test_invalid_env_var_falls_back_to_default(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        from fastapi.testclient import TestClient
+
+        from maxwell_daemon.api.rate_limit import ENV_DEFAULT_PER_MIN
+
+        monkeypatch.setenv(ENV_DEFAULT_PER_MIN, "not-a-number")
+        # Should not raise; falls back to the 120/min default.
+        app = _build_env_app(write_per_min=600)
+        client = TestClient(app)
+        # 5 requests well under the 120/min fallback.
+        for _ in range(5):
+            assert client.get("/api/status").status_code == 200
+
+
+class TestRouteClass:
+    def test_post_dispatch_is_write(self) -> None:
+        from maxwell_daemon.api.rate_limit import _route_class
+
+        assert _route_class("POST", "/api/dispatch") == "write"
+
+    def test_post_control_action_is_write(self) -> None:
+        from maxwell_daemon.api.rate_limit import _route_class
+
+        assert _route_class("POST", "/api/control/pause") == "write"
+        assert _route_class("POST", "/api/control/resume") == "write"
+
+    def test_get_dispatch_is_default(self) -> None:
+        from maxwell_daemon.api.rate_limit import _route_class
+
+        # Defensive: only POSTs to write-class paths get the strict bucket.
+        assert _route_class("GET", "/api/dispatch") == "default"
+
+    def test_arbitrary_post_is_default(self) -> None:
+        from maxwell_daemon.api.rate_limit import _route_class
+
+        assert _route_class("POST", "/api/tasks") == "default"
+
+
+class TestIpKey:
+    def test_x_forwarded_for_first_ip_wins(self) -> None:
+        from unittest.mock import MagicMock
+
+        from maxwell_daemon.api.rate_limit import _ip_key
+
+        req = MagicMock()
+        # MagicMock.headers.get must respect real header lookups.
+        req.headers.get.side_effect = lambda name, default="": {
+            "x-forwarded-for": "203.0.113.7, 10.0.0.1",
+        }.get(name, default)
+        req.client.host = "10.0.0.99"
+        assert _ip_key(req) == "ip:203.0.113.7"
+
+    def test_falls_back_to_client_host(self) -> None:
+        from unittest.mock import MagicMock
+
+        from maxwell_daemon.api.rate_limit import _ip_key
+
+        req = MagicMock()
+        req.headers.get.side_effect = lambda name, default="": default
+        req.client.host = "192.0.2.5"
+        assert _ip_key(req) == "ip:192.0.2.5"
+
+    def test_returns_unknown_when_no_client(self) -> None:
+        from unittest.mock import MagicMock
+
+        from maxwell_daemon.api.rate_limit import _ip_key
+
+        req = MagicMock()
+        req.headers.get.side_effect = lambda name, default="": default
+        req.client = None
+        assert _ip_key(req) == "ip:unknown"

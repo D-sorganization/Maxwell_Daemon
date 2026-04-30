@@ -1429,6 +1429,13 @@ def create_app(
             },
         )
 
+    # Env-driven per-IP rate limiter (Phase 1 of #796). Always on with sane
+    # defaults, tunable via MAXWELL_RATELIMIT_{DEFAULT,WRITE}_PER_MIN. Exempts
+    # /api/health and /api/version so liveness/contract probes never 429.
+    from maxwell_daemon.api.rate_limit import install_env_rate_limiter
+
+    install_env_rate_limiter(app)
+
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next: Any) -> Response:
         """Attach a UUID request-id to every request + response + log line."""
