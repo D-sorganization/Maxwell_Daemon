@@ -48,7 +48,7 @@ def export_cmd(
     mgr = _make_manager(config, data_dir)
     try:
         archive = mgr.export(out)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         err_console.print(f"[red]Export failed:[/red] {exc}")
         raise typer.Exit(1) from None
 
@@ -88,7 +88,7 @@ def restore_cmd(
     except RestoreError as exc:
         err_console.print(f"[red]Restore failed:[/red] {exc}")
         raise typer.Exit(1) from None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         err_console.print(f"[red]Unexpected error during restore:[/red] {exc}")
         raise typer.Exit(1) from None
 
@@ -136,7 +136,7 @@ def export_json_cmd(
     except ValueError as exc:
         err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         err_console.print(f"[red]Unexpected error:[/red] {exc}")
         raise typer.Exit(1) from None
 
@@ -169,7 +169,7 @@ def info_cmd(
             if fh is None:
                 raise RuntimeError("Could not read manifest.json from archive")
             manifest_data = json.loads(fh.read().decode("utf-8"))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         err_console.print(f"[red]Failed to read archive:[/red] {exc}")
         raise typer.Exit(1) from None
 

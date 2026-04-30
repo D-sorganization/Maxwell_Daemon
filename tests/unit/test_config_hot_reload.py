@@ -141,7 +141,7 @@ class TestReloadConfig:
         def _reload() -> None:
             try:
                 file_daemon.reload_config()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 
         threads = [threading.Thread(target=_reload) for _ in range(8)]

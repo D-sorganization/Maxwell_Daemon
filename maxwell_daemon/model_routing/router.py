@@ -31,7 +31,7 @@ class ModelRouteDecision:
     rejections: tuple[ProfileRejection, ...]
 
 
-def select_profile(
+def select_profile(  # noqa: C901
     *,
     profiles: list[ModelProfile],
     policy: ModelRoutingPolicy,
