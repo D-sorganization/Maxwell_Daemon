@@ -811,7 +811,7 @@ class Daemon:
             summarizer_role=summarizer,
         ).anneal()
 
-    def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:  # noqa: C901
+    def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:
         """Insert a queue entry while respecting daemon loop thread affinity."""
         item = (priority, task)
         if self._queue.full():
