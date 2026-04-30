@@ -8,6 +8,7 @@ External callers (CLI, REST API, gRPC) interact through `Daemon.submit()` and
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import signal
 import threading
 import uuid
@@ -810,7 +811,7 @@ class Daemon:
             summarizer_role=summarizer,
         ).anneal()
 
-    def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:
+    def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:  # noqa: C901
         """Insert a queue entry while respecting daemon loop thread affinity."""
         item = (priority, task)
         if self._queue.full():
@@ -848,18 +849,24 @@ class Daemon:
             self._loop.call_soon_threadsafe(_put_inline)
             return
 
-        # Use run_coroutine_threadsafe which is the documented safe pattern
-        # for calling async code from threads.
-        async def _put_async() -> None:
+        result: concurrent.futures.Future[None] = concurrent.futures.Future()
+
+        def _put() -> None:
             try:
                 self._queue.put_nowait(item)
-            except asyncio.QueueFull as exc:
-                raise QueueSaturationError(
-                    "Task queue is full, please try again later", backoff_seconds=60
-                ) from exc
+            except asyncio.QueueFull:
+                result.set_exception(
+                    QueueSaturationError(
+                        "Task queue is full, please try again later", backoff_seconds=60
+                    )
+                )
+            except BaseException as exc:  # pragma: no cover - surfaced via Future
+                result.set_exception(exc)
+            else:
+                result.set_result(None)
 
-        future = asyncio.run_coroutine_threadsafe(_put_async(), self._loop)
-        future.result(timeout=60.0)
+        self._loop.call_soon_threadsafe(_put)
+        result.result(timeout=60.0)
 
     def submit(
         self,
