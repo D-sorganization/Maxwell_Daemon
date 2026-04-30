@@ -135,7 +135,7 @@ def _run_coroutine_sync(coroutine: Coroutine[Any, Any, _T]) -> _T:
     def runner() -> None:
         try:
             result.append(asyncio.run(coroutine))
-        except BaseException as exc:  # pragma: no cover - defensive thread handoff
+        except BaseException as exc:  # pragma: no cover - defensive thread handoff  # noqa: BLE001
             errors.append(exc)
 
     thread = threading.Thread(target=runner, daemon=True)

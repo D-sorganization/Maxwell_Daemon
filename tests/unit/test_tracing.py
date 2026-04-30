@@ -94,7 +94,7 @@ class TestTracingImportError:
         with patch.dict("sys.modules", dict.fromkeys(otel_modules)):
             try:
                 configure_tracing(endpoint="http://localhost:4317", service_name="test")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass  # either succeeds silently or raises; both are acceptable
             finally:
                 configure_tracing(endpoint=None)

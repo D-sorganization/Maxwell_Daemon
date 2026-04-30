@@ -141,7 +141,7 @@ def discover_ollama_models(endpoint: str | None = None) -> list[OllamaModelInfo]
             resp = client.get(f"{base}/api/tags")
             resp.raise_for_status()
             return _parse_models(resp.json())
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         log.debug("ollama_discovery: could not reach %s: %s", base, exc)
         return []
 
@@ -153,7 +153,7 @@ def is_ollama_available(endpoint: str | None = None) -> bool:
         with httpx.Client(timeout=_TIMEOUT) as client:
             resp = client.get(f"{base}/api/tags")
             return resp.status_code == 200
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -177,7 +177,7 @@ async def adiscover_ollama_models(endpoint: str | None = None) -> list[OllamaMod
             resp = await client.get(f"{base}/api/tags")
             resp.raise_for_status()
             return _parse_models(resp.json())
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         log.debug("ollama_discovery: could not reach %s: %s", base, exc)
         return []
 
@@ -189,7 +189,7 @@ async def ais_ollama_available(endpoint: str | None = None) -> bool:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(f"{base}/api/tags")
             return resp.status_code == 200
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 

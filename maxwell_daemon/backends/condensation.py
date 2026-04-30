@@ -87,7 +87,7 @@ class Condenser:
 
         try:
             summary_text = await self._summarize(list(middle))
-        except Exception:
+        except Exception:  # noqa: BLE001
             return messages
 
         summary_msg: dict[str, object] = {

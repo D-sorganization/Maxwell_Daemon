@@ -140,14 +140,14 @@ class GroqBackend(ILLMBackend):
         try:
             await self._client.models.list()
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
 
     async def list_models(self) -> list[str]:
         try:
             page = await self._client.models.list()
             return [m.id for m in page.data]
-        except Exception:
+        except Exception:  # noqa: BLE001
             return []
 
     def capabilities(self, model: str) -> BackendCapabilities:

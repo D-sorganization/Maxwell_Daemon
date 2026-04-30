@@ -29,7 +29,7 @@ from maxwell_daemon.tools.builtins import build_default_registry
 log = logging.getLogger(__name__)
 
 
-async def run_mcp_server(config_path: Path | None = None) -> None:
+async def run_mcp_server(config_path: Path | None = None) -> None:  # noqa: C901
     """Run the Maxwell Daemon as an MCP server via stdio."""
     config = load_config(config_path)
 

@@ -96,11 +96,19 @@ target-version = "py310"
 line-ending = "lf"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "C90"]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "C90", "BLE"]
 ignore = ["E501"]
+# `BLE` (flake8-blind-except) is now enforced. Existing bare
+# `except Exception:` handlers (~94 sites, see #795) are grandfathered
+# with inline `# noqa: BLE001` directives so any new code is held to
+# the stricter standard. Per-module remediation tracked under #795.
 
 [tool.ruff.lint.mccabe]
-max-complexity = 270
+# Industry standard is 10–15 (see #794). Existing high-complexity
+# functions are grandfathered with inline `# noqa: C901` directives so
+# new code is held to the stricter standard. Per-function refactors
+# remain tracked under #794 (also see #793 / #798 for the two largest).
+max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["E402"]
