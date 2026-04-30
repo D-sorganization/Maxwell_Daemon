@@ -61,7 +61,7 @@ class RepoSchematic:
                     schematic += f"Dir: {item.name}\n"
                 elif item.is_file():
                     schematic += f"File: {item.name}\n"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             schematic += f"Error: {e}\n"
 
         if os.environ.get("MAXWELL_AGGRESSIVE_COMPRESSION") == "1":

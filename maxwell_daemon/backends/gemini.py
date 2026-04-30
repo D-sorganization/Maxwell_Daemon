@@ -137,13 +137,13 @@ class GeminiBackend(ILLMBackend):
             gmodel = self._genai.GenerativeModel(model_name="gemini-1.5-flash")
             await gmodel.generate_content_async("ping")
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
 
     async def list_models(self) -> list[str]:
         try:
             return [m.name for m in self._genai.list_models()]
-        except Exception:
+        except Exception:  # noqa: BLE001
             return []
 
     def capabilities(self, model: str) -> BackendCapabilities:

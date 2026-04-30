@@ -350,7 +350,7 @@ class CriticPanelRunner:
                 started_at=started_at,
                 finished_at=_utc_now(),
             )
-        except Exception as exc:  # pragma: no cover - exercised by failure-path tests
+        except Exception as exc:  # noqa: BLE001 — fail-closed wrapper; pragma: no cover
             return CriticPanelRun(
                 profile=profile,
                 status="error",

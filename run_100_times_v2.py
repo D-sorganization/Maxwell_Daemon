@@ -85,7 +85,9 @@ def main() -> int:
         }
         save_progress(progress)
 
-        print(f"Run {i:3d}/{RUNS}: {status} ({run_elapsed:.2f}s) | Total: {passed} passed, {failed} failed")
+        print(
+            f"Run {i:3d}/{RUNS}: {status} ({run_elapsed:.2f}s) | Total: {passed} passed, {failed} failed"
+        )
 
         if i % 10 == 0:
             print(f"--- Progress: {i}/{RUNS} ---")
@@ -110,7 +112,7 @@ def main() -> int:
     print("=" * 60)
 
     if failures:
-        print(f"\n--- First failure details ---\n")
+        print("\n--- First failure details ---\n")
         f = failures[0]
         print(f"Run #{f['run']} ({f['elapsed']:.2f}s):")
         print("STDOUT:", f["stdout"])

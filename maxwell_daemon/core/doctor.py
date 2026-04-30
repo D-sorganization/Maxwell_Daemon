@@ -53,7 +53,7 @@ def check_config_loadable(path: Path) -> CheckResult:
         return CheckResult("config", Severity.ERROR, f"config not found at {path}")
     try:
         load_config(path)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return CheckResult("config", Severity.ERROR, f"config invalid: {e}")
     return CheckResult("config", Severity.OK, f"loaded {path}")
 
@@ -66,7 +66,7 @@ def check_ledger_writable(path: Path) -> CheckResult:
         if parent.exists() and parent.stat().st_mode & 0o222 == 0:
             return CheckResult("ledger", Severity.ERROR, f"ledger parent is not writable: {parent}")
         CostLedger(path)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return CheckResult("ledger", Severity.ERROR, f"ledger not writable: {e}")
     return CheckResult("ledger", Severity.OK, f"writable at {path}")
 
@@ -135,7 +135,7 @@ async def check_backends_healthy(*, backends: Iterable[Any]) -> CheckResult:
     async def probe(b: Any) -> tuple[str, bool]:
         try:
             return b.name, await b.health_check()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return b.name, False
 
     results = await asyncio.gather(*(probe(b) for b in backends))
@@ -174,7 +174,7 @@ async def run_all_checks(*, config_path: Path, ledger_path: Path) -> list[CheckR
         for name in router.available_backends():
             try:
                 backends.append(router.route(backend_override=name).backend)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 results.append(
                     CheckResult(
                         "backends",

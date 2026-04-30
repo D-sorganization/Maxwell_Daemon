@@ -135,7 +135,7 @@ def build_repo_schematic(workspace: Path) -> RepoSchematic:
             continue
         try:
             entry = parser(workspace, path)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Belt-and-suspenders: per-file parsing must never kill the sweep.
             entry = None
         if entry is not None:

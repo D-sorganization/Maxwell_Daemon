@@ -469,7 +469,7 @@ class BackupManager:
 
     # ── hash verification ─────────────────────────────────────────────────────
 
-    def _verify_hashes(self, root: Path, hashes: dict[str, Any]) -> None:
+    def _verify_hashes(self, root: Path, hashes: dict[str, Any]) -> None:  # noqa: C901
         """Check every recorded hash against the unpacked files."""
         # Config
         if "config" in hashes:
@@ -566,7 +566,7 @@ class BackupManager:
             import yaml
 
             raw = yaml.safe_load(self._config_path.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except Exception:  # noqa: BLE001
             return
 
         lines = [

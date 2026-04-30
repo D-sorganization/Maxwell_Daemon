@@ -37,7 +37,9 @@ for i in range(1, RUNS + 1):
             }
         )
 
-    print(f"Run {i:3d}/{RUNS}: {status} ({run_elapsed:.2f}s) | Total: {passed} passed, {failed} failed")
+    print(
+        f"Run {i:3d}/{RUNS}: {status} ({run_elapsed:.2f}s) | Total: {passed} passed, {failed} failed"
+    )
 
     if i % 10 == 0:
         print(f"--- Progress: {i}/{RUNS} ---")
@@ -46,11 +48,11 @@ total_elapsed = time.monotonic() - start
 
 print("\n" + "=" * 60)
 print(f"SUMMARY: {passed} passed, {failed} failed out of {RUNS} runs")
-print(f"Total time: {total_elapsed:.1f}s  Avg per run: {total_elapsed/RUNS:.2f}s")
+print(f"Total time: {total_elapsed:.1f}s  Avg per run: {total_elapsed / RUNS:.2f}s")
 print("=" * 60)
 
 if failures:
-    print(f"\n--- First failure details ---\n")
+    print("\n--- First failure details ---\n")
     f = failures[0]
     print(f"Run #{f['run']} ({f['elapsed']:.2f}s):")
     print("STDOUT:", f["stdout"][:2000])
