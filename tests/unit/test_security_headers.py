@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import re
+from html.parser import HTMLParser
+from pathlib import Path
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -14,6 +18,13 @@ from maxwell_daemon.api.security_headers import (
     SecurityHeadersMiddleware,
     install_security_headers,
 )
+
+UI_DIR = Path(__file__).resolve().parents[2] / "maxwell_daemon" / "api" / "ui"
+
+# Inline event-handler attributes (e.g. ``onclick``) are forbidden under
+# ``script-src 'self'``; this regex flags any HTML attribute starting with
+# ``on`` followed by alphanumerics. Restricted to ASCII identifiers.
+_INLINE_HANDLER_RE = re.compile(r"\bon[a-zA-Z]+\s*=", re.IGNORECASE)
 
 
 def _build_app() -> FastAPI:
@@ -117,6 +128,74 @@ def test_install_is_idempotent() -> None:
         if getattr(m, "cls", None) is SecurityHeadersMiddleware
     ]
     assert len(matches) == 1
+
+
+class _InlineScriptFinder(HTMLParser):
+    """HTML parser that records ``<script>`` tags lacking a ``src=`` attribute.
+
+    These would be blocked by ``script-src 'self'`` and therefore must not
+    appear in any UI HTML shipped with the daemon.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.offenders: list[tuple[int, int]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "script":
+            return
+        attr_names = {name.lower() for name, _ in attrs}
+        if "src" not in attr_names:
+            self.offenders.append(self.getpos())
+
+
+def test_no_inline_scripts_in_ui_html() -> None:
+    """Reject any inline ``<script>`` block — they violate ``script-src 'self'``.
+
+    Globs every ``*.html`` shipped under ``maxwell_daemon/api/ui/`` and
+    parses each with :mod:`html.parser`. A failure lists the offending
+    file together with line/column numbers so the regression is easy to
+    locate.
+    """
+    html_files = sorted(UI_DIR.glob("*.html"))
+    assert html_files, f"no UI HTML files found under {UI_DIR}"
+
+    offenders: list[str] = []
+    for path in html_files:
+        finder = _InlineScriptFinder()
+        finder.feed(path.read_text(encoding="utf-8"))
+        for line, col in finder.offenders:
+            offenders.append(f"{path}:{line}:{col}")
+
+    assert not offenders, (
+        "Inline <script> blocks found (CSP 'script-src \\'self\\'' would "
+        "block these). Move the body into an external /ui/<file>.js and "
+        "reference it via <script src=...>:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_no_inline_event_handlers_in_ui_html() -> None:
+    """Reject inline ``on*=`` event handlers — they violate ``script-src 'self'``.
+
+    Inline event handlers (``onclick``, ``onload``, …) execute as inline
+    script and would be blocked by the locked-down CSP. Refactor any hits
+    to :func:`addEventListener` calls in the appropriate JS module.
+    """
+    html_files = sorted(UI_DIR.glob("*.html"))
+    assert html_files, f"no UI HTML files found under {UI_DIR}"
+
+    offenders: list[str] = []
+    for path in html_files:
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for match in _INLINE_HANDLER_RE.finditer(line):
+                handler = match.group().rstrip("=").strip()
+                offenders.append(f"{path}:{lineno}:{match.start() + 1}: {handler}=")
+
+    assert not offenders, (
+        "Inline event-handler attributes found (CSP 'script-src \\'self\\'' "
+        "would block these). Replace with addEventListener() in app.js or "
+        "another bundled module:\n  " + "\n  ".join(offenders)
+    )
 
 
 def test_existing_header_not_overwritten() -> None:

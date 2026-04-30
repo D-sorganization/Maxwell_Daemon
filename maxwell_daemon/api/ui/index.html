@@ -463,10 +463,6 @@
   </footer>
 
   <script src="/ui/app.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/ui/sw.js', { scope: '/ui/' });
-    }
-  </script>
+  <script src="/ui/bootstrap.js" defer></script>
 </body>
 </html>
