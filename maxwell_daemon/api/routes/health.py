@@ -28,6 +28,20 @@ from maxwell_daemon.logging import get_logger
 
 log = get_logger(__name__)
 
+# Exceptions that indicate the daemon's internal state is inconsistent
+# (partial initialisation, attribute missing, wrong type, etc.).  These
+# are caught so that liveness probes degrade gracefully and never
+# observe a 5xx from a half-initialised daemon.  Control signals such as
+# KeyboardInterrupt, SystemExit, and asyncio.CancelledError are never
+# swallowed.
+_STATE_ERROR_TYPES: tuple[type[BaseException], ...] = (
+    RuntimeError,
+    AttributeError,
+    TypeError,
+    ValueError,
+    OSError,
+)
+
 
 def register(app: FastAPI, daemon: Daemon) -> None:
     """Attach ``GET /api/version`` and ``GET /api/health`` to ``app``.
@@ -54,8 +68,11 @@ def register(app: FastAPI, daemon: Daemon) -> None:
                 "uptime_seconds": uptime,
                 "version": __version__,
             }
-        except Exception:
-            log.exception("legacy_health: daemon.state() raised; returning degraded")
+        except _STATE_ERROR_TYPES as exc:
+            log.exception(
+                "legacy_health: daemon.state() raised; returning degraded",
+                error=str(exc),
+            )
             return {
                 "status": "ok",
                 "uptime_seconds": 0.0,
@@ -79,8 +96,11 @@ def register(app: FastAPI, daemon: Daemon) -> None:
                 "uptime_seconds": uptime,
                 "version": __version__,
             }
-        except Exception:
-            log.exception("legacy_healthz: daemon.state() raised; returning degraded")
+        except _STATE_ERROR_TYPES as exc:
+            log.exception(
+                "legacy_healthz: daemon.state() raised; returning degraded",
+                error=str(exc),
+            )
             return {
                 "status": "ok",
                 "uptime_seconds": 0.0,
@@ -99,8 +119,11 @@ def register(app: FastAPI, daemon: Daemon) -> None:
                 uptime_seconds=uptime,
                 gate=gate,
             )
-        except Exception:
-            log.exception("api_health: daemon.state() raised; returning degraded")
+        except _STATE_ERROR_TYPES as exc:
+            log.exception(
+                "api_health: daemon.state() raised; returning degraded",
+                error=str(exc),
+            )
             return HealthResponse(
                 status="degraded",
                 uptime_seconds=0.0,
@@ -119,8 +142,11 @@ def register(app: FastAPI, daemon: Daemon) -> None:
             return {"status": "ready"}
         except HTTPException:
             raise
-        except Exception:
-            log.exception("legacy_readyz: daemon.state() raised; returning unavailable")
+        except _STATE_ERROR_TYPES as exc:
+            log.exception(
+                "legacy_readyz: daemon.state() raised; returning unavailable",
+                error=str(exc),
+            )
             from fastapi import HTTPException
 
             raise HTTPException(503, "no backends available") from None
