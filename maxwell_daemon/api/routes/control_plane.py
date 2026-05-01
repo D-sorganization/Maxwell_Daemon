@@ -310,9 +310,7 @@ def _critic_findings_for_task(task: Task) -> tuple[CriticFindingView, ...]:
     return tuple(sorted(findings, key=lambda finding: priority[finding.severity]))
 
 
-def _delegate_snapshots_for_task(
-    daemon: Daemon, task: Task, *, limit: int = 20
-) -> tuple[Any, ...]:
+def _delegate_snapshots_for_task(daemon: Daemon, task: Task, *, limit: int = 20) -> tuple[Any, ...]:
     """Get delegate session snapshots for a task."""
     snapshots = daemon.delegate_lifecycle.list_sessions(limit=limit, task_id=task.id)
     ordered = sorted(
@@ -510,7 +508,6 @@ def register(  # noqa: C901
         except KeyError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found") from exc
         return _control_plane_view_from_task(daemon, task)
-
 
     @app.post(
         "/api/v1/control-plane/gauntlet/{task_id}/cancel",
