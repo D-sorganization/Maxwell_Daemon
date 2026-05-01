@@ -25,7 +25,7 @@ from maxwell_daemon.api.contract import (
 )
 from maxwell_daemon.backends.base import TokenUsage
 from maxwell_daemon.daemon import Daemon
-from maxwell_daemon.daemon.runner import TaskStatus
+from maxwell_daemon.daemon.runner import Task, TaskStatus
 from maxwell_daemon.logging import get_logger
 
 log = get_logger(__name__)
@@ -41,7 +41,7 @@ def _status_v2_tokens(usage: TokenUsage | None) -> StatusV2Tokens:
     )
 
 
-def _status_v2_counts(tasks: list[object]) -> dict[str, int]:
+def _status_v2_counts(tasks: list[Task]) -> dict[str, int]:
     counts: dict[str, int] = {
         "running": 0,
         "retrying": 0,
