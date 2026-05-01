@@ -15,6 +15,7 @@ terminate TLS at the reverse proxy (nginx, caddy) or enable TLS in uvicorn.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hmac
 import uuid
@@ -1396,6 +1397,29 @@ def create_app(  # noqa: C901
         if audit_log_path is not None
         else None
     )
+
+    # CORS middleware — disabled by default (loopback-only deployments need no
+    # cross-origin access). Operators set ``api.cors_allowed_origins`` to an
+    # explicit list of trusted origins. Using ["*"] is rejected when JWT is
+    # enabled so credentials are never exposed to every origin (#797).
+    api_cfg_for_cors = daemon._config.api
+    if api_cfg_for_cors.cors_allowed_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=api_cfg_for_cors.cors_allowed_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PATCH", "DELETE"],
+            allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+            expose_headers=[
+                "X-Request-ID",
+                "X-Correlation-ID",
+                "RateLimit-Limit",
+                "RateLimit-Remaining",
+                "RateLimit-Reset",
+            ],
+        )
 
     # Security-headers middleware — attaches conservative defaults
     # (X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
@@ -2901,8 +2925,6 @@ def create_app(  # noqa: C901
     @app.post("/api/v1/evals/run", dependencies=[Depends(auth), Depends(_require_operator())])
     async def run_evals(payload: EvalRunRequest) -> dict[str, Any]:
         """Kick off an evaluation run."""
-        import asyncio
-
         from maxwell_daemon.evals.runner import EvalRunner
         from maxwell_daemon.evals.storage import EvalRunStore
 
@@ -3157,6 +3179,30 @@ def create_app(  # noqa: C901
     # shell session itself handles all subsequent user input.
     _ssh_allowed_commands: frozenset[str] = frozenset({"bash", "sh", "zsh", "fish", "rbash"})
 
+    # WebSocket connection counter (in-process, reset on restart).
+    # Guards against connection exhaustion when api.websocket_max_connections > 0.
+    _ws_connection_count: int = 0
+    _ws_connection_lock = asyncio.Lock()
+    _ws_max: int = daemon._config.api.websocket_max_connections  # 0 = unlimited
+
+    async def _ws_acquire() -> bool:
+        """Increment WS counter; return False if limit reached (#796)."""
+        nonlocal _ws_connection_count
+        if _ws_max == 0:
+            async with _ws_connection_lock:
+                _ws_connection_count += 1
+            return True
+        async with _ws_connection_lock:
+            if _ws_connection_count >= _ws_max:
+                return False
+            _ws_connection_count += 1
+        return True
+
+    async def _ws_release() -> None:
+        nonlocal _ws_connection_count
+        async with _ws_connection_lock:
+            _ws_connection_count = max(0, _ws_connection_count - 1)
+
     @app.websocket("/api/v1/ssh/shell")
     async def ssh_shell_ws(ws: WebSocket) -> None:
         """Interactive shell over WebSocket.
@@ -3255,22 +3301,28 @@ def create_app(  # noqa: C901
         APIs can't set headers. Static tokens grant admin; JWT tokens must have
         viewer-or-higher privileges. Terminate at a proxy for TLS.
         """
-        if not await _websocket_auth_or_close(
-            ws,
-            Role.viewer,
-            auth_token,
-            jwt_config,
-            getattr(daemon, "_auth_store", None),
-            _audit,
-        ):
+        if not await _ws_acquire():
+            await ws.close(code=1013)  # 1013 = Try Again Later
             return
-        await ws.accept()
         try:
-            async for event in daemon.events.subscribe(queue_size=64):
-                await ws.send_text(event.to_json())
-        except WebSocketDisconnect:
-            return
-        except Exception:  # noqa: BLE001
-            await ws.close(code=1011)
+            if not await _websocket_auth_or_close(
+                ws,
+                Role.viewer,
+                auth_token,
+                jwt_config,
+                getattr(daemon, "_auth_store", None),
+                _audit,
+            ):
+                return
+            await ws.accept()
+            try:
+                async for event in daemon.events.subscribe(queue_size=64):
+                    await ws.send_text(event.to_json())
+            except WebSocketDisconnect:
+                return
+            except Exception:  # noqa: BLE001
+                await ws.close(code=1011)
+        finally:
+            await _ws_release()
 
     return app

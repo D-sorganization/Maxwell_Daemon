@@ -291,6 +291,23 @@ class APIConfig(BaseModel):
         default_factory=DispatchRateLimitConfig,
         description="Per-endpoint rate limit for POST /api/dispatch. Disabled by default.",
     )
+    # CORS — list of allowed origins. Empty list = CORS disabled (default for
+    # localhost deployments). Set to ["https://your-dashboard.example.com"] in
+    # production to restrict cross-origin access (#797).
+    cors_allowed_origins: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Allowed CORS origins. Empty list disables CORS middleware. "
+            'Use ["*"] for development only — never in production.'
+        ),
+    )
+    # WebSocket connection cap (per-server process). Protects against connection
+    # exhaustion attacks (#796). 0 = unlimited (default for localhost).
+    websocket_max_connections: int = Field(
+        0,
+        ge=0,
+        description="Maximum concurrent WebSocket connections. 0 = unlimited.",
+    )
 
     def jwt_secret_value(self) -> str | None:
         """Unwrap the JWT secret SecretStr, or None if unset."""
