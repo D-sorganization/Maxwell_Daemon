@@ -47,7 +47,7 @@ from typing import TYPE_CHECKING
 from maxwell_daemon.contracts import require
 
 if TYPE_CHECKING:
-    from maxwell_daemon.daemon.runner import Task, TaskStatus
+    from maxwell_daemon.daemon.task_models import Task, TaskStatus
 
 __all__ = ["TaskStore"]
 
@@ -344,7 +344,7 @@ class TaskStore:
         return [_row_to_task(r) for r in rows]
 
     def _recover_sync(self) -> list[Task]:
-        from maxwell_daemon.daemon.runner import TaskStatus as _TaskStatus
+        from maxwell_daemon.daemon.task_models import TaskStatus as _TaskStatus
 
         now = datetime.now(timezone.utc).isoformat()
         with self._lock, self._connect() as conn:

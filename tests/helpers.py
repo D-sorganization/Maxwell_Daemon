@@ -184,7 +184,7 @@ def assert_task_state_valid(task: Task) -> None:
     assert task.id, "task.id must be non-empty"
     assert task.prompt or task.kind == TaskKind.ISSUE, "prompt is required for PROMPT tasks"
     assert 0 <= task.priority <= 200, "priority must be in [0, 200]"
-    assert task.status in TaskStatus, "status must be a valid TaskStatus"
+    assert isinstance(task.status, TaskStatus), "status must be a valid TaskStatus"
     if task.kind == TaskKind.ISSUE:
         assert task.issue_repo, "issue_repo required for ISSUE tasks"
         assert task.issue_number is not None, "issue_number required for ISSUE tasks"

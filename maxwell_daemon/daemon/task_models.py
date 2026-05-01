@@ -10,6 +10,7 @@ These types are imported by ``runner.py`` and exposed through
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -51,6 +52,7 @@ class DuplicateTaskIdError(ValueError):
     """Raised when a caller supplies a task id that already exists."""
 
 
+@functools.total_ordering
 @dataclass
 class Task:
     id: str
