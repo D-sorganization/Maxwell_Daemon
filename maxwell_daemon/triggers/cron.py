@@ -94,7 +94,7 @@ def _matches(dt: datetime, cron: str) -> bool:
     """Return True if *dt* (minute-precision) matches *cron*."""
     try:
         minutes, hours, mdays, months, wdays = _parse_cron(cron)
-    except (ValueError, Exception):  # noqa: BLE001
+    except ValueError:
         log.warning("invalid cron expression %r; skipping", cron)
         return False
     return (

@@ -123,7 +123,7 @@ def test_api_health_returns_liveness_and_gate(
     body = r.json()
     # Required contract fields.
     assert body["status"] in {"ok", "degraded"}
-    assert isinstance(body["uptime_seconds"], (int, float))
+    assert isinstance(body["uptime_seconds"], int | float)
     assert body["uptime_seconds"] >= 0.0
     assert body["gate"] in {"open", "closed"}
 
