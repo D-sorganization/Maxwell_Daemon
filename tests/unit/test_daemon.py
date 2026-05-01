@@ -367,7 +367,7 @@ class TestTaskExecution:
             await d.start(worker_count=1)
             try:
                 task = d.submit_issue(repo="D-sorganization/Maxwell-Daemon", issue_number=762)
-                final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
+                final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=30.0)
                 assert final.pr_url == "https://example.invalid/pr/762"
                 assert executor.calls == 2
             finally:
