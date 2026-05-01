@@ -67,6 +67,8 @@ log = get_logger("maxwell_daemon.daemon")
 # Task data models are extracted to task_models.py (phase 1 of #798).
 # Re-exported here for backwards-compatibility so existing import paths
 # (e.g. ``from maxwell_daemon.daemon.runner import Task``) keep working.
+# Fleet coordinator logic is extracted to fleet_coordinator.py (phase 2 of #798).
+from maxwell_daemon.daemon.fleet_coordinator import FleetCoordinator  # noqa: E402
 from maxwell_daemon.daemon.task_models import (  # noqa: E402
     DaemonState,
     DuplicateTaskIdError,
@@ -81,6 +83,7 @@ __all__ = [
     "Daemon",
     "DaemonState",
     "DuplicateTaskIdError",
+    "FleetCoordinator",
     "QueueSaturationError",
     "Task",
     "TaskKind",
@@ -236,6 +239,8 @@ class Daemon:
         # Fleet coordination: track last-seen time per worker machine for heartbeat.
         # Keys are machine names; values are the UTC datetime of last contact.
         self._worker_last_seen: dict[str, datetime] = {}
+        # Created lazily in start() when role == "coordinator" (see fleet_coordinator.py).
+        self._fleet_coordinator: FleetCoordinator | None = None
         self._active_execution_tasks: dict[str, asyncio.Task[None]] = {}
         self._last_stream_event_at: dict[str, datetime] = {}
         self._last_stream_event_kind: dict[str, str] = {}
@@ -291,6 +296,8 @@ class Daemon:
                     mode=ApprovalMode(new_config.tools.approval_tier),
                     workspace_root=self._workspace_root,
                 )
+            if hasattr(self, "_fleet_coordinator"):
+                self._fleet_coordinator.update_config(new_config)
 
         log.info("config reloaded from %s", path)
         return path
@@ -373,7 +380,18 @@ class Daemon:
             # Coordinator: runs discovery and dispatches to remote workers — no local execution.
             self._worker_count = 0
             log.info("daemon started as coordinator (no local workers)")
-            coord_task = asyncio.create_task(self._coordinator_loop(), name="coordinator-loop")
+            self._fleet_coordinator = FleetCoordinator(
+                config=self._config,
+                tasks=self._tasks,
+                tasks_lock=self._tasks_lock,
+                task_store=self._task_store,
+                worker_last_seen=self._worker_last_seen,
+                enqueue_task_entry=self._enqueue_task_entry,
+                running_flag=lambda: self._running,
+            )
+            coord_task = asyncio.create_task(
+                self._fleet_coordinator.run_loop(), name="coordinator-loop"
+            )
             self._bg_tasks.add(coord_task)
             coord_task.add_done_callback(self._bg_tasks.discard)
         elif role == "worker":
@@ -1426,188 +1444,11 @@ class Daemon:
         log.info("reprioritized task=%s old=%d new=%d", task_id, old_priority, new_priority)
         return task
 
-    # -- coordinator loop ----------------------------------------------------
-
-    async def _coordinator_loop(self) -> None:
-        """Periodically flush QUEUED tasks to remote workers via FleetDispatcher."""
-        poll_seconds = self._config.fleet_coordinator_poll_seconds
-        while self._running:
-            try:
-                await self._dispatch_to_fleet()
-            except Exception:
-                log.exception("coordinator dispatch error")
-            await asyncio.sleep(poll_seconds)
-
-    async def _dispatch_to_fleet(self) -> None:  # noqa: C901
-        """One coordinator dispatch tick: probe machines, plan, submit, requeue stale tasks."""
-        from maxwell_daemon.fleet.client import RemoteDaemonClient, RemoteDaemonError
-        from maxwell_daemon.fleet.dispatcher import (
-            FleetDispatcher,
-            MachineState,
-            TaskRequirement,
-        )
-
-        fleet_machines = self._config.fleet_machines
-        if not fleet_machines:
-            return
-
-        # Build initial MachineState snapshots from config.
-        initial_machines = tuple(
-            MachineState(
-                name=m.name,
-                host=m.host,
-                port=m.port,
-                capacity=m.capacity,
-                tags=tuple(m.tags),
-            )
-            for m in fleet_machines
-        )
-
-        client = RemoteDaemonClient(
-            auth_token=self._config.api_auth_token,
-        )
-
-        # Probe all machines in parallel to get live health.
-        machines = await client.refresh_all(initial_machines)
-
-        # Requeue tasks dispatched to machines that have gone offline.
-        now = datetime.now(timezone.utc)
-        stale_threshold = self._config.fleet_heartbeat_seconds * 3
-        with self._tasks_lock:
-            tasks_snapshot = dict(self._tasks)
-
-        for t in tasks_snapshot.values():
-            if t.status is not TaskStatus.DISPATCHED or t.dispatched_to is None:
-                continue
-            machine_name = t.dispatched_to
-            machine_healthy = any(m.name == machine_name and m.healthy for m in machines)
-            if not machine_healthy:
-                last_seen = self._worker_last_seen.get(machine_name)
-                stale = True
-                if last_seen is not None:
-                    elapsed = (now - last_seen).total_seconds()
-                    stale = elapsed > stale_threshold
-                if stale:
-                    self._handle_stale_dispatched_task(t, machine_name)
-
-        # Collect tasks still QUEUED after potential requeuing above.
-        with self._tasks_lock:
-            tasks_snapshot = dict(self._tasks)
-
-        queued_tasks = [t for t in tasks_snapshot.values() if t.status is TaskStatus.QUEUED]
-        if not queued_tasks:
-            return
-
-        task_requirements = tuple(TaskRequirement(task_id=t.id) for t in queued_tasks)
-
-        # Tally active_tasks on each machine from known DISPATCHED tasks.
-        dispatched_counts: dict[str, int] = {}
-        for t in tasks_snapshot.values():
-            if t.status is TaskStatus.DISPATCHED and t.dispatched_to:
-                dispatched_counts[t.dispatched_to] = dispatched_counts.get(t.dispatched_to, 0) + 1
-
-        machines_with_load = tuple(
-            MachineState(
-                name=m.name,
-                host=m.host,
-                port=m.port,
-                capacity=m.capacity,
-                tags=m.tags,
-                active_tasks=dispatched_counts.get(m.name, 0),
-                healthy=m.healthy,
-            )
-            for m in machines
-        )
-
-        dispatcher = FleetDispatcher()
-        plan = dispatcher.plan(machines_with_load, task_requirements)
-
-        # Build lookup maps for fast resolution.
-        tasks_by_id = {t.id: t for t in queued_tasks}
-        machines_by_name = {m.name: m for m in machines}
-
-        for assignment in plan.assignments:
-            assigned_task = tasks_by_id.get(assignment.task_id)
-            machine = machines_by_name.get(assignment.machine_name)
-            if assigned_task is None or machine is None:
-                continue
-
-            task_payload: dict[str, Any] = {
-                "task_id": assigned_task.id,
-                "prompt": assigned_task.prompt,
-                "kind": assigned_task.kind.value,
-                "repo": assigned_task.repo,
-                "backend": assigned_task.backend,
-                "model": assigned_task.model,
-                "issue_repo": assigned_task.issue_repo,
-                "issue_number": assigned_task.issue_number,
-                "issue_mode": assigned_task.issue_mode,
-                "priority": assigned_task.priority,
-            }
-
-            try:
-                result = await client.submit_task(machine, task_payload=task_payload)
-            except RemoteDaemonError:
-                log.exception(
-                    "failed to dispatch task %s to machine %s",
-                    assigned_task.id,
-                    machine.name,
-                )
-                continue
-
-            if result.status == "submitted":
-                assigned_task.status = TaskStatus.DISPATCHED
-                assigned_task.dispatched_to = machine.name
-                log.info("dispatched task %s to machine %s", assigned_task.id, machine.name)
-                try:
-                    self._task_store.save(assigned_task)
-                except Exception as exc:  # noqa: BLE001
-                    log.warning(
-                        "Failed to persist DISPATCHED state for task %s: %s",
-                        assigned_task.id,
-                        exc,
-                        exc_info=True,
-                    )
-            else:
-                log.warning(
-                    "machine %s rejected task %s: %s",
-                    machine.name,
-                    assigned_task.id,
-                    result.detail,
-                )
-
-        if plan.unassigned:
-            log.debug(
-                "coordinator: %d task(s) could not be placed this tick: %s",
-                len(plan.unassigned),
-                plan.unassigned,
-            )
-
-    def _handle_stale_dispatched_task(self, task: Task, machine_name: str) -> None:
-        if task.side_effects_started:
-            log.warning(
-                "worker %s appears offline after task %s started side effects; failing instead of transparent failover",
-                machine_name,
-                task.id,
-            )
-            task.status = TaskStatus.FAILED
-            task.error = (
-                f"worker {machine_name} became stale after side effects started; "
-                "retry as a new attempt"
-            )
-            task.finished_at = datetime.now(timezone.utc)
-            self._task_store.save(task)
-            return
-
-        log.warning(
-            "worker %s appears offline before task %s started side effects; requeueing",
-            machine_name,
-            task.id,
-        )
-        task.status = TaskStatus.QUEUED
-        task.dispatched_to = None
-        self._task_store.save(task)
-        self._enqueue_task_entry(task.priority, task)
+    # -- coordinator loop (see daemon/fleet_coordinator.py) -----------------
+    # The _coordinator_loop, _dispatch_to_fleet, and _handle_stale_dispatched_task
+    # methods have been extracted to FleetCoordinator (phase 2 of #798).
+    # Daemon.start() creates a FleetCoordinator instance and drives it via
+    # FleetCoordinator.run_loop() when role == "coordinator".
 
     async def _reload_config_signal(self) -> None:
         """Signal handler wrapper — logs errors rather than crashing the event loop."""
