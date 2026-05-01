@@ -177,9 +177,109 @@ function openGauntletForTask(taskId) {
   fetchGauntlet().catch(console.error);
 }
 
+// ---- state persistence -----------------------------------------------------
+
+const PERSISTENCE_KEYS = {
+  sidebarScroll: "maxwell-sidebar-scroll",
+  statusFilter: "maxwell-status-filter",
+  historyFilter: "maxwell-history-filter",
+  currentView: "maxwell-current-view",
+};
+
+function saveScrollPosition(view, scrollTop) {
+  try {
+    sessionStorage.setItem(`${PERSISTENCE_KEYS.sidebarScroll}-${view}`, String(scrollTop));
+  } catch (_) { /* sessionStorage may be unavailable */ }
+}
+
+function restoreScrollPosition(view) {
+  try {
+    const saved = sessionStorage.getItem(`${PERSISTENCE_KEYS.sidebarScroll}-${view}`);
+    return saved !== null ? Number(saved) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveStatusFilter(value) {
+  try {
+    localStorage.setItem(PERSISTENCE_KEYS.statusFilter, value);
+  } catch (_) { /* localStorage may be unavailable */ }
+}
+
+function restoreStatusFilter() {
+  try {
+    return localStorage.getItem(PERSISTENCE_KEYS.statusFilter);
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveHistoryFilter(value) {
+  try {
+    localStorage.setItem(PERSISTENCE_KEYS.historyFilter, value);
+  } catch (_) { /* localStorage may be unavailable */ }
+}
+
+function restoreHistoryFilter() {
+  try {
+    return localStorage.getItem(PERSISTENCE_KEYS.historyFilter);
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveCurrentView(view) {
+  try {
+    localStorage.setItem(PERSISTENCE_KEYS.currentView, view);
+  } catch (_) { /* localStorage may be unavailable */ }
+}
+
+function restoreCurrentView(defaultValue) {
+  try {
+    const saved = localStorage.getItem(PERSISTENCE_KEYS.currentView);
+    return saved || defaultValue;
+  } catch (_) {
+    return defaultValue;
+  }
+}
+
+function applyPersistedScroll(view) {
+  const scrollPosition = restoreScrollPosition(view);
+  if (scrollPosition !== null) {
+    const sidebar = document.querySelector(".sidebar");
+    if (sidebar) {
+      sidebar.scrollTop = scrollPosition;
+    }
+  }
+}
+
+function initPersistedState() {
+  const savedStatusFilter = restoreStatusFilter();
+  if (savedStatusFilter !== null) {
+    const statusFilterEl = document.getElementById("status-filter");
+    if (statusFilterEl) {
+      statusFilterEl.value = savedStatusFilter;
+    }
+  }
+  const savedHistoryFilter = restoreHistoryFilter();
+  if (savedHistoryFilter !== null) {
+    const historyFilterEl = document.getElementById("history-filter");
+    if (historyFilterEl) {
+      historyFilterEl.value = savedHistoryFilter;
+    }
+  }
+}
+
 // ---- tab navigation --------------------------------------------------------
 
 function switchView(name) {
+  // Save scroll position for current view before switching
+  const sidebar = document.querySelector(".sidebar");
+  if (sidebar) {
+    saveScrollPosition(state.currentView, sidebar.scrollTop);
+  }
+
   state.currentView = name;
   document.querySelectorAll(".tab").forEach((btn) => {
     const active = btn.dataset.view === name;
@@ -207,6 +307,9 @@ function switchView(name) {
   if (name === "history") renderHistory();
   if (name === "repos") fetchFleet().catch(console.error);  // repos uses same data
   document.getElementById("status-operation").textContent = `Viewing ${name}`;
+
+  // Apply persisted scroll position for the new view
+  applyPersistedScroll(name);
 }
 
 // ---- data fetching ---------------------------------------------------------
@@ -1441,7 +1544,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Tasks view
   document.getElementById("refresh-btn").addEventListener("click", fetchTasks);
-  document.getElementById("status-filter").addEventListener("change", fetchTasks);
+  document.getElementById("status-filter").addEventListener("change", () => {
+    saveStatusFilter(document.getElementById("status-filter").value);
+    fetchTasks();
+  });
   document.getElementById("detail-close").addEventListener("click", () => {
     document.getElementById("detail-card").hidden = true;
     state.selected = null;
@@ -1468,7 +1574,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("cost-refresh-btn").addEventListener("click", () => fetchCostDetail().catch(console.error));
 
   // History view
-  document.getElementById("history-filter").addEventListener("change", renderHistory);
+  document.getElementById("history-filter").addEventListener("change", () => {
+    saveHistoryFilter(document.getElementById("history-filter").value);
+    renderHistory();
+  });
   document.getElementById("history-refresh-btn").addEventListener("click", () => fetchTasks().catch(console.error));
 
   // Monitor view
@@ -1569,9 +1678,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (next !== current) switchView(viewOrder[next]);
   }, { passive: true });
 
-  // Handle ?view= URL param on load (PWA shortcut links)
+  // Initialize persisted state (filters, etc.) before first render
+  initPersistedState();
+
+  // Handle ?view= URL param on load (PWA shortcut links), or restore last view
   const viewParam = new URLSearchParams(location.search).get("view");
-  if (viewParam && viewOrder.includes(viewParam)) switchView(viewParam);
+  const initialView = viewParam && viewOrder.includes(viewParam)
+    ? viewParam
+    : restoreCurrentView("tasks");
+  switchView(initialView);
 
   // Initial load
   fetchTasks().catch(console.error);
