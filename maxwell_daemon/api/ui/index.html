@@ -19,9 +19,9 @@
   <header>
     <h1>Maxwell-Daemon</h1>
     <div class="toolbar">
-      <button id="new-task-btn" title="Dispatch a task (shortcut: N)">+ New</button>
-      <button id="command-palette-btn" title="Open command palette (shortcut: Ctrl+K)">Command</button>
-      <button id="enable-notifications-btn" title="Enable push notifications" hidden>🔔 Notifications</button>
+      <button id="new-task-btn" type="button" aria-label="Dispatch a new task" title="Dispatch a task (shortcut: N)">+ New</button>
+      <button id="command-palette-btn" type="button" aria-label="Open command palette" title="Open command palette (shortcut: Ctrl+K)">Command</button>
+      <button id="enable-notifications-btn" type="button" aria-label="Enable push notifications" title="Enable push notifications" hidden>🔔 Notifications</button>
       <button id="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode" aria-pressed="false">🌙</button>
       <span id="connection" class="pill" role="status" aria-live="polite">connecting…</span>
       <span id="cost-summary" class="pill" aria-live="polite"></span>
@@ -30,34 +30,34 @@
 
   <div class="workbench-shell">
     <nav class="activity-bar" role="tablist" aria-label="Activity Bar">
-      <button class="tab active" data-view="tasks" role="tab" aria-selected="true" title="Tasks" aria-label="Tasks">T</button>
-      <button class="tab" data-view="fleet" role="tab" aria-selected="false" title="Fleet" aria-label="Fleet">F</button>
-      <button class="tab" data-view="gauntlet" role="tab" aria-selected="false" title="Gauntlet" aria-label="Gauntlet">G</button>
-      <button class="tab" data-view="work-items" role="tab" aria-selected="false" title="Work Items" aria-label="Work Items">W</button>
-      <button class="tab" data-view="approvals" role="tab" aria-selected="false" title="Approvals" aria-label="Approvals">A</button>
-      <button class="tab" data-view="artifacts" role="tab" aria-selected="false" title="Artifacts" aria-label="Artifacts">I</button>
-      <button class="tab" data-view="graphs" role="tab" aria-selected="false" title="Graphs" aria-label="Graphs">G</button>
-      <button class="tab" data-view="checks" role="tab" aria-selected="false" title="Checks" aria-label="Checks">K</button>
-      <button class="tab" data-view="repos" role="tab" aria-selected="false" title="Repositories" aria-label="Repositories">R</button>
-      <button class="tab" data-view="monitor" role="tab" aria-selected="false" title="Monitor" aria-label="Monitor">M</button>
-      <button class="tab" data-view="history" role="tab" aria-selected="false" title="History" aria-label="History">H</button>
-      <button class="tab" data-view="cost" role="tab" aria-selected="false" title="Cost" aria-label="Cost">C</button>
-      <button class="tab" data-view="debug" role="tab" aria-selected="false" title="Debug" aria-label="Debug">D</button>
+      <button type="button" class="tab active" data-view="tasks" role="tab" aria-selected="true" title="Tasks" aria-label="Tasks">T</button>
+      <button type="button" class="tab" data-view="fleet" role="tab" aria-selected="false" title="Fleet" aria-label="Fleet">F</button>
+      <button type="button" class="tab" data-view="gauntlet" role="tab" aria-selected="false" title="Gauntlet" aria-label="Gauntlet">G</button>
+      <button type="button" class="tab" data-view="work-items" role="tab" aria-selected="false" title="Work Items" aria-label="Work Items">W</button>
+      <button type="button" class="tab" data-view="approvals" role="tab" aria-selected="false" title="Approvals" aria-label="Approvals">A</button>
+      <button type="button" class="tab" data-view="artifacts" role="tab" aria-selected="false" title="Artifacts" aria-label="Artifacts">I</button>
+      <button type="button" class="tab" data-view="graphs" role="tab" aria-selected="false" title="Graphs" aria-label="Graphs">G</button>
+      <button type="button" class="tab" data-view="checks" role="tab" aria-selected="false" title="Checks" aria-label="Checks">K</button>
+      <button type="button" class="tab" data-view="repos" role="tab" aria-selected="false" title="Repositories" aria-label="Repositories">R</button>
+      <button type="button" class="tab" data-view="monitor" role="tab" aria-selected="false" title="Monitor" aria-label="Monitor">M</button>
+      <button type="button" class="tab" data-view="history" role="tab" aria-selected="false" title="History" aria-label="History">H</button>
+      <button type="button" class="tab" data-view="cost" role="tab" aria-selected="false" title="Cost" aria-label="Cost">C</button>
+      <button type="button" class="tab" data-view="debug" role="tab" aria-selected="false" title="Debug" aria-label="Debug">D</button>
     </nav>
 
     <aside class="sidebar" aria-label="Sidebar">
       <section>
         <h2>Explorer</h2>
-        <button class="sidebar-item active" data-view="tasks">Tasks</button>
-        <button class="sidebar-item" data-view="fleet">Fleet nodes</button>
-        <button class="sidebar-item" data-view="gauntlet">Gauntlet</button>
-        <button class="sidebar-item" data-view="work-items">Work items</button>
-        <button class="sidebar-item" data-view="approvals">Approvals</button>
-        <button class="sidebar-item" data-view="artifacts">Artifacts</button>
-        <button class="sidebar-item" data-view="graphs">Task graphs</button>
-        <button class="sidebar-item" data-view="checks">Checks</button>
-        <button class="sidebar-item" data-view="repos">Repositories</button>
-        <button class="sidebar-item" data-view="monitor">Daemon logs</button>
+        <button type="button" class="sidebar-item active" data-view="tasks">Tasks</button>
+        <button type="button" class="sidebar-item" data-view="fleet">Fleet nodes</button>
+        <button type="button" class="sidebar-item" data-view="gauntlet">Gauntlet</button>
+        <button type="button" class="sidebar-item" data-view="work-items">Work items</button>
+        <button type="button" class="sidebar-item" data-view="approvals">Approvals</button>
+        <button type="button" class="sidebar-item" data-view="artifacts">Artifacts</button>
+        <button type="button" class="sidebar-item" data-view="graphs">Task graphs</button>
+        <button type="button" class="sidebar-item" data-view="checks">Checks</button>
+        <button type="button" class="sidebar-item" data-view="repos">Repositories</button>
+        <button type="button" class="sidebar-item" data-view="monitor">Daemon logs</button>
       </section>
       <section>
         <h2>Agents</h2>
@@ -86,7 +86,7 @@
             <option value="failed">failed</option>
             <option value="cancelled">cancelled</option>
           </select>
-          <button id="refresh-btn">refresh</button>
+          <button id="refresh-btn" type="button" aria-label="Refresh task list">refresh</button>
         </div>
       </div>
       <table id="tasks-table">
@@ -111,7 +111,7 @@
     <section class="card" id="detail-card" hidden>
       <div class="card-head">
         <h2 id="detail-title">Task detail</h2>
-        <button id="detail-close" aria-label="Close task details" title="Close">×</button>
+        <button id="detail-close" type="button" aria-label="Close task details" title="Close">×</button>
       </div>
       <div id="detail-next-action" class="detail-banner" hidden></div>
       <section class="detail-section">
@@ -149,7 +149,7 @@
     <section class="card full-width">
       <div class="card-head">
         <h2>Fleet Overview</h2>
-        <button id="fleet-refresh-btn">refresh</button>
+        <button id="fleet-refresh-btn" type="button" aria-label="Refresh fleet overview">refresh</button>
       </div>
       <div id="fleet-meta" class="fleet-meta"></div>
       <table id="fleet-table">
@@ -175,7 +175,7 @@
     <section class="card full-width">
       <div class="card-head">
         <h2>Cost Analytics</h2>
-        <button id="cost-refresh-btn">refresh</button>
+        <button id="cost-refresh-btn" type="button" aria-label="Refresh cost analytics">refresh</button>
       </div>
       <div id="cost-summary-detail" class="cost-summary-detail"></div>
       <h3 class="section-label">Cost by Backend</h3>
@@ -213,7 +213,7 @@
             <option value="failed">failed</option>
             <option value="cancelled">cancelled</option>
           </select>
-          <button id="history-refresh-btn">refresh</button>
+          <button id="history-refresh-btn" type="button" aria-label="Refresh history timeline">refresh</button>
         </div>
       </div>
       <ol id="history-list" class="timeline"></ol>
@@ -227,7 +227,7 @@
         <h2>Agent Monitor</h2>
         <div class="filters">
           <input id="monitor-filter" type="text" placeholder="filter events…" aria-label="Filter events">
-          <button id="monitor-clear-btn">clear</button>
+          <button id="monitor-clear-btn" type="button" aria-label="Clear agent monitor log">clear</button>
         </div>
       </div>
       <pre id="monitor-log" class="monitor-log">(waiting for events…)</pre>
@@ -239,7 +239,7 @@
     <section class="card full-width">
       <div class="card-head">
         <h2>Repository Dashboard</h2>
-        <button id="repos-refresh-btn">refresh</button>
+        <button id="repos-refresh-btn" type="button" aria-label="Refresh repository dashboard">refresh</button>
       </div>
       <div id="repos-grid" class="repos-grid"></div>
     </section>
@@ -252,8 +252,8 @@
         <h2>Gate Gauntlet</h2>
         <div class="filters">
           <span id="gauntlet-focus-state" class="hint">All tasks</span>
-          <button id="gauntlet-clear-focus-btn" hidden>clear focus</button>
-          <button id="gauntlet-refresh-btn">refresh</button>
+          <button id="gauntlet-clear-focus-btn" type="button" aria-label="Clear gauntlet task filter" hidden>clear focus</button>
+          <button id="gauntlet-refresh-btn" type="button" aria-label="Refresh gauntlet board">refresh</button>
         </div>
       </div>
       <div id="gauntlet-board" class="gauntlet-board"></div>
@@ -265,7 +265,7 @@
     <section class="card full-width">
       <div class="card-head">
         <h2>Work Items</h2>
-        <button id="work-items-refresh-btn">refresh</button>
+        <button id="work-items-refresh-btn" type="button" aria-label="Refresh work items">refresh</button>
       </div>
       <table id="work-items-table">
         <thead>
@@ -290,7 +290,7 @@
     <section class="card full-width">
       <div class="card-head">
         <h2>Approvals</h2>
-        <button id="approvals-refresh-btn">refresh</button>
+        <button id="approvals-refresh-btn" type="button" aria-label="Refresh approvals queue">refresh</button>
       </div>
       <table id="approvals-table">
         <thead>
@@ -321,7 +321,7 @@
             <option value="work-item">work item</option>
           </select>
           <input id="artifact-owner-id" type="text" placeholder="owner id" aria-label="Artifact owner id" autocomplete="off">
-          <button id="artifacts-refresh-btn">refresh</button>
+          <button id="artifacts-refresh-btn" type="button" aria-label="Refresh artifact list">refresh</button>
         </div>
       </div>
       <div class="split-pane">
@@ -349,7 +349,7 @@
     <section class="card full-width">
       <div class="card-head">
         <h2>Task Graphs</h2>
-        <button id="graphs-refresh-btn">refresh</button>
+        <button id="graphs-refresh-btn" type="button" aria-label="Refresh task graphs">refresh</button>
       </div>
       <div class="split-pane">
         <table id="graphs-table">
@@ -375,7 +375,7 @@
     <section class="card full-width">
       <div class="card-head">
         <h2>Checks</h2>
-        <button id="checks-refresh-btn">refresh</button>
+        <button id="checks-refresh-btn" type="button" aria-label="Refresh checks">refresh</button>
       </div>
       <table id="checks-table">
         <thead>
@@ -396,7 +396,7 @@
     <section class="card full-width">
       <div class="card-head">
         <h2>Debug Inspector</h2>
-        <button id="debug-clear-btn">clear</button>
+        <button id="debug-clear-btn" type="button" aria-label="Clear debug log">clear</button>
       </div>
       <p class="debug-hint">Last 200 WebSocket events received in this session.</p>
       <pre id="debug-log" class="monitor-log">(no events yet)</pre>
@@ -406,7 +406,7 @@
       <section class="terminal-panel" aria-label="Terminal">
         <div class="terminal-head">
           <span>Terminal</span>
-          <button id="terminal-clear-btn">clear</button>
+          <button id="terminal-clear-btn" type="button" aria-label="Clear terminal log">clear</button>
         </div>
         <pre id="terminal-log" class="terminal-log">(waiting for daemon output...)</pre>
       </section>
@@ -444,8 +444,8 @@
       <div id="new-task-error" class="error" role="alert" aria-live="polite" hidden></div>
 
       <menu>
-        <button type="button" id="new-task-cancel">Cancel</button>
-        <button type="submit" id="new-task-submit">Dispatch</button>
+        <button type="button" id="new-task-cancel" aria-label="Cancel task dispatch">Cancel</button>
+        <button type="submit" id="new-task-submit" aria-label="Dispatch task">Dispatch</button>
       </menu>
     </form>
   </dialog>

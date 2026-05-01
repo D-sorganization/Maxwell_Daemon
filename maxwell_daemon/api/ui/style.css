@@ -1129,3 +1129,35 @@ button, .tab, select, input[type="checkbox"], input[type="radio"] {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
+
+/* ---- small phone breakpoint (<480px) ----------------------------------- */
+/* Horizontal table scroll prevents layout breakage on narrow phones.       */
+/* font-size: 16px prevents iOS auto-zoom on input focus.                   */
+@media (max-width: 480px) {
+  body {
+    font-size: 16px; /* prevent iOS input auto-zoom */
+  }
+  header h1 {
+    font-size: 16px;
+  }
+  /* Stack toolbar items on very narrow screens */
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  /* All data tables scroll horizontally rather than truncating content */
+  #tasks-table,
+  #fleet-table,
+  #cost-backend-table,
+  #cost-task-table,
+  #work-items-table,
+  #approvals-table,
+  #artifacts-table,
+  #graphs-table,
+  #checks-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+}
