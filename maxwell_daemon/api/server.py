@@ -641,11 +641,6 @@ class ControlPlaneWorkItemView(BaseModel):
     actions: tuple[ControlPlaneActionView, ...] = ()
 
 
-class CostSummary(BaseModel):
-    month_to_date_usd: float
-    by_backend: dict[str, float]
-
-
 class AssembleMemoryRequest(BaseModel):
     repo: str = Field(..., min_length=1)
     issue_title: str = ""
@@ -1638,29 +1633,6 @@ def create_app(  # noqa: C901
                 return {"sub": "static-token", "role": "admin", "exp": None}
         return {"sub": "anonymous", "role": None, "exp": None}
 
-    @app.get("/health")
-    async def health() -> dict[str, Any]:
-        state = daemon.state()
-        return {
-            "status": "ok",
-            "version": state.version,
-            "uptime_seconds": (datetime.now(timezone.utc) - state.started_at).total_seconds(),
-        }
-
-    @app.get("/readyz")
-    async def readyz() -> dict[str, Any]:
-        state = daemon.state()
-        if not state.backends_available:
-            raise HTTPException(status_code=503, detail="no backends available")
-        return {"status": "ready"}
-
-    @app.get("/healthz")
-    async def healthz() -> dict[str, Any]:
-        state = daemon.state()
-        if not state.backends_available:
-            raise HTTPException(status_code=503, detail="no backends available")
-        return {"status": "ready"}
-
     # ── Stable operator contract surface (/api/) ──────────────────────────────
     # These endpoints form the versioned contract consumed by runner-dashboard
     # and other operator tooling.  Shape changes require bumping CONTRACT_VERSION
@@ -1668,11 +1640,13 @@ def create_app(  # noqa: C901
     #
     # ``/api/version`` and ``/api/health`` live in maxwell_daemon.api.routes.health
     # as the first phase of decomposing this module (issue #793).
+    from maxwell_daemon.api.routes import cost as _cost_routes
     from maxwell_daemon.api.routes import health as _health_routes
     from maxwell_daemon.api.routes import status as _status_routes
 
     _health_routes.register(app, daemon)
     _status_routes.register(app, daemon)
+    _cost_routes.register(app, daemon, _require_viewer())
 
     @app.get("/api/tasks", dependencies=[Depends(_require_viewer())])
     async def api_list_tasks(
@@ -2855,15 +2829,6 @@ def create_app(  # noqa: C901
             "ledger_records_pruned": result["ledger_records"],
             "audit_entries_pruned": audit_removed,
         }
-
-    @app.get("/api/v1/cost", dependencies=[Depends(_require_viewer())])
-    async def cost_summary() -> CostSummary:
-        now = datetime.now(timezone.utc)
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        return CostSummary(
-            month_to_date_usd=daemon._ledger.month_to_date(),
-            by_backend=daemon._ledger.by_backend(start),
-        )
 
     @app.post("/api/v1/webhooks/github")
     async def github_webhook(request: Request) -> Response:

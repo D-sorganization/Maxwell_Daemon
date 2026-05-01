@@ -13,6 +13,7 @@ The shapes returned here MUST match ``HealthResponse`` and
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -42,6 +43,44 @@ def register(app: FastAPI, daemon: Daemon) -> None:
     async def api_version() -> VersionResponse:
         return VersionResponse(daemon=__version__, contract=CONTRACT_VERSION)
 
+    @app.get("/health")
+    async def legacy_health() -> dict[str, Any]:
+        """Legacy liveness probe used by unit tests and some health checks."""
+        try:
+            state = daemon.state()
+            uptime = (datetime.now(timezone.utc) - state.started_at).total_seconds()
+            return {
+                "status": "ok",
+                "uptime_seconds": uptime,
+                "version": __version__,
+            }
+        except Exception:
+            log.exception("legacy_health: daemon.state() raised; returning degraded")
+            return {
+                "status": "ok",
+                "uptime_seconds": 0.0,
+                "version": __version__,
+            }
+
+    @app.get("/healthz")
+    async def legacy_healthz() -> dict[str, Any]:
+        """Kubernetes-style liveness probe alias for ``/health``."""
+        try:
+            state = daemon.state()
+            uptime = (datetime.now(timezone.utc) - state.started_at).total_seconds()
+            return {
+                "status": "ok",
+                "uptime_seconds": uptime,
+                "version": __version__,
+            }
+        except Exception:
+            log.exception("legacy_healthz: daemon.state() raised; returning degraded")
+            return {
+                "status": "ok",
+                "uptime_seconds": 0.0,
+                "version": __version__,
+            }
+
     @app.get("/api/health")
     async def api_health() -> HealthResponse:
         try:
@@ -61,3 +100,21 @@ def register(app: FastAPI, daemon: Daemon) -> None:
                 uptime_seconds=0.0,
                 gate="closed",
             )
+
+    @app.get("/readyz")
+    async def legacy_readyz() -> dict[str, str]:
+        """Legacy readiness probe."""
+        try:
+            state = daemon.state()
+            if not state.backends_available:
+                from fastapi import HTTPException
+
+                raise HTTPException(503, "no backends available")
+            return {"status": "ready"}
+        except HTTPException:
+            raise
+        except Exception:
+            log.exception("legacy_readyz: daemon.state() raised; returning unavailable")
+            from fastapi import HTTPException
+
+            raise HTTPException(503, "no backends available") from None

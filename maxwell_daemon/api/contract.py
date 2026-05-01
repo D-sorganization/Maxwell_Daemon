@@ -115,3 +115,8 @@ class ControlResponse(BaseModel):
     action: str
     applied_at: str
     previous_state: str
+
+
+class CostSummary(BaseModel):
+    month_to_date_usd: float
+    by_backend: dict[str, float]
