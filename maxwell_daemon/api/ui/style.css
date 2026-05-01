@@ -995,6 +995,16 @@ kbd {
 }
 
 /* ---- responsive ------------------------------------------------------- */
+
+/* Tablets (900–1200px): wider sidebar, larger touch targets */
+@media (min-width: 900px) and (max-width: 1200px) {
+  .sidebar { min-width: 220px; max-width: 280px; }
+  button { padding: 10px 14px; min-height: 48px; }
+  table { font-size: 13px; }
+  .activity-bar { min-width: 60px; }
+  .tab { font-size: 13px; padding: 12px 0; }
+}
+
 @media (max-width: 900px) {
   .workbench-shell {
     grid-template-columns: 48px minmax(0, 1fr);
