@@ -14,6 +14,7 @@ from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.core import ActionKind
 from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.daemon import Daemon
+from maxwell_daemon.daemon.fleet_coordinator import FleetCoordinator
 from maxwell_daemon.daemon.runner import Task, TaskKind, TaskStatus
 
 
@@ -245,6 +246,10 @@ class TestRecovery:
     def test_stale_dispatched_task_with_side_effects_fails_instead_of_requeueing(
         self, cfg: MaxwellDaemonConfig, tmp_path: Path
     ) -> None:
+        import threading
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
         d = Daemon(
             cfg,
             ledger_path=tmp_path / "l.db",
@@ -264,17 +269,38 @@ class TestRecovery:
         with d._tasks_lock:
             d._tasks[task.id] = task
 
-        d._handle_stale_dispatched_task(task, "worker-a")
+        enqueue_fn = MagicMock()
+        task_store_mock = MagicMock()
+        coordinator = FleetCoordinator(
+            config=SimpleNamespace(
+                fleet_machines=[],
+                fleet_coordinator_poll_seconds=5,
+                fleet_heartbeat_seconds=30,
+                api_auth_token=None,
+            ),
+            tasks=d._tasks,
+            tasks_lock=threading.Lock(),
+            task_store=task_store_mock,
+            worker_last_seen={},
+            enqueue_task_entry=enqueue_fn,
+            running_flag=lambda: False,
+        )
+        coordinator._handle_stale_dispatched_task(task, "worker-a")
 
         assert task.status is TaskStatus.FAILED
         assert task.dispatched_to == "worker-a"
         assert task.error is not None
         assert "side effects started" in task.error
+        enqueue_fn.assert_not_called()
         assert d._queue.qsize() == 0
 
     def test_stale_dispatched_task_without_side_effects_requeues(
         self, cfg: MaxwellDaemonConfig, tmp_path: Path
     ) -> None:
+        import threading
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
         d = Daemon(
             cfg,
             ledger_path=tmp_path / "l.db",
@@ -291,11 +317,26 @@ class TestRecovery:
             created_at=datetime.now(timezone.utc),
         )
 
-        d._handle_stale_dispatched_task(task, "worker-a")
+        enqueued: list[Any] = []
+        coordinator = FleetCoordinator(
+            config=SimpleNamespace(
+                fleet_machines=[],
+                fleet_coordinator_poll_seconds=5,
+                fleet_heartbeat_seconds=30,
+                api_auth_token=None,
+            ),
+            tasks=d._tasks,
+            tasks_lock=threading.Lock(),
+            task_store=MagicMock(),
+            worker_last_seen={},
+            enqueue_task_entry=lambda priority, t: enqueued.append(t),
+            running_flag=lambda: False,
+        )
+        coordinator._handle_stale_dispatched_task(task, "worker-a")
 
         assert task.status is TaskStatus.QUEUED
         assert task.dispatched_to is None
-        assert d._queue.qsize() == 1
+        assert len(enqueued) == 1
 
     def test_submit_persists_immediately(self, cfg: MaxwellDaemonConfig, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"

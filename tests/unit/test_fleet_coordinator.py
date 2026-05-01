@@ -13,14 +13,18 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.daemon.fleet_coordinator import FleetCoordinator
 from maxwell_daemon.daemon.runner import Daemon, Task, TaskKind, TaskStatus
 
 # ---------------------------------------------------------------------------
@@ -296,44 +300,47 @@ class _FakeHTTPClient:
         return _FakeHTTPResponse(status_code=code)
 
 
-class TestDispatchToFleet:
-    def _daemon_with_machines(
-        self,
-        tmp_path: Path,
-        machines: list[dict],  # type: ignore[type-arg]
-    ) -> tuple[Daemon, _FakeHTTPClient]:
-        cfg = _make_config(role="coordinator", machines=machines)
-        daemon = Daemon(
-            cfg,
-            ledger_path=tmp_path / "ledger.db",
-            task_store_path=tmp_path / "tasks.db",
-        )
-        fake_http = _FakeHTTPClient()
-        # Patch RemoteDaemonClient to use our fake HTTP transport.
-        daemon._fake_http = fake_http  # type: ignore[attr-defined] # store ref for assertions
-        # We'll monkeypatch at the module level for the duration of the test.
-        return daemon, fake_http
+def _make_coordinator(
+    *,
+    tasks: dict[str, Task] | None = None,
+    worker_last_seen: dict[str, datetime] | None = None,
+    machines: list[Any] | None = None,
+    task_store: Any = None,
+    enqueue_fn: Any = None,
+) -> FleetCoordinator:
+    """Build a FleetCoordinator with a real-like config SimpleNamespace."""
+    fleet_machines = machines or []
+    config = SimpleNamespace(
+        fleet_machines=fleet_machines,
+        fleet_coordinator_poll_seconds=5,
+        fleet_heartbeat_seconds=30,
+        api_auth_token=None,
+    )
+    return FleetCoordinator(
+        config=config,
+        tasks=tasks if tasks is not None else {},
+        tasks_lock=threading.Lock(),
+        task_store=task_store or MagicMock(),
+        worker_last_seen=worker_last_seen if worker_last_seen is not None else {},
+        enqueue_task_entry=enqueue_fn or MagicMock(),
+        running_flag=lambda: False,
+    )
 
+
+class TestDispatchToFleet:
     def test_queued_task_gets_dispatched(self, tmp_path: Path) -> None:
         """A QUEUED task is assigned to a healthy machine and marked DISPATCHED."""
 
         async def _run() -> None:
-            cfg = _make_config(
-                role="coordinator",
-                machines=[{"name": "w1", "host": "worker1", "port": 8080}],
-            )
-            daemon = Daemon(
-                cfg,
-                ledger_path=tmp_path / "ledger.db",
-                task_store_path=tmp_path / "tasks.db",
-            )
-            # Add a QUEUED task directly.
             task = _task("abc123")
-            daemon._tasks["abc123"] = task
+            tasks: dict[str, Task] = {"abc123": task}
 
             fake_http = _FakeHTTPClient()
 
-            # Patch the RemoteDaemonClient constructor to inject fake http.
+            # Build a machine config SimpleNamespace matching what FleetCoordinator needs.
+            machine = SimpleNamespace(name="w1", host="worker1", port=8080, capacity=1, tags=[])
+            coordinator = _make_coordinator(tasks=tasks, machines=[machine])
+
             import maxwell_daemon.fleet.client as fleet_client_mod
 
             original_cls = fleet_client_mod.RemoteDaemonClient
@@ -344,7 +351,7 @@ class TestDispatchToFleet:
 
             fleet_client_mod.RemoteDaemonClient = _PatchedClient  # type: ignore[misc]
             try:
-                await daemon._dispatch_to_fleet()
+                await coordinator._dispatch_tick()
             finally:
                 fleet_client_mod.RemoteDaemonClient = original_cls  # type: ignore[misc]
 
@@ -356,19 +363,14 @@ class TestDispatchToFleet:
         asyncio.run(_run())
 
     def test_no_machines_configured_is_noop(self, tmp_path: Path) -> None:
-        """When fleet has no machines, _dispatch_to_fleet returns without error."""
+        """When fleet has no machines, _dispatch_tick returns without error."""
 
         async def _run() -> None:
-            cfg = _make_config(role="coordinator")  # no machines
-            daemon = Daemon(
-                cfg,
-                ledger_path=tmp_path / "ledger.db",
-                task_store_path=tmp_path / "tasks.db",
-            )
             task = _task("t1")
-            daemon._tasks["t1"] = task
+            tasks: dict[str, Task] = {"t1": task}
+            coordinator = _make_coordinator(tasks=tasks, machines=[])
             # Should complete without raising.
-            await daemon._dispatch_to_fleet()
+            await coordinator._dispatch_tick()
             # Task stays QUEUED since there's nowhere to send it.
             assert task.status is TaskStatus.QUEUED
 
@@ -378,17 +380,10 @@ class TestDispatchToFleet:
         """Tasks are not dispatched to unhealthy machines."""
 
         async def _run() -> None:
-            cfg = _make_config(
-                role="coordinator",
-                machines=[{"name": "w1", "host": "dead-host", "port": 8080}],
-            )
-            daemon = Daemon(
-                cfg,
-                ledger_path=tmp_path / "ledger.db",
-                task_store_path=tmp_path / "tasks.db",
-            )
             task = _task("abc")
-            daemon._tasks["abc"] = task
+            tasks: dict[str, Task] = {"abc": task}
+            machine = SimpleNamespace(name="w1", host="dead-host", port=8080, capacity=1, tags=[])
+            coordinator = _make_coordinator(tasks=tasks, machines=[machine])
 
             fake_http = _FakeHTTPClient(health_ok=False)
 
@@ -402,7 +397,7 @@ class TestDispatchToFleet:
 
             fleet_client_mod.RemoteDaemonClient = _PatchedClient  # type: ignore[misc]
             try:
-                await daemon._dispatch_to_fleet()
+                await coordinator._dispatch_tick()
             finally:
                 fleet_client_mod.RemoteDaemonClient = original_cls  # type: ignore[misc]
 
@@ -416,24 +411,23 @@ class TestDispatchToFleet:
         """DISPATCHED tasks whose worker has been offline too long are requeued."""
 
         async def _run() -> None:
-            cfg = _make_config(
-                role="coordinator",
-                machines=[{"name": "w1", "host": "dead-host", "port": 8080}],
-            )
-            daemon = Daemon(
-                cfg,
-                ledger_path=tmp_path / "ledger.db",
-                task_store_path=tmp_path / "tasks.db",
-            )
-            # Task already dispatched to w1.
             task = _task("xyz")
             task.status = TaskStatus.DISPATCHED
             task.dispatched_to = "w1"
-            daemon._tasks["xyz"] = task
+            tasks: dict[str, Task] = {"xyz": task}
 
             # w1's last heartbeat was a long time ago (>3x heartbeat_seconds = 90s).
             stale_time = datetime.now(timezone.utc) - timedelta(seconds=200)
-            daemon._worker_last_seen["w1"] = stale_time
+            worker_last_seen: dict[str, datetime] = {"w1": stale_time}
+
+            enqueued: list[Task] = []
+            machine = SimpleNamespace(name="w1", host="dead-host", port=8080, capacity=1, tags=[])
+            coordinator = _make_coordinator(
+                tasks=tasks,
+                machines=[machine],
+                worker_last_seen=worker_last_seen,
+                enqueue_fn=lambda priority, t: enqueued.append(t),
+            )
 
             fake_http = _FakeHTTPClient(health_ok=False)
 
@@ -447,7 +441,7 @@ class TestDispatchToFleet:
 
             fleet_client_mod.RemoteDaemonClient = _PatchedClient  # type: ignore[misc]
             try:
-                await daemon._dispatch_to_fleet()
+                await coordinator._dispatch_tick()
             finally:
                 fleet_client_mod.RemoteDaemonClient = original_cls  # type: ignore[misc]
 
