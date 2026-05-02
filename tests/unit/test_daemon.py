@@ -319,8 +319,7 @@ class TestTaskExecution:
 
                 deadline = asyncio.get_event_loop().time() + 5.0
                 while asyncio.get_event_loop().time() < deadline:
-                    second_task = d.get_task(second.id)
-                    if second_task is not None and second_task.status is TaskStatus.RUNNING:
+                    if max_active >= 2:
                         break
                     await asyncio.sleep(0.02)
                 else:
