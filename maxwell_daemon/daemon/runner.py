@@ -1805,6 +1805,10 @@ class Daemon:
                 task.id,
             )
 
+        # Record initial activity timestamp so stall detection doesn't trigger
+        # before any output is produced.
+        self._record_stream_event(task.id, EventKind.TASK_STARTED.value)
+
         async def _emit_test_output(chunk: str, stream: str) -> None:
             self._record_stream_event(task.id, f"{EventKind.TEST_OUTPUT.value}:{stream}")
             await self._events.publish(
