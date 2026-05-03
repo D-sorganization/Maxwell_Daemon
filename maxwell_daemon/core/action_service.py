@@ -111,7 +111,8 @@ class ActionService:
                         _ACTION_EXECUTOR_TIMEOUT_SECONDS,
                     )
                     raise ActionTimeoutError(
-                        f"Action {action.id} exceeded {_ACTION_EXECUTOR_TIMEOUT_SECONDS:.0f}s timeout"
+                        f"Action {action.id} exceeded "
+                        f"{_ACTION_EXECUTOR_TIMEOUT_SECONDS:.0f}s timeout"
                     ) from None
             return self.mark_applied(running.id, result=result)
         except Exception as exc:  # noqa: BLE001
@@ -224,8 +225,7 @@ class ActionService:
 
     def mark_reverted(self, action_id: str) -> Action:
         action = self._store.transition(action_id, ActionStatus.REVERTED)
-        # Assuming we don't have ACTION_REVERTED event yet, we could just not publish or add one.
-        # But wait, we don't have EventKind.ACTION_REVERTED. Let's look at events.py if we need to publish.
+        # No event published yet — ACTION_REVERTED event kind does not exist.
         return action
 
     def _publish(self, kind: EventKind, action: Action) -> None:

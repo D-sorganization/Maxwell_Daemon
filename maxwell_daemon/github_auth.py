@@ -85,7 +85,8 @@ class GitHubAuth:
             token = getattr(gh_cfg, "token", None) or _env_token()
             if not token:
                 raise ValueError(
-                    "GitHub token not configured. Set github.token in config or GITHUB_TOKEN env var."
+                    "GitHub token not configured. Set github.token in config "
+                    "or GITHUB_TOKEN env var."
                 )
             return cls.from_token(token)
 
@@ -168,7 +169,8 @@ class GitHubAuth:
             import jwt as _jwt
         except ImportError as exc:
             raise ImportError(
-                "PyJWT is required for GitHub App auth — it is included in maxwell-daemon's default deps."
+                "PyJWT is required for GitHub App auth — "
+                "it is included in maxwell-daemon's default deps."
             ) from exc
 
         try:
@@ -209,7 +211,8 @@ class GitHubAuth:
             import jwt as _jwt
         except ImportError as exc:
             raise ImportError(
-                "PyJWT is required for GitHub App auth — it is included in maxwell-daemon's default deps."
+                "PyJWT is required for GitHub App auth — "
+                "it is included in maxwell-daemon's default deps."
             ) from exc
 
         try:

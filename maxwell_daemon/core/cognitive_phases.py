@@ -47,7 +47,9 @@ class CognitivePipeline:
 
         # Phase 2: Implement (Coder)
         impl_job = Job(
-            instructions=f"Implement the following plan. Adhere to DbC, DRY, and LOD.\n\nPlan:\n{plan}",
+            instructions=(
+                f"Implement the following plan. Adhere to DbC, DRY, and LOD.\n\nPlan:\n{plan}"
+            ),
             context_data=job.context_data,
         )
         impl_response = await self.implementer.execute(impl_job)
@@ -59,7 +61,8 @@ class CognitivePipeline:
             instructions=(
                 f"Verify this implementation against the plan.\n"
                 f"Plan:\n{plan}\n\nCode:\n{code}\n\n"
-                f"Reply with exactly PASS if the code perfectly implements the plan, or FAIL with reasons."
+                f"Reply with exactly PASS if the code perfectly implements "
+                f"the plan, or FAIL with reasons."
             ),
             context_data=job.context_data,
         )

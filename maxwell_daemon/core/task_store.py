@@ -220,9 +220,14 @@ class TaskStore:
                     repo, backend, model, route_reason,
                     issue_repo, issue_number, issue_mode, ab_group,
                     thread_id, turn_count, max_turns,
-                    priority, result, error, waived_by, waiver_reason, waived_at, pr_url, cost_usd, started_at,
+                    priority, result, error, waived_by, waiver_reason,
+                    waived_at, pr_url, cost_usd, started_at,
                     finished_at, dispatched_to, side_effects_started, completed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
                 ON CONFLICT(id) DO UPDATE SET
                     updated_at=excluded.updated_at,
                     status=excluded.status,

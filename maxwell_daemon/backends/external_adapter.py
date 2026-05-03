@@ -508,7 +508,8 @@ class ExternalAgentAdapterBase(ABC):
                 adapter_id=self.adapter_id,
                 operation=context.operation,
                 reason=(
-                    f"context adapter mismatch: expected {self.adapter_id}, got {context.adapter_id}"
+                    f"context adapter mismatch: "
+                    f"expected {self.adapter_id}, got {context.adapter_id}"
                 ),
             )
         if not self.capabilities.supports(context.operation):
@@ -768,9 +769,12 @@ class BackendReadOnlyExternalAgentAdapter(ExternalAgentAdapterBase):
                 "Analyze or propose validation commands. Do not edit files."
             ),
             ExternalAgentOperation.CHECKPOINT: (
-                "Summarize recoverable state, decisions, blockers, and next steps. Do not edit files."
+                "Summarize recoverable state, decisions, blockers, "
+                "and next steps. Do not edit files."
             ),
-            ExternalAgentOperation.READ: "Inspect and summarize the requested context. Do not edit files.",
+            ExternalAgentOperation.READ: (
+                "Inspect and summarize the requested context. Do not edit files."
+            ),
         }
         return instructions.get(operation, "Respond without editing files.")
 

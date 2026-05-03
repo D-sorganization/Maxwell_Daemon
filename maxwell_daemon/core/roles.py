@@ -52,7 +52,8 @@ class RolePlayer:
         caps = self.backend.capabilities(model)
         if self.role.requires_tool_use and not caps.supports_tool_use:
             raise ValueError(
-                f"Backend {self.backend.name} does not support required tool use for role {self.role.name}"
+                f"Backend {self.backend.name} does not support required tool use "
+                f"for role {self.role.name}"
             )
 
     async def execute(self, job: Job, tools: list[dict[str, Any]] | None = None) -> BackendResponse:

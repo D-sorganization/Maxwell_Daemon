@@ -101,7 +101,11 @@ class CostEvaluator:
             confidence_pct = 100
         else:
             model_chosen = tier_model
-            reasoning = f"Selected {complexity} tier based on prompt length ({len(task.prompt)} chars) and budget (${budget_info.safe_allocation:.2f})"
+            reasoning = (
+                f"Selected {complexity} tier based on prompt length "
+                f"({len(task.prompt)} chars) and budget "
+                f"(${budget_info.safe_allocation:.2f})"
+            )
             confidence_pct = 85
 
         # Emit metric: token_budget_allocation{task_id, budget_remaining, model_chosen}

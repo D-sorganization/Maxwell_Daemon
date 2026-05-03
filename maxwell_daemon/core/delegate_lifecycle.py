@@ -561,13 +561,20 @@ class DelegateSessionStore:
         created_at TEXT NOT NULL,
         metadata TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_delegate_sessions_delegate ON delegate_sessions(delegate_id, updated_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_delegate_sessions_work_item ON delegate_sessions(work_item_id, updated_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_delegate_sessions_task ON delegate_sessions(task_id, updated_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_delegate_sessions_status ON delegate_sessions(status, updated_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_delegate_leases_session ON delegate_leases(session_id, heartbeat_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_delegate_checkpoints_session ON delegate_checkpoints(session_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_delegate_handoffs_session ON delegate_handoffs(session_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_delegate_sessions_delegate
+        ON delegate_sessions(delegate_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_delegate_sessions_work_item
+        ON delegate_sessions(work_item_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_delegate_sessions_task
+        ON delegate_sessions(task_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_delegate_sessions_status
+        ON delegate_sessions(status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_delegate_leases_session
+        ON delegate_leases(session_id, heartbeat_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_delegate_checkpoints_session
+        ON delegate_checkpoints(session_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_delegate_handoffs_session
+        ON delegate_handoffs(session_id, created_at DESC);
     """
 
     def __init__(self, db_path: Path | str) -> None:

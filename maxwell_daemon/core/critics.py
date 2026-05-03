@@ -346,7 +346,10 @@ class CriticPanelRunner:
             return CriticPanelRun(
                 profile=profile,
                 status="timed_out",
-                message=f"critic {profile.critic_id!r} timed out after {profile.timeout_seconds} seconds",
+                message=(
+                    f"critic {profile.critic_id!r} timed out after "
+                    f"{profile.timeout_seconds} seconds"
+                ),
                 started_at=started_at,
                 finished_at=_utc_now(),
             )
@@ -406,7 +409,10 @@ _DEFAULT_CRITIC_PROFILES: tuple[CriticProfile, ...] = (
         critic_id="architecture-critic",
         name="Architecture Critic",
         adapter="architecture-critic",
-        scope="Checks boundaries, dependency direction, design simplicity, and fit with local patterns.",
+        scope=(
+            "Checks boundaries, dependency direction, design simplicity, "
+            "and fit with local patterns."
+        ),
         required_inputs=("goal", "diff", "changed-files", "repo-context"),
         forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
         minimum_model_capability_tags=("architecture-review", "reasoning-medium"),
@@ -438,7 +444,9 @@ _DEFAULT_CRITIC_PROFILES: tuple[CriticProfile, ...] = (
         critic_id="security-critic",
         name="Security Critic",
         adapter="security-critic",
-        scope="Checks auth, secrets, sandbox escape, path traversal, and destructive-command risks.",
+        scope=(
+            "Checks auth, secrets, sandbox escape, path traversal, and destructive-command risks."
+        ),
         required_inputs=("goal", "diff", "changed-files", "test-results", "policy"),
         forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
         minimum_model_capability_tags=("security-review", "reasoning-high"),
@@ -472,7 +480,10 @@ _DEFAULT_CRITIC_PROFILES: tuple[CriticProfile, ...] = (
         critic_id="product-critic",
         name="Product Critic",
         adapter="product-critic",
-        scope="Checks that the patch improves the home-user experience and avoids enterprise-only complexity.",
+        scope=(
+            "Checks that the patch improves the home-user experience "
+            "and avoids enterprise-only complexity."
+        ),
         required_inputs=("goal", "diff", "changed-files", "issue-context"),
         forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
         minimum_model_capability_tags=("product-review", "reasoning-medium"),
@@ -490,7 +501,10 @@ _DEFAULT_CRITIC_PROFILES: tuple[CriticProfile, ...] = (
         critic_id="release-critic",
         name="Release Critic",
         adapter="release-critic",
-        scope="Checks docs, migration notes, rollback considerations, and operator guidance when relevant.",
+        scope=(
+            "Checks docs, migration notes, rollback considerations, "
+            "and operator guidance when relevant."
+        ),
         required_inputs=("goal", "diff", "changed-files", "docs", "release-context"),
         forbidden_actions=("edit-files", "merge-pr", "waive-gate"),
         minimum_model_capability_tags=("release-review", "reasoning-medium"),

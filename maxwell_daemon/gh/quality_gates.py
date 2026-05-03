@@ -91,7 +91,8 @@ class TodoFixmeGate:
                         if token.type != tokenize.COMMENT or not self._PATTERN.search(token.string):
                             continue
                         offenders.append(
-                            f"{path.relative_to(repo_path)}:{token.start[0]}: {token.string.rstrip()}"
+                            f"{path.relative_to(repo_path)}:{token.start[0]}: "
+                            f"{token.string.rstrip()}"
                         )
             except (OSError, tokenize.TokenError, UnicodeDecodeError):
                 continue

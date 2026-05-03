@@ -208,7 +208,12 @@ class CostLedger:
         placeholders = ",".join("?" for _ in agent_ids)
         with self._get_conn() as conn:
             rows = conn.execute(
-                f"SELECT agent_id, COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0) FROM cost_records WHERE agent_id IN ({placeholders}) GROUP BY agent_id",  # nosec B608
+                f"SELECT agent_id, "
+                f"COALESCE(SUM(prompt_tokens), 0), "
+                f"COALESCE(SUM(completion_tokens), 0) "
+                f"FROM cost_records "
+                f"WHERE agent_id IN ({placeholders}) "
+                f"GROUP BY agent_id",  # nosec B608
                 tuple(sorted(agent_ids)),
             ).fetchall()
 

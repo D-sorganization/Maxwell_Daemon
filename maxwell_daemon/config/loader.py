@@ -115,7 +115,8 @@ def _resolve_backend_api_keys(
         secret = secret_store.get(secret_ref)
         if secret is None:
             raise RuntimeError(
-                f"backend '{backend_name}' secret_ref '{secret_ref}' was not found in the secret store"
+                f"backend '{backend_name}' secret_ref '{secret_ref}' "
+                "was not found in the secret store"
             )
         backend_cfg["api_key"] = secret
     return raw

@@ -96,12 +96,17 @@ class AgentConfig(BaseModel):
     stall_timeout_seconds: int = Field(
         300,
         ge=0,
-        description="Cancel and retry RUNNING tasks that emit no progress events for this many seconds. 0 disables stall detection.",
+        description=(
+            "Cancel and retry RUNNING tasks that emit no progress events "
+            "for this many seconds. 0 disables stall detection."
+        ),
     )
     task_retention_days: int = Field(
         30,
         ge=0,
-        description="Delete terminal tasks and cost records older than this many days. 0 disables pruning.",
+        description=(
+            "Delete terminal tasks and cost records older than this many days. 0 disables pruning."
+        ),
     )
     task_prune_interval_seconds: int = Field(
         86_400,
@@ -118,17 +123,26 @@ class AgentConfig(BaseModel):
     default_backend: str = "claude"
     concurrency_by_kind: dict[str, int] = Field(
         default_factory=dict,
-        description="Optional per-kind concurrency caps applied on top of the global worker pool. Keys typically use issue modes such as 'plan' or 'implement'.",
+        description=(
+            "Optional per-kind concurrency caps applied on top of the "
+            "global worker pool. Keys typically use issue modes such as "
+            "'plan' or 'implement'."
+        ),
     )
     max_queue_depth: int = Field(
         1000,
         ge=1,
-        description="Maximum number of tasks allowed in the queue before submissions are rejected with 429 Too Many Requests.",
+        description=(
+            "Maximum number of tasks allowed in the queue before "
+            "submissions are rejected with 429 Too Many Requests."
+        ),
     )
     task_live_retention_seconds: int = Field(
         600,
         ge=0,
-        description="Seconds to keep terminal tasks in memory before evicting them to the database.",
+        description=(
+            "Seconds to keep terminal tasks in memory before evicting them to the database."
+        ),
     )
 
 
