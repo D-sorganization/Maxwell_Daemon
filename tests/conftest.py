@@ -2,16 +2,34 @@
 
 Reusable building blocks kept here so individual test modules stay focused on
 behavior rather than scaffolding.
+
+Top-level conftest: enforce thread-safety and disable real network.
+See Repository_Management/docs/FLEET_TESTING_STANDARDS.md §5.
 """
 
 from __future__ import annotations
 
 import os
+
+# C-extension thread safety. Many "xdist worker crashed" failures
+# come from MKL/OpenBLAS forking under xdist. Pin to single-threaded
+# for tests; production code can re-thread itself if it needs to.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
+# matplotlib headless backend, set before any matplotlib import.
+os.environ.setdefault("MPLBACKEND", "Agg")
+
+# Qt headless backend, for repos that import PyQt/PySide indirectly.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+os.environ["MAXWELL_AGGRESSIVE_COMPRESSION"] = "1"
+
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
-
-os.environ["MAXWELL_AGGRESSIVE_COMPRESSION"] = "1"
 
 import pytest
 import structlog
@@ -25,6 +43,34 @@ from maxwell_daemon.backends import (
     registry,
 )
 from maxwell_daemon.config import MaxwellDaemonConfig
+
+
+@pytest.fixture(autouse=True)
+def _no_real_network_in_unit_lane(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Block real outbound HTTP from unit-marked tests by default.
+
+    See FLEET_TESTING_STANDARDS.md §5.
+    """
+    if "unit" not in request.keywords:
+        return
+
+    def _refuse(*_a: Any, **_kw: Any) -> None:
+        raise RuntimeError(
+            "Unit test made a real network call. Mock with `respx` "
+            "or `pytest-httpx`, or mark the test "
+            "`@pytest.mark.requires_network`."
+        )
+
+    for module in ("httpx", "requests", "urllib.request"):
+        try:
+            mod = __import__(module, fromlist=["*"])
+            for attr in ("get", "post", "put", "delete", "request"):
+                if hasattr(mod, attr):
+                    monkeypatch.setattr(mod, attr, _refuse, raising=False)
+        except ImportError:
+            pass
 
 
 @pytest.fixture(autouse=True)

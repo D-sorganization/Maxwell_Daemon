@@ -117,12 +117,50 @@ max-complexity = 15
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+timeout = 60
+timeout_method = "thread"
 # ``tests/benchmarks/`` is intentionally excluded from the default run.
 # Performance benchmarks are timing-sensitive and must be invoked
 # explicitly via ``pytest tests/benchmarks/ --benchmark-only``; including
 # them in the standard unit/integration lane would bias coverage and
 # potentially cause flakes on slow runners.
-addopts = "-ra --strict-markers --cov=maxwell_daemon --cov-report=term-missing --cov-fail-under=85.0 --ignore=tests/benchmarks"
+#
+# Default lane: fast, deterministic, offline. See
+# Repository_Management/docs/FLEET_TESTING_STANDARDS.md §2.
+addopts = """
+  -ra
+  --strict-markers
+  --strict-config
+  --durations=20
+  --cov=maxwell_daemon
+  --cov-report=term-missing
+  --cov-fail-under=85.0
+  --ignore=tests/benchmarks
+  -m "not slow and not live_simulation and not e2e and not requires_network"
+"""
+
+markers = [
+  # ---- tier markers ----
+  "unit: pure logic, fully mocked, < 100 ms wall-clock",
+  "integration: cross-module / file-system / process boundaries, < 5 s",
+  "e2e: full-stack smoke tests; nightly + release gate only",
+  "slow: > 1 s wall-clock; deselect with -m 'not slow'",
+  "live_simulation: requires a real physics / math engine; deselect by default",
+
+  # ---- environment markers ----
+  "requires_network: needs real outbound network; deselect by default",
+  "requires_gpu: needs CUDA / Metal / ROCm",
+  "requires_gl: needs OpenGL or a display",
+  "headless_safe: verified under QT_QPA_PLATFORM=offscreen",
+
+  # ---- workflow markers ----
+  "serial: must run with -n 0 (xdist parallel breaks this test)",
+  "benchmark: deterministic perf smoke; not a primary correctness gate",
+  "smoke: release-blocking smoke; subset of e2e",
+]
 
 [tool.mypy]
 python_version = "3.10"
