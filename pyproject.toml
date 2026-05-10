@@ -122,7 +122,13 @@ testpaths = ["tests"]
 # explicitly via ``pytest tests/benchmarks/ --benchmark-only``; including
 # them in the standard unit/integration lane would bias coverage and
 # potentially cause flakes on slow runners.
-addopts = "-ra --strict-markers --cov=maxwell_daemon --cov-report=term-missing --cov-fail-under=85.0 --ignore=tests/benchmarks"
+addopts = "-ra -q --strict-markers --strict-config --durations=20 --cov=maxwell_daemon --cov-report=term-missing --cov-fail-under=85.0 --ignore=tests/benchmarks"
+markers = [
+    "unit: Pure logic, highly isolated, execution in < 100ms",
+    "integration: Subsystem boundaries, DBs, I/O, heavy mocking",
+    "e2e: Full system boot, real networks, user workflows",
+    "slow: marks tests as slow",
+]
 
 [tool.mypy]
 python_version = "3.10"
