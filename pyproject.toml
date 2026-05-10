@@ -48,7 +48,7 @@ ollama = ["ollama>=0.3.0"]
 google = ["google-cloud-aiplatform>=1.151.0"]
 azure = ["azure-identity>=1.18.0"]
 grpc = ["grpcio>=1.66.0", "grpcio-tools>=1.66.0", "protobuf>=5.28.0"]
-ssh = ["asyncssh>=2.14.0"]
+ssh = ["asyncssh>=2.23.0"]
 browser = ["playwright>=1.45.0"]
 docs = [
     "mkdocs>=1.6.0",
