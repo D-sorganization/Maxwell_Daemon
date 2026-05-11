@@ -95,6 +95,8 @@ jobs:
     name: Test (py${{ matrix.python-version }})
     needs: [pick-runner, typecheck]
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    env:
+      BASELINE_TEST_COUNT: 2471
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -113,6 +115,11 @@ jobs:
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
+      - name: Test count regression guard
+        run: |
+          COUNT=$(.venv/bin/python -m pytest --collect-only -q 2>&1 | tail -3 | grep -oE "[0-9]+ tests collected" | grep -oE "^[0-9]+" | head -1)
+          echo "Collected $COUNT tests; baseline is ${{ env.BASELINE_TEST_COUNT }}"
+          [ "$COUNT" -ge "${{ env.BASELINE_TEST_COUNT }}" ] || (echo "::error::Test count $COUNT < baseline ${{ env.BASELINE_TEST_COUNT }}"; exit 1)
       - name: Run tests
         run: .venv/bin/python -m pytest -p no:xvfb --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
       - name: Run integration tests (PR only)

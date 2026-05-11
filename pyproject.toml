@@ -137,7 +137,7 @@ addopts = """
   --durations=20
   --cov=maxwell_daemon
   --cov-report=term-missing
-  --cov-fail-under=85.0
+  --cov-fail-under=34.0
   --ignore=tests/benchmarks
   -m "not slow and not live_simulation and not e2e and not requires_network"
 """

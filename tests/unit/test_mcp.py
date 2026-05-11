@@ -102,9 +102,7 @@ async def test_mcp_client_manager_starts_enabled_server_with_autospec_stdio(
     monkeypatch.setattr("maxwell_daemon.mcp.client.ClientSession", _SessionCtx)
 
     servers = {
-        "echo-srv": McpServerConfig(
-            name="echo-srv", command="echo", args=["hi"], enabled=True
-        ),
+        "echo-srv": McpServerConfig(name="echo-srv", command="echo", args=["hi"], enabled=True),
     }
     manager = McpClientManager(servers)
     await manager.start()
@@ -156,9 +154,7 @@ async def test_mcp_tool_handler_propagates_error_result(
     fake_session = AsyncMock()
     fake_session.initialize = AsyncMock(return_value=None)
     fake_session.list_tools = AsyncMock(return_value=SimpleNamespace(tools=[fake_tool]))
-    fake_session.call_tool = AsyncMock(
-        return_value=SimpleNamespace(isError=True, content="kaboom")
-    )
+    fake_session.call_tool = AsyncMock(return_value=SimpleNamespace(isError=True, content="kaboom"))
 
     @asynccontextmanager
     async def fake_stdio_client(_params: Any):  # type: ignore[no-untyped-def]
