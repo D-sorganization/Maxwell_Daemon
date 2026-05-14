@@ -12,6 +12,8 @@
 - Fleet-dispatched tasks persist `dispatched_to` and `side_effects_started`. A coordinator may
   transparently requeue a stale dispatched task only while `side_effects_started` is false; once
   side effects have started, stale-worker recovery fails the task so any retry is a new attempt.
+- `submit_threadsafe()` must remain safe while daemon maintenance loops are active; cross-thread
+  queue scheduling cannot hold the live task mutex while waiting on the event loop.
 - CI test lanes enforce bounded execution with the pytest timeout plugin and a matrix job timeout
   so a wedged test cannot block merge readiness indefinitely. Coverage is produced by the py3.12
   lane; py3.10 and py3.11 run compatibility tests without coverage overhead. The test matrix
