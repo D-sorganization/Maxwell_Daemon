@@ -31,3 +31,20 @@ def test_ci_test_matrix_has_job_timeout() -> None:
     test_job = workflow["jobs"]["test"]
 
     assert test_job["timeout-minutes"] == 45
+
+
+def test_ci_compatibility_lanes_do_not_collect_coverage() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    test_job = workflow["jobs"]["test"]
+    steps = test_job["steps"]
+
+    coverage_steps = [step for step in steps if step.get("name") == "Run tests with coverage"]
+    compatibility_steps = [step for step in steps if step.get("name") == "Run compatibility tests"]
+
+    assert len(coverage_steps) == 1
+    assert coverage_steps[0]["if"] == "matrix.python-version == '3.12'"
+    assert "--cov=maxwell_daemon" in coverage_steps[0]["run"]
+
+    assert len(compatibility_steps) == 1
+    assert compatibility_steps[0]["if"] == "matrix.python-version != '3.12'"
+    assert "--no-cov" in compatibility_steps[0]["run"]
