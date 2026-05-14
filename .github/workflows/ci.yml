@@ -94,8 +94,8 @@ jobs:
   test:
     name: Test (py${{ matrix.python-version }})
     needs: [pick-runner, typecheck]
-    runs-on: ${{ needs.pick-runner.outputs.runner }}
-    timeout-minutes: 20
+    runs-on: [self-hosted, Linux, X64, d-sorg-fleet, deskcomputer]
+    timeout-minutes: 45
     env:
       BASELINE_TEST_COUNT: 2471
     strategy:
@@ -121,8 +121,12 @@ jobs:
           COUNT=$(.venv/bin/python -m pytest --collect-only -q 2>&1 | tail -3 | grep -oE "[0-9]+ tests collected" | grep -oE "^[0-9]+" | head -1)
           echo "Collected $COUNT tests; baseline is ${{ env.BASELINE_TEST_COUNT }}"
           [ "$COUNT" -ge "${{ env.BASELINE_TEST_COUNT }}" ] || (echo "::error::Test count $COUNT < baseline ${{ env.BASELINE_TEST_COUNT }}"; exit 1)
-      - name: Run tests
+      - name: Run tests with coverage
+        if: matrix.python-version == '3.12'
         run: .venv/bin/python -m pytest -p no:xvfb --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
+      - name: Run compatibility tests
+        if: matrix.python-version != '3.12'
+        run: .venv/bin/python -m pytest -p no:xvfb --no-cov
       - name: Run integration tests (PR only)
         # Phase 1 of #800 - gated to pull_request events so the unit-test
         # fast lane on push/main stays untouched. The default ``pytest``
