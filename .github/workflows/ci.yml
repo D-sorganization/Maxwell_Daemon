@@ -241,8 +241,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: apps/desktop-electron/package-lock.json
       - name: Verify desktop package lock
         working-directory: apps/desktop-electron
         run: npm ci --ignore-scripts
@@ -307,8 +305,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: apps/desktop-electron/package-lock.json
       - name: Install desktop dependencies
         working-directory: apps/desktop-electron
         run: npm ci
