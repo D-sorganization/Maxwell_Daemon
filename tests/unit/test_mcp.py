@@ -161,6 +161,9 @@ async def test_mcp_tool_handler_propagates_error_result(
         yield (AsyncMock(), AsyncMock())
 
     class _SessionCtx:
+        def __init__(self, *_a: Any, **_kw: Any) -> None:
+            pass
+
         async def __aenter__(self) -> Any:
             return fake_session
 
