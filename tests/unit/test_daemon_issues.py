@@ -83,7 +83,6 @@ async def _run_to_completion(daemon: Daemon, task_id: str, timeout: float = 10.0
     final_states = {TaskStatus.COMPLETED, TaskStatus.FAILED}
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
-    task = daemon.get_task(task_id)
     while loop.time() < deadline:
         task = daemon.get_task(task_id)
         if task and task.status in final_states:
