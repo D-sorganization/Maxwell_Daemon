@@ -7,6 +7,7 @@ minimal environments.
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, TypeVar
@@ -786,6 +787,55 @@ class TestSubmitThreadsafe:
                 TaskStatus.RUNNING,
                 TaskStatus.COMPLETED,
             )
+            await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+    def test_submit_threadsafe_releases_tasks_lock_before_enqueue(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """Cross-thread queue scheduling must not wait while holding _tasks_lock."""
+
+        async def body(d: Daemon) -> None:
+            observed: dict[str, bool] = {}
+            original_enqueue = d._enqueue_task_entry
+
+            def wrapped_enqueue(priority: int, task: Task | None) -> None:
+                observed["locked"] = d._tasks_lock.locked()
+                original_enqueue(priority, task)
+
+            d._enqueue_task_entry = wrapped_enqueue  # type: ignore[method-assign]
+            try:
+                task = await asyncio.to_thread(d.submit_threadsafe, "my prompt")
+            finally:
+                d._enqueue_task_entry = original_enqueue  # type: ignore[method-assign]
+
+            assert observed["locked"] is False
+            await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
+
+    def test_submit_threadsafe_registers_task_on_daemon_loop_thread(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """Cross-thread submit uses the regular loop-owned submit path."""
+
+        async def body(d: Daemon) -> None:
+            loop_thread_id = threading.get_ident()
+            observed: dict[str, int] = {}
+            original_submit = d.submit
+
+            def wrapped_submit(*args: Any, **kwargs: Any) -> Task:
+                observed["thread_id"] = threading.get_ident()
+                return original_submit(*args, **kwargs)
+
+            d.submit = wrapped_submit  # type: ignore[method-assign]
+            try:
+                task = await asyncio.to_thread(d.submit_threadsafe, "my prompt")
+            finally:
+                d.submit = original_submit  # type: ignore[method-assign]
+
+            assert observed["thread_id"] == loop_thread_id
             await _wait_for_status(d, task.id, TaskStatus.COMPLETED)
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))

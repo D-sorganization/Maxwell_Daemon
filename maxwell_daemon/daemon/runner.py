@@ -829,19 +829,23 @@ class Daemon:
             depends_on=list(depends_on) if depends_on else [],
             dry_run=dry_run,
         )
-        # Persist and track the task under lock, then route the queue mutation
-        # through the daemon loop if this caller is on a foreign thread.
+        # Persist and track the task under lock, then perform the queue
+        # mutation after releasing it. The cross-thread enqueue path waits for
+        # the daemon loop to run a callback, so holding _tasks_lock here can
+        # deadlock if the loop is concurrently inside a maintenance path that
+        # also needs the lock.
         with self._tasks_lock:
             if task_id is not None:
                 self._reject_duplicate_task_id(task.id)
             self._task_store.save(task)
             self._tasks[task.id] = task
-            try:
-                self._enqueue_task_entry(task.priority, task)
-            except QueueSaturationError:
+        try:
+            self._enqueue_task_entry(task.priority, task)
+        except QueueSaturationError:
+            with self._tasks_lock:
                 del self._tasks[task.id]
-                self._task_store.delete(task.id)
-                raise
+            self._task_store.delete(task.id)
+            raise
         # Fire-and-forget: if there's no running loop yet (e.g. sync test
         # submits before start()), skip the event — the queued state is
         # observable via get_task().
@@ -890,37 +894,38 @@ class Daemon:
         if self._loop is None:
             raise RuntimeError("daemon must be started before submit_threadsafe()")
 
-        resolved_task_id = uuid.uuid4().hex[:12]
-        if len(prompt) > 50000:
-            main_req = prompt[:10000]
-            remainder = prompt[10000:]
-            artifact = self._artifact_store.put_text(
-                kind=ArtifactKind.METADATA,
-                name="prompt_overflow.txt",
-                text=remainder,
-                task_id=resolved_task_id,
-            )
-            prompt = f"{main_req}\n\n[PROMPT TRUNCATED. Remainder stored in artifact_id:///{artifact.id}]"
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
 
-        task = Task(
-            id=resolved_task_id,
-            prompt=prompt,
-            kind=TaskKind.PROMPT,
-            repo=repo,
-            backend=backend,
-            model=model,
-            dry_run=dry_run,
-        )
-        self._task_store.save(task)
-        with self._tasks_lock:
-            self._tasks[task.id] = task
+        if running_loop is self._loop:
+            return self.submit(
+                prompt,
+                repo=repo,
+                backend=backend,
+                model=model,
+                dry_run=dry_run,
+            )
+
+        result: concurrent.futures.Future[Task] = concurrent.futures.Future()
+
+        def _submit_on_loop() -> None:
             try:
-                self._enqueue_task_entry(task.priority, task)
-            except QueueSaturationError:
-                del self._tasks[task.id]
-                self._task_store.delete(task.id)
-                raise
-        return task
+                task = self.submit(
+                    prompt,
+                    repo=repo,
+                    backend=backend,
+                    model=model,
+                    dry_run=dry_run,
+                )
+            except BaseException as exc:  # pragma: no cover - surfaced via Future  # noqa: BLE001
+                result.set_exception(exc)
+            else:
+                result.set_result(task)
+
+        self._loop.call_soon_threadsafe(_submit_on_loop)
+        return result.result(timeout=60.0)
 
     def _offload_prompt_if_needed(self, task_id: str, prompt: str) -> str:
         """Move large prompts (>50KB) to the artifact store to keep task history lean.
