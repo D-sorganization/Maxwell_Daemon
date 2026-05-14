@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -80,13 +80,30 @@ def daemon_with_fake_executor(
 
 
 async def _run_to_completion(daemon: Daemon, task_id: str, timeout: float = 10.0) -> None:
-    deadline = asyncio.get_event_loop().time() + timeout
-    while asyncio.get_event_loop().time() < deadline:
-        t = daemon.get_task(task_id)
-        if t and t.status in {TaskStatus.COMPLETED, TaskStatus.FAILED}:
+    final_states = {TaskStatus.COMPLETED, TaskStatus.FAILED}
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    task = daemon.get_task(task_id)
+    while loop.time() < deadline:
+        task = daemon.get_task(task_id)
+        if task and task.status in final_states:
             return
         await asyncio.sleep(0.02)
-    raise AssertionError(f"task {task_id} did not finish: status={t.status if t else None}")
+    task = daemon.get_task(task_id)
+    if task and task.status in final_states:
+        return
+    raise AssertionError(f"task {task_id} did not finish: status={task.status if task else None}")
+
+
+def test_run_to_completion_checks_final_state_after_timeout() -> None:
+    class CompletedTask:
+        status = TaskStatus.COMPLETED
+
+    class CompletedDaemon:
+        def get_task(self, task_id: str) -> CompletedTask:
+            return CompletedTask()
+
+    asyncio.run(_run_to_completion(cast(Daemon, CompletedDaemon()), "finished", timeout=0.0))
 
 
 class TestSubmitIssue:

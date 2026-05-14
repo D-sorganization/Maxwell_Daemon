@@ -122,9 +122,10 @@ python_classes = "Test*"
 python_functions = "test_*"
 timeout = 60
 timeout_method = "thread"
-# ``tests/benchmarks/`` is intentionally excluded from the default run.
+# ``tests/benchmark/`` and ``tests/benchmarks/`` are intentionally
+# excluded from the default run.
 # Performance benchmarks are timing-sensitive and must be invoked
-# explicitly via ``pytest tests/benchmarks/ --benchmark-only``; including
+# explicitly via ``pytest tests/benchmark/ tests/benchmarks/ --benchmark-only``; including
 # them in the standard unit/integration lane would bias coverage and
 # potentially cause flakes on slow runners.
 #
@@ -138,6 +139,7 @@ addopts = """
   --cov=maxwell_daemon
   --cov-report=term-missing
   --cov-fail-under=34.0
+  --ignore=tests/benchmark
   --ignore=tests/benchmarks
   -m "not slow and not live_simulation and not e2e and not requires_network"
 """
