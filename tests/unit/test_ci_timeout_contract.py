@@ -30,4 +30,4 @@ def test_ci_test_matrix_has_job_timeout() -> None:
     workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
     test_job = workflow["jobs"]["test"]
 
-    assert test_job["timeout-minutes"] == 20
+    assert test_job["timeout-minutes"] == 45

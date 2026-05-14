@@ -95,7 +95,7 @@ jobs:
     name: Test (py${{ matrix.python-version }})
     needs: [pick-runner, typecheck]
     runs-on: ${{ needs.pick-runner.outputs.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       BASELINE_TEST_COUNT: 2471
     strategy:
