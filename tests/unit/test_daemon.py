@@ -372,6 +372,7 @@ class TestTaskExecution:
                 assert executor.calls == 2
             finally:
                 await d.stop()
+                await asyncio.sleep(0)  # allow subprocess GC to run before loop closes (py3.10 compat)
 
         _run(body())
 
@@ -413,6 +414,7 @@ class TestTaskExecution:
                 assert executor.calls == 1
             finally:
                 await d.stop()
+                await asyncio.sleep(0)  # allow subprocess GC to run before loop closes (py3.10 compat)
 
         _run(body())
 
