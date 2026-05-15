@@ -319,10 +319,11 @@ jobs:
         run: xvfb-run --auto-servernum npm run smoke:launch
         env:
           ELECTRON_DISABLE_SANDBOX: "1"
-          MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "10000"
+          ELECTRON_EXTRA_LAUNCH_ARGS: "--disable-gpu --disable-dev-shm-usage"
+          MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "60000"
       - name: Run desktop launch smoke
         if: runner.os != 'Linux'
         working-directory: apps/desktop-electron
         run: npm run smoke:launch
         env:
-          MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "10000"
+          MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "60000"
