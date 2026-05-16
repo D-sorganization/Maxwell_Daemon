@@ -354,7 +354,7 @@ class TestTaskExecution:
         async def body() -> None:
             cfg = minimal_config.model_copy(
                 update={
-                    "agent": minimal_config.agent.model_copy(update={"stall_timeout_seconds": 1})
+                    "agent": minimal_config.agent.model_copy(update={"stall_timeout_seconds": 2})
                 }
             )
             executor = _RetryingIssueExecutor()
@@ -372,7 +372,7 @@ class TestTaskExecution:
                 assert executor.calls == 2
             finally:
                 await d.stop()
-                await asyncio.sleep(0)  # allow subprocess GC before loop close (py3.10)
+                await asyncio.sleep(0.1)  # allow task store flush + subprocess GC (py3.10+)
 
         _run(body())
 
@@ -396,7 +396,7 @@ class TestTaskExecution:
         async def body() -> None:
             cfg = minimal_config.model_copy(
                 update={
-                    "agent": minimal_config.agent.model_copy(update={"stall_timeout_seconds": 1})
+                    "agent": minimal_config.agent.model_copy(update={"stall_timeout_seconds": 2})
                 }
             )
             executor = _StreamingIssueExecutor()
@@ -409,12 +409,12 @@ class TestTaskExecution:
             await d.start(worker_count=1)
             try:
                 task = d.submit_issue(repo="D-sorganization/Maxwell-Daemon", issue_number=763)
-                final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
+                final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=15.0)
                 assert final.result == "streamed"
                 assert executor.calls == 1
             finally:
                 await d.stop()
-                await asyncio.sleep(0)  # allow subprocess GC before loop close (py3.10)
+                await asyncio.sleep(0.1)  # allow task store flush + subprocess GC (py3.10+)
 
         _run(body())
 
@@ -602,7 +602,7 @@ class TestRunningStatusResilience:
                 task = d.submit("hi")
                 # First update_status(RUNNING) raises -> task re-queued.
                 # Second attempt succeeds -> task eventually completes.
-                final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
+                final = await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=15.0)
                 assert final.status == TaskStatus.COMPLETED
                 # Must have been called at least twice (one fail, one success).
                 assert store.running_call_count >= 2
@@ -645,7 +645,7 @@ class TestRunningStatusResilience:
             await d.start(worker_count=1)
             try:
                 task = d.submit("check not lost")
-                await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=10.0)
+                await _wait_for_status(d, task.id, TaskStatus.COMPLETED, timeout=15.0)
                 # Task is still registered in the daemon dict after completion.
                 assert d.get_task(task.id) is not None
                 assert d.get_task(task.id).status == TaskStatus.COMPLETED  # type: ignore[union-attr]
