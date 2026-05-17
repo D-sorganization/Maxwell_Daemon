@@ -53,6 +53,7 @@ jobs:
           fi
 
   build:
+    timeout-minutes: 60
     name: Build MkDocs site
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
@@ -77,6 +78,7 @@ jobs:
           path: site
 
   deploy:
+    timeout-minutes: 30
     name: Deploy GitHub Pages
     needs: [pick-runner, build]
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
