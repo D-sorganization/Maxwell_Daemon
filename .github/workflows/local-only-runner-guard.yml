@@ -50,6 +50,7 @@ jobs:
           fi
 
   local-only-workflows:
+    timeout-minutes: 30
     name: Reject hosted runner routing
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}

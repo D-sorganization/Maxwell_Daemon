@@ -43,6 +43,7 @@ jobs:
           fi
 
   build-and-publish:
+    timeout-minutes: 60
     name: Build and publish to PyPI
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}

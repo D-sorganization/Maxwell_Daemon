@@ -33,6 +33,7 @@ jobs:
           echo "Self-hosted runner claimed this job - routing locally"
 
   analyze:
+    timeout-minutes: 90
     name: Analyze
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}

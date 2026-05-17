@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   local-only-workflows:
+    timeout-minutes: 30
     name: Reject hosted runner routing
     runs-on: d-sorg-fleet
     steps:
@@ -46,6 +47,7 @@ jobs:
           echo "Self-hosted runner claimed this job - routing locally"
 
   lint:
+    timeout-minutes: 20
     name: Lint (ruff)
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
@@ -70,6 +72,7 @@ jobs:
         run: .venv/bin/python -m ruff format --check .
 
   typecheck:
+    timeout-minutes: 30
     name: Typecheck (mypy --strict)
     needs: [pick-runner, lint]
     runs-on: ${{ needs.pick-runner.outputs.runner }}
@@ -153,6 +156,7 @@ jobs:
           path: benchmark-results.json
 
   coverage-floor:
+    timeout-minutes: 30
     name: Coverage floor (ratchet)
     needs: [pick-runner, test]
     if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'dependabot/github_actions/') }}
@@ -173,6 +177,7 @@ jobs:
       - run: python scripts/check_coverage_floor.py --xml coverage.xml
 
   file-size-budget:
+    timeout-minutes: 30
     name: File size budget
     needs: [pick-runner, coverage-floor]
     runs-on: ${{ needs.pick-runner.outputs.runner }}
@@ -189,6 +194,7 @@ jobs:
       - run: python scripts/check_file_size_budget.py
 
   todo-fixme:
+    timeout-minutes: 30
     name: No untracked TODO/FIXME
     needs: [pick-runner, file-size-budget]
     runs-on: ${{ needs.pick-runner.outputs.runner }}
@@ -205,6 +211,7 @@ jobs:
       - run: python scripts/check_todo_fixme.py maxwell_daemon
 
   security:
+    timeout-minutes: 20
     name: Security scans
     needs: [pick-runner, todo-fixme]
     runs-on: ${{ needs.pick-runner.outputs.runner }}
@@ -227,6 +234,7 @@ jobs:
         run: .venv/bin/python -m pip_audit . --desc --strict
 
   dependency-locks:
+    timeout-minutes: 60
     name: Dependency locks
     needs: [pick-runner, security]
     runs-on: ${{ needs.pick-runner.outputs.runner }}
@@ -251,6 +259,7 @@ jobs:
         run: npm ci --ignore-scripts
 
   build:
+    timeout-minutes: 60
     name: Build distribution
     needs: [pick-runner, dependency-locks]
     runs-on: ${{ needs.pick-runner.outputs.runner }}
@@ -274,6 +283,7 @@ jobs:
           path: dist/
 
   desktop-smoke:
+    timeout-minutes: 60
     name: Desktop launcher smoke (${{ matrix.os }})
     needs: build
     runs-on: ${{ matrix.os }}
