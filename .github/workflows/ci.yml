@@ -61,6 +61,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: 'pip'
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
@@ -83,6 +84,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: 'pip'
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
@@ -113,6 +115,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
@@ -167,6 +170,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: 'pip'
       - uses: actions/download-artifact@v8
         with:
           name: coverage-xml
@@ -186,6 +190,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: 'pip'
       - run: python scripts/check_file_size_budget.py
 
   todo-fixme:
@@ -202,6 +207,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: 'pip'
       - run: python scripts/check_todo_fixme.py maxwell_daemon
 
   security:
@@ -218,6 +224,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: 'pip'
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv pip install bandit pip-audit
@@ -240,12 +247,14 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: 'pip'
       - run: python -m pip install uv
       - name: Verify uv.lock is fresh
         run: uv lock --check
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
+          cache: 'npm'
       - name: Verify desktop package lock
         working-directory: apps/desktop-electron
         run: npm ci --ignore-scripts
@@ -264,6 +273,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: 'pip'
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv pip install build
@@ -291,6 +301,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: 'pip'
       - uses: actions/download-artifact@v8
         with:
           name: dist
@@ -310,6 +321,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
+          cache: 'npm'
       - name: Install desktop dependencies
         working-directory: apps/desktop-electron
         run: npm ci

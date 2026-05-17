@@ -60,6 +60,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: 'pip'
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Update uv lockfile
         run: uv lock --upgrade
