@@ -53,7 +53,7 @@ jobs:
     timeout-minutes: 30
     name: Reject hosted runner routing
     needs: pick-runner
-    runs-on: ${{ needs.pick-runner.outputs.runner }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository without external actions
         shell: bash
