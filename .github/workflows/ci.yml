@@ -75,7 +75,7 @@ jobs:
   typecheck:
     timeout-minutes: 30
     name: Typecheck (mypy --strict)
-    needs: [pick-runner, lint]
+    needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
@@ -98,7 +98,7 @@ jobs:
 
   test:
     name: Test (py${{ matrix.python-version }})
-    needs: [pick-runner, typecheck]
+    needs: pick-runner
     runs-on: [self-hosted, Linux, X64, d-sorg-fleet, deskcomputer]
     timeout-minutes: 45
     env:
@@ -183,7 +183,7 @@ jobs:
   file-size-budget:
     timeout-minutes: 30
     name: File size budget
-    needs: [pick-runner, coverage-floor]
+    needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
@@ -201,7 +201,7 @@ jobs:
   todo-fixme:
     timeout-minutes: 30
     name: No untracked TODO/FIXME
-    needs: [pick-runner, file-size-budget]
+    needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
@@ -219,7 +219,7 @@ jobs:
   security:
     timeout-minutes: 20
     name: Security scans
-    needs: [pick-runner, todo-fixme]
+    needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
@@ -243,7 +243,7 @@ jobs:
   dependency-locks:
     timeout-minutes: 60
     name: Dependency locks
-    needs: [pick-runner, security]
+    needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
@@ -270,7 +270,7 @@ jobs:
   build:
     timeout-minutes: 60
     name: Build distribution
-    needs: [pick-runner, dependency-locks]
+    needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
