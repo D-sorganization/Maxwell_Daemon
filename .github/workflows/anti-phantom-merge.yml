@@ -18,6 +18,7 @@ concurrency:
 jobs:
   guard:
     runs-on: d-sorg-fleet
+    timeout-minutes: 10
     if: github.event.pull_request.base.ref == 'main' || github.event.pull_request.base.ref == 'master'
     steps:
       - name: Checkout PR head with full history
@@ -54,7 +55,7 @@ jobs:
           FILES=$(echo "$STATS" | jq -r .changedFiles)
           TITLE=$(gh pr view "$PR" --repo "$REPO" --json title --jq .title)
           BODY=$(gh pr view "$PR" --repo "$REPO" --json body --jq .body)
-          PR_FILES=$(gh pr diff "$PR" --repo "$REPO" --name-only)
+          PR_FILES=$(gh pr view "$PR" --repo "$REPO" --json files --jq ".files[].path")
 
           FAIL=""
           fail() { FAIL="${FAIL}- $1\n"; }
