@@ -83,7 +83,7 @@ jobs:
           fi
 
   fleet-dispatch:
-    runs-on: [self-hosted, maxwell-daemon-fleet]
+    runs-on: d-sorg-fleet
     timeout-minutes: 120
     env:
       GITHUB_TOKEN: ${{ secrets.MAXWELL_GH_TOKEN || secrets.GITHUB_TOKEN }}
