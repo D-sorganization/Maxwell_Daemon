@@ -47,7 +47,7 @@ on:
 
 concurrency:
   group: maxwell-daemon-fleet-dispatch
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
 
