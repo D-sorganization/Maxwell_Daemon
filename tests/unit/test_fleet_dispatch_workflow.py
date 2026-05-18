@@ -72,10 +72,12 @@ class TestJobShape:
     def test_self_hosted_runner(self) -> None:
         data = _load()
         runs_on = data["jobs"]["fleet-dispatch"]["runs-on"]
-        # GitHub Actions renders a list literal; accept str ("self-hosted") too.
+        # GitHub Actions renders a list literal; accept str ("d-sorg-fleet") too.
         joined = " ".join(runs_on) if isinstance(runs_on, list) else str(runs_on)
-        assert "self-hosted" in joined
-        assert "maxwell-daemon-fleet" in joined
+        # The fleet runs on the org-wide "d-sorg-fleet" label (advertised by
+        # every online Linux self-hosted runner). The previous
+        # "maxwell-daemon-fleet" label was stale — no runner advertised it.
+        assert "d-sorg-fleet" in joined
 
     def test_secrets_wired_to_env(self) -> None:
         data = _load()
