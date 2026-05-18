@@ -301,7 +301,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [d-sorg-fleet, [self-hosted, macOS], [self-hosted, Windows]]
+        # macOS leg removed: org has zero macOS self-hosted runners, so the
+        # job sat queued for 200+ minutes and was eventually cancelled. Re-add
+        # only when a macOS runner is provisioned, or switch to `macos-14`
+        # (GH-hosted) if Actions-minute cost is acceptable.
+        os: [d-sorg-fleet, [self-hosted, Windows]]
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
