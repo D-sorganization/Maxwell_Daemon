@@ -90,4 +90,7 @@ class TestJobShape:
         data = _load()
         conc = data["concurrency"]
         assert conc["group"] == "maxwell-daemon-fleet-dispatch"
-        assert conc["cancel-in-progress"] is False
+        # cancel-in-progress: true is required by the workflow lint policy
+        # introduced in lint-workflow-files.yml to prevent queue saturation
+        # (see: post-2026-05-15 fleet-queue protection rule).
+        assert conc["cancel-in-progress"] is True
