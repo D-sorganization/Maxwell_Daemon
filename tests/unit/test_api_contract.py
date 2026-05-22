@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -145,6 +145,26 @@ class TestApiHealth:
     def test_has_uptime_seconds(self, client: TestClient) -> None:
         body = client.get("/api/health").json()
         assert "uptime_seconds" in body
+
+    def test_uptime_is_never_negative(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Small clock skews must not leak negative uptime into the API contract."""
+
+        def _future_state(self: Daemon) -> DaemonState:
+            return DaemonState(
+                version="test",
+                config_path=None,
+                tasks={},
+                started_at=datetime.now(timezone.utc) + timedelta(seconds=1),
+                backends_available=["test"],
+            )
+
+        monkeypatch.setattr(Daemon, "state", _future_state)
+        body = client.get("/api/health").json()
+        assert body["uptime_seconds"] == 0.0
 
     def test_has_gate_key(self, client: TestClient) -> None:
         body = client.get("/api/health").json()
