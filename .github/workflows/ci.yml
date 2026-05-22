@@ -21,6 +21,9 @@ jobs:
     runs-on: d-sorg-fleet
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: Run local-only workflow guard
         shell: bash
         run: |
