@@ -201,6 +201,24 @@ jobs:
           cache: 'pip'
       - run: python scripts/check_file_size_budget.py
 
+
+  noqa-ratchet:
+    timeout-minutes: 30
+    name: noqa ratchet (BLE001 / C901)
+    needs: pick-runner
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
+    steps:
+      - name: Clear stale checkout locks
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+      - run: python scripts/check_noqa_ratchet.py
   todo-fixme:
     timeout-minutes: 30
     name: No untracked TODO/FIXME
