@@ -29,7 +29,7 @@ import fnmatch
 import json
 import re
 import shlex
-import subprocess
+import subprocess  # nosec B404
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -163,10 +163,8 @@ def _parse_specs(raw: Any) -> list[HookSpec]:
             raise HookViolationError(f"hook spec `match:` must be a string ({item!r})")
         shell = item.get("shell", False)
         if not isinstance(shell, bool):
-            raise HookViolationError(
-                f"hook spec `shell:` must be a boolean true/false ({item!r})"
-            )
-        out.append(HookSpec(command=cmd, match=match, shell=shell))
+            raise HookViolationError(f"hook spec `shell:` must be a boolean true/false ({item!r})")
+        out.append(HookSpec(command=cmd, match=match, shell=shell))  # nosec B604
     return out
 
 
@@ -342,9 +340,9 @@ def _needs_shell(command: str) -> bool:
     Precondition: ``command`` must be a ``str``.
     Postcondition: returns a ``bool``.
     """
-    assert isinstance(command, str), f"_needs_shell: command must be str, got {type(command)}"
+    assert isinstance(command, str), f"_needs_shell: command must be str, got {type(command)}"  # nosec B101
     result = bool(_SHELL_METACHAR_RE.search(command))
-    assert isinstance(result, bool)
+    assert isinstance(result, bool)  # nosec B101
     return result
 
 
@@ -409,12 +407,12 @@ async def _exec_default_runner(
     Precondition: ``command`` is a non-empty ``str``; ``timeout`` is positive.
     Postcondition: returns ``(int, str)`` where int is the exit code.
     """
-    assert isinstance(command, str) and command, (
-        f"_exec_default_runner: command must be a non-empty str, got {command!r}"
-    )
-    assert isinstance(timeout, (int, float)) and timeout > 0, (
-        f"_exec_default_runner: timeout must be positive, got {timeout!r}"
-    )
+    assert (  # nosec B101
+        isinstance(command, str) and command
+    ), f"_exec_default_runner: command must be a non-empty str, got {command!r}"
+    assert (  # nosec B101
+        isinstance(timeout, int | float) and timeout > 0
+    ), f"_exec_default_runner: timeout must be positive, got {timeout!r}"
     args = shlex.split(command)
     proc = await asyncio.create_subprocess_exec(
         *args,
@@ -430,7 +428,7 @@ async def _exec_default_runner(
         await proc.wait()
         return 124, f"timeout after {timeout}s"
     result = proc.returncode or 0, stdout.decode(errors="replace")
-    assert isinstance(result[0], int)
+    assert isinstance(result[0], int)  # nosec B101
     return result
 
 
@@ -447,13 +445,13 @@ async def _shell_default_runner(
     Precondition: ``command`` is a non-empty ``str``; ``timeout`` is positive.
     Postcondition: returns ``(int, str)`` where int is the exit code.
     """
-    assert isinstance(command, str) and command, (
-        f"_shell_default_runner: command must be a non-empty str, got {command!r}"
-    )
-    assert isinstance(timeout, (int, float)) and timeout > 0, (
-        f"_shell_default_runner: timeout must be positive, got {timeout!r}"
-    )
-    proc = await asyncio.create_subprocess_shell(
+    assert (  # nosec B101
+        isinstance(command, str) and command
+    ), f"_shell_default_runner: command must be a non-empty str, got {command!r}"
+    assert (  # nosec B101
+        isinstance(timeout, int | float) and timeout > 0
+    ), f"_shell_default_runner: timeout must be positive, got {timeout!r}"
+    proc = await asyncio.create_subprocess_shell(  # nosec B602
         command,
         cwd=cwd,
         env=env,
@@ -467,7 +465,7 @@ async def _shell_default_runner(
         await proc.wait()
         return 124, f"timeout after {timeout}s"
     result = proc.returncode or 0, stdout.decode(errors="replace")
-    assert isinstance(result[0], int)
+    assert isinstance(result[0], int)  # nosec B101
     return result
 
 

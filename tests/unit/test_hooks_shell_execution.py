@@ -224,9 +224,7 @@ class TestHookRunnerShellDispatch:
     async def test_pre_tool_shell_false_uses_exec_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
         shell_runner = _TrackingRunner("shell")
-        cfg = HookConfig(
-            pre_tool=(HookSpec(command="ruff check .", match="*", shell=False),)
-        )
+        cfg = HookConfig(pre_tool=(HookSpec(command="ruff check .", match="*", shell=False),))
         hr = HookRunner(
             cfg,
             workspace=tmp_path,
@@ -269,14 +267,10 @@ class TestHookRunnerShellDispatch:
         assert len(exec_runner.calls) == 1
         assert len(shell_runner.calls) == 0
 
-    async def test_backward_compat_runner_kwarg_used_as_exec_runner(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_backward_compat_runner_kwarg_used_as_exec_runner(self, tmp_path: Path) -> None:
         """runner= kwarg maps to exec_runner for backward compatibility."""
         compat_runner = _TrackingRunner("compat")
-        cfg = HookConfig(
-            pre_tool=(HookSpec(command="ruff check .", match="*", shell=False),)
-        )
+        cfg = HookConfig(pre_tool=(HookSpec(command="ruff check .", match="*", shell=False),))
         hr = HookRunner(cfg, workspace=tmp_path, runner=compat_runner)
         await hr.run_pre_tool("run_bash", {})
         assert len(compat_runner.calls) == 1
@@ -384,7 +378,7 @@ class TestLifecycleHookAutoDetect:
             shell_runner=shell_runner,
         )
         await hr.run_pre_commit()
-        assert len(exec_runner.calls) == 2   # ruff and mypy
+        assert len(exec_runner.calls) == 2  # ruff and mypy
         assert len(shell_runner.calls) == 1  # cat | grep
 
 
@@ -435,14 +429,10 @@ class TestDefaultRunnersCallable:
                 close()
             raise asyncio.TimeoutError
 
-        monkeypatch.setattr(
-            "maxwell_daemon.hooks.asyncio.create_subprocess_exec", _fake_create
-        )
+        monkeypatch.setattr("maxwell_daemon.hooks.asyncio.create_subprocess_exec", _fake_create)
         monkeypatch.setattr("maxwell_daemon.hooks.asyncio.wait_for", _fake_wait_for)
 
-        rc, output = await _exec_default_runner(
-            "echo hi", cwd=str(tmp_path), env={}, timeout=0.01
-        )
+        rc, output = await _exec_default_runner("echo hi", cwd=str(tmp_path), env={}, timeout=0.01)
         assert rc == 124
         assert "timeout after" in output
         assert proc.killed is True
@@ -478,14 +468,10 @@ class TestDefaultRunnersCallable:
                 close()
             raise asyncio.TimeoutError
 
-        monkeypatch.setattr(
-            "maxwell_daemon.hooks.asyncio.create_subprocess_shell", _fake_create
-        )
+        monkeypatch.setattr("maxwell_daemon.hooks.asyncio.create_subprocess_shell", _fake_create)
         monkeypatch.setattr("maxwell_daemon.hooks.asyncio.wait_for", _fake_wait_for)
 
-        rc, output = await _shell_default_runner(
-            "echo hi", cwd=str(tmp_path), env={}, timeout=0.01
-        )
+        rc, output = await _shell_default_runner("echo hi", cwd=str(tmp_path), env={}, timeout=0.01)
         assert rc == 124
         assert "timeout after" in output
         assert proc.killed is True
