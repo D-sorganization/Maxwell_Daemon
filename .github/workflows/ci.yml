@@ -18,17 +18,20 @@ jobs:
   local-only-workflows:
     timeout-minutes: 30
     name: Reject hosted runner routing
-    runs-on: d-sorg-fleet
+    runs-on: d-sorg-fleet-16core
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: Run local-only workflow guard
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/check_local_only_workflows.py
+          python scripts/check_local_only_workflows.py
 
   pick-runner:
-    runs-on: d-sorg-fleet
+    runs-on: d-sorg-fleet-16core
     timeout-minutes: 2
     outputs:
       runner: ${{ steps.check.outputs.runner }}
@@ -43,8 +46,8 @@ jobs:
             exit 1
           fi
           mkdir -p "$(dirname "$GITHUB_OUTPUT")"
-          echo "runner=d-sorg-fleet" >> "$GITHUB_OUTPUT"
-          echo "Self-hosted runner claimed this job - routing locally"
+          echo "runner=d-sorg-fleet-16core" >> "$GITHUB_OUTPUT"
+          echo "Desktop fleet runner claimed this job - routing locally"
 
   lint:
     timeout-minutes: 20
@@ -99,7 +102,7 @@ jobs:
   test:
     name: Test (py${{ matrix.python-version }})
     needs: pick-runner
-    runs-on: [self-hosted, Linux, X64, d-sorg-fleet, deskcomputer]
+    runs-on: [self-hosted, Linux, X64, d-sorg-fleet-16core]
     timeout-minutes: 45
     env:
       BASELINE_TEST_COUNT: 2471
@@ -129,10 +132,10 @@ jobs:
           [ "$COUNT" -ge "${{ env.BASELINE_TEST_COUNT }}" ] || (echo "::error::Test count $COUNT < baseline ${{ env.BASELINE_TEST_COUNT }}"; exit 1)
       - name: Run tests with coverage
         if: matrix.python-version == '3.12'
-        run: .venv/bin/python -m pytest -p no:xvfb --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
+        run: .venv/bin/python -m pytest -p no:xvfb --timeout=300 --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
       - name: Run compatibility tests
         if: matrix.python-version != '3.12'
-        run: .venv/bin/python -m pytest -p no:xvfb --no-cov
+        run: .venv/bin/python -m pytest -p no:xvfb --timeout=300 --no-cov
       - name: Run integration tests (PR only)
         # Phase 1 of #800 - gated to pull_request events so the unit-test
         # fast lane on push/main stays untouched. The default ``pytest``
@@ -141,7 +144,7 @@ jobs:
         # explicit, named re-run that surfaces integration failures
         # separately in PR checks for easier triage.
         if: github.event_name == 'pull_request' && matrix.python-version == '3.12'
-        run: .venv/bin/python -m pytest tests/integration/ --no-cov -p no:xvfb
+        run: .venv/bin/python -m pytest tests/integration/ --no-cov -p no:xvfb --timeout=300
       - name: Upload coverage artifact
         if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@v7
@@ -297,7 +300,7 @@ jobs:
     timeout-minutes: 60
     name: Desktop launcher smoke (${{ matrix.os }})
     needs: build
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runs_on }}
     strategy:
       fail-fast: false
       matrix:
@@ -305,7 +308,11 @@ jobs:
         # job sat queued for 200+ minutes and was eventually cancelled. Re-add
         # only when a macOS runner is provisioned, or switch to `macos-14`
         # (GH-hosted) if Actions-minute cost is acceptable.
-        os: [d-sorg-fleet, [self-hosted, Windows]]
+        include:
+          - os: d-sorg-fleet-16core
+            runs_on: [self-hosted, Linux, X64, d-sorg-fleet-16core]
+          - os: [self-hosted, Windows]
+            runs_on: [self-hosted, Windows]
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'

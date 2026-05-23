@@ -43,6 +43,8 @@ repos:
     rev: 1.7.5
     hooks:
       - id: bandit
+        additional_dependencies: [pbr]
+        exclude: ^tests/
 
   # Secrets scanning — fails the commit if a credential / API key / private
   # key is about to be committed.  Runs locally only; CI re-runs via the
