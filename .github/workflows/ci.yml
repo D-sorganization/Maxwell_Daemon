@@ -99,7 +99,7 @@ jobs:
   test:
     name: Test (py${{ matrix.python-version }})
     needs: pick-runner
-    runs-on: [self-hosted, Linux, X64, d-sorg-fleet, deskcomputer]
+    runs-on: [self-hosted, Linux, X64, d-sorg-fleet]
     timeout-minutes: 45
     env:
       BASELINE_TEST_COUNT: 2471
