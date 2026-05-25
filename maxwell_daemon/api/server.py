@@ -874,10 +874,8 @@ def create_app(  # noqa: C901
     http_metrics_middleware(app)
     _mount_web_ui(app)
 
-    # RFC 7807 handler covers the entire MaxwellError tree. Catching the root
-    # class is enough; LSP guarantees subclass status codes land in the
-    # response. See maxwell_daemon/api/problem.py and docs/reviews/
-    # 2026-05-22-adversarial-review.md §4 for the migration plan.
+    # RFC 7807 handler covers the MaxwellError tree; subclass status codes land
+    # in the response through LSP.
     from maxwell_daemon.api.problem import install_problem_handler
 
     install_problem_handler(app)
