@@ -18,7 +18,7 @@ jobs:
   local-only-workflows:
     timeout-minutes: 30
     name: Reject hosted runner routing
-    runs-on: d-sorg-fleet-16core
+    runs-on: d-sorg-fleet
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -31,7 +31,7 @@ jobs:
           python scripts/check_local_only_workflows.py
 
   pick-runner:
-    runs-on: d-sorg-fleet-16core
+    runs-on: d-sorg-fleet
     timeout-minutes: 2
     outputs:
       runner: ${{ steps.check.outputs.runner }}
@@ -46,7 +46,7 @@ jobs:
             exit 1
           fi
           mkdir -p "$(dirname "$GITHUB_OUTPUT")"
-          echo "runner=d-sorg-fleet-16core" >> "$GITHUB_OUTPUT"
+          echo "runner=d-sorg-fleet" >> "$GITHUB_OUTPUT"
           echo "Desktop fleet runner claimed this job - routing locally"
 
   lint:
@@ -102,7 +102,7 @@ jobs:
   test:
     name: Test (py${{ matrix.python-version }})
     needs: pick-runner
-    runs-on: [self-hosted, Linux, X64, d-sorg-fleet-16core]
+    runs-on: [self-hosted, Linux, X64, d-sorg-fleet]
     timeout-minutes: 45
     env:
       BASELINE_TEST_COUNT: 2471
@@ -327,8 +327,8 @@ jobs:
         # only when a macOS runner is provisioned, or switch to `macos-14`
         # (GH-hosted) if Actions-minute cost is acceptable.
         include:
-          - os: d-sorg-fleet-16core
-            runs_on: [self-hosted, Linux, X64, d-sorg-fleet-16core]
+          - os: d-sorg-fleet
+            runs_on: [self-hosted, Linux, X64, d-sorg-fleet]
           - os: [self-hosted, Windows]
             runs_on: [self-hosted, Windows]
     steps:
