@@ -27,7 +27,6 @@ from fastapi.testclient import TestClient
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
