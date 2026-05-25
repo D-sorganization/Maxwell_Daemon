@@ -43,7 +43,10 @@ DEFAULT_PATHS: Final[tuple[str, ...]] = ("maxwell_daemon",)
 # Matches ruff's per-line suppression syntax (single or comma-list).
 # Capture everything after the colon up to end-of-comment, then split on
 # whitespace/commas. Case-insensitive because ruff accepts either case.
-_NOQA_RE: Final[re.Pattern[str]] = re.compile(r"#\s*noqa\s*:\s*([A-Za-z0-9, ]+)")
+_NOQA_RE: Final[re.Pattern[str]] = re.compile(
+    r"#\s*noqa\s*:\s*([A-Za-z0-9, ]+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True, slots=True)

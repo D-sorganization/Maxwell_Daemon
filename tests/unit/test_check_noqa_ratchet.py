@@ -55,6 +55,12 @@ class TestCountNoqa:
         counts = ratchet.count_noqa([f], rules=("BLE001", "C901"))  # type: ignore[attr-defined]
         assert counts == {"BLE001": 1, "C901": 1}
 
+    def test_counts_uppercase_noqa(self, tmp_path: Path, ratchet: object) -> None:
+        f = tmp_path / "uppercase.py"
+        f.write_text("def f():  # NOQA: ble001, c901\n    pass\n")
+        counts = ratchet.count_noqa([f], rules=("BLE001", "C901"))  # type: ignore[attr-defined]
+        assert counts == {"BLE001": 1, "C901": 1}
+
     def test_counts_bare_noqa_is_ignored(self, tmp_path: Path, ratchet: object) -> None:
         # A blanket suppression with no rule is its own bad practice; the ratchet
         # only tracks the rules it was asked about.

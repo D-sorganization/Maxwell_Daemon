@@ -326,8 +326,8 @@ class HookRunner:
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
-#: Regex matching any shell metacharacter that requires ``create_subprocess_shell``.
-_SHELL_METACHAR_RE = re.compile(r"[|&;<>`$(){}]")
+#: Regex matching shell syntax that needs expansion via ``create_subprocess_shell``.
+_SHELL_METACHAR_RE = re.compile(r"[|&;<>`$(){}*?\[\]~]")
 
 
 def _needs_shell(command: str) -> bool:

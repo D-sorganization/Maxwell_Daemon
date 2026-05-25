@@ -93,6 +93,12 @@ class TestNeedsShell:
         # && contains & which is a shell metacharacter
         assert _needs_shell("make all && make test") is True
 
+    def test_glob_pattern_requires_shell(self) -> None:
+        assert _needs_shell("pytest tests/unit/test_*.py") is True
+
+    def test_tilde_expansion_requires_shell(self) -> None:
+        assert _needs_shell("cat ~/.config/maxwell-daemon/config.toml") is True
+
 
 # ── HookSpec.shell field ──────────────────────────────────────────────────────
 
@@ -309,6 +315,20 @@ class TestLifecycleHookAutoDetect:
         await hr.run_pre_commit()
         assert len(exec_runner.calls) == 1
         assert len(shell_runner.calls) == 0
+
+    async def test_pre_commit_with_glob_uses_shell_runner(self, tmp_path: Path) -> None:
+        exec_runner = _TrackingRunner("exec")
+        shell_runner = _TrackingRunner("shell")
+        cfg = HookConfig(pre_commit=("pytest tests/unit/test_*.py",))
+        hr = HookRunner(
+            cfg,
+            workspace=tmp_path,
+            exec_runner=exec_runner,
+            shell_runner=shell_runner,
+        )
+        await hr.run_pre_commit()
+        assert len(shell_runner.calls) == 1
+        assert len(exec_runner.calls) == 0
 
     async def test_on_prompt_with_pipe_uses_shell_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
