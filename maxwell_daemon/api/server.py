@@ -1067,7 +1067,9 @@ def create_app(  # noqa: C901
     from maxwell_daemon.api.routes import status as _status_routes
     from maxwell_daemon.api.routes import tasks as _task_routes
 
-    _auth_routes.register(app, daemon, jwt_config, auth_token, _require_admin(), _require_operator())
+    _auth_routes.register(
+        app, daemon, jwt_config, auth_token, _require_admin(), _require_operator()
+    )
     _health_routes.register(app, daemon)
     _status_routes.register(app, daemon)
     _cost_routes.register(app, daemon, _require_viewer())
@@ -1519,7 +1521,6 @@ def create_app(  # noqa: C901
         except ValueError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         return TaskGraphView.from_record(record)
-
 
     @app.post(
         "/api/v1/memory/assemble",

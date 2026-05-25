@@ -160,10 +160,7 @@ class TestServerPyUsesRouteModules:
             "from maxwell_daemon.api.routes import tasks" in server_src
             and "tasks" in server_src
             and "register" in server_src
-        ), (
-            "server.py must import and call tasks.register() "
-            "as part of Phase 1.1 decomposition"
-        )
+        ), "server.py must import and call tasks.register() as part of Phase 1.1 decomposition"
 
     def test_control_plane_route_module_registered_in_create_app(self) -> None:
         """create_app() source delegates control-plane routes to control_plane.register()."""
