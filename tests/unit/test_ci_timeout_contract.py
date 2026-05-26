@@ -37,7 +37,7 @@ def test_ci_test_matrix_targets_desktop_linux_runners() -> None:
     workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
     test_job = workflow["jobs"]["test"]
 
-    assert test_job["runs-on"] == ["self-hosted", "Linux", "X64", "d-sorg-fleet", "deskcomputer"]
+    assert test_job["runs-on"] == ["self-hosted", "Linux", "X64", "d-sorg-fleet"]
 
 
 def test_ci_compatibility_lanes_do_not_collect_coverage() -> None:
