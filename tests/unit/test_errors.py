@@ -76,9 +76,9 @@ class TestMaxwellErrorHierarchy:
             StorageError,
         ):
             assert isinstance(cls.problem_type, str)
-            assert cls.problem_type.startswith(
-                "https://"
-            ), f"{cls.__name__}.problem_type must be an absolute URI"
+            assert cls.problem_type.startswith("https://"), (
+                f"{cls.__name__}.problem_type must be an absolute URI"
+            )
 
 
 class TestStatusCodeMapping:

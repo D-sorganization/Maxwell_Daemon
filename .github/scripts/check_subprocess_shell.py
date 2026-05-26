@@ -130,7 +130,7 @@ def main() -> None:
         )
         sys.exit(1)
     else:
-        print(f"OK: `{_TARGET}` is confined to `{_ALLOWED_FUNCTION}` " f"in `{_ALLOWED_FILE}`.")
+        print(f"OK: `{_TARGET}` is confined to `{_ALLOWED_FUNCTION}` in `{_ALLOWED_FILE}`.")
         sys.exit(0)
 
 
