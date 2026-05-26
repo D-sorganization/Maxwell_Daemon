@@ -217,6 +217,9 @@ class Daemon:
         # are a mix of sync and async — acquisition is uncontended under
         # normal load and a lock-free async path doesn't win us anything.
         self._tasks_lock = threading.Lock()
+        # asyncio.PriorityQueue is loop-affine and not safe for concurrent
+        # off-loop put/full calls before the daemon loop starts running.
+        self._queue_lock = threading.Lock()
         self._needs_restart = False
         self._restart_required_reasons: list[str] = []
         # PriorityQueue: workers dequeue (priority, task) tuples. Lower priority
@@ -748,21 +751,23 @@ class Daemon:
     def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:
         """Insert a queue entry while respecting daemon loop thread affinity."""
         item = (priority, task)
-        if self._queue.full():
-            log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
-            raise QueueSaturationError(
-                "Task queue is full, please try again later",
-                backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
-            )
-
         if self._loop is None or not self._loop.is_running():
-            try:
-                self._queue.put_nowait(item)
-            except asyncio.QueueFull as exc:
-                raise QueueSaturationError(
-                    "Task queue is full, please try again later",
-                    backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
-                ) from exc
+            with self._queue_lock:
+                if self._queue.full():
+                    log.warning(
+                        "queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth
+                    )
+                    raise QueueSaturationError(
+                        "Task queue is full, please try again later",
+                        backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
+                    )
+                try:
+                    self._queue.put_nowait(item)
+                except asyncio.QueueFull as exc:
+                    raise QueueSaturationError(
+                        "Task queue is full, please try again later",
+                        backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
+                    ) from exc
             return
         try:
             running_loop = asyncio.get_running_loop()
@@ -775,6 +780,12 @@ class Daemon:
             # interrupted a heapq operation. Use call_soon_threadsafe to defer safely.
             def _put_inline() -> None:
                 try:
+                    if self._queue.full():
+                        log.error(
+                            "Queue saturated inline; dropped task %s",
+                            getattr(task, "id", None),
+                        )
+                        return
                     self._queue.put_nowait(item)
                 except asyncio.QueueFull:
                     log.error(
@@ -789,6 +800,14 @@ class Daemon:
 
         def _put() -> None:
             try:
+                if self._queue.full():
+                    result.set_exception(
+                        QueueSaturationError(
+                            "Task queue is full, please try again later",
+                            backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
+                        )
+                    )
+                    return
                 self._queue.put_nowait(item)
             except asyncio.QueueFull:
                 result.set_exception(

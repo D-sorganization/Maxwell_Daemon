@@ -236,11 +236,11 @@ class TestTasksDictThreadSafety:
     def test_state_iteration_survives_concurrent_mutation(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
-        """Tighter race test — hammer ``state()`` while writers mutate _tasks.
+        """Tighter race test for both snapshots and pre-start queue mutation.
 
-        Also iterates ``state().tasks`` after the copy: a torn snapshot can
-        slip through the ``dict()`` call on some CPython versions under heavy
-        contention. We do lots of reads to maximise the chance of catching it.
+        Readers hammer ``state()`` while writers call ``submit()`` before the
+        daemon loop starts, so this catches both torn task snapshots and
+        thread-unsafe direct writes into the underlying PriorityQueue.
         """
         d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
         d._task_store = _NoopTaskStore()
