@@ -781,15 +781,17 @@ class Daemon:
             def _put_inline() -> None:
                 try:
                     if self._queue.full():
-                        log.error(
-                            "Queue saturated inline; dropped task %s",
+                        log.warning(
+                            "queue is saturated (max_depth=%d); dropped task %s",
+                            self._config.agent.max_queue_depth,
                             getattr(task, "id", None),
                         )
                         return
                     self._queue.put_nowait(item)
                 except asyncio.QueueFull:
-                    log.error(
-                        "Queue saturated inline; dropped task %s",
+                    log.warning(
+                        "queue is saturated (max_depth=%d); dropped task %s",
+                        self._config.agent.max_queue_depth,
                         getattr(task, "id", None),
                     )
 
@@ -810,6 +812,7 @@ class Daemon:
                     return
                 self._queue.put_nowait(item)
             except asyncio.QueueFull:
+                log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
                 result.set_exception(
                     QueueSaturationError(
                         "Task queue is full, please try again later",
