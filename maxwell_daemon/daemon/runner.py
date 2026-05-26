@@ -224,6 +224,11 @@ class Daemon:
         self._queue: asyncio.PriorityQueue[tuple[int, Task | None]] = asyncio.PriorityQueue(
             maxsize=config.agent.max_queue_depth
         )
+        # asyncio.PriorityQueue is loop-affine once the daemon is running, but
+        # submit() is also valid before start() from synchronous threads.
+        # Protect that pre-loop direct mutation path so the queue heap list
+        # cannot tear under concurrent callers.
+        self._queue_lock = threading.Lock()
         self._workers: list[asyncio.Task[None]] = []
         self._worker_count: int = 0
         self._bg_tasks: set[asyncio.Task[None]] = set()
@@ -748,17 +753,13 @@ class Daemon:
     def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:
         """Insert a queue entry while respecting daemon loop thread affinity."""
         item = (priority, task)
-        if self._queue.full():
-            log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
-            raise QueueSaturationError(
-                "Task queue is full, please try again later",
-                backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
-            )
 
         if self._loop is None or not self._loop.is_running():
             try:
-                self._queue.put_nowait(item)
+                with self._queue_lock:
+                    self._queue.put_nowait(item)
             except asyncio.QueueFull as exc:
+                log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
                 raise QueueSaturationError(
                     "Task queue is full, please try again later",
                     backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
@@ -777,8 +778,9 @@ class Daemon:
                 try:
                     self._queue.put_nowait(item)
                 except asyncio.QueueFull:
-                    log.error(
-                        "Queue saturated inline; dropped task %s",
+                    log.warning(
+                        "queue is saturated (max_depth=%d); dropped task %s",
+                        self._config.agent.max_queue_depth,
                         getattr(task, "id", None),
                     )
 
@@ -791,6 +793,7 @@ class Daemon:
             try:
                 self._queue.put_nowait(item)
             except asyncio.QueueFull:
+                log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
                 result.set_exception(
                     QueueSaturationError(
                         "Task queue is full, please try again later",
