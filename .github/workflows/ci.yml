@@ -380,3 +380,22 @@ jobs:
         run: npm run smoke:launch
         env:
           MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "60000"
+  quality-gate:
+    name: quality-gate
+    timeout-minutes: 5
+    needs:
+      - lint
+      - typecheck
+      - test
+      - coverage-floor
+      - file-size-budget
+      - noqa-ratchet
+      - todo-fixme
+      - security
+      - dependency-locks
+      - build
+      - desktop-smoke
+    runs-on: d-sorg-fleet
+    steps:
+      - name: All checks passed
+        run: echo "All required checks passed"
