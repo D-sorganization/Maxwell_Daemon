@@ -45,6 +45,19 @@ class _ThreadBoundQueue:
         self.put_event.set()
 
 
+class _NoopTaskStore:
+    """Thread-safe no-op store used by high-contention daemon tests."""
+
+    def save(self, task: Task) -> None:
+        return None
+
+    def get(self, task_id: str) -> None:
+        return None
+
+    def delete(self, task_id: str) -> None:
+        return None
+
+
 class TestTasksDictThreadSafety:
     def test_enqueue_task_entry_puts_directly_before_daemon_loop_starts(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
@@ -186,9 +199,9 @@ class TestTasksDictThreadSafety:
         d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
         # Swap the TaskStore for a fast in-memory stub so the SQLite serial
         # point doesn't mask the race — the bug is about ``self._tasks`` not
-        # ``self._task_store``.
-        stub: Any = MagicMock()
-        d._task_store = stub
+        # ``self._task_store``. Keep the stub thread-safe: MagicMock call
+        # recording can raise unrelated list-mutation errors under contention.
+        d._task_store = _NoopTaskStore()
         errors: list[BaseException] = []
 
         def _submit(_: int) -> None:
@@ -223,15 +236,14 @@ class TestTasksDictThreadSafety:
     def test_state_iteration_survives_concurrent_mutation(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
-        """Tighter race test — hammer ``state()`` while writers mutate _tasks.
+        """Tighter race test for both snapshots and pre-start queue mutation.
 
-        Also iterates ``state().tasks`` after the copy: a torn snapshot can
-        slip through the ``dict()`` call on some CPython versions under heavy
-        contention. We do lots of reads to maximise the chance of catching it.
+        Readers hammer ``state()`` while writers call ``submit()`` before the
+        daemon loop starts, so this catches both torn task snapshots and
+        thread-unsafe direct writes into the underlying PriorityQueue.
         """
         d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
-        stub: Any = MagicMock()
-        d._task_store = stub
+        d._task_store = _NoopTaskStore()
         errors: list[BaseException] = []
         stop = False
 

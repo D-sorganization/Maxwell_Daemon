@@ -1,16 +1,14 @@
-"""FastAPI app exposing the daemon over HTTP.
+"""FastAPI app — Maxwell-Daemon HTTP API.
 
-Endpoints (v1):
-    GET  /health
-    GET  /api/v1/backends
-    GET  /api/v1/backends/available
-    POST /api/v1/tasks           — submit a task
-    GET  /api/v1/tasks           — list tasks
-    GET  /api/v1/tasks/{id}      — fetch a task
-    GET  /api/v1/cost            — cost summary (month-to-date + by backend)
+Route modules extracted via epic #896 Phase 1.1:
+  - maxwell_daemon.api.routes.tasks       (/api/v1/tasks, /api/tasks legacy)
+  - maxwell_daemon.api.routes.control_plane (/api/v1/control-plane/gauntlet)
+  - maxwell_daemon.api.routes.health      (/api/version, /api/health)
+  - maxwell_daemon.api.routes.status      (/api/status)
+  - maxwell_daemon.api.routes.cost        (/api/cost)
+  - maxwell_daemon.api.routes.auth        (/api/auth/*)
 
-Auth: simple bearer token from `api.auth_token` in config. For production,
-terminate TLS at the reverse proxy (nginx, caddy) or enable TLS in uvicorn.
+Auth: bearer token from config; JWT RBAC when jwt_config is set.
 """
 
 from __future__ import annotations
@@ -46,16 +44,10 @@ from maxwell_daemon.api.contract import (
     DispatchRequest,
     DispatchResponse,
     StatusV2Tokens,
-    TaskDetail,
-    TaskListResponse,
-    TaskSummary,
 )
 from maxwell_daemon.api.validation import (
     PriorityField,
-    PromptField,
     RepoField,
-    RoutingKeyField,
-    TaskIdField,
 )
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role, is_jwt_auth_failure
@@ -77,7 +69,7 @@ from maxwell_daemon.core.work_items import (
     WorkItemStatus,
 )
 from maxwell_daemon.daemon import Daemon
-from maxwell_daemon.daemon.runner import DuplicateTaskIdError, Task, TaskStatus
+from maxwell_daemon.daemon.runner import Task
 from maxwell_daemon.director import (
     GraphStatus,
     NodeRun,
@@ -112,12 +104,6 @@ def _mount_web_ui(app: FastAPI) -> None:
         return RedirectResponse(url="/ui/", status_code=308)
 
 
-def _coerce_datetime_to_utc(value: datetime) -> datetime:
-    if value.tzinfo is None or value.utcoffset() is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
-
-
 def _parse_delegate_status(value: str | None) -> DelegateSessionStatus | None:
     if value is None:
         return None
@@ -128,24 +114,6 @@ def _parse_delegate_status(value: str | None) -> DelegateSessionStatus | None:
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"invalid delegate session status: {value}",
         ) from exc
-
-
-class TaskSubmit(BaseModel):
-    prompt: PromptField
-    task_id: TaskIdField | None = None
-    kind: str = "prompt"
-    repo: RoutingKeyField | None = None
-    backend: str | None = None
-    model: str | None = None
-    issue_repo: RepoField | None = None
-    issue_number: int | None = None
-    issue_mode: Literal["plan", "implement"] | None = None
-    priority: PriorityField = 100
-    dry_run: bool = False
-    depends_on: list[str] = Field(
-        default_factory=list,
-        description="Task IDs that must reach COMPLETED before this task starts.",
-    )
 
 
 class WorkItemCreate(BaseModel):
@@ -379,23 +347,6 @@ class ActionRejectRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=1000)
 
 
-class GateRetryRequest(BaseModel):
-    target_id: str = Field(..., min_length=1)
-    expected_status: Literal["failed"] = "failed"
-
-
-class GateCancelRequest(BaseModel):
-    target_id: str = Field(..., min_length=1)
-    expected_status: Literal["queued"] = "queued"
-
-
-class GateWaiverRequest(BaseModel):
-    target_id: str = Field(..., min_length=1)
-    expected_status: Literal["failed"] = "failed"
-    actor: str = Field(..., min_length=1)
-    reason: str = Field(..., min_length=1, max_length=1000)
-
-
 class IssueCreate(BaseModel):
     repo: RepoField
     title: str = Field(..., min_length=1)
@@ -576,70 +527,6 @@ class BackendCatalogEntryView(BaseModel):
 
 class BackendCatalogResponse(BaseModel):
     backends: tuple[BackendCatalogEntryView, ...]
-
-
-class GateTimelineEntry(BaseModel):
-    id: str
-    name: str
-    status: Literal["passed", "failed", "blocked", "waived", "running", "pending"]
-    evidence_links: tuple[str, ...] = ()
-    next_action: str | None = None
-    retry_allowed: bool = False
-    waiver_allowed: bool = False
-
-
-class CriticFindingView(BaseModel):
-    severity: Literal["blocker", "warning", "note"]
-    critic: str
-    message: str
-    file: str | None = None
-    line: int | None = None
-    evidence: str | None = None
-
-
-class DelegateSessionView(BaseModel):
-    id: str
-    role: str
-    status: str
-    machine: str | None = None
-    backend: str | None = None
-    latest_checkpoint: str | None = None
-    cost_usd: float = 0.0
-    duration_seconds: float | None = None
-
-
-class ResourceRoutingView(BaseModel):
-    selected_backend: str | None
-    selected_model: str | None = None
-    selection_reason: str | None = None
-    alternatives_considered: tuple[str, ...] = ()
-    warning: str | None = None
-
-
-class ControlPlaneActionView(BaseModel):
-    kind: Literal["retry", "waive", "cancel"]
-    label: str
-    path: str
-    target_id: str
-    expected_status: Literal["failed", "queued"]
-    requires_reason: bool = False
-    requires_actor: bool = False
-
-
-class ControlPlaneWorkItemView(BaseModel):
-    work_item_id: str | None = None
-    work_item_status: str | None = None
-    task_id: str
-    title: str
-    status: str
-    final_decision: Literal["pass", "fail", "blocked", "running", "pending", "cancelled", "waived"]
-    current_gate: str | None
-    next_action: str
-    gates: tuple[GateTimelineEntry, ...]
-    critic_findings: tuple[CriticFindingView, ...] = ()
-    delegates: tuple[DelegateSessionView, ...]
-    resource_routing: ResourceRoutingView
-    actions: tuple[ControlPlaneActionView, ...] = ()
 
 
 class AssembleMemoryRequest(BaseModel):
@@ -896,332 +783,6 @@ async def _websocket_auth_or_close(
     return True
 
 
-def _task_title(task: Task) -> str:
-    if task.issue_repo and task.issue_number is not None:
-        return f"{task.issue_repo}#{task.issue_number}"
-    return task.prompt[:80]
-
-
-def _duration_seconds(task: Task) -> float | None:
-    if task.started_at is None:
-        return None
-    end = task.finished_at or datetime.now(timezone.utc)
-    return max(0.0, (end - task.started_at).total_seconds())
-
-
-def _task_is_waived(task: Task) -> bool:
-    return bool(task.waived_by and task.waiver_reason)
-
-
-def _control_plane_actions_for_task(task: Task) -> tuple[ControlPlaneActionView, ...]:
-    if task.status.value == "queued":
-        return (
-            ControlPlaneActionView(
-                kind="cancel",
-                label="Cancel",
-                path=f"/api/v1/control-plane/gauntlet/{task.id}/cancel",
-                target_id=task.id,
-                expected_status="queued",
-            ),
-        )
-    if task.status.value != "failed" or _task_is_waived(task):
-        return ()
-    return (
-        ControlPlaneActionView(
-            kind="retry",
-            label="Retry",
-            path=f"/api/v1/control-plane/gauntlet/{task.id}/retry",
-            target_id=task.id,
-            expected_status="failed",
-        ),
-        ControlPlaneActionView(
-            kind="waive",
-            label="Waive",
-            path=f"/api/v1/control-plane/gauntlet/{task.id}/waive",
-            target_id=task.id,
-            expected_status="failed",
-            requires_reason=True,
-            requires_actor=True,
-        ),
-    )
-
-
-def _gate_statuses_for_task(task: Task) -> tuple[GateTimelineEntry, ...]:
-    status_value = task.status.value
-    target = _task_title(task)
-    evidence = (task.pr_url,) if task.pr_url else ()
-    intake = GateTimelineEntry(
-        id="intake",
-        name="Work intake",
-        status="passed",
-        evidence_links=evidence,
-    )
-    if status_value == "queued":
-        return (
-            intake,
-            GateTimelineEntry(
-                id="delegate",
-                name="Delegate session",
-                status="pending",
-                next_action="Waiting for a delegate slot",
-            ),
-            GateTimelineEntry(id="verification", name="Verification", status="pending"),
-        )
-    if status_value in {"running", "dispatched"}:
-        return (
-            intake,
-            GateTimelineEntry(
-                id="delegate",
-                name="Delegate session",
-                status="running",
-                next_action="Delegate is still working",
-            ),
-            GateTimelineEntry(
-                id="verification",
-                name="Verification",
-                status="blocked",
-                next_action="Wait for delegate output before retrying verification",
-            ),
-        )
-    if status_value == "completed":
-        return (
-            intake,
-            GateTimelineEntry(
-                id="delegate",
-                name="Delegate session",
-                status="passed",
-                evidence_links=evidence,
-            ),
-            GateTimelineEntry(
-                id="verification",
-                name="Verification",
-                status="passed",
-                evidence_links=evidence,
-            ),
-        )
-    if status_value == "failed":
-        if _task_is_waived(task):
-            return (
-                intake,
-                GateTimelineEntry(
-                    id="delegate",
-                    name="Delegate session",
-                    status="waived",
-                    evidence_links=evidence,
-                    next_action=f"Waived by {task.waived_by}: {task.waiver_reason}",
-                ),
-                GateTimelineEntry(
-                    id="verification",
-                    name="Verification",
-                    status="blocked",
-                    next_action="Waived failures stay visible until the task is retried",
-                ),
-            )
-        return (
-            intake,
-            GateTimelineEntry(
-                id="delegate",
-                name="Delegate session",
-                status="failed",
-                evidence_links=evidence,
-                next_action="Inspect failure evidence and retry if policy allows",
-                retry_allowed=True,
-                waiver_allowed=True,
-            ),
-            GateTimelineEntry(
-                id="verification",
-                name="Verification",
-                status="blocked",
-                next_action="Blocked by failed delegate session",
-            ),
-        )
-    if status_value == "cancelled":
-        return (
-            intake,
-            GateTimelineEntry(
-                id="delegate",
-                name="Delegate session",
-                status="waived",
-                evidence_links=evidence,
-                next_action=f"{target} was cancelled by policy or operator action",
-            ),
-            GateTimelineEntry(id="verification", name="Verification", status="blocked"),
-        )
-    return (
-        intake,
-        GateTimelineEntry(
-            id="delegate",
-            name="Delegate session",
-            status="blocked",
-            next_action=f"Unknown task status {status_value!r}",
-        ),
-    )
-
-
-def _critic_findings_for_task(task: Task) -> tuple[CriticFindingView, ...]:
-    findings: list[CriticFindingView] = []
-    if task.status.value == "failed":
-        findings.append(
-            CriticFindingView(
-                severity="blocker",
-                critic="runtime",
-                message=task.error or "Delegate failed without a recorded error",
-                evidence=task.result,
-            )
-        )
-    if task.status.value in {"queued", "running", "dispatched"}:
-        findings.append(
-            CriticFindingView(
-                severity="note",
-                critic="control-plane",
-                message="No critic verdict is available until the delegate reaches a gate.",
-            )
-        )
-    priority = {"blocker": 0, "warning": 1, "note": 2}
-    return tuple(sorted(findings, key=lambda finding: priority[finding.severity]))
-
-
-def _delegate_snapshots_for_task(
-    daemon: Daemon, task: Task, *, limit: int = 20
-) -> tuple[DelegateSessionSnapshot, ...]:
-    snapshots = daemon.delegate_lifecycle.list_sessions(limit=limit, task_id=task.id)
-    ordered = sorted(
-        snapshots,
-        key=lambda snapshot: (
-            snapshot.session.updated_at,
-            (
-                snapshot.latest_checkpoint.created_at
-                if snapshot.latest_checkpoint
-                else snapshot.session.created_at
-            ),
-        ),
-        reverse=True,
-    )
-    return tuple(ordered)
-
-
-def _delegate_views_for_task(
-    _daemon: Daemon, task: Task, snapshots: tuple[DelegateSessionSnapshot, ...]
-) -> tuple[DelegateSessionView, ...]:
-    if snapshots:
-        views: list[DelegateSessionView] = []
-        for snapshot in snapshots:
-            session = snapshot.session
-            checkpoint = snapshot.latest_checkpoint
-            latest_checkpoint = None
-            if checkpoint is not None:
-                latest_checkpoint = checkpoint.current_plan
-                if checkpoint.failures_and_learnings:
-                    latest_checkpoint = (
-                        f"{checkpoint.current_plan} | {checkpoint.failures_and_learnings[0]}"
-                    )
-            metadata_cost = session.metadata.get("cost_usd")
-            try:
-                cost_usd = float(metadata_cost) if metadata_cost is not None else 0.0
-            except (TypeError, ValueError):
-                cost_usd = 0.0
-            duration_seconds = max(0.0, (session.updated_at - session.created_at).total_seconds())
-            views.append(
-                DelegateSessionView(
-                    id=session.id,
-                    role=session.delegate_id,
-                    status=session.status.value,
-                    machine=session.machine_ref,
-                    backend=session.backend_ref,
-                    latest_checkpoint=latest_checkpoint,
-                    cost_usd=cost_usd,
-                    duration_seconds=duration_seconds,
-                )
-            )
-        return tuple(views)
-
-    backend = task.backend or task.model
-    return (
-        DelegateSessionView(
-            id=f"{task.id}:delegate",
-            role="implementer" if task.kind.value == "issue" else "operator",
-            status=task.status.value,
-            machine=task.dispatched_to,
-            backend=backend,
-            latest_checkpoint=task.result or task.error,
-            cost_usd=task.cost_usd,
-            duration_seconds=_duration_seconds(task),
-        ),
-    )
-
-
-def _work_item_context_for_task(
-    daemon: Daemon, snapshots: tuple[DelegateSessionSnapshot, ...]
-) -> tuple[str | None, str | None]:
-    work_item_id = next(
-        (
-            snapshot.session.work_item_id
-            for snapshot in snapshots
-            if snapshot.session.work_item_id is not None
-        ),
-        None,
-    )
-    if work_item_id is None:
-        return None, None
-    item = daemon.get_work_item(work_item_id)
-    return work_item_id, item.status.value if item is not None else None
-
-
-def _control_plane_view_from_task(daemon: Daemon, task: Task) -> ControlPlaneWorkItemView:
-    gates = _gate_statuses_for_task(task)
-    snapshots = _delegate_snapshots_for_task(daemon, task)
-    work_item_id, work_item_status = _work_item_context_for_task(daemon, snapshots)
-    current_gate = next(
-        (gate.name for gate in gates if gate.status in {"failed", "blocked", "running", "pending"}),
-        None,
-    )
-    decision_by_status: dict[
-        str,
-        Literal["pass", "fail", "blocked", "running", "pending", "cancelled", "waived"],
-    ] = {
-        "completed": "pass",
-        "failed": "waived" if _task_is_waived(task) else "fail",
-        "cancelled": "cancelled",
-        "running": "running",
-        "dispatched": "running",
-        "queued": "pending",
-    }
-    next_action_by_status = {
-        "completed": "Review artifacts and merge only if policy allows",
-        "failed": (
-            f"Waived by {task.waived_by}: {task.waiver_reason}"
-            if _task_is_waived(task)
-            else "Inspect blocker evidence, then retry or waive with a reason"
-        ),
-        "cancelled": "No action required unless the task should be requeued",
-        "running": "Wait for the delegate to reach the next gate",
-        "dispatched": "Wait for the assigned worker heartbeat or recovery timeout",
-        "queued": "Assign or wait for an available delegate",
-    }
-    backend = task.backend
-    return ControlPlaneWorkItemView(
-        work_item_id=work_item_id,
-        work_item_status=work_item_status,
-        task_id=task.id,
-        title=_task_title(task),
-        status=task.status.value,
-        final_decision=decision_by_status.get(task.status.value, "blocked"),
-        current_gate=current_gate,
-        next_action=next_action_by_status.get(task.status.value, "Inspect task state"),
-        gates=gates,
-        critic_findings=_critic_findings_for_task(task),
-        delegates=_delegate_views_for_task(daemon, task, snapshots),
-        resource_routing=ResourceRoutingView(
-            selected_backend=backend,
-            selected_model=task.model,
-            selection_reason=task.route_reason,
-            alternatives_considered=(),
-            warning=None if backend else "No backend has been selected yet",
-        ),
-        actions=_control_plane_actions_for_task(task),
-    )
-
-
 class WebhookTriggerRequest(BaseModel):
     """Body accepted by ``POST /api/webhooks/trigger``."""
 
@@ -1312,6 +873,12 @@ def create_app(  # noqa: C901
     mount_metrics_endpoint(app)
     http_metrics_middleware(app)
     _mount_web_ui(app)
+
+    # RFC 7807 handler covers the MaxwellError tree; subclass status codes land
+    # in the response through LSP.
+    from maxwell_daemon.api.problem import install_problem_handler
+
+    install_problem_handler(app)
 
     from fastapi.responses import JSONResponse
 
@@ -1498,69 +1065,22 @@ def create_app(  # noqa: C901
 
         return GitHubClient()
 
-    # ── JWT auth endpoints ────────────────────────────────────────────────────
-    # Extracted to maxwell_daemon/api/routes/auth.py (phase 2 of #793).
+    # ── Route modules (issue #793, epic #896 Phase 1.1) ─────────────────────
     from maxwell_daemon.api.routes import auth as _auth_routes
-
-    _auth_routes.register(
-        app,
-        daemon,
-        jwt_config,
-        auth_token,
-        _require_admin(),
-        _require_operator(),
-    )
-
-    # ── Stable operator contract surface (/api/) ──────────────────────────────
-    # These endpoints form the versioned contract consumed by runner-dashboard
-    # and other operator tooling.  Shape changes require bumping CONTRACT_VERSION
-    # in maxwell_daemon/api/contract.py.
-    #
-    # ``/api/version`` and ``/api/health`` live in maxwell_daemon.api.routes.health
-    # as the first phase of decomposing this module (issue #793).
+    from maxwell_daemon.api.routes import control_plane as _control_plane_routes
     from maxwell_daemon.api.routes import cost as _cost_routes
     from maxwell_daemon.api.routes import health as _health_routes
     from maxwell_daemon.api.routes import status as _status_routes
+    from maxwell_daemon.api.routes import tasks as _task_routes
 
+    _auth_routes.register(
+        app, daemon, jwt_config, auth_token, _require_admin(), _require_operator()
+    )
     _health_routes.register(app, daemon)
     _status_routes.register(app, daemon)
     _cost_routes.register(app, daemon, _require_viewer())
-
-    @app.get("/api/tasks", dependencies=[Depends(_require_viewer())])
-    async def api_list_tasks(
-        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-        cursor: Annotated[str | None, Query()] = None,
-    ) -> TaskListResponse:
-        tasks = await daemon._task_store.alist_tasks(limit=limit)
-        summaries = [
-            TaskSummary(
-                id=t.id,
-                status=t.status.value,
-                created_at=t.created_at.isoformat(),
-                repo=t.repo,
-                prompt_preview=t.prompt[:120] if t.prompt else "",
-            )
-            for t in tasks
-        ]
-        return TaskListResponse(
-            tasks=summaries,
-            next_cursor=None,
-            total=len(summaries),
-        )
-
-    @app.get("/api/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
-    async def api_get_task(task_id: str) -> TaskDetail:
-        t = daemon.get_task(task_id)
-        if t is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
-        return TaskDetail(
-            id=t.id,
-            status=t.status.value,
-            created_at=t.created_at.isoformat(),
-            repo=t.repo,
-            transcript=[],
-            artifacts=[],
-        )
+    _task_routes.register(app, daemon, auth, _require_viewer(), _require_operator())
+    _control_plane_routes.register(app, daemon, auth, _require_viewer(), _require_operator())
 
     @app.post(
         "/api/dispatch",
@@ -1785,196 +1305,6 @@ def create_app(  # noqa: C901
         except Exception as e:  # noqa: BLE001
             return {"status": "error", "error": str(e)}
 
-    @app.post(
-        "/api/v1/tasks",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-        status_code=status.HTTP_202_ACCEPTED,
-    )
-    async def submit_task(payload: TaskSubmit) -> TaskView:
-        try:
-            if payload.kind == "issue":
-                if not payload.issue_repo or payload.issue_number is None:
-                    raise HTTPException(
-                        status.HTTP_422_UNPROCESSABLE_CONTENT,
-                        "issue_repo and issue_number are required when kind is 'issue'",
-                    )
-                try:
-                    task = daemon.submit_issue(
-                        repo=payload.issue_repo,
-                        issue_number=payload.issue_number,
-                        mode=payload.issue_mode or "plan",
-                        backend=payload.backend,
-                        model=payload.model,
-                        priority=payload.priority,
-                        task_id=payload.task_id,
-                        dry_run=payload.dry_run,
-                    )
-                except ValueError as exc:
-                    raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-            else:
-                task = daemon.submit(
-                    payload.prompt,
-                    repo=payload.repo,
-                    backend=payload.backend,
-                    model=payload.model,
-                    priority=payload.priority,
-                    task_id=payload.task_id,
-                    depends_on=payload.depends_on or [],
-                    dry_run=payload.dry_run,
-                )
-        except DuplicateTaskIdError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        return TaskView.from_task(task)
-
-    @app.get("/api/v1/tasks", dependencies=[Depends(_require_viewer())])
-    async def list_tasks(
-        status: Annotated[str | None, Query()] = None,
-        kind: Annotated[str | None, Query()] = None,
-        repo: Annotated[str | None, Query()] = None,
-        cursor: Annotated[datetime | None, Query()] = None,
-        completed_before: Annotated[datetime | None, Query()] = None,
-        completed_before_camel: Annotated[datetime | None, Query(alias="completedBefore")] = None,
-        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-    ) -> list[TaskView]:
-        completed_before_filter = completed_before or completed_before_camel
-        if completed_before_filter is not None:
-            completed_before_filter = _coerce_datetime_to_utc(completed_before_filter)
-        if cursor is not None:
-            cursor = _coerce_datetime_to_utc(cursor)
-
-        task_status: TaskStatus | None = None
-        if status is not None:
-            try:
-                task_status = TaskStatus(status)
-            except ValueError as exc:
-                raise HTTPException(422, f"invalid task status: {status}") from exc
-
-        tasks = await daemon._task_store.alist_tasks(
-            limit=limit,
-            status=task_status,
-            repo=repo,
-            kind=kind,
-            cursor=cursor,
-            completed_before=completed_before_filter,
-        )
-        return [TaskView.from_task(t) for t in tasks]
-
-    @app.get("/api/v1/tasks/{task_id}", dependencies=[Depends(_require_viewer())])
-    async def get_task(task_id: str) -> TaskView:
-        t = daemon.get_task(task_id)
-        if t is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
-        return TaskView.from_task(t)
-
-    @app.get(
-        "/api/v1/control-plane/gauntlet",
-        response_model=tuple[ControlPlaneWorkItemView, ...],
-        dependencies=[Depends(_require_viewer())],
-    )
-    async def control_plane_gauntlet(
-        task_id: Annotated[str | None, Query()] = None,
-        status_filter: Annotated[str | None, Query(alias="status")] = None,
-        limit: int = Query(50, ge=1, le=200),
-    ) -> tuple[ControlPlaneWorkItemView, ...]:
-        tasks = list(daemon.state().tasks.values())
-        if task_id:
-            tasks = [task for task in tasks if task.id == task_id]
-        if status_filter:
-            tasks = [task for task in tasks if task.status.value == status_filter]
-        tasks.sort(key=lambda task: task.created_at, reverse=True)
-        return tuple(_control_plane_view_from_task(daemon, task) for task in tasks[:limit])
-
-    @app.post(
-        "/api/v1/control-plane/gauntlet/{task_id}/retry",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-    )
-    async def retry_control_plane_gate(
-        task_id: str, payload: GateRetryRequest
-    ) -> ControlPlaneWorkItemView:
-        if payload.target_id != task_id:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT, "target_id does not match the route task_id"
-            )
-        task = daemon.get_task(task_id)
-        if task is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
-        if task.status.value != payload.expected_status:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                f"task {task_id} is {task.status.value}; expected {payload.expected_status}",
-            )
-        if _task_is_waived(task):
-            raise HTTPException(status.HTTP_409_CONFLICT, f"task {task_id} is already waived")
-        try:
-            task = daemon.retry_task(task_id, expected_status=TaskStatus(payload.expected_status))
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        except KeyError as exc:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found") from exc
-        return _control_plane_view_from_task(daemon, task)
-
-    @app.post(
-        "/api/v1/control-plane/gauntlet/{task_id}/cancel",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-    )
-    async def cancel_control_plane_gate(
-        task_id: str, payload: GateCancelRequest
-    ) -> ControlPlaneWorkItemView:
-        if payload.target_id != task_id:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT, "target_id does not match the route task_id"
-            )
-        task = daemon.get_task(task_id)
-        if task is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
-        if task.status.value != payload.expected_status:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                f"task {task_id} is {task.status.value}; expected {payload.expected_status}",
-            )
-        try:
-            task = daemon.cancel_task(task_id)
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        except KeyError as exc:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found") from exc
-        return _control_plane_view_from_task(daemon, task)
-
-    @app.post(
-        "/api/v1/control-plane/gauntlet/{task_id}/waive",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-    )
-    async def waive_control_plane_gate(
-        task_id: str,
-        payload: GateWaiverRequest,
-    ) -> ControlPlaneWorkItemView:
-        if payload.target_id != task_id:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT, "target_id does not match the route task_id"
-            )
-        task = daemon.get_task(task_id)
-        if task is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
-        if task.status.value != payload.expected_status:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                f"task {task_id} is {task.status.value}; expected {payload.expected_status}",
-            )
-        if _task_is_waived(task):
-            raise HTTPException(status.HTTP_409_CONFLICT, f"task {task_id} is already waived")
-        try:
-            task = daemon.waive_task(
-                task_id,
-                expected_status=TaskStatus(payload.expected_status),
-                actor=payload.actor,
-                reason=payload.reason,
-            )
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        except KeyError as exc:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found") from exc
-        return _control_plane_view_from_task(daemon, task)
-
     @app.get("/api/v1/tasks/{task_id}/artifacts", dependencies=[Depends(_require_viewer())])
     async def list_task_artifacts(
         task_id: str,
@@ -2197,19 +1527,6 @@ def create_app(  # noqa: C901
         except ValueError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         return TaskGraphView.from_record(record)
-
-    @app.post(
-        "/api/v1/tasks/{task_id}/cancel",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-    )
-    async def cancel_task(task_id: str) -> TaskView:
-        try:
-            cancelled = daemon.cancel_task(task_id)
-        except KeyError:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found") from None
-        except ValueError as e:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
-        return TaskView.from_task(cancelled)
 
     @app.post(
         "/api/v1/memory/assemble",

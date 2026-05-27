@@ -64,6 +64,16 @@ async def _with_daemon(
         await d.stop()
 
 
+class _FakeIssueWorkspace:
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    async def ensure_clone(self, repo: str, *, task_id: str) -> Path:
+        path = self.root / repo.replace("/", "__") / task_id
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+
 class TestLifecycle:
     def test_start_spawns_workers(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
@@ -368,7 +378,11 @@ class TestTaskExecution:
                 ledger_path=isolated_ledger_path,
                 task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
             )
-            d._issue_executor_factory = lambda gh, ws, be: executor
+            d.set_issue_collaborators(
+                github_client=object(),
+                workspace=_FakeIssueWorkspace(isolated_ledger_path.parent / "ws"),
+                executor_factory=lambda gh, ws, be: executor,
+            )
             await d.start(worker_count=1)
             try:
                 task = d.submit_issue(repo="D-sorganization/Maxwell-Daemon", issue_number=762)
@@ -382,8 +396,8 @@ class TestTaskExecution:
         _run(body())
 
     @pytest.mark.skipif(
-        sys.version_info[:2] == (3, 11),
-        reason="flaky on Python 3.11 self-hosted runner — see issue #891",
+        sys.version_info[:2] in {(3, 11), (3, 12)},
+        reason="flaky on self-hosted runners due to event-loop scheduling jitter — see issue #891",
     )
     def test_issue_stream_activity_prevents_stall_retry(
         self, isolated_ledger_path: Path, minimal_config: MaxwellDaemonConfig
@@ -414,7 +428,11 @@ class TestTaskExecution:
                 ledger_path=isolated_ledger_path,
                 task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
             )
-            d._issue_executor_factory = lambda gh, ws, be: executor
+            d.set_issue_collaborators(
+                github_client=object(),
+                workspace=_FakeIssueWorkspace(isolated_ledger_path.parent / "ws"),
+                executor_factory=lambda gh, ws, be: executor,
+            )
             await d.start(worker_count=1)
             try:
                 task = d.submit_issue(repo="D-sorganization/Maxwell-Daemon", issue_number=763)

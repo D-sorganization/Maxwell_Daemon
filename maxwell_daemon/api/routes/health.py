@@ -43,6 +43,11 @@ _STATE_ERROR_TYPES: tuple[type[BaseException], ...] = (
 )
 
 
+def _uptime_seconds(started_at: datetime) -> float:
+    """Return non-negative uptime, tolerating tiny wall-clock skews."""
+    return max(0.0, (datetime.now(timezone.utc) - started_at).total_seconds())
+
+
 def register(app: FastAPI, daemon: Daemon) -> None:
     """Attach ``GET /api/version`` and ``GET /api/health`` to ``app``.
 
@@ -62,7 +67,7 @@ def register(app: FastAPI, daemon: Daemon) -> None:
         """Legacy liveness probe used by unit tests and some health checks."""
         try:
             state = daemon.state()
-            uptime = (datetime.now(timezone.utc) - state.started_at).total_seconds()
+            uptime = _uptime_seconds(state.started_at)
             return {
                 "status": "ok",
                 "uptime_seconds": uptime,
@@ -89,7 +94,7 @@ def register(app: FastAPI, daemon: Daemon) -> None:
         """
         try:
             state = daemon.state()
-            uptime = (datetime.now(timezone.utc) - state.started_at).total_seconds()
+            uptime = _uptime_seconds(state.started_at)
             probe_status = "ready" if state.backends_available else "ok"
             return {
                 "status": probe_status,
@@ -111,7 +116,7 @@ def register(app: FastAPI, daemon: Daemon) -> None:
     async def api_health() -> HealthResponse:
         try:
             state = daemon.state()
-            uptime = (datetime.now(timezone.utc) - state.started_at).total_seconds()
+            uptime = _uptime_seconds(state.started_at)
             # "gate" concept: open when backends are available, closed otherwise.
             gate = "open" if state.backends_available else "closed"
             return HealthResponse(

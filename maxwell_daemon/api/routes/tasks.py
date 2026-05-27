@@ -228,7 +228,7 @@ def register(  # noqa: C901
 
     @app.get("/api/tasks", dependencies=[Depends(viewer_dep)])
     async def api_list_tasks(
-        limit: int = Query(ge=1, le=1000),
+        limit: int = Query(default=100, ge=1, le=1000),
         cursor: str | None = Query(default=None),
     ) -> TaskListResponse:
         tasks = await daemon._task_store.alist_tasks(limit=limit)
