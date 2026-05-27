@@ -1,5 +1,6 @@
 """Safe validation sandbox policy primitives."""
 
+from maxwell_daemon.sandbox.git import GitTracker, GitWorktree
 from maxwell_daemon.sandbox.policy import (
     CommandPolicy,
     EnvPolicy,
@@ -21,6 +22,8 @@ __all__ = [
     "EnvPolicy",
     "GateDecision",
     "GateEvidence",
+    "GitTracker",
+    "GitWorktree",
     "SandboxCommandRunner",
     "SandboxPolicy",
     "SandboxRunResult",

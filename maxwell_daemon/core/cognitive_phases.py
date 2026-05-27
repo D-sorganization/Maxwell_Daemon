@@ -7,8 +7,12 @@ If validation fails, the pipeline enforces revision, adhering to TDD and DbC.
 
 from __future__ import annotations
 
+import typing
 from dataclasses import dataclass, field
 from enum import Enum
+
+if typing.TYPE_CHECKING:
+    from maxwell_daemon.core.hyperplan import HyperPlanStrategy
 
 from maxwell_daemon.core.roles import Job, RolePlayer
 
@@ -30,20 +34,33 @@ class CognitivePipeline:
     """Orchestrates the lifecycle of a task through orthogonal roles."""
 
     def __init__(
-        self, strategist: RolePlayer, implementer: RolePlayer, validator: RolePlayer
+        self,
+        strategist: RolePlayer,
+        implementer: RolePlayer,
+        validator: RolePlayer,
+        strategy: HyperPlanStrategy | None = None,
     ) -> None:
         self.strategist = strategist
         self.implementer = implementer
         self.validator = validator
+        self.strategy = strategy
 
     async def run(self, job: Job) -> PipelineResult:
         """Runs the task through the Maxwell Cognitive Pipeline."""
         history: list[str] = []
 
         # Phase 1: Strategize (Architect)
-        plan_response = await self.strategist.execute(job)
-        plan = plan_response.content
-        history.append(f"Strategist Plan:\n{plan}")
+        if self.strategy is not None:
+            from maxwell_daemon.core.hyperplan import HyperPlanExecutor
+
+            executor = HyperPlanExecutor(self.strategy)
+            plan = await executor.execute(job.instructions)
+            for step_id, step_result in executor.step_results.items():
+                history.append(f"HyperPlan Step '{step_id}':\n{step_result}")
+        else:
+            plan_response = await self.strategist.execute(job)
+            plan = plan_response.content
+            history.append(f"Strategist Plan:\n{plan}")
 
         # Phase 2: Implement (Coder)
         impl_job = Job(

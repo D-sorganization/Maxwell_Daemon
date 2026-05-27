@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import logging
+import subprocess
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -112,12 +115,52 @@ class SandboxCommandRunner:
             return validation
 
         filtered_env = policy.env.filter(env)
-        result = await self._executor.execute(
-            validation.command,
-            cwd=Path(validation.cwd),
-            env=filtered_env,
-            timeout_seconds=policy.timeout_seconds,
-        )
+
+        # Check if the workspace is a Git repository for GitWorktree isolation
+        workspace_path = Path(validation.workspace_root)
+        is_git_repo = False
+        with contextlib.suppress(OSError):
+            is_git_repo = (workspace_path / ".git").exists()
+
+        if is_git_repo:
+            from maxwell_daemon.sandbox.git import GitTracker, GitWorktree
+
+            tracker = GitTracker(workspace_path)
+            try:
+                snapshot_id = tracker.take_snapshot()
+            except (subprocess.SubprocessError, OSError) as e:
+                logging.getLogger(__name__).warning("Failed to take git snapshot: %s", e)
+                snapshot_id = "HEAD"
+
+            original_cwd = Path(validation.cwd)
+            try:
+                rel_cwd = original_cwd.relative_to(workspace_path)
+            except ValueError:
+                rel_cwd = Path(".")
+
+            try:
+                async with GitWorktree(workspace_path, commit_ish=snapshot_id) as worktree_path:
+                    new_cwd = worktree_path / rel_cwd
+                    new_cwd.mkdir(parents=True, exist_ok=True)
+                    result = await self._executor.execute(
+                        validation.command,
+                        cwd=new_cwd,
+                        env=filtered_env,
+                        timeout_seconds=policy.timeout_seconds,
+                    )
+            except Exception as e:  # noqa: BLE001
+                logging.getLogger(__name__).error("Git worktree sandbox execution failed: %s", e)
+                result = SandboxRunResult(
+                    returncode=None,
+                    error=f"Git worktree sandbox error: {e!s}",
+                )
+        else:
+            result = await self._executor.execute(
+                validation.command,
+                cwd=Path(validation.cwd),
+                env=filtered_env,
+                timeout_seconds=policy.timeout_seconds,
+            )
         summary = policy.summarize_output(result.stdout, result.stderr or result.error, env=env)
         command_display = policy.env.redact(" ".join(validation.command), env=env)
         redacted_stdout = policy.env.redact(result.stdout, env=env)
