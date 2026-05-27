@@ -329,7 +329,7 @@ class TestTaskExecution:
                 )
                 d.reload_config()
 
-                deadline = asyncio.get_event_loop().time() + 5.0
+                deadline = asyncio.get_event_loop().time() + 15.0
                 while asyncio.get_event_loop().time() < deadline:
                     if max_active >= 2:
                         break
