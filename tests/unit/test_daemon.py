@@ -720,9 +720,9 @@ class TestRunningStatusResilience:
                 d.submit("hi")
                 await asyncio.sleep(0.1)  # Wait for processing attempt
                 captured = capsys.readouterr()
-                assert (
-                    "re-queuing" in captured.out or "re-queuing" in captured.err
-                ), "expected re-queuing log message"
+                assert "re-queuing" in captured.out or "re-queuing" in captured.err, (
+                    "expected re-queuing log message"
+                )
             finally:
                 await d.stop()
 
