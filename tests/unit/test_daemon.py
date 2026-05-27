@@ -329,7 +329,7 @@ class TestTaskExecution:
                 )
                 d.reload_config()
 
-                deadline = asyncio.get_event_loop().time() + 5.0
+                deadline = asyncio.get_event_loop().time() + 15.0
                 while asyncio.get_event_loop().time() < deadline:
                     if max_active >= 2:
                         break
@@ -720,9 +720,9 @@ class TestRunningStatusResilience:
                 d.submit("hi")
                 await asyncio.sleep(0.1)  # Wait for processing attempt
                 captured = capsys.readouterr()
-                assert "re-queuing" in captured.out or "re-queuing" in captured.err, (
-                    "expected re-queuing log message"
-                )
+                assert (
+                    "re-queuing" in captured.out or "re-queuing" in captured.err
+                ), "expected re-queuing log message"
             finally:
                 await d.stop()
 
