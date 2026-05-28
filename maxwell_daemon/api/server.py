@@ -896,14 +896,10 @@ def create_app(  # noqa: C901
             headers={"Retry-After": str(exc.backoff_seconds)},
         )
 
-    # When jwt_config is provided, RBAC deps handle all auth (both static and JWT).
-    # The `auth` dep becomes a pass-through so endpoints with Depends(auth) still
-    # work with JWT tokens without double-checking the static token.
+    # Auth dependencies Setup
     auth = _auth_dep(None if jwt_config is not None else auth_token)
 
-    # RBAC dependency factories — only active when jwt_config is provided.
-    # When jwt_config is None the daemon falls back to static bearer-token auth
-    # (``auth`` dep above) and role enforcement is skipped.
+    # RBAC dependency factories
     def _require_viewer() -> Any:
         if jwt_config is not None:
             return _make_rbac_dep(
@@ -943,10 +939,7 @@ def create_app(  # noqa: C901
         else None
     )
 
-    # CORS middleware — disabled by default (loopback-only deployments need no
-    # cross-origin access). Operators set ``api.cors_allowed_origins`` to an
-    # explicit list of trusted origins. Using ["*"] is rejected when JWT is
-    # enabled so credentials are never exposed to every origin (#797).
+    # CORS middleware
     api_cfg_for_cors = daemon._config.api
     if api_cfg_for_cors.cors_allowed_origins:
         from fastapi.middleware.cors import CORSMiddleware
@@ -966,19 +959,12 @@ def create_app(  # noqa: C901
             ],
         )
 
-    # Security-headers middleware — attaches conservative defaults
-    # (X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
-    # Permissions-Policy, Content-Security-Policy, optional HSTS) to every
-    # response. Installed at the front of the middleware stack so it runs
-    # closest to the route handler and decorates every outgoing response
-    # before outer middleware (correlation-id, rate-limit, request-id) add
-    # their own headers (#797 Phase 1).
+    # Security-headers middleware
     from maxwell_daemon.api.security_headers import install_security_headers
 
     install_security_headers(app)
 
-    # Correlation-ID middleware — attaches a UUID to every request, propagates
-    # it through structlog context-vars, and echoes it in X-Correlation-ID.
+    # Correlation-ID middleware
     from maxwell_daemon.api.correlation import install_correlation_middleware
 
     install_correlation_middleware(app)

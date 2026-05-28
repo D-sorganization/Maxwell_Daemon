@@ -76,9 +76,12 @@ def check(repo_root: Path) -> list[str]:
         # Skip this script itself.
         if py_file.resolve() == Path(__file__).resolve():
             continue
-        # Skip test files — tests are allowed to monkeypatch the symbol.
+        # Skip test files, virtual environments, and hidden folders.
         rel = py_file.relative_to(repo_root)
-        if rel.parts and rel.parts[0] in ("tests", "test"):
+        if rel.parts and (
+            rel.parts[0] in ("tests", "test", ".venv", "venv", ".git", ".mypy_cache", ".ruff_cache")
+            or any(part.startswith(".") for part in rel.parts)
+        ):
             continue
         if py_file.name.startswith("test_"):
             continue
