@@ -13,7 +13,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from maxwell_daemon.api import create_app
-from maxwell_daemon.api import server as api_server
 from maxwell_daemon.backends import (
     BackendCapabilities,
     BackendRegistry,
@@ -173,7 +172,9 @@ class TestBackends:
         fake_registry = BackendRegistry()
         fake_registry.register("claude", CatalogBackend)
         fake_registry.register("ollama", CatalogBackend)
-        monkeypatch.setattr(api_server, "registry", fake_registry)
+        from maxwell_daemon.api.routes import backends as _backends_routes
+
+        monkeypatch.setattr(_backends_routes, "registry", fake_registry)
         monkeypatch.setattr(daemon, "state", lambda: SimpleNamespace(backends_available=["cloud"]))
 
         response = client.get("/api/v1/backends/available")
