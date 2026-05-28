@@ -1,84 +1,51 @@
 """FastAPI app — Maxwell-Daemon HTTP API.
 
-Route modules extracted via epic #896 Phase 1.1:
-  - maxwell_daemon.api.routes.tasks       (/api/v1/tasks, /api/tasks legacy)
-  - maxwell_daemon.api.routes.control_plane (/api/v1/control-plane/gauntlet)
-  - maxwell_daemon.api.routes.health      (/api/version, /api/health)
-  - maxwell_daemon.api.routes.status      (/api/status)
-  - maxwell_daemon.api.routes.cost        (/api/cost)
-  - maxwell_daemon.api.routes.auth        (/api/auth/*)
+This module is responsible only for:
+  - Creating the FastAPI application instance
+  - Installing middleware (CORS, security headers, correlation IDs,
+    rate limiting, request-ID, metrics)
+  - Wiring all route modules (see ``maxwell_daemon/api/routes/``)
+  - Serving the static UI
 
-Auth: bearer token from config; JWT RBAC when jwt_config is set.
+All route handlers live in ``api/routes/`` submodules.  Route modules
+extracted via epic #896 Phase 1.1:
+
+  - maxwell_daemon.api.routes.auth          (/api/v1/auth/*)
+  - maxwell_daemon.api.routes.control_plane (/api/v1/control-plane/gauntlet)
+  - maxwell_daemon.api.routes.health        (/api/version, /api/health, /health*)
+  - maxwell_daemon.api.routes.status        (/api/status)
+  - maxwell_daemon.api.routes.cost          (/api/cost)
+  - maxwell_daemon.api.routes.tasks         (/api/v1/tasks, /api/tasks legacy)
+  - maxwell_daemon.api.routes.dispatch      (/api/dispatch, /api/control/{action})
+  - maxwell_daemon.api.routes.backends      (/api/v1/backends/*)
+  - maxwell_daemon.api.routes.actions       (/api/v1/actions/*, /api/v1/artifacts/*)
+  - maxwell_daemon.api.routes.work_items    (/api/v1/work-items/*, /api/v1/task-graphs/*)
+  - maxwell_daemon.api.routes.issues        (/api/v1/issues/*, /api/v1/templates/*, /api/v1/memory/*)
+  - maxwell_daemon.api.routes.fleet         (/api/v1/fleet/*, /api/v1/workers/*, /api/v1/heartbeat)
+  - maxwell_daemon.api.routes.audit         (/api/v1/audit/*, /api/reload, /api/v1/admin/prune)
+  - maxwell_daemon.api.routes.webhooks      (/api/v1/webhooks/*, /api/webhooks/trigger, /api/v1/evals/*)
+  - maxwell_daemon.api.routes.ssh           (/api/v1/ssh/*)
+  - maxwell_daemon.api.routes.events        (/api/v1/events WebSocket)
+
+Auth helpers (``make_auth_dep``, ``make_rbac_dep``, ``websocket_auth_or_close``)
+live in ``maxwell_daemon.api.deps``.
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
-import hmac
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path as _Path
-from typing import Annotated, Any, Literal, cast
+from typing import Any
 
-from fastapi import (
-    Body,
-    Depends,
-    FastAPI,
-    Header,
-    HTTPException,
-    Query,
-    Request,
-    Response,
-    WebSocket,
-    WebSocketDisconnect,
-    status,
-)
-from pydantic import BaseModel, Field, field_validator
+from fastapi import FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse
 
 from maxwell_daemon import __version__
-from maxwell_daemon.api.contract import (
-    CONTRACT_VERSION,
-    ControlRequest,
-    ControlResponse,
-    DispatchRequest,
-    DispatchResponse,
-    StatusV2Tokens,
-)
-from maxwell_daemon.api.validation import (
-    PriorityField,
-    RepoField,
-)
+from maxwell_daemon.api.contract import CONTRACT_VERSION
+from maxwell_daemon.api.deps import make_auth_dep, make_rbac_dep, websocket_auth_or_close
 from maxwell_daemon.audit import AuditLogger
-from maxwell_daemon.auth import JWTConfig, Role, is_jwt_auth_failure
-from maxwell_daemon.backends import BackendManifest, registry
-from maxwell_daemon.backends.base import TokenUsage
-from maxwell_daemon.config.loader import _default_secret_store, save_config
-from maxwell_daemon.config.models import BackendConfig
-from maxwell_daemon.core.actions import Action, ActionStatus
-from maxwell_daemon.core.artifacts import Artifact, ArtifactIntegrityError, ArtifactKind
-from maxwell_daemon.core.delegate_lifecycle import (
-    DelegateSessionSnapshot,
-    DelegateSessionStatus,
-)
-from maxwell_daemon.core.work_items import (
-    REPO_PATTERN,
-    AcceptanceCriterion,
-    ScopeBoundary,
-    WorkItem,
-    WorkItemStatus,
-)
+from maxwell_daemon.auth import JWTConfig, Role
 from maxwell_daemon.daemon import Daemon
-from maxwell_daemon.daemon.runner import Task
-from maxwell_daemon.daemon.task_models import DuplicateTaskIdError
-from maxwell_daemon.director import (
-    GraphStatus,
-    NodeRun,
-    TaskGraph,
-    TaskGraphExecutorUnavailableError,
-    TaskGraphRecord,
-    TaskGraphTemplate,
-)
 from maxwell_daemon.logging import bind_context, get_logger
 from maxwell_daemon.metrics import http_metrics_middleware, mount_metrics_endpoint
 
@@ -89,7 +56,7 @@ log = get_logger(__name__)
 def _mount_web_ui(app: FastAPI) -> None:
     """Serve the vanilla-JS dashboard at ``/ui/``.
 
-    Uses ``StaticFiles`` so there's no per-request Python overhead and
+    Uses ``StaticFiles`` so there is no per-request Python overhead and
     content-types are set correctly from the file extension.
     """
     from fastapi.responses import RedirectResponse
@@ -105,710 +72,6 @@ def _mount_web_ui(app: FastAPI) -> None:
         return RedirectResponse(url="/ui/", status_code=308)
 
 
-def _parse_delegate_status(value: str | None) -> DelegateSessionStatus | None:
-    if value is None:
-        return None
-    try:
-        return DelegateSessionStatus(value)
-    except ValueError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"invalid delegate session status: {value}",
-        ) from exc
-
-
-class WorkItemCreate(BaseModel):
-    id: str | None = Field(default=None, min_length=1)
-    title: str = Field(..., min_length=1)
-    body: str = ""
-    repo: RepoField | None = None
-    source: str = Field(default="api", pattern=r"^(manual|github_issue|gaai|api)$")
-    source_url: str | None = None
-    acceptance_criteria: tuple[AcceptanceCriterion, ...] = ()
-    scope: ScopeBoundary = Field(default_factory=ScopeBoundary)
-    required_checks: tuple[str, ...] = ()
-    priority: int = Field(default=100, ge=0, le=1000)
-    task_ids: tuple[str, ...] = ()
-
-
-class WorkItemPatch(BaseModel):
-    title: str | None = Field(default=None, min_length=1)
-    body: str | None = None
-    repo: RepoField | None = None
-    source_url: str | None = None
-    acceptance_criteria: tuple[AcceptanceCriterion, ...] | None = None
-    scope: ScopeBoundary | None = None
-    required_checks: tuple[str, ...] | None = None
-    priority: int | None = Field(default=None, ge=0, le=1000)
-    task_ids: tuple[str, ...] | None = None
-
-
-class WorkItemTransition(BaseModel):
-    status: WorkItemStatus
-
-
-class WorkItemView(BaseModel):
-    id: str
-    title: str
-    body: str
-    repo: str | None
-    source: str
-    source_url: str | None
-    status: str
-    acceptance_criteria: tuple[AcceptanceCriterion, ...]
-    scope: ScopeBoundary
-    required_checks: tuple[str, ...]
-    priority: int
-    created_at: datetime
-    updated_at: datetime
-    started_at: datetime | None
-    completed_at: datetime | None
-    task_ids: tuple[str, ...]
-
-    @classmethod
-    def from_item(cls, item: WorkItem) -> WorkItemView:
-        return cls(
-            id=item.id,
-            title=item.title,
-            body=item.body,
-            repo=item.repo,
-            source=item.source,
-            source_url=item.source_url,
-            status=item.status.value,
-            acceptance_criteria=item.acceptance_criteria,
-            scope=item.scope,
-            required_checks=item.required_checks,
-            priority=item.priority,
-            created_at=item.created_at,
-            updated_at=item.updated_at,
-            started_at=item.started_at,
-            completed_at=item.completed_at,
-            task_ids=item.task_ids,
-        )
-
-
-class TaskGraphCreate(BaseModel):
-    work_item_id: str = Field(..., min_length=1)
-    id: str | None = Field(default=None, min_length=1)
-    template: TaskGraphTemplate | None = None
-    labels: tuple[str, ...] = ()
-
-
-class NodeRunView(BaseModel):
-    id: str
-    graph_id: str
-    node_id: str
-    status: str
-    task_id: str | None
-    artifact_ids: tuple[str, ...]
-    started_at: datetime | None
-    finished_at: datetime | None
-    cost_usd: float
-    attempts: int
-    error: str | None
-
-    @classmethod
-    def from_run(cls, run: NodeRun) -> NodeRunView:
-        return cls(
-            id=run.id,
-            graph_id=run.graph_id,
-            node_id=run.node_id,
-            status=run.status.value,
-            task_id=run.task_id,
-            artifact_ids=run.artifact_ids,
-            started_at=run.started_at,
-            finished_at=run.finished_at,
-            cost_usd=run.cost_usd,
-            attempts=run.attempts,
-            error=run.error,
-        )
-
-
-class TaskGraphView(BaseModel):
-    graph: TaskGraph
-    node_runs: tuple[NodeRunView, ...]
-
-    @classmethod
-    def from_record(cls, record: TaskGraphRecord) -> TaskGraphView:
-        return cls(
-            graph=record.graph,
-            node_runs=tuple(NodeRunView.from_run(run) for run in record.node_runs),
-        )
-
-
-class BackendConfigPayload(BaseModel):
-    name: str
-    api_key: str | None = None
-    endpoint: str | None = None
-    set_as_default: bool = False
-
-
-class AvailableBackendView(BaseModel):
-    name: str
-    display_name: str
-    description: str
-    requires_api_key: bool
-    local_only: bool
-    logo_key: str | None = None
-    default_endpoint: str | None = None
-    configured: bool = False
-
-
-class BackendTestResponse(BaseModel):
-    success: bool
-    latency_ms: float | None = None
-    models: list[str] = Field(default_factory=list)
-    error: str | None = None
-
-
-class OnboardingSmokeTestRequest(BaseModel):
-    backend_name: str
-    model: str
-
-
-class ArtifactView(BaseModel):
-    id: str
-    task_id: str | None
-    work_item_id: str | None
-    kind: str
-    name: str
-    media_type: str
-    path: str
-    sha256: str
-    size_bytes: int
-    created_at: datetime
-    metadata: dict[str, Any]
-
-    @classmethod
-    def from_artifact(cls, artifact: Artifact) -> ArtifactView:
-        return cls(
-            id=artifact.id,
-            task_id=artifact.task_id,
-            work_item_id=artifact.work_item_id,
-            kind=artifact.kind.value,
-            name=artifact.name,
-            media_type=artifact.media_type,
-            path=artifact.path.as_posix(),
-            sha256=artifact.sha256,
-            size_bytes=artifact.size_bytes,
-            created_at=artifact.created_at,
-            metadata=artifact.metadata,
-        )
-
-
-class ActionView(BaseModel):
-    id: str
-    task_id: str
-    work_item_id: str | None
-    kind: str
-    status: str
-    summary: str
-    payload: dict[str, Any]
-    risk_level: str
-    requires_approval: bool
-    approval_contract: Literal["proposal_only"] = "proposal_only"
-    approved_by: str | None
-    approved_at: datetime | None
-    rejected_by: str | None
-    rejected_at: datetime | None
-    rejection_reason: str | None
-    result_artifact_id: str | None
-    result: dict[str, Any]
-    error: str | None
-    created_at: datetime
-    updated_at: datetime
-
-    @classmethod
-    def from_action(cls, action: Action) -> ActionView:
-        return cls(
-            id=action.id,
-            task_id=action.task_id,
-            work_item_id=action.work_item_id,
-            kind=action.kind.value,
-            status=action.status.value,
-            summary=action.summary,
-            payload=action.payload,
-            risk_level=action.risk_level.value,
-            requires_approval=action.requires_approval,
-            approval_contract="proposal_only",
-            approved_by=action.approved_by,
-            approved_at=action.approved_at,
-            rejected_by=action.rejected_by,
-            rejected_at=action.rejected_at,
-            rejection_reason=action.rejection_reason,
-            result_artifact_id=action.result_artifact_id,
-            result=action.result,
-            error=action.error,
-            created_at=action.created_at,
-            updated_at=action.updated_at,
-        )
-
-
-class ActionRejectRequest(BaseModel):
-    reason: str | None = Field(default=None, max_length=1000)
-
-
-class IssueCreate(BaseModel):
-    repo: RepoField
-    title: str = Field(..., min_length=1)
-    body: str = ""
-    labels: list[str] = Field(default_factory=list)
-    dispatch: bool = False
-    mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
-
-
-class IssueDispatch(BaseModel):
-    repo: RepoField
-    number: int = Field(..., ge=1)
-    mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
-    backend: str | None = None
-    model: str | None = None
-    priority: PriorityField = 100
-    dry_run: bool = False
-
-
-class IssueBatchDispatch(BaseModel):
-    items: list[IssueDispatch] = Field(..., min_length=1, max_length=100)
-
-
-class IssueAbDispatch(BaseModel):
-    repo: RepoField
-    number: int = Field(..., ge=1)
-    backends: list[str] = Field(..., min_length=2, max_length=4)
-    mode: str = Field(default="plan", pattern=r"^(plan|implement)$")
-    dry_run: bool = False
-
-    @field_validator("backends")
-    @classmethod
-    def _check_distinct(cls, v: list[str]) -> list[str]:
-        if len(set(v)) != len(v):
-            raise ValueError("A/B backends must be distinct")
-        return v
-
-
-class TaskView(BaseModel):
-    id: str
-    prompt: str
-    kind: str
-    repo: str | None
-    backend: str | None
-    model: str | None
-    route_reason: str | None = None
-    issue_repo: str | None = None
-    issue_number: int | None = None
-    issue_mode: str | None = None
-    ab_group: str | None = None
-    thread_id: str | None = None
-    turn_count: int = 0
-    max_turns: int = 20
-    session_id: str
-    continuation: bool = False
-    depends_on: list[str] = Field(default_factory=list)
-    priority: int = 100
-    pr_url: str | None = None
-    dispatched_to: str | None = None
-    side_effects_started: bool = False
-    status: str
-    result: str | None
-    error: str | None
-    waived_by: str | None = None
-    waiver_reason: str | None = None
-    waived_at: datetime | None = None
-    dry_run: bool = False
-    cost_usd: float
-    created_at: datetime
-    started_at: datetime | None
-    finished_at: datetime | None
-
-    @classmethod
-    def from_task(cls, t: Task) -> TaskView:
-        return cls(
-            id=t.id,
-            prompt=t.prompt,
-            kind=t.kind.value,
-            repo=t.repo,
-            backend=t.backend,
-            model=t.model,
-            route_reason=t.route_reason,
-            issue_repo=t.issue_repo,
-            issue_number=t.issue_number,
-            issue_mode=t.issue_mode,
-            ab_group=t.ab_group,
-            thread_id=t.thread_id,
-            turn_count=t.turn_count,
-            max_turns=t.max_turns,
-            session_id=t.turn_session_id,
-            continuation=t.is_continuation_turn,
-            depends_on=list(getattr(t, "depends_on", [])),
-            priority=getattr(t, "priority", 100),
-            pr_url=t.pr_url,
-            dispatched_to=t.dispatched_to,
-            side_effects_started=t.side_effects_started,
-            status=t.status.value,
-            result=t.result,
-            error=t.error,
-            waived_by=t.waived_by,
-            waiver_reason=t.waiver_reason,
-            waived_at=t.waived_at,
-            cost_usd=t.cost_usd,
-            created_at=t.created_at,
-            started_at=t.started_at,
-            finished_at=t.finished_at,
-            dry_run=getattr(t, "dry_run", False),
-        )
-
-
-def _status_v2_tokens(usage: TokenUsage | None) -> StatusV2Tokens:
-    if usage is None:
-        return StatusV2Tokens()
-    return StatusV2Tokens(
-        input_tokens=usage.prompt_tokens,
-        output_tokens=usage.completion_tokens,
-        total_tokens=usage.total_tokens,
-    )
-
-
-def _status_v2_counts(tasks: list[Task]) -> dict[str, int]:
-    counts = {
-        "running": 0,
-        "retrying": 0,
-        "queued": 0,
-        "dispatched": 0,
-        "completed": 0,
-        "failed": 0,
-        "cancelled": 0,
-    }
-    for task in tasks:
-        counts[task.status.value] = counts.get(task.status.value, 0) + 1
-    return counts
-
-
-class BackendCatalogEntryView(BaseModel):
-    name: str
-    display_name: str
-    description: str
-    requires_api_key: bool
-    local_only: bool
-    logo_key: str | None = None
-    default_endpoint: str | None = None
-    api_key_env_var: str | None = None
-    endpoint_env_var: str | None = None
-    install_extra: str | None = None
-    command: str | None = None
-    configured_aliases: tuple[str, ...] = ()
-    loaded: bool
-    connected: bool
-
-    @classmethod
-    def from_manifest(
-        cls,
-        manifest: BackendManifest,
-        *,
-        configured_aliases: tuple[str, ...],
-        loaded: bool,
-        connected: bool,
-    ) -> BackendCatalogEntryView:
-        return cls(
-            name=manifest.name,
-            display_name=manifest.display_name,
-            description=manifest.description,
-            requires_api_key=manifest.requires_api_key,
-            local_only=manifest.local_only,
-            logo_key=manifest.logo_key,
-            default_endpoint=manifest.default_endpoint,
-            api_key_env_var=manifest.api_key_env_var,
-            endpoint_env_var=manifest.endpoint_env_var,
-            install_extra=manifest.install_extra,
-            command=manifest.command,
-            configured_aliases=configured_aliases,
-            loaded=loaded,
-            connected=connected,
-        )
-
-
-class BackendCatalogResponse(BaseModel):
-    backends: tuple[BackendCatalogEntryView, ...]
-
-
-class AssembleMemoryRequest(BaseModel):
-    repo: str = Field(..., min_length=1)
-    issue_title: str = ""
-    issue_body: str = ""
-    task_id: str = Field(..., min_length=1)
-    max_chars: int = 8000
-
-
-class RecordMemoryOutcome(BaseModel):
-    task_id: str = Field(..., min_length=1)
-    repo: str = Field(..., min_length=1)
-    issue_number: int
-    issue_title: str = ""
-    issue_body: str = ""
-    plan: str = ""
-    applied_diff: bool = False
-    pr_url: str = ""
-    outcome: str = ""
-
-
-class SSHConnectRequest(BaseModel):
-    host: str
-    port: int = 22
-    user: str
-    password: str | None = None
-
-
-class SSHRunRequest(BaseModel):
-    host: str
-    port: int = 22
-    user: str
-    command: str
-    timeout_seconds: float = 30.0
-
-
-def _auth_dep(token: str | None) -> Any:
-    async def _check(authorization: Annotated[str | None, Header()] = None) -> None:
-        if token is None:
-            return
-        if not authorization or not authorization.startswith("Bearer "):
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token")
-        presented = authorization.removeprefix("Bearer ").strip()
-        # Constant-time comparison — prevents leaking token via response timing.
-        if not hmac.compare_digest(presented.encode(), token.encode()):
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token")
-
-    return _check
-
-
-def _make_rbac_dep(  # noqa: C901
-    minimum: Role,
-    static_token: str | None,
-    jwt_config: JWTConfig | None,
-    auth_store: Any | None = None,
-    audit: Any | None = None,
-) -> Any:
-    """Return a FastAPI dependency that enforces *minimum* role.
-
-    Accepts EITHER:
-    - A valid static admin bearer token (treated as Role.admin), OR
-    - A valid JWT bearer token whose role is >= *minimum*.
-
-    When neither JWT config nor static token is configured, all requests pass
-    (open/dev mode — same behaviour as the existing ``_auth_dep(None)``).
-    """
-
-    async def _dep(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:  # noqa: C901
-        # Open mode — nothing to enforce.
-        if static_token is None and jwt_config is None:
-            return
-
-        if authorization is None or not authorization.startswith("Bearer "):
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bearer token required")
-
-        raw = authorization.removeprefix("Bearer ").strip()
-
-        # Fast path: static admin token — always grants admin-level access.
-        if static_token is not None and hmac.compare_digest(raw.encode(), static_token.encode()):
-            if audit:
-                audit.log_auth_decision(
-                    subject="static",
-                    role="admin",
-                    endpoint=request.url.path,
-                    outcome="pass",
-                )
-            return  # admitted as admin
-
-        # JWT path.
-        if jwt_config is None:
-            if audit:
-                audit.log_auth_decision(
-                    subject="unknown",
-                    role="none",
-                    endpoint=request.url.path,
-                    outcome="fail_no_jwt",
-                )
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token")
-
-        try:
-            claims = jwt_config.decode_token(raw)
-        except Exception as exc:
-            if audit:
-                audit.log_auth_decision(
-                    subject="unknown",
-                    role="none",
-                    endpoint=request.url.path,
-                    outcome="fail_invalid_token",
-                )
-            if is_jwt_auth_failure(exc):
-                log.warning("Auth failure: %s", exc, exc_info=False)
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication failed",
-                ) from exc
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication failed",
-            ) from exc
-
-        if (
-            auth_store is not None
-            and getattr(claims, "jti", None)
-            and auth_store.is_revoked(claims.jti)
-        ):
-            if audit:
-                audit.log_auth_decision(
-                    subject=claims.sub,
-                    role=claims.role.value,
-                    endpoint=request.url.path,
-                    outcome="fail_revoked",
-                )
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has been revoked")
-
-        if getattr(claims, "typ", "access") != "access":
-            if audit:
-                audit.log_auth_decision(
-                    subject=claims.sub,
-                    role=claims.role.value,
-                    endpoint=request.url.path,
-                    outcome="fail_wrong_type",
-                )
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED,
-                "Refresh tokens cannot be used as access tokens",
-            )
-
-        if not claims.has_role(minimum):
-            if audit:
-                audit.log_auth_decision(
-                    subject=claims.sub,
-                    role=claims.role.value,
-                    endpoint=request.url.path,
-                    outcome="fail_role_insufficient",
-                )
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                f"role {claims.role.value!r} lacks {minimum.value!r} privileges",
-            )
-
-        if audit:
-            audit.log_auth_decision(
-                subject=claims.sub,
-                role=claims.role.value,
-                endpoint=request.url.path,
-                outcome="pass",
-            )
-
-    return _dep
-
-
-async def _websocket_auth_or_close(
-    ws: WebSocket,
-    minimum: Role,
-    static_token: str | None,
-    jwt_config: JWTConfig | None,
-    auth_store: Any | None = None,
-    audit: Any | None = None,
-) -> bool:
-    """Authenticate a WebSocket query token against static/JWT auth policy."""
-    if static_token is None and jwt_config is None:
-        return True
-
-    presented = ws.query_params.get("token") or ""
-    if not presented:
-        await ws.close(code=1008)
-        return False
-
-    if static_token is not None and hmac.compare_digest(presented.encode(), static_token.encode()):
-        return True
-
-    if jwt_config is None:
-        await ws.close(code=1008)
-        return False
-
-    try:
-        claims = jwt_config.decode_token(presented)
-    except Exception:  # nosec B110 - invalid WebSocket token, close below.  # noqa: BLE001
-        if audit:
-            audit.log_auth_decision(
-                subject="unknown",
-                role="none",
-                endpoint=ws.url.path,
-                outcome="fail_invalid_token",
-            )
-        await ws.close(code=1008)
-        return False
-
-    if (
-        auth_store is not None
-        and getattr(claims, "jti", None)
-        and auth_store.is_revoked(claims.jti)
-    ):
-        if audit:
-            audit.log_auth_decision(
-                subject=claims.sub,
-                role=claims.role.value,
-                endpoint=ws.url.path,
-                outcome="fail_revoked",
-            )
-        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="Token revoked")
-        return False
-
-    if getattr(claims, "typ", "access") != "access":
-        if audit:
-            audit.log_auth_decision(
-                subject=claims.sub,
-                role=claims.role.value,
-                endpoint=ws.url.path,
-                outcome="fail_wrong_type",
-            )
-        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="Refresh token not allowed")
-        return False
-
-    if not claims.has_role(minimum):
-        if audit:
-            audit.log_auth_decision(
-                subject=claims.sub,
-                role=claims.role.value,
-                endpoint=ws.url.path,
-                outcome="fail_role_insufficient",
-            )
-        await ws.close(code=1008)
-        return False
-
-    if audit:
-        audit.log_auth_decision(
-            subject=claims.sub,
-            role=claims.role.value,
-            endpoint=ws.url.path,
-            outcome="pass",
-        )
-    return True
-
-
-class WebhookTriggerRequest(BaseModel):
-    """Body accepted by ``POST /api/webhooks/trigger``."""
-
-    prompt: str = Field(..., min_length=1)
-    repo: str | None = None
-    backend: str | None = None
-    priority: int = Field(default=100, ge=0, le=1000)
-
-
-class EvalRunRequest(BaseModel):
-    suite_id: str
-    backends: list[str] = Field(default_factory=list)
-    models: list[str] = Field(default_factory=list)
-
-
-class EvalLeaderboardEntry(BaseModel):
-    backend: str
-    model: str
-    score: float
-    latency_p50: float | None = None
-    latency_p95: float | None = None
-    cost: float
-    pass_rate: float
-
-
 def create_app(  # noqa: C901
     daemon: Daemon,
     *,
@@ -819,8 +82,8 @@ def create_app(  # noqa: C901
 ) -> FastAPI:
     """Build the FastAPI app.
 
-    `github_client` is an optional injection point for tests — if omitted, the
-    handlers construct a fresh ``GitHubClient()`` on demand.
+    ``github_client`` is an optional injection point for tests — if omitted,
+    the handlers construct a fresh ``GitHubClient()`` on demand.
     """
     app = FastAPI(
         title="Maxwell-Daemon API",
@@ -840,10 +103,6 @@ def create_app(  # noqa: C901
             "```\nAuthorization: Bearer <your_token>\n```\n\n"
             "When JWT auth is configured, role-based access control "
             "(viewer / operator / admin) is enforced per endpoint.\n\n"
-            "## WebSockets\n\n"
-            "Real-time event streams are exposed under `/ws/*`.  See the "
-            "`AGENTS.md` and `SPEC.md` documents in the source repository "
-            "for the event schema.\n\n"
             "## Interactive docs\n\n"
             "* Swagger UI: [`/docs`](/docs)\n"
             "* ReDoc: [`/redoc`](/redoc)\n"
@@ -871,18 +130,18 @@ def create_app(  # noqa: C901
             {"name": "fleet", "description": "Multi-repo fleet manifest and dispatch."},
         ],
     )
+
+    # -- Metrics & static UI
     mount_metrics_endpoint(app)
     http_metrics_middleware(app)
     _mount_web_ui(app)
 
-    # RFC 7807 handler covers the MaxwellError tree; subclass status codes land
-    # in the response through LSP.
+    # -- RFC 7807 problem-detail handler
     from maxwell_daemon.api.problem import install_problem_handler
 
     install_problem_handler(app)
 
-    from fastapi.responses import JSONResponse
-
+    # -- QueueSaturationError -> HTTP 429
     from maxwell_daemon.daemon.runner import QueueSaturationError
 
     @app.exception_handler(QueueSaturationError)
@@ -896,13 +155,19 @@ def create_app(  # noqa: C901
             headers={"Retry-After": str(exc.backoff_seconds)},
         )
 
-    # Auth dependencies Setup
-    auth = _auth_dep(None if jwt_config is not None else auth_token)
+    # -- Audit logger
+    _audit: AuditLogger | None = (
+        AuditLogger(audit_log_path, retention_days=daemon._config.agent.task_retention_days)
+        if audit_log_path is not None
+        else None
+    )
 
-    # RBAC dependency factories
+    # -- Auth dependency factories
+    auth = make_auth_dep(None if jwt_config is not None else auth_token)
+
     def _require_viewer() -> Any:
         if jwt_config is not None:
-            return _make_rbac_dep(
+            return make_rbac_dep(
                 Role.viewer,
                 auth_token,
                 jwt_config,
@@ -913,7 +178,7 @@ def create_app(  # noqa: C901
 
     def _require_operator() -> Any:
         if jwt_config is not None:
-            return _make_rbac_dep(
+            return make_rbac_dep(
                 Role.operator,
                 auth_token,
                 jwt_config,
@@ -924,7 +189,7 @@ def create_app(  # noqa: C901
 
     def _require_admin() -> Any:
         if jwt_config is not None:
-            return _make_rbac_dep(
+            return make_rbac_dep(
                 Role.admin,
                 auth_token,
                 jwt_config,
@@ -933,20 +198,15 @@ def create_app(  # noqa: C901
             )
         return auth
 
-    _audit: AuditLogger | None = (
-        AuditLogger(audit_log_path, retention_days=daemon._config.agent.task_retention_days)
-        if audit_log_path is not None
-        else None
-    )
+    # -- Middleware
+    api_cfg = daemon._config.api
 
-    # CORS middleware
-    api_cfg_for_cors = daemon._config.api
-    if api_cfg_for_cors.cors_allowed_origins:
+    if api_cfg.cors_allowed_origins:
         from fastapi.middleware.cors import CORSMiddleware
 
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=api_cfg_for_cors.cors_allowed_origins,
+            allow_origins=api_cfg.cors_allowed_origins,
             allow_credentials=True,
             allow_methods=["GET", "POST", "PATCH", "DELETE"],
             allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
@@ -959,18 +219,12 @@ def create_app(  # noqa: C901
             ],
         )
 
-    # Security-headers middleware
+    from maxwell_daemon.api.correlation import install_correlation_middleware
     from maxwell_daemon.api.security_headers import install_security_headers
 
     install_security_headers(app)
-
-    # Correlation-ID middleware
-    from maxwell_daemon.api.correlation import install_correlation_middleware
-
     install_correlation_middleware(app)
 
-    # Rate-limit middleware — installs only when config declares a default group.
-    api_cfg = daemon._config.api
     if api_cfg.rate_limit_default is not None:
         from maxwell_daemon.api.rate_limit import install_rate_limiter
 
@@ -984,9 +238,7 @@ def create_app(  # noqa: C901
             },
         )
 
-    # Phase-1 per-endpoint rate limit for POST /api/dispatch (issue #796).
-    # Build the dependency unconditionally so the route signature is stable;
-    # when the feature is disabled the dep is a cheap no-op.
+    # Per-endpoint rate limit for POST /api/dispatch (issue #796).
     dispatch_rl_cfg = api_cfg.dispatch_rate_limit
     if dispatch_rl_cfg.enabled:
         from maxwell_daemon.api.rate_limit import (
@@ -996,15 +248,13 @@ def create_app(  # noqa: C901
             install_rate_limit_headers_middleware,
         )
 
-        _dispatch_rl_store = InMemoryRateLimitStore()
-        _dispatch_rl_policy = RateLimitPolicy(
-            limit=dispatch_rl_cfg.limit,
-            window_seconds=float(dispatch_rl_cfg.window_seconds),
-        )
         dispatch_rate_limit_dep: Any = build_rate_limit_dependency(
             endpoint="dispatch",
-            policy=_dispatch_rl_policy,
-            store=_dispatch_rl_store,
+            policy=RateLimitPolicy(
+                limit=dispatch_rl_cfg.limit,
+                window_seconds=float(dispatch_rl_cfg.window_seconds),
+            ),
+            store=InMemoryRateLimitStore(),
         )
         install_rate_limit_headers_middleware(app)
     else:
@@ -1027,13 +277,10 @@ def create_app(  # noqa: C901
         response.headers["x-request-id"] = request_id
         if _audit is not None and not request.url.path.startswith("/ui"):
             auth_header = request.headers.get("authorization", "")
-            # Extract only the auth scheme prefix (e.g. "Bearer") — never
-            # persist the actual token value in the audit log (#234).
             if auth_header.lower().startswith("bearer "):
-                user = "Bearer ***"
+                user: str | None = "Bearer ***"
             elif auth_header:
-                scheme = auth_header.split(" ", 1)[0]
-                user = f"{scheme} ***"
+                user = f"{auth_header.split(' ', 1)[0]} ***"
             else:
                 user = None
             _audit.log_api_call(
@@ -1045,6 +292,7 @@ def create_app(  # noqa: C901
             )
         return response
 
+    # -- GitHub client factory
     def _gh() -> Any:
         if github_client is not None:
             return github_client
@@ -1052,14 +300,25 @@ def create_app(  # noqa: C901
 
         return GitHubClient()
 
-    # ── Route modules (issue #793, epic #896 Phase 1.1) ─────────────────────
+    # -- Route modules (epic #896 Phase 1.1)
+    from maxwell_daemon.api.routes import actions as _actions_routes
+    from maxwell_daemon.api.routes import audit as _audit_routes
     from maxwell_daemon.api.routes import auth as _auth_routes
+    from maxwell_daemon.api.routes import backends as _backends_routes
     from maxwell_daemon.api.routes import control_plane as _control_plane_routes
     from maxwell_daemon.api.routes import cost as _cost_routes
+    from maxwell_daemon.api.routes import dispatch as _dispatch_routes
+    from maxwell_daemon.api.routes import events as _events_routes
+    from maxwell_daemon.api.routes import fleet as _fleet_routes
     from maxwell_daemon.api.routes import health as _health_routes
+    from maxwell_daemon.api.routes import issues as _issues_routes
+    from maxwell_daemon.api.routes import ssh as _ssh_routes
     from maxwell_daemon.api.routes import status as _status_routes
     from maxwell_daemon.api.routes import tasks as _task_routes
+    from maxwell_daemon.api.routes import webhooks as _webhooks_routes
+    from maxwell_daemon.api.routes import work_items as _work_items_routes
 
+    # Stable operator contract (CLAUDE.md section 1)
     _auth_routes.register(
         app, daemon, jwt_config, auth_token, _require_admin(), _require_operator()
     )
@@ -1069,1422 +328,45 @@ def create_app(  # noqa: C901
     _task_routes.register(app, daemon, auth, _require_viewer(), _require_operator())
     _control_plane_routes.register(app, daemon, auth, _require_viewer(), _require_operator())
 
-    @app.post(
-        "/api/dispatch",
-        status_code=status.HTTP_202_ACCEPTED,
-        dependencies=[Depends(dispatch_rate_limit_dep)],
+    # Dispatch / control -- stable contract surface (CLAUDE.md section 1)
+    _dispatch_routes.register(app, daemon, auth_token, dispatch_rate_limit_dep)
+
+    # Domain routers
+    _backends_routes.register(app, daemon, _require_viewer(), _require_admin())
+    _actions_routes.register(app, daemon, _audit, _require_viewer(), _require_operator(), auth)
+    _work_items_routes.register(app, daemon, _require_viewer(), _require_operator(), auth)
+    _issues_routes.register(
+        app, daemon, _gh, _require_viewer(), _require_operator(), _require_admin(), auth
     )
-    async def api_dispatch(payload: DispatchRequest) -> DispatchResponse:
-        expected_token = auth_token or ""
-        if not expected_token or not hmac.compare_digest(
-            payload.confirmation_token, expected_token
-        ):
-            raise HTTPException(status_code=403, detail="invalid confirmation_token")
-
-        log.info(
-            "audit: api_dispatch idempotency_key=%s repo=%s",
-            payload.idempotency_key,
-            payload.repo,
-        )
-        try:
-            task = daemon.submit(
-                payload.prompt,
-                repo=payload.repo,
-                task_id=payload.idempotency_key,
-            )
-        except DuplicateTaskIdError as exc:
-            # 409 Conflict: caller supplied an idempotency_key that already exists.
-            # Narrowed from bare `except Exception` per epic #896 §1.2 — only
-            # DuplicateTaskIdError warrants 409; storage/runtime failures should
-            # surface as 5xx, not be silently collapsed to a misleading 409.
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-        return DispatchResponse(
-            task_id=task.id,
-            status=task.status.value,
-            queued_at=task.created_at.isoformat(),
-        )
-
-    @app.post("/api/control/{action}")
-    async def api_control(action: str, payload: ControlRequest) -> ControlResponse:
-        valid_actions = {"pause", "resume", "abort"}
-        if action not in valid_actions:
-            raise HTTPException(
-                status_code=422,
-                detail=f"action must be one of {sorted(valid_actions)}",
-            )
-
-        expected_token = auth_token or ""
-        if not expected_token or not hmac.compare_digest(
-            payload.confirmation_token, expected_token
-        ):
-            raise HTTPException(status_code=403, detail="invalid confirmation_token")
-
-        log.info(
-            "audit: api_control action=%s reason=%s",
-            action,
-            payload.reason,
-        )
-
-        # Derive previous_state before applying the action.
-        try:
-            state = daemon.state()
-            running_tasks = [t for t in state.tasks.values() if t.status.value == "running"]
-            previous_state = "running" if running_tasks else "idle"
-        except Exception:  # noqa: BLE001
-            previous_state = "unknown"
-
-        if action == "abort":
-            # Cancel all currently running/queued tasks.
-            try:
-                state = daemon.state()
-                for task_obj in list(state.tasks.values()):
-                    if task_obj.status.value in ("running", "queued"):
-                        with contextlib.suppress(Exception):
-                            daemon.cancel_task(task_obj.id)
-            except Exception:  # noqa: BLE001
-                log.warning("Error during abort: cancel tasks failed", exc_info=True)
-
-        return ControlResponse(
-            action=action,
-            applied_at=datetime.now(timezone.utc).isoformat(),
-            previous_state=previous_state,
-        )
-
-    # ── End stable operator contract surface ──────────────────────────────────
-
-    @app.get("/api/v1/backends", dependencies=[Depends(_require_viewer())])
-    async def list_backends() -> dict[str, Any]:
-        return {"backends": daemon.state().backends_available}
-
-    @app.get(
-        "/api/v1/backends/available",
-        dependencies=[Depends(_require_viewer())],
-        response_model=BackendCatalogResponse,
+    _fleet_routes.register(app, daemon, _require_viewer(), _require_operator(), auth)
+    _audit_routes.register(
+        app,
+        daemon,
+        _audit,
+        audit_log_path,
+        _require_viewer(),
+        _require_operator(),
+        _require_admin(),
     )
-    async def list_available_backends() -> BackendCatalogResponse:
-        configured_aliases_by_type: dict[str, list[str]] = {}
-        for alias, backend_cfg in daemon._config.backends.items():
-            configured_aliases_by_type.setdefault(backend_cfg.type, []).append(alias)
-
-        connected_aliases = set(daemon.state().backends_available)
-        loaded_backend_types = set(registry.available())
-        catalog = tuple(
-            BackendCatalogEntryView.from_manifest(
-                manifest,
-                configured_aliases=tuple(sorted(configured_aliases_by_type.get(manifest.name, ()))),
-                loaded=manifest.name in loaded_backend_types,
-                connected=any(
-                    alias in connected_aliases
-                    for alias in configured_aliases_by_type.get(manifest.name, ())
-                ),
-            )
-            for manifest in registry.catalog()
-        )
-        return BackendCatalogResponse(backends=catalog)
-
-    @app.post("/api/v1/backends", dependencies=[Depends(_require_admin())])
-    async def configure_backend(payload: BackendConfigPayload) -> dict[str, Any]:
-        from maxwell_daemon.secrets import backend_api_key_secret_ref
-
-        manifest = next((m for m in registry.catalog() if m.name == payload.name), None)
-        if not manifest:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Backend '{payload.name}' not found in registry",
-            )
-
-        store = _default_secret_store()
-        secret_ref = backend_api_key_secret_ref(payload.name)
-        if payload.api_key and store:
-            store.set(secret_ref, payload.api_key)
-
-        cfg_dict: dict[str, Any] = {
-            "type": payload.name,
-            "model": "",  # To be set or default
-            "base_url": payload.endpoint or manifest.default_endpoint,
-            "api_key_secret_ref": secret_ref if (payload.api_key and store) else None,
-        }
-
-        # Give it a default model so it passes validation if possible
-        if payload.name == "ollama":
-            cfg_dict["model"] = "llama3"
-        elif payload.name == "openai":
-            cfg_dict["model"] = "gpt-4o-mini"
-        elif payload.name == "claude":
-            cfg_dict["model"] = "claude-haiku-4-5"
-        else:
-            cfg_dict["model"] = "default"
-
-        daemon._config.backends[payload.name] = BackendConfig(**cfg_dict)
-
-        if payload.set_as_default:
-            daemon._config.agent.default_backend = payload.name
-
-        try:
-            save_config(daemon._config)
-            # Make sure it's instantiated so the daemon can use it immediately
-            # The router handles param normalization and secret unwrapping
-            daemon._router._get_or_create(payload.name, daemon._config.backends[payload.name])
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to save config: {e}") from e
-
-        return {"status": "success"}
-
-    @app.post("/api/v1/backends/{name}/test", dependencies=[Depends(_require_admin())])
-    async def test_backend(name: str) -> BackendTestResponse:
-        from time import monotonic
-
-        if name in daemon._router._instances:
-            backend = daemon._router._instances[name]
-        else:
-            # Maybe it's registered but not loaded due to config
-            if name not in daemon._config.backends:
-                raise HTTPException(status_code=404, detail=f"Backend '{name}' not configured")
-            try:
-                backend = daemon._router._get_or_create(name, daemon._config.backends[name])
-            except Exception as e:  # noqa: BLE001
-                return BackendTestResponse(success=False, error=str(e))
-
-        start = monotonic()
-        try:
-            is_healthy = await backend.health_check()
-        except Exception as e:  # noqa: BLE001
-            return BackendTestResponse(success=False, error=str(e))
-
-        latency = (monotonic() - start) * 1000
-
-        models = []
-        if is_healthy and hasattr(backend, "list_models"):
-            import contextlib
-
-            with contextlib.suppress(Exception):
-                models = await backend.list_models()
-
-        return BackendTestResponse(
-            success=is_healthy,
-            latency_ms=latency,
-            models=models,
-            error=None if is_healthy else "Health check returned false",
-        )
-
-    @app.post("/api/v1/onboarding/smoke-test", dependencies=[Depends(_require_admin())])
-    async def onboarding_smoke_test(
-        payload: OnboardingSmokeTestRequest,
-    ) -> dict[str, Any]:
-        from maxwell_daemon.backends.base import Message, MessageRole
-
-        if payload.backend_name not in daemon._router._instances:
-            raise HTTPException(
-                status_code=404, detail=f"Backend '{payload.backend_name}' not loaded"
-            )
-
-        backend = daemon._router._instances[payload.backend_name]
-        try:
-            resp = await backend.complete(
-                messages=[
-                    Message(
-                        role=MessageRole.USER,
-                        content="Hello! Please reply with exactly 'Hello world'.",
-                    )
-                ],
-                model=payload.model,
-                temperature=0.0,
-                max_tokens=10,
-            )
-            return {"status": "success", "response": resp.content}
-        except Exception as e:  # noqa: BLE001
-            return {"status": "error", "error": str(e)}
-
-    @app.get("/api/v1/tasks/{task_id}/artifacts", dependencies=[Depends(_require_viewer())])
-    async def list_task_artifacts(
-        task_id: str,
-        kind: Annotated[ArtifactKind | None, Query()] = None,
-    ) -> list[ArtifactView]:
-        return [
-            ArtifactView.from_artifact(artifact)
-            for artifact in daemon.list_task_artifacts(task_id, kind=kind)
-        ]
-
-    @app.get("/api/v1/tasks/{task_id}/actions", dependencies=[Depends(_require_viewer())])
-    async def list_task_actions(task_id: str) -> list[ActionView]:
-        return [ActionView.from_action(action) for action in daemon.list_task_actions(task_id)]
-
-    @app.get("/api/v1/actions", dependencies=[Depends(_require_viewer())])
-    async def list_actions(
-        status_filter: Annotated[ActionStatus | None, Query(alias="status")] = None,
-        task_id: Annotated[str | None, Query()] = None,
-        work_item_id: Annotated[str | None, Query()] = None,
-        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-    ) -> list[ActionView]:
-        return [
-            ActionView.from_action(action)
-            for action in daemon.list_actions(
-                status=status_filter,
-                task_id=task_id,
-                work_item_id=work_item_id,
-                limit=limit,
-            )
-        ]
-
-    @app.get("/api/v1/actions/{action_id}", dependencies=[Depends(_require_viewer())])
-    async def get_action(action_id: str) -> ActionView:
-        action = daemon.get_action(action_id)
-        if action is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "action not found")
-        return ActionView.from_action(action)
-
-    @app.post(
-        "/api/v1/actions/{action_id}/approve",
-        dependencies=[Depends(auth), Depends(_require_operator())],
+    _webhooks_routes.register(app, daemon, _require_viewer(), _require_operator(), auth)
+    _ssh_routes.register(
+        app,
+        daemon,
+        auth_token,
+        jwt_config,
+        _audit,
+        _require_admin(),
+        auth,
+        websocket_auth_or_close,
     )
-    async def approve_action(action_id: str) -> ActionView:
-        try:
-            action = daemon.approve_action(action_id, actor="api", audit=_audit)
-        except KeyError as exc:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "action not found") from exc
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        return ActionView.from_action(action)
-
-    @app.post(
-        "/api/v1/actions/{action_id}/reject",
-        dependencies=[Depends(auth), Depends(_require_operator())],
+    _events_routes.register(
+        app,
+        daemon,
+        auth_token,
+        jwt_config,
+        _audit,
+        api_cfg.websocket_max_connections,
+        websocket_auth_or_close,
     )
-    async def reject_action(action_id: str, payload: ActionRejectRequest) -> ActionView:
-        try:
-            action = daemon.reject_action(
-                action_id,
-                actor="api",
-                reason=payload.reason,
-                audit=_audit,
-            )
-        except KeyError as exc:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "action not found") from exc
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        return ActionView.from_action(action)
-
-    @app.post(
-        "/api/v1/work-items",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-        status_code=status.HTTP_201_CREATED,
-    )
-    async def create_work_item(payload: WorkItemCreate) -> WorkItemView:
-        item = WorkItem(
-            id=payload.id or uuid.uuid4().hex[:12],
-            title=payload.title,
-            body=payload.body,
-            repo=payload.repo,
-            source=payload.source,  # type: ignore[arg-type]
-            source_url=payload.source_url,
-            acceptance_criteria=payload.acceptance_criteria,
-            scope=payload.scope,
-            required_checks=payload.required_checks,
-            priority=payload.priority,
-            task_ids=payload.task_ids,
-        )
-        try:
-            saved = daemon.create_work_item(item)
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
-        return WorkItemView.from_item(saved)
-
-    @app.get("/api/v1/work-items", dependencies=[Depends(_require_viewer())])
-    async def list_work_items(
-        status_filter: Annotated[WorkItemStatus | None, Query(alias="status")] = None,
-        repo: Annotated[str | None, Query(pattern=REPO_PATTERN)] = None,
-        source: Annotated[str | None, Query(pattern=r"^(manual|github_issue|gaai|api)$")] = None,
-        max_priority: Annotated[int | None, Query(ge=0, le=1000)] = None,
-        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-    ) -> list[WorkItemView]:
-        items = daemon.list_work_items(
-            limit=limit,
-            status=status_filter,
-            repo=repo,
-            source=source,
-            max_priority=max_priority,
-        )
-        return [WorkItemView.from_item(item) for item in items]
-
-    @app.get("/api/v1/work-items/{item_id}", dependencies=[Depends(_require_viewer())])
-    async def get_work_item(item_id: str) -> WorkItemView:
-        item = daemon.get_work_item(item_id)
-        if item is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found")
-        return WorkItemView.from_item(item)
-
-    @app.get(
-        "/api/v1/work-items/{item_id}/artifacts",
-        dependencies=[Depends(_require_viewer())],
-    )
-    async def list_work_item_artifacts(
-        item_id: str,
-        kind: Annotated[ArtifactKind | None, Query()] = None,
-    ) -> list[ArtifactView]:
-        return [
-            ArtifactView.from_artifact(artifact)
-            for artifact in daemon.list_work_item_artifacts(item_id, kind=kind)
-        ]
-
-    @app.patch(
-        "/api/v1/work-items/{item_id}",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-    )
-    async def patch_work_item(item_id: str, payload: WorkItemPatch) -> WorkItemView:
-        item = daemon.get_work_item(item_id)
-        if item is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found")
-        updates = {
-            key: value
-            for key, value in payload.model_dump(exclude_unset=True).items()
-            if value is not None
-        }
-        updates["updated_at"] = datetime.now(timezone.utc)
-        try:
-            updated = daemon.update_work_item(WorkItem.model_validate(item.model_dump() | updates))
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
-        return WorkItemView.from_item(updated)
-
-    @app.post(
-        "/api/v1/work-items/{item_id}/transition",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-    )
-    async def transition_work_item_endpoint(
-        item_id: str,
-        payload: WorkItemTransition,
-    ) -> WorkItemView:
-        try:
-            item = daemon.transition_work_item(item_id, payload.status)
-        except KeyError:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found") from None
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        return WorkItemView.from_item(item)
-
-    @app.post(
-        "/api/v1/task-graphs",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-        status_code=status.HTTP_201_CREATED,
-    )
-    async def create_task_graph(payload: TaskGraphCreate) -> TaskGraphView:
-        try:
-            record = daemon.create_task_graph(
-                payload.work_item_id,
-                template=payload.template,
-                graph_id=payload.id,
-                labels=payload.labels,
-            )
-        except KeyError as exc:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "work item not found") from exc
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
-        return TaskGraphView.from_record(record)
-
-    @app.get("/api/v1/task-graphs", dependencies=[Depends(_require_viewer())])
-    async def list_task_graphs(
-        work_item_id: Annotated[str | None, Query()] = None,
-        status_filter: Annotated[GraphStatus | None, Query(alias="status")] = None,
-        limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-    ) -> list[TaskGraphView]:
-        return [
-            TaskGraphView.from_record(record)
-            for record in daemon.list_task_graphs(
-                work_item_id=work_item_id,
-                status=status_filter,
-                limit=limit,
-            )
-        ]
-
-    @app.get("/api/v1/task-graphs/{graph_id}", dependencies=[Depends(_require_viewer())])
-    async def get_task_graph(graph_id: str) -> TaskGraphView:
-        record = daemon.get_task_graph(graph_id)
-        if record is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task graph not found")
-        return TaskGraphView.from_record(record)
-
-    @app.post(
-        "/api/v1/task-graphs/{graph_id}/start",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-    )
-    async def start_task_graph(graph_id: str) -> TaskGraphView:
-        try:
-            record = daemon.start_task_graph(graph_id)
-        except KeyError as exc:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "task graph not found") from exc
-        except TaskGraphExecutorUnavailableError as exc:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        return TaskGraphView.from_record(record)
-
-    @app.post(
-        "/api/v1/memory/assemble",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-    )
-    async def assemble_memory(payload: AssembleMemoryRequest) -> dict[str, Any]:
-        """Assemble repo/task context from the coordinator's shared memory store."""
-        context = daemon._memory.assemble_context(
-            repo=payload.repo,
-            issue_title=payload.issue_title,
-            issue_body=payload.issue_body,
-            task_id=payload.task_id,
-            max_chars=payload.max_chars,
-        )
-        return {"context": context}
-
-    @app.post(
-        "/api/v1/memory/record",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-        status_code=status.HTTP_201_CREATED,
-    )
-    async def record_memory(payload: RecordMemoryOutcome) -> dict[str, Any]:
-        """Record a completed task's outcome to the coordinator's shared memory store."""
-        daemon._memory.record_outcome(
-            task_id=payload.task_id,
-            repo=payload.repo,
-            issue_number=payload.issue_number,
-            issue_title=payload.issue_title,
-            issue_body=payload.issue_body,
-            plan=payload.plan,
-            applied_diff=payload.applied_diff,
-            pr_url=payload.pr_url,
-            outcome=payload.outcome,
-        )
-        return {"status": "recorded"}
-
-    @app.post(
-        "/api/v1/issues",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-        status_code=status.HTTP_201_CREATED,
-    )
-    async def create_issue(payload: IssueCreate) -> dict[str, Any]:
-        """Create a GitHub issue. Optionally dispatch the daemon immediately."""
-        gh = _gh()
-        url = await gh.create_issue(
-            payload.repo,
-            title=payload.title,
-            body=payload.body,
-            labels=payload.labels or None,
-        )
-        result: dict[str, Any] = {"url": url}
-
-        if payload.dispatch:
-            import re
-
-            # Anchor to end-of-string so we only match the trailing issue
-            # number that ``gh issue create`` actually returns (one URL per
-            # line), not an ``/issues/NN`` fragment that happens to appear in
-            # the issue body or in a repo slug like ``org/x-issues``.
-            match = re.search(r"/issues/(\d+)/?\s*$", url.strip())
-            if match:
-                number = int(match.group(1))
-                task = daemon.submit_issue(
-                    repo=payload.repo, issue_number=number, mode=payload.mode
-                )
-                result["task_id"] = task.id
-        return result
-
-    @app.post(
-        "/api/v1/issues/dispatch",
-        dependencies=[Depends(auth), Depends(_require_admin())],
-        status_code=status.HTTP_202_ACCEPTED,
-    )
-    async def dispatch_issue(payload: IssueDispatch) -> TaskView:
-        """Queue an existing issue for the daemon to draft a PR for."""
-        task = daemon.submit_issue(
-            repo=payload.repo,
-            issue_number=payload.number,
-            mode=payload.mode,
-            backend=payload.backend,
-            model=payload.model,
-            priority=payload.priority,
-            dry_run=payload.dry_run,
-        )
-        return TaskView.from_task(task)
-
-    @app.get("/api/v1/artifacts/{artifact_id}", dependencies=[Depends(_require_viewer())])
-    async def get_artifact(artifact_id: str) -> ArtifactView:
-        artifact = daemon.get_artifact(artifact_id)
-        if artifact is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "artifact not found")
-        return ArtifactView.from_artifact(artifact)
-
-    @app.get(
-        "/api/v1/artifacts/{artifact_id}/content",
-        dependencies=[Depends(_require_viewer())],
-    )
-    async def get_artifact_content(artifact_id: str) -> Response:
-        artifact = daemon.get_artifact(artifact_id)
-        if artifact is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "artifact not found")
-        try:
-            content = daemon.read_artifact_bytes(artifact_id)
-        except ArtifactIntegrityError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        return Response(content=content, media_type=artifact.media_type)
-
-    @app.post(
-        "/api/v1/issues/ab-dispatch",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-        status_code=status.HTTP_202_ACCEPTED,
-    )
-    async def ab_dispatch_issue(payload: IssueAbDispatch) -> dict[str, Any]:
-        """Race multiple backends on the same issue — reviewer picks the winner."""
-        available = set(daemon.state().backends_available)
-        unknown = [b for b in payload.backends if b not in available]
-        if unknown:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                f"unknown backend(s): {', '.join(unknown)}; available: {sorted(available)}",
-            )
-        try:
-            tasks = daemon.submit_issue_ab(
-                repo=payload.repo,
-                issue_number=payload.number,
-                backends=payload.backends,
-                mode=payload.mode,
-                dry_run=payload.dry_run,
-            )
-        except ValueError as e:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
-        return {
-            "ab_group": tasks[0].ab_group,
-            "tasks": [TaskView.from_task(t).model_dump(mode="json") for t in tasks],
-        }
-
-    @app.get("/api/v1/templates", dependencies=[Depends(_require_viewer())])
-    async def list_templates() -> list[dict[str, Any]]:
-        """List all available task templates."""
-        return [t.model_dump() for t in daemon.template_store.list_templates()]
-
-    @app.get("/api/v1/templates/{template_id}", dependencies=[Depends(_require_viewer())])
-    async def get_template(template_id: str) -> dict[str, Any]:
-        """Fetch a specific task template by ID."""
-        t = daemon.template_store.get_template(template_id)
-        if not t:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Template {template_id} not found")
-        return cast(dict[str, Any], t.model_dump())
-
-    @app.post(
-        "/api/v1/issues/batch-dispatch",
-        dependencies=[Depends(auth), Depends(_require_operator())],
-        status_code=status.HTTP_202_ACCEPTED,
-    )
-    async def batch_dispatch_issues(payload: IssueBatchDispatch) -> dict[str, Any]:
-        """Queue up to 100 issues in one call.
-
-        Per-item failures (e.g. submit_issue raising ValueError) are recorded
-        but don't abort the batch — callers get back separate dispatched/
-        failed counts plus per-item details.
-        """
-        dispatched: list[TaskView] = []
-        failures: list[dict[str, Any]] = []
-        for item in payload.items:
-            try:
-                task = daemon.submit_issue(
-                    repo=item.repo,
-                    issue_number=item.number,
-                    mode=item.mode,
-                    backend=item.backend,
-                    model=item.model,
-                    priority=item.priority,
-                )
-                dispatched.append(TaskView.from_task(task))
-            except Exception as e:  # noqa: BLE001
-                failures.append({"repo": item.repo, "number": item.number, "error": str(e)})
-        return {
-            "dispatched": len(dispatched),
-            "failed": len(failures),
-            "tasks": [t.model_dump(mode="json") for t in dispatched],
-            "failures": failures,
-        }
-
-    @app.get("/api/v1/issues/{owner}/{name}", dependencies=[Depends(_require_viewer())])
-    async def list_repo_issues(
-        owner: str, name: str, state: str = "open", limit: int = 25
-    ) -> list[dict[str, Any]]:
-        gh = _gh()
-        issues = await gh.list_issues(f"{owner}/{name}", state=state, limit=limit)
-        return [
-            {
-                "number": i.number,
-                "title": i.title,
-                "state": i.state,
-                "labels": i.labels,
-                "url": i.url,
-            }
-            for i in issues
-        ]
-
-    @app.post("/api/v1/push/subscribe", dependencies=[Depends(_require_viewer())])
-    async def push_subscribe(request: Request) -> dict[str, str]:
-        """Register a Web Push subscription.
-
-        Currently a stub. Real implementation requires storing the subscription
-        and generating a VAPID keypair.
-        """
-        body = await request.json()
-        if not body or "endpoint" not in body:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid subscription")
-        return {
-            "status": "subscribed",
-            "message": "Push notification subscription recorded.",
-        }
-
-    @app.post("/api/v1/heartbeat", dependencies=[Depends(auth)])
-    async def worker_heartbeat(request: Request) -> dict[str, Any]:
-        """Workers POST here every heartbeat_seconds to stay registered as alive.
-
-        Body: {"machine_name": "<name>"}
-        Coordinators use last-seen timestamps to detect dead workers and requeue
-        their DISPATCHED tasks.
-        """
-        body = await request.json()
-        machine_name = str(body.get("machine_name") or "")
-        if not machine_name:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "machine_name required")
-        daemon.record_worker_heartbeat(machine_name)
-        return {
-            "machine_name": machine_name,
-            "recorded_at": datetime.now(timezone.utc).isoformat(),
-        }
-
-    @app.get("/api/v1/fleet", dependencies=[Depends(_require_viewer())])
-    async def fleet_overview() -> dict[str, Any]:
-        """Return fleet manifest data merged with live task counts per repo.
-
-        When role == "coordinator", also aggregates per-machine health summaries
-        from remote workers via RemoteDaemonClient health checks.
-        When role == "worker" or "standalone", shows local tasks only.
-        """
-        import os
-
-        import yaml
-
-        candidates = [
-            os.environ.get("MAXWELL_FLEET_CONFIG") or "",
-            "./fleet.yaml",
-            str(_Path.home() / ".maxwell-daemon" / "fleet.yaml"),
-        ]
-        raw: dict[str, Any] = {}
-        for path in candidates:
-            if path:
-                p = _Path(path)
-                if p.is_file():
-                    with p.open(encoding="utf-8") as fh:
-                        raw = yaml.safe_load(fh) or {}
-                    break
-
-        fleet_section: dict[str, Any] = raw.get("fleet", {})
-        repos_raw: list[dict[str, Any]] = raw.get("repos", [])
-
-        default_slots: int = fleet_section.get("default_slots", 2)
-        default_budget: float = fleet_section.get("default_budget_per_story", 0.50)
-        default_branch: str = fleet_section.get("default_pr_target_branch", "staging")
-        default_labels: list[str] = fleet_section.get("default_watch_labels", [])
-
-        tasks = list(daemon.state().tasks.values())
-        active_by_repo: dict[str, int] = {}
-        cost_by_repo: dict[str, float] = {}
-        for t in tasks:
-            repo_name = (t.issue_repo or "").split("/")[-1] or t.repo or ""
-            if not repo_name:
-                continue
-            if t.status.value in ("queued", "running", "dispatched"):
-                active_by_repo[repo_name] = active_by_repo.get(repo_name, 0) + 1
-            cost_by_repo[repo_name] = cost_by_repo.get(repo_name, 0.0) + t.cost_usd
-
-        # In coordinator mode, include per-machine health summary from the fleet config.
-        machines_summary: list[dict[str, Any]] = []
-        if daemon._config.role == "coordinator" and daemon._config.fleet_machines:
-            from maxwell_daemon.fleet.client import RemoteDaemonClient
-            from maxwell_daemon.fleet.dispatcher import MachineState
-
-            initial = tuple(
-                MachineState(
-                    name=m.name,
-                    host=m.host,
-                    port=m.port,
-                    capacity=m.capacity,
-                    tags=tuple(m.tags),
-                )
-                for m in daemon._config.fleet_machines
-            )
-            fleet_client = RemoteDaemonClient(auth_token=daemon._config.api_auth_token)
-            try:
-                probed = await fleet_client.refresh_all(initial)
-            except Exception:  # noqa: BLE001
-                probed = initial  # fall back to config data on probe failure
-
-            # Count tasks dispatched to each machine.
-            dispatched_per_machine: dict[str, int] = {}
-            for t in tasks:
-                from maxwell_daemon.daemon.runner import TaskStatus
-
-                if t.status is TaskStatus.DISPATCHED and t.dispatched_to:
-                    dispatched_per_machine[t.dispatched_to] = (
-                        dispatched_per_machine.get(t.dispatched_to, 0) + 1
-                    )
-
-            for m in probed:
-                last_seen = daemon._worker_last_seen.get(m.name)
-                machines_summary.append(
-                    {
-                        "name": m.name,
-                        "host": m.host,
-                        "port": m.port,
-                        "capacity": m.capacity,
-                        "healthy": m.healthy,
-                        "dispatched_tasks": dispatched_per_machine.get(m.name, 0),
-                        "last_seen": last_seen.isoformat() if last_seen else None,
-                    }
-                )
-
-        repos: list[dict[str, Any]] = []
-        for r in repos_raw:
-            name: str = r.get("name", "")
-            org: str = r.get("org", "")
-            repos.append(
-                {
-                    "name": name,
-                    "org": org,
-                    "github_url": (f"https://github.com/{org}/{name}" if org and name else None),
-                    "slots": r.get("slots", default_slots),
-                    "budget_per_story": r.get("budget_per_story", default_budget),
-                    "pr_target_branch": r.get("pr_target_branch", default_branch),
-                    "watch_labels": r.get("watch_labels", default_labels),
-                    "active_tasks": active_by_repo.get(name, 0),
-                    "total_cost_usd": round(cost_by_repo.get(name, 0.0), 6),
-                }
-            )
-
-        result: dict[str, Any] = {
-            "role": daemon._config.role,
-            "fleet": {
-                "name": fleet_section.get("name", ""),
-                "auto_promote_staging": fleet_section.get("auto_promote_staging", False),
-                "discovery_interval_seconds": fleet_section.get("discovery_interval_seconds", 300),
-            },
-            "repos": repos,
-        }
-        if machines_summary:
-            result["machines"] = machines_summary
-        return result
-
-    @app.get(
-        "/api/v1/fleet/capabilities",
-        dependencies=[Depends(_require_viewer())],
-    )
-    @app.get("/api/v1/fleet/nodes", dependencies=[Depends(_require_viewer())])
-    async def fleet_capabilities(
-        repo: str = Query(..., min_length=1),
-        tool: str = Query(..., min_length=1),
-        required_capability: Annotated[list[str] | None, Query()] = None,
-    ) -> dict[str, Any]:
-        """Return a redacted capability registry snapshot for dispatch decisions."""
-
-        status_view = daemon.fleet_registry.describe(
-            repo=repo,
-            tool=tool,
-            required_capabilities=tuple(required_capability or ()),
-        )
-        return status_view.to_dict()
-
-    @app.get("/api/v1/audit", dependencies=[Depends(_require_viewer())])
-    async def audit_log(
-        limit: int = Query(default=200, ge=1, le=10_000),
-        offset: int = Query(default=0, ge=0),
-    ) -> dict[str, Any]:
-        """Return paginated audit log entries (oldest first)."""
-        if _audit is None:
-            return {"entries": [], "audit_enabled": False}
-        return {
-            "entries": _audit.entries(limit=limit, offset=offset),
-            "audit_enabled": True,
-        }
-
-    @app.get("/api/v1/audit/verify", dependencies=[Depends(_require_viewer())])
-    async def audit_verify() -> dict[str, Any]:
-        """Verify the audit log hash chain.  Returns violations (empty = clean)."""
-        from maxwell_daemon.audit import verify_chain
-
-        if _audit is None or audit_log_path is None:
-            return {"clean": True, "violations": [], "audit_enabled": False}
-        violations = verify_chain(audit_log_path)
-        return {
-            "clean": len(violations) == 0,
-            "violations": violations,
-            "audit_enabled": True,
-        }
-
-    @app.post(
-        "/api/reload",
-        dependencies=[Depends(_require_operator())],
-    )
-    async def reload_config() -> dict[str, Any]:
-        """Reload daemon config from disk without restarting.
-
-        Atomically swaps the in-memory config and router so running workers are
-        not interrupted. Requires operator role (or static bearer token when JWT
-        is not configured).
-
-        Returns the path that was reloaded and an ISO-8601 timestamp.
-        """
-        try:
-            path = daemon.reload_config()
-        except FileNotFoundError as exc:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                f"config reload failed: {exc}",
-            ) from exc
-        return {
-            "status": "reloaded",
-            "config_path": str(path),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-    @app.get("/api/v1/workers", dependencies=[Depends(_require_viewer())])
-    async def workers_status() -> dict[str, Any]:
-        """Return current worker count and queue depth."""
-        state = daemon.state()
-        return {
-            "worker_count": state.worker_count,
-            "queue_depth": state.queue_depth,
-        }
-
-    @app.get(
-        "/api/v1/delegate-sessions",
-        dependencies=[Depends(_require_viewer())],
-        response_model=list[DelegateSessionSnapshot],
-    )
-    async def list_delegate_sessions(
-        limit: Annotated[int, Query(ge=1, le=200)] = 50,
-        delegate_id: Annotated[str | None, Query()] = None,
-        work_item_id: Annotated[str | None, Query()] = None,
-        task_id: Annotated[str | None, Query()] = None,
-        status: Annotated[str | None, Query()] = None,
-    ) -> list[DelegateSessionSnapshot]:
-        """List durable delegate sessions and their latest recovery evidence."""
-
-        parsed_status = _parse_delegate_status(status)
-        return daemon.delegate_lifecycle.list_sessions(
-            limit=limit,
-            delegate_id=delegate_id,
-            work_item_id=work_item_id,
-            task_id=task_id,
-            status=parsed_status,
-        )
-
-    @app.get(
-        "/api/v1/delegate-sessions/{session_id}",
-        dependencies=[Depends(_require_viewer())],
-        response_model=DelegateSessionSnapshot,
-    )
-    async def get_delegate_session(session_id: str) -> DelegateSessionSnapshot:
-        """Return one durable delegate session snapshot."""
-
-        snapshot = daemon.delegate_lifecycle.snapshot(session_id)
-        return snapshot
-
-    @app.put("/api/v1/workers", dependencies=[Depends(_require_operator())])
-    async def set_workers(count: int) -> dict[str, Any]:
-        """Rescale the worker pool to *count* workers."""
-        try:
-            await daemon.set_worker_count(count)
-        except ValueError as e:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
-        return {"worker_count": count}
-
-    @app.get("/api/v1/admin/prune", dependencies=[Depends(_require_admin())])
-    async def prune_history(
-        older_than_days: Annotated[int | None, Query(ge=0)] = None,
-    ) -> dict[str, Any]:
-        """Run retention pruning on demand."""
-        days = (
-            daemon._config.agent.task_retention_days if older_than_days is None else older_than_days
-        )
-        result = daemon.prune_retained_history(days)
-        audit_removed = _audit.rotate() if _audit is not None else 0
-        return {
-            "older_than_days": days,
-            "tasks_pruned": result["tasks"],
-            "ledger_records_pruned": result["ledger_records"],
-            "audit_entries_pruned": audit_removed,
-        }
-
-    @app.post("/api/v1/webhooks/github")
-    async def github_webhook(request: Request) -> Response:
-        """Receive GitHub webhook events.
-
-        Authenticated with HMAC-SHA256 via X-Hub-Signature-256. No bearer-token
-        dependency is applied so GitHub's retry delivery system isn't double-gated.
-        """
-        import json as _json
-
-        from fastapi.responses import JSONResponse
-
-        from maxwell_daemon.gh.webhook import (
-            WebhookConfig,
-            WebhookRoute,
-            WebhookRouter,
-            verify_signature,
-        )
-
-        body = await request.body()
-        signature = request.headers.get("x-hub-signature-256", "")
-        event_type = request.headers.get("x-github-event", "")
-
-        config_secret = daemon._config.github_webhook_secret_value()
-        if config_secret is None:
-            return JSONResponse(
-                {"detail": "webhooks disabled", "disabled": True},
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        if not verify_signature(config_secret, body, signature):
-            return JSONResponse(
-                {"detail": "invalid signature"},
-                status_code=status.HTTP_401_UNAUTHORIZED,
-            )
-
-        try:
-            payload = _json.loads(body) if body else {}
-        except _json.JSONDecodeError:
-            return JSONResponse(
-                {"detail": "malformed json"},
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        routes = [
-            WebhookRoute(
-                event=r.event,
-                action=r.action,
-                mode=r.mode,  # type: ignore[arg-type]
-                label=r.label,
-                trigger=r.trigger,
-            )
-            for r in daemon._config.github_routes
-        ]
-        router = WebhookRouter(
-            WebhookConfig(
-                secret=config_secret,
-                allowed_repos=daemon._config.github_allowed_repos,
-                routes=routes,
-            ),
-            daemon=daemon,
-        )
-        dispatches = router.handle(event_type=event_type, payload=payload)
-        return JSONResponse(
-            {"event": event_type, "dispatched": len(dispatches)},
-            status_code=status.HTTP_200_OK,
-        )
-
-    # ── Evals endpoints ──────────────────────────────────────────────────────
-
-    @app.post("/api/v1/evals/run", dependencies=[Depends(auth), Depends(_require_operator())])
-    async def run_evals(payload: EvalRunRequest) -> dict[str, Any]:
-        """Kick off an evaluation run."""
-        from maxwell_daemon.evals.runner import EvalRunner
-        from maxwell_daemon.evals.storage import EvalRunStore
-
-        output_root = daemon._config.memory.workspace_path / "evals"
-        runner = EvalRunner(output_root)
-        store = EvalRunStore(output_root)
-
-        def _do_run() -> None:
-            # Note: A fully featured run would matrix-multiply over the requested
-            # backends and models. For now, we kick the base suite via the runner.
-            run, results = runner.run(scenario_ids=[payload.suite_id], allow_non_fixture=True)
-            store.save(run, results)
-
-        asyncio.get_running_loop().run_in_executor(None, _do_run)
-        return {"status": "started", "suite_id": payload.suite_id}
-
-    @app.get("/api/v1/evals/leaderboard", dependencies=[Depends(_require_viewer())])
-    async def get_eval_leaderboard(suite_id: str) -> dict[str, Any]:
-        """Return sortable leaderboard results for a suite."""
-        from maxwell_daemon.evals.storage import EvalRunStore
-
-        output_root = daemon._config.memory.workspace_path / "evals"
-        store = EvalRunStore(output_root)
-        entries: list[EvalLeaderboardEntry] = []
-
-        if output_root.exists():
-            for run_dir in output_root.iterdir():
-                if not run_dir.is_dir():
-                    continue
-                backend = "unknown"
-                model = "unknown"
-                try:
-                    run = store.load_run(run_dir.name)
-                    if suite_id in run.scenario_ids:
-                        results = store.load_results(run_dir.name)
-                        for res in results:
-                            if res.scenario_id == suite_id:
-                                backend = "local"
-                                model = "scripted-agent"
-                                if run.external_agent_adapter_ids:
-                                    backend = run.external_agent_adapter_ids[0]
-                                if run.model_profile_ids:
-                                    model = run.model_profile_ids[0]
-                                entries.append(
-                                    EvalLeaderboardEntry(
-                                        backend=backend,
-                                        model=model,
-                                        score=res.score_total,
-                                        cost=sum(res.cost_summary.values()),
-                                        pass_rate=1.0 if res.status.value == "passed" else 0.0,
-                                    )
-                                )
-                except Exception:  # noqa: BLE001
-                    log.warning(
-                        "Failed to build leaderboard entry for %s/%s",
-                        backend,
-                        model,
-                        exc_info=True,
-                    )
-
-        return {"suite_id": suite_id, "entries": [e.model_dump() for e in entries]}
-
-    # ── Generic webhook trigger ──────────────────────────────────────────────
-
-    @app.post("/api/webhooks/trigger", dependencies=[Depends(_require_operator())])
-    async def generic_webhook_trigger(
-        request: Request,
-        body: Annotated[WebhookTriggerRequest, Body()],
-    ) -> Response:
-        """Trigger a task from any external source via a generic HTTP webhook.
-
-        Unlike the GitHub endpoint this route is bearer-token authenticated
-        (operator role).  Optionally supply ``X-Maxwell-Signature: sha256=<hex>``
-        for an additional HMAC-SHA256 layer using the daemon's
-        ``webhook_secret`` config value, and ``X-Idempotency-Key`` to prevent
-        duplicate task creation on webhook retries.
-        """
-        from fastapi.responses import JSONResponse
-
-        from maxwell_daemon.triggers.webhook import (
-            WebhookTriggerPayload,
-            enqueue_webhook_task,
-            verify_webhook_signature,
-        )
-
-        # Optional extra HMAC layer — only enforced when a secret is configured.
-        webhook_secret: str | None = getattr(daemon._config, "webhook_secret", None)
-        if webhook_secret:
-            raw_body = await request.body()
-            sig_header = request.headers.get("x-maxwell-signature", "")
-            if not verify_webhook_signature(webhook_secret, raw_body, sig_header):
-                return JSONResponse(
-                    {"detail": "invalid signature"},
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                )
-
-        idempotency_key: str | None = request.headers.get("x-idempotency-key")
-
-        payload = WebhookTriggerPayload(
-            prompt=body.prompt,
-            repo=body.repo,
-            backend=body.backend,
-            priority=body.priority,
-            idempotency_key=idempotency_key,
-        )
-        result = enqueue_webhook_task(payload, daemon=daemon)
-
-        if result.error:
-            return JSONResponse(
-                {"detail": result.error},
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        if result.duplicate:
-            return JSONResponse(
-                {"duplicate": True, "task_id": None},
-                status_code=status.HTTP_200_OK,
-            )
-        return JSONResponse(
-            {"task_id": result.task_id, "duplicate": False},
-            status_code=status.HTTP_202_ACCEPTED,
-        )
-
-    # ── SSH endpoints ────────────────────────────────────────────────────────
-    # asyncssh is optional (pip install maxwell-daemon[ssh]).  All SSH routes
-    # return 503 if it is not installed.
-
-    _ssh_pool_ref: dict[str, Any] = {}  # lazy singleton
-
-    def _ssh_pool() -> Any:
-        if "pool" not in _ssh_pool_ref:
-            try:
-                # This import is a presence check for optional SSH dependencies.
-                # It is assigned to a private name to avoid unused-import warning.
-                import asyncssh as _asyncssh  # noqa: F401 — presence check only
-
-                from maxwell_daemon.ssh.session import SSHSessionPool
-
-                _ssh_pool_ref["pool"] = SSHSessionPool()
-            except ImportError:
-                _ssh_pool_ref["pool"] = None
-        return _ssh_pool_ref.get("pool")
-
-    def _ssh_unavailable() -> Any:
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(
-            {"detail": "SSH support not installed — pip install maxwell-daemon[ssh]"},
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-
-    @app.get("/api/v1/ssh/sessions", dependencies=[Depends(_require_admin())])
-    async def ssh_sessions() -> Any:
-        """List active SSH sessions."""
-        pool = _ssh_pool()
-        if pool is None:
-            return _ssh_unavailable()
-        return {"sessions": pool.sessions()}
-
-    @app.get("/api/v1/ssh/keys", dependencies=[Depends(_require_admin())])
-    async def ssh_list_keys() -> Any:
-        """List machines that have stored SSH keys."""
-        try:
-            from maxwell_daemon.ssh.keys import SSHKeyStore
-        except ImportError:
-            return _ssh_unavailable()
-        store = SSHKeyStore()
-        return {"machines": store.list_machines()}
-
-    @app.get("/api/v1/ssh/keys/{machine}", dependencies=[Depends(_require_admin())])
-    async def ssh_get_key(machine: str) -> Any:
-        """Return the public key for *machine*, generating it if absent."""
-        try:
-            from maxwell_daemon.ssh.keys import SSHKeyStore
-        except ImportError:
-            return _ssh_unavailable()
-        store = SSHKeyStore()
-        _, pub = store.get_or_generate(machine)
-        return {"machine": machine, "public_key": pub}
-
-    @app.delete("/api/v1/ssh/keys/{machine}", dependencies=[Depends(_require_admin())])
-    async def ssh_delete_key(machine: str) -> Any:
-        """Remove stored SSH keys for *machine*."""
-        try:
-            from maxwell_daemon.ssh.keys import SSHKeyStore
-        except ImportError:
-            return _ssh_unavailable()
-        SSHKeyStore().remove(machine)
-        return {"machine": machine, "deleted": True}
-
-    @app.post("/api/v1/ssh/connect", dependencies=[Depends(auth), Depends(_require_admin())])
-    async def ssh_connect(payload: SSHConnectRequest) -> Any:
-        """Open (or reuse) an SSH session and return its summary."""
-        pool = _ssh_pool()
-        if pool is None:
-            return _ssh_unavailable()
-        session = await pool.get(
-            payload.host,
-            user=payload.user,
-            port=payload.port,
-            password=payload.password,
-        )
-        return {
-            "host": payload.host,
-            "port": payload.port,
-            "user": payload.user,
-            "age_seconds": round(session.age_seconds, 1),
-        }
-
-    @app.post("/api/v1/ssh/run", dependencies=[Depends(auth), Depends(_require_admin())])
-    async def ssh_run(payload: SSHRunRequest) -> Any:
-        """Run a command on a remote machine and return its output."""
-        pool = _ssh_pool()
-        if pool is None:
-            return _ssh_unavailable()
-        session = await pool.get(payload.host, user=payload.user, port=payload.port)
-        result = await session.run(payload.command, timeout=payload.timeout_seconds)
-        return {
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "exit_code": result.exit_code,
-        }
-
-    @app.get("/api/v1/ssh/files", dependencies=[Depends(_require_admin())])
-    async def ssh_list_files(
-        host: str = Query(...),
-        user: str = Query(...),
-        port: int = Query(default=22),
-        path: str = Query(default="/"),
-    ) -> Any:
-        """List files on a remote machine via SFTP."""
-        pool = _ssh_pool()
-        if pool is None:
-            return _ssh_unavailable()
-        session = await pool.get(host, user=user, port=port)
-        entries = await session.list_dir(path)
-        return {
-            "path": path,
-            "entries": [
-                {
-                    "name": e.name,
-                    "path": e.path,
-                    "size": e.size,
-                    "is_dir": e.is_dir,
-                    "modified": e.modified,
-                }
-                for e in entries
-            ],
-        }
-
-    # Whitelist of shell commands that are permitted over the SSH WebSocket.
-    # Only bare command names (no arguments) are accepted — the interactive
-    # shell session itself handles all subsequent user input.
-    _ssh_allowed_commands: frozenset[str] = frozenset({"bash", "sh", "zsh", "fish", "rbash"})
-
-    # WebSocket connection counter (in-process, reset on restart).
-    # Guards against connection exhaustion when api.websocket_max_connections > 0.
-    _ws_connection_count: int = 0
-    _ws_connection_lock = asyncio.Lock()
-    _ws_max: int = daemon._config.api.websocket_max_connections  # 0 = unlimited
-
-    async def _ws_acquire() -> bool:
-        """Increment WS counter; return False if limit reached (#796)."""
-        nonlocal _ws_connection_count
-        if _ws_max == 0:
-            async with _ws_connection_lock:
-                _ws_connection_count += 1
-            return True
-        async with _ws_connection_lock:
-            if _ws_connection_count >= _ws_max:
-                return False
-            _ws_connection_count += 1
-        return True
-
-    async def _ws_release() -> None:
-        nonlocal _ws_connection_count
-        async with _ws_connection_lock:
-            _ws_connection_count = max(0, _ws_connection_count - 1)
-
-    @app.websocket("/api/v1/ssh/shell")
-    async def ssh_shell_ws(ws: WebSocket) -> None:
-        """Interactive shell over WebSocket.
-
-        Query params: ``host``, ``user``, ``port`` (default 22), ``token``
-        (bearer token for auth), ``command`` (default ``bash``).
-
-        The ``command`` parameter is validated against an explicit whitelist of
-        permitted shell executables.  Arbitrary shell strings, pipes, and
-        redirections are rejected to prevent remote code execution via command
-        injection (CVE / Issue #138).
-
-        Frames: text frames sent from client are written to stdin.
-        Text frames sent to client contain stdout/stderr chunks.
-        Session ends when the command exits or the client disconnects.
-        Max session duration: 1 hour.
-        """
-        import json as _json_mod
-
-        if not await _websocket_auth_or_close(
-            ws,
-            Role.admin,
-            auth_token,
-            jwt_config,
-            getattr(daemon, "_auth_store", None),
-            _audit,
-        ):
-            return
-
-        pool = _ssh_pool()
-        if pool is None:
-            await ws.accept()
-            await ws.send_text('{"error": "SSH not installed"}')
-            await ws.close(code=1011)
-            return
-
-        host = ws.query_params.get("host") or ""
-        user = ws.query_params.get("user") or ""
-
-        # Validate port — must be a valid integer in 1-65535
-        raw_port = ws.query_params.get("port") or "22"
-        try:
-            port = int(raw_port)
-            if not (1 <= port <= 65535):
-                raise ValueError("port out of range")
-        except ValueError:
-            await ws.accept()
-            await ws.send_text('{"error": "invalid port"}')
-            await ws.close(code=1008)
-            return
-
-        # Validate command against whitelist — reject anything that is not a
-        # known-safe shell executable name.  This prevents injection of shell
-        # metacharacters, pipes, subshells, or arbitrary binaries.
-        raw_command = ws.query_params.get("command") or "bash"
-        command = raw_command.strip()
-        if command not in _ssh_allowed_commands:
-            await ws.accept()
-            await ws.send_text(
-                _json_mod.dumps(
-                    {
-                        "error": (
-                            f"command {command!r} is not permitted; "
-                            f"allowed: {sorted(_ssh_allowed_commands)}"
-                        )
-                    }
-                )
-            )
-            await ws.close(code=1008)
-            return
-
-        if not host or not user:
-            await ws.accept()
-            await ws.send_text('{"error": "host and user are required"}')
-            await ws.close(code=1008)
-            return
-
-        await ws.accept()
-        try:
-            session = await pool.get(host, user=user, port=port)
-            # Pass command as a single-element list so asyncssh treats it as an
-            # exec request rather than a shell string — no shell interpolation.
-            async for chunk in session.shell_stream(command):
-                await ws.send_bytes(chunk)
-        except WebSocketDisconnect:
-            return
-        except Exception as exc:  # noqa: BLE001
-            await ws.send_text(_json_mod.dumps({"error": str(exc)}))
-            await ws.close(code=1011)
-
-    @app.websocket("/api/v1/events")
-    async def events_ws(ws: WebSocket) -> None:
-        """Stream daemon events as JSON frames to the client.
-
-        Clients pass ``?token=...`` as a query param because browser WebSocket
-        APIs can't set headers. Static tokens grant admin; JWT tokens must have
-        viewer-or-higher privileges. Terminate at a proxy for TLS.
-        """
-        if not await _ws_acquire():
-            await ws.close(code=1013)  # 1013 = Try Again Later
-            return
-        try:
-            if not await _websocket_auth_or_close(
-                ws,
-                Role.viewer,
-                auth_token,
-                jwt_config,
-                getattr(daemon, "_auth_store", None),
-                _audit,
-            ):
-                return
-            await ws.accept()
-            try:
-                async for event in daemon.events.subscribe(queue_size=64):
-                    await ws.send_text(event.to_json())
-            except WebSocketDisconnect:
-                return
-            except Exception:  # noqa: BLE001
-                await ws.close(code=1011)
-        finally:
-            await _ws_release()
 
     return app

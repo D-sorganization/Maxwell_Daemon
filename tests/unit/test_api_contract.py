@@ -509,8 +509,10 @@ class TestApiEvalLeaderboard:
 
         monkeypatch.setattr(EvalRunStore, "load_run", _mock_load_run)
 
+        from maxwell_daemon.api.routes import webhooks as _webhooks_routes
+
         mock_log = MagicMock()
-        monkeypatch.setattr(server_module, "log", mock_log)
+        monkeypatch.setattr(_webhooks_routes, "log", mock_log)
 
         r = auth_client.get(
             "/api/v1/evals/leaderboard?suite_id=test-suite",
