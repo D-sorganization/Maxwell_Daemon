@@ -8,8 +8,6 @@ name: Local-Only Workflow Runner Guard
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/**"
   push:
     branches: [main]
     paths:
@@ -25,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5

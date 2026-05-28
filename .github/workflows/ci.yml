@@ -20,8 +20,8 @@ jobs:
     name: Reject hosted runner routing
     runs-on: d-sorg-fleet
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Run local-only workflow guard
@@ -60,10 +60,10 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - name: Purge stale untracked files (self-hosted runner hygiene)
         run: git clean -fdx --exclude=.venv
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -86,8 +86,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -117,8 +117,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -147,7 +147,7 @@ jobs:
         run: .venv/bin/python -m pytest tests/integration/ --no-cov -p no:xvfb --timeout=300
       - name: Upload coverage artifact
         if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-xml
           path: coverage.xml
@@ -156,7 +156,7 @@ jobs:
         run: .venv/bin/python -m pytest benchmarks/ --benchmark-only --no-cov --benchmark-json=benchmark-results.json
       - name: Upload benchmark results
         if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: benchmark-results.json
@@ -173,8 +173,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -194,8 +194,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -213,8 +213,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -230,8 +230,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -248,8 +248,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -272,15 +272,15 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
       - run: python -m pip install uv
       - name: Verify uv.lock is fresh
         run: uv lock --check
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: 'npm'
@@ -300,8 +300,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -309,7 +309,7 @@ jobs:
       - run: uv venv .venv --python $(which python)
       - run: uv pip install build
       - run: .venv/bin/python -m build
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
@@ -337,8 +337,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -358,7 +358,7 @@ jobs:
               print("No wheel artifact found in dist/")
               sys.exit(1)
           subprocess.check_call([sys.executable, "-m", "pip", "install", wheels[0]])
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: 'npm'

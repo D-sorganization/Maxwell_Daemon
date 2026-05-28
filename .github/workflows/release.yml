@@ -51,8 +51,8 @@ jobs:
       name: pypi
       url: https://pypi.org/p/maxwell-daemon
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -73,7 +73,7 @@ jobs:
             dist/*.whl
             dist/sbom.json
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
