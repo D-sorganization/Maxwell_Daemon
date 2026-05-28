@@ -217,3 +217,8 @@ exclude_dirs = ["tests", "docs"]
 #       not cryptographic purposes.
 # B404/B603 are about subprocess — we deliberately use subprocess with argv lists.
 skips = ["B101", "B311", "B404", "B603"]
+
+[tool.uv]
+# cffi 2.0.0 ships a wheel with malformed METADATA (Name field missing),
+# causing uv to fail on Python 3.10. Pin below 2.0 until upstream fixes it.
+constraint-dependencies = ["cffi<2.0.0"]
