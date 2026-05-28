@@ -70,6 +70,7 @@ from maxwell_daemon.core.work_items import (
 )
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task
+from maxwell_daemon.daemon.task_models import DuplicateTaskIdError
 from maxwell_daemon.director import (
     GraphStatus,
     NodeRun,
@@ -1105,7 +1106,11 @@ def create_app(  # noqa: C901
                 repo=payload.repo,
                 task_id=payload.idempotency_key,
             )
-        except Exception as exc:
+        except DuplicateTaskIdError as exc:
+            # 409 Conflict: caller supplied an idempotency_key that already exists.
+            # Narrowed from bare `except Exception` per epic #896 §1.2 — only
+            # DuplicateTaskIdError warrants 409; storage/runtime failures should
+            # surface as 5xx, not be silently collapsed to a misleading 409.
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
         return DispatchResponse(

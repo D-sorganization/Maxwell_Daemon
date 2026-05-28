@@ -372,7 +372,12 @@ class AuditLogger:
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, self._path)
-        except Exception:
+        except OSError:
+            # Narrow from `except Exception` per epic #896 §1.2 — the only
+            # failures here are OS-level I/O errors from write/fsync/replace.
+            # Non-OS exceptions (e.g. MemoryError) propagate unchanged via the
+            # outer `raise`; catching only OSError avoids masking programming
+            # errors that should surface during development.
             os.unlink(tmp)
             raise
 
