@@ -8,15 +8,14 @@ on:
   schedule:
     - cron: '37 20 * * 1'
 
-env:
-  AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
-
 jobs:
 
 
 
 
   pick-runner:
+    env:
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     runs-on: d-sorg-fleet
     timeout-minutes: 2
     outputs:
@@ -36,6 +35,8 @@ jobs:
           echo "Self-hosted runner claimed this job - routing locally"
 
   analyze:
+    env:
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 90
     name: Analyze
     needs: pick-runner

@@ -8,15 +8,14 @@ permissions:
   contents: write
   id-token: write
 
-env:
-  AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
-
 jobs:
 
 
 
 
   pick-runner:
+    env:
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     runs-on: d-sorg-fleet
     timeout-minutes: 2
     outputs:
@@ -46,6 +45,8 @@ jobs:
           fi
 
   build-and-publish:
+    env:
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 60
     name: Build and publish to PyPI
     needs: pick-runner

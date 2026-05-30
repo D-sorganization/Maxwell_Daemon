@@ -18,15 +18,14 @@ concurrency:
   group: docs-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
-
 jobs:
 
 
 
 
   pick-runner:
+    env:
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     runs-on: d-sorg-fleet
     timeout-minutes: 2
     outputs:
@@ -56,6 +55,8 @@ jobs:
           fi
 
   build:
+    env:
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 60
     name: Build MkDocs site
     needs: pick-runner
@@ -84,6 +85,8 @@ jobs:
           path: site
 
   deploy:
+    env:
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 30
     name: Deploy GitHub Pages
     needs: [pick-runner, build]

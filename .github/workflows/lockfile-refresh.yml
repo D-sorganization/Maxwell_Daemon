@@ -5,15 +5,14 @@ on:
     - cron: '0 4 * * *'  # 4 AM UTC daily
   workflow_dispatch:
 
-env:
-  AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
-
 jobs:
 
 
 
 
   pick-runner:
+    env:
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     runs-on: d-sorg-fleet
     timeout-minutes: 2
     outputs:
@@ -43,6 +42,8 @@ jobs:
           fi
 
   refresh:
+    env:
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 30
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
