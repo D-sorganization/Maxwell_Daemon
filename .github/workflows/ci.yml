@@ -46,6 +46,18 @@ jobs:
       runner: ${{ steps.check.outputs.runner }}
     steps:
       - uses: actions/checkout@v4
+      - name: Runner Diagnostics
+        shell: bash
+        run: |
+          echo "=== Disk Space ==="
+          df -h
+          echo "=== Directory Permissions ==="
+          ls -la /home/dieterolson/actions-runners-nvme/ || true
+          ls -la /home/dieterolson/actions-runners-nvme/.shared-tool-cache || true
+          echo "=== Whoami ==="
+          whoami
+          echo "=== Temp Directory ==="
+          ls -la /home/dieterolson/actions-runners-nvme/runner-*/_work/_temp || true
       - name: Force-clean stale Python tool cache (NVMe runners)
         if: runner.os != 'Windows' && github.event.inputs.clean_cache == 'true'
         shell: bash
