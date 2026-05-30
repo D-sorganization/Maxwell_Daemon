@@ -22,8 +22,6 @@ permissions:
 
 jobs:
   local-only-workflows:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 30
     name: Reject hosted runner routing
     needs: pick-runner
@@ -31,6 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
       - name: Purge pip cache
@@ -42,8 +42,6 @@ jobs:
           python scripts/check_local_only_workflows.py
 
   pick-runner:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     runs-on: d-sorg-fleet
     timeout-minutes: 5
     outputs:
@@ -63,6 +61,8 @@ jobs:
           echo "=== Temp Directory ==="
           ls -la /home/dieterolson/actions-runners-nvme/runner-*/_work/_temp || true
       - name: Force-clean stale Python tool cache (NVMe runners)
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         if: runner.os != 'Windows' && github.event.inputs.clean_cache == 'true'
         shell: bash
         run: |
@@ -74,14 +74,20 @@ jobs:
             fi
           done
       - name: Pre-populate Python 3.10 cache
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - name: Pre-populate Python 3.11 cache
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Pre-populate Python 3.12 cache
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -99,8 +105,6 @@ jobs:
           echo "Desktop fleet runner claimed this job - routing locally"
 
   lint:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 20
     name: Lint (ruff)
     needs: pick-runner
@@ -115,6 +119,8 @@ jobs:
       - name: Purge stale untracked files (self-hosted runner hygiene)
         run: git clean -fdx --exclude=.venv
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -129,8 +135,6 @@ jobs:
         run: .venv/bin/python -m ruff format --check .
 
   typecheck:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 30
     name: Typecheck (mypy --strict)
     needs: pick-runner
@@ -143,6 +147,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -162,7 +168,6 @@ jobs:
     runs-on: [self-hosted, Linux, X64, d-sorg-fleet]
     timeout-minutes: 45
     env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
       BASELINE_TEST_COUNT: 2471
     strategy:
       fail-fast: false
@@ -177,6 +182,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -222,8 +229,6 @@ jobs:
           path: benchmark-results.json
 
   coverage-floor:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 30
     name: Coverage floor (ratchet)
     needs: [pick-runner, test]
@@ -237,6 +242,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -248,8 +255,6 @@ jobs:
       - run: python scripts/check_coverage_floor.py --xml coverage.xml
 
   file-size-budget:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 30
     name: File size budget
     needs: pick-runner
@@ -262,6 +267,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -271,8 +278,6 @@ jobs:
 
 
   noqa-ratchet:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 30
     name: noqa ratchet (BLE001 / C901)
     needs: pick-runner
@@ -285,6 +290,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -292,8 +299,6 @@ jobs:
         run: python -m pip cache purge || true
       - run: python scripts/check_noqa_ratchet.py
   todo-fixme:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 30
     name: No untracked TODO/FIXME
     needs: pick-runner
@@ -306,6 +311,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -314,8 +321,6 @@ jobs:
       - run: python scripts/check_todo_fixme.py maxwell_daemon
 
   security:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 20
     name: Security scans
     needs: pick-runner
@@ -328,6 +333,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -342,8 +349,6 @@ jobs:
         run: .venv/bin/python -m pip_audit . --desc --strict
 
   dependency-locks:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 60
     name: Dependency locks
     needs: pick-runner
@@ -356,6 +361,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -374,8 +381,6 @@ jobs:
         run: npm ci --ignore-scripts
 
   build:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 60
     name: Build distribution
     needs: pick-runner
@@ -388,6 +393,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -403,8 +410,6 @@ jobs:
           path: dist/
 
   desktop-smoke:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     timeout-minutes: 60
     name: Desktop launcher smoke (${{ matrix.os }})
     needs: build
@@ -429,6 +434,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -473,8 +480,6 @@ jobs:
         env:
           MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "60000"
   quality-gate:
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
     name: quality-gate
     timeout-minutes: 5
     needs:
