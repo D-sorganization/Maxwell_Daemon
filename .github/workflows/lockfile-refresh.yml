@@ -5,6 +5,9 @@ on:
     - cron: '0 4 * * *'  # 4 AM UTC daily
   workflow_dispatch:
 
+env:
+  AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
+
 jobs:
 
 

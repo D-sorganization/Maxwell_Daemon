@@ -49,6 +49,9 @@ concurrency:
   group: maxwell-daemon-fleet-dispatch
   cancel-in-progress: true
 
+env:
+  AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
+
 jobs:
 
 

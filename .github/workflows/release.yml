@@ -8,6 +8,9 @@ permissions:
   contents: write
   id-token: write
 
+env:
+  AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
+
 jobs:
 
 
