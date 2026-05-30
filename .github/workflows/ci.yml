@@ -18,12 +18,15 @@ jobs:
   local-only-workflows:
     timeout-minutes: 30
     name: Reject hosted runner routing
-    runs-on: d-sorg-fleet
+    needs: pick-runner
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - name: Run local-only workflow guard
         shell: bash
         run: |
@@ -32,10 +35,33 @@ jobs:
 
   pick-runner:
     runs-on: d-sorg-fleet
-    timeout-minutes: 2
+    timeout-minutes: 5
     outputs:
       runner: ${{ steps.check.outputs.runner }}
     steps:
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo mv "$cache_root/Python" "$cache_root/Python_stale_$RANDOM" || true
+              sudo rm -rf "$cache_root/Python_stale_$RANDOM" || true
+            fi
+          done
+      - name: Pre-populate Python 3.10 cache
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Pre-populate Python 3.11 cache
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Pre-populate Python 3.12 cache
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Check for self-hosted runner
         id: check
         shell: bash
@@ -67,6 +93,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
@@ -91,6 +119,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
@@ -122,6 +152,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
@@ -178,6 +210,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - uses: actions/download-artifact@v4
         with:
           name: coverage-xml
@@ -199,6 +233,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: python scripts/check_file_size_budget.py
 
 
@@ -218,6 +254,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: python scripts/check_noqa_ratchet.py
   todo-fixme:
     timeout-minutes: 30
@@ -235,6 +273,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: python scripts/check_todo_fixme.py maxwell_daemon
 
   security:
@@ -253,6 +293,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv pip install bandit pip-audit
@@ -277,6 +319,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: python -m pip install uv
       - name: Verify uv.lock is fresh
         run: uv lock --check
@@ -305,6 +349,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv pip install build
@@ -342,6 +388,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - uses: actions/download-artifact@v4
         with:
           name: dist

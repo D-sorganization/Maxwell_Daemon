@@ -62,6 +62,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Update uv lockfile
         run: uv lock --upgrade
