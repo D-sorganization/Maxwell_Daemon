@@ -433,7 +433,9 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        if: runner.os != 'Windows'
+        uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
@@ -465,6 +467,14 @@ jobs:
       - name: Install desktop dependencies
         working-directory: apps/desktop-electron
         run: npm ci
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          if sudo -n true 2>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libdbus-1-3 libxcb1 libxkbcommon0 libxdg-basedir1 libpango-1.0-0 libcairo2 libasound2
+          else
+            echo "No passwordless sudo, assuming libraries are pre-installed"
+          fi
       - name: Run desktop launch smoke (Linux)
         if: runner.os == 'Linux'
         working-directory: apps/desktop-electron
