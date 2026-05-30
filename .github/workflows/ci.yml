@@ -21,6 +21,16 @@ jobs:
     runs-on: d-sorg-fleet
     steps:
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -63,6 +73,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Purge stale untracked files (self-hosted runner hygiene)
         run: git clean -fdx --exclude=.venv
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -87,6 +107,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -118,6 +148,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -174,6 +214,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -195,6 +245,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -214,6 +274,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -231,6 +301,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -249,6 +329,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -273,6 +363,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -301,6 +401,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -338,6 +448,16 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo rm -rf "$cache_root/Python"
+            fi
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
