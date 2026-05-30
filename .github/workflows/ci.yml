@@ -39,6 +39,7 @@ jobs:
     outputs:
       runner: ${{ steps.check.outputs.runner }}
     steps:
+      - uses: actions/checkout@v4
       - name: Force-clean stale Python tool cache (NVMe runners)
         if: runner.os != 'Windows'
         shell: bash
