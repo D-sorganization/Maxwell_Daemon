@@ -68,6 +68,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: python -m venv .venv
       - run: .venv/bin/python -m pip install --upgrade pip
       - run: .venv/bin/python -m pip install ".[docs]"
