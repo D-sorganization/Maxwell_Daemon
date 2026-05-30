@@ -471,7 +471,15 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           if sudo -n true 2>/dev/null; then
-            sudo apt-get update && sudo apt-get install -y libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libdbus-1-3 libxcb1 libxkbcommon0 libxdg-basedir1 libpango-1.0-0 libcairo2 libasound2
+            sudo apt-get update || true
+            # libasound2 was renamed to libasound2t64 in the Ubuntu 24.04
+            # time_t64 transition; install whichever exists. Install each
+            # package best-effort so a single unavailable candidate on a newer
+            # runner image does not fail the whole job — the smoke step below
+            # surfaces any library that is genuinely missing.
+            for pkg in libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libdbus-1-3 libxcb1 libxkbcommon0 libxdg-basedir1 libpango-1.0-0 libcairo2 libasound2t64 libasound2; do
+              sudo apt-get install -y "$pkg" || echo "Skipping unavailable package: $pkg"
+            done
           else
             echo "No passwordless sudo, assuming libraries are pre-installed"
           fi
