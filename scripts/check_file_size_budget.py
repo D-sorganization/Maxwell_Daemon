@@ -54,7 +54,7 @@ def _changed_python_files(repo_root: Path, base_ref: str) -> list[Path]:
 
 
 def _all_python_files(repo_root: Path) -> list[Path]:
-    return [p for p in (repo_root / "maxwell-daemon").rglob("*.py") if p.is_file()]
+    return [p for p in (repo_root / "maxwell_daemon").rglob("*.py") if p.is_file()]
 
 
 def _check(paths: list[Path], repo_root: Path, config: dict[str, Any]) -> list[str]:
@@ -70,7 +70,7 @@ def _check(paths: list[Path], repo_root: Path, config: dict[str, Any]) -> list[s
         if rel in exc_map:
             exc = exc_map[rel]
             print(
-                f"⚠ {rel} ({n} lines) exempt until {exc['expires_on']} "
+                f"WARNING: {rel} ({n} lines) exempt until {exc['expires_on']} "
                 f"- owner: {exc['owner']}, reason: {exc['reason']}"
             )
             continue
