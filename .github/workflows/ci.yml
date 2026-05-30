@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      clean_cache:
+        description: "Force-clean stale Python tool cache"
+        required: false
+        default: "false"
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,6 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
       - name: Purge pip cache
@@ -39,8 +47,23 @@ jobs:
     outputs:
       runner: ${{ steps.check.outputs.runner }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Runner Diagnostics
+        shell: bash
+        run: |
+          echo "=== Disk Space ==="
+          df -h
+          echo "=== Directory Permissions ==="
+          ls -la /home/dieterolson/actions-runners-nvme/ || true
+          ls -la /home/dieterolson/actions-runners-nvme/.shared-tool-cache || true
+          echo "=== Whoami ==="
+          whoami
+          echo "=== Temp Directory ==="
+          ls -la /home/dieterolson/actions-runners-nvme/runner-*/_work/_temp || true
       - name: Force-clean stale Python tool cache (NVMe runners)
-        if: runner.os != 'Windows'
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
+        if: runner.os != 'Windows' && github.event.inputs.clean_cache == 'true'
         shell: bash
         run: |
           for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
@@ -51,14 +74,20 @@ jobs:
             fi
           done
       - name: Pre-populate Python 3.10 cache
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - name: Pre-populate Python 3.11 cache
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Pre-populate Python 3.12 cache
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -90,6 +119,8 @@ jobs:
       - name: Purge stale untracked files (self-hosted runner hygiene)
         run: git clean -fdx --exclude=.venv
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -116,6 +147,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -149,6 +182,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -207,6 +242,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -230,6 +267,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -251,6 +290,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -270,6 +311,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -290,6 +333,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -316,6 +361,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -346,6 +393,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -385,6 +434,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'

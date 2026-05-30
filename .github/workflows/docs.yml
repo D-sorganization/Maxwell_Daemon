@@ -65,6 +65,8 @@ jobs:
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'

@@ -52,6 +52,8 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python
+      env:
+        AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
       if: matrix.language == 'python'
       uses: actions/setup-python@v5
       with:
