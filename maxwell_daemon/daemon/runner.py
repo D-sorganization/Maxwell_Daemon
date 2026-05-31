@@ -171,7 +171,9 @@ class Daemon:
             events=self._events,
             on_side_effect_started=self.mark_task_side_effects_started,
         )
-        default_delegate_store = delegate_lifecycle_store_path or storage_root / "delegate_sessions.db"
+        default_delegate_store = (
+            delegate_lifecycle_store_path or storage_root / "delegate_sessions.db"
+        )
         self._delegate_lifecycle = DelegateLifecycleService(
             DelegateSessionStore(default_delegate_store)
         )
