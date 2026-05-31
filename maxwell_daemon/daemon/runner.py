@@ -61,6 +61,7 @@ from maxwell_daemon.events import Event, EventBus, EventKind, attach_observabili
 from maxwell_daemon.fleet.capabilities import InMemoryFleetCapabilityRegistry
 from maxwell_daemon.logging import get_logger
 from maxwell_daemon.metrics import record_request
+from maxwell_daemon.tracing import span as _trace_span
 
 log = get_logger("maxwell_daemon.daemon")
 
@@ -130,23 +131,28 @@ class Daemon:
 
         self._router = BackendRouter(config, mcp_manager=self._mcp_manager)
         self._fleet_registry = InMemoryFleetCapabilityRegistry()
-        self._ledger = CostLedger(
-            ledger_path or Path.home() / ".local/share/maxwell-daemon/ledger.db"
+        storage_root = (
+            Path(ledger_path).expanduser().parent
+            if ledger_path is not None
+            else Path.home() / ".local/share/maxwell-daemon"
         )
+        self._ledger = CostLedger(ledger_path or storage_root / "ledger.db")
         self._budget = BudgetEnforcer(config.budget, self._ledger)
         self._events = EventBus()
         self._workspace_root = (
             workspace_root or Path.home() / ".local/share/maxwell-daemon/workspaces"
         )
-        # Durable task store lives next to the cost ledger by default.
-        default_store = Path.home() / ".local/share/maxwell-daemon/tasks.db"
+        # Durable stores live next to the cost ledger by default. Keeping the
+        # default root derived from an explicit ledger path lets tests and
+        # embedded instances isolate all SQLite state with one parameter.
+        default_store = storage_root / "tasks.db"
         self._task_store = TaskStore(task_store_path or default_store)
-        default_work_item_store = Path.home() / ".local/share/maxwell-daemon/work_items.db"
+        default_work_item_store = storage_root / "work_items.db"
         self._work_item_store = WorkItemStore(work_item_store_path or default_work_item_store)
-        default_task_graph_store = Path.home() / ".local/share/maxwell-daemon/task_graphs.db"
+        default_task_graph_store = storage_root / "task_graphs.db"
         self._task_graph_store = TaskGraphStore(task_graph_store_path or default_task_graph_store)
-        default_artifact_store = Path.home() / ".local/share/maxwell-daemon/artifacts.db"
-        default_artifact_root = Path.home() / ".local/share/maxwell-daemon/artifacts"
+        default_artifact_store = storage_root / "artifacts.db"
+        default_artifact_root = storage_root / "artifacts"
         self._artifact_store = ArtifactStore(
             artifact_store_path or default_artifact_store,
             blob_root=artifact_blob_root or default_artifact_root,
@@ -155,7 +161,7 @@ class Daemon:
             store=self._task_graph_store,
             artifact_store=self._artifact_store,
         )
-        default_action_store = Path.home() / ".local/share/maxwell-daemon/actions.db"
+        default_action_store = storage_root / "actions.db"
         self._action_store = ActionStore(action_store_path or default_action_store)
         self._actions = ActionService(
             self._action_store,
@@ -167,8 +173,7 @@ class Daemon:
             on_side_effect_started=self.mark_task_side_effects_started,
         )
         default_delegate_store = (
-            delegate_lifecycle_store_path
-            or Path.home() / ".local/share/maxwell-daemon/delegate_sessions.db"
+            delegate_lifecycle_store_path or storage_root / "delegate_sessions.db"
         )
         self._delegate_lifecycle = DelegateLifecycleService(
             DelegateSessionStore(default_delegate_store)
@@ -177,9 +182,7 @@ class Daemon:
 
         self._template_store = TemplateStore(Path.home() / ".local/share/maxwell-daemon/templates")
 
-        default_auth_store = auth_store_path or (
-            Path.home() / ".local/share/maxwell-daemon/auth_sessions.db"
-        )
+        default_auth_store = auth_store_path or storage_root / "auth_sessions.db"
         self._auth_store = AuthSessionStore(default_auth_store)
         # Memory store — co-located with the ledger for easy backup.
         from maxwell_daemon.memory import (
@@ -1599,39 +1602,58 @@ class Daemon:
                 )
             )
             self._record_stream_event(task.id, EventKind.TASK_STARTED.value)
-            snapshot.budget.require_under_budget()
-            decision = snapshot.router.route(
-                repo=task.repo,
-                backend_override=task.backend,
-                model_override=task.model,
-            )
-            task.backend = decision.backend_name
-            task.route_reason = decision.reason
-            if task.kind is not TaskKind.ISSUE:
-                task.model = decision.model
-            decision_backend = task.backend
-            decision_model = task.model or decision.model
-            try:
-                self._task_store.save(task)
-            except Exception:
-                log.exception("task store write failed while recording route for task=%s", task.id)
+            # Wrap the dispatch path (routing → backend completion) in a span so
+            # a trace shows the task lifecycle end-to-end. The span is a no-op
+            # when tracing is disabled (zero-cost default install). Exceptions
+            # propagate *through* the span — it records them and sets an ERROR
+            # status — and are then handled by the except clauses below.
+            async with _trace_span(
+                "maxwell_daemon.task.dispatch",
+                {"task_id": task.id, "kind": task.kind.value},
+            ):
+                snapshot.budget.require_under_budget()
+                decision = snapshot.router.route(
+                    repo=task.repo,
+                    backend_override=task.backend,
+                    model_override=task.model,
+                )
+                task.backend = decision.backend_name
+                task.route_reason = decision.reason
+                if task.kind is not TaskKind.ISSUE:
+                    task.model = decision.model
+                decision_backend = task.backend
+                decision_model = task.model or decision.model
+                try:
+                    self._task_store.save(task)
+                except Exception:
+                    log.exception(
+                        "task store write failed while recording route for task=%s", task.id
+                    )
 
-            if task.kind is TaskKind.ISSUE:
-                await self._execute_issue(task, decision)
-                return
+                if task.kind is TaskKind.ISSUE:
+                    await self._execute_issue(task, decision)
+                    return
 
-            prompt_content = task.prompt
-            if task.repo and repo_path:
-                from maxwell_daemon.core.repo_overrides import RepoSchematic
+                prompt_content = task.prompt
+                if task.repo and repo_path:
+                    from maxwell_daemon.core.repo_overrides import RepoSchematic
 
-                schematic = RepoSchematic(task.repo, repo_path).generate()
-                prompt_content = f"{schematic}\n\n{prompt_content}"
+                    schematic = RepoSchematic(task.repo, repo_path).generate()
+                    prompt_content = f"{schematic}\n\n{prompt_content}"
 
-            resp = await decision.backend.complete(
-                [Message(role=MessageRole.USER, content=prompt_content)],
-                model=decision.model,
-                dry_run=task.dry_run,
-            )
+                async with _trace_span(
+                    "maxwell_daemon.task.backend_complete",
+                    {
+                        "task_id": task.id,
+                        "backend": decision.backend_name,
+                        "model": decision.model,
+                    },
+                ):
+                    resp = await decision.backend.complete(
+                        [Message(role=MessageRole.USER, content=prompt_content)],
+                        model=decision.model,
+                        dry_run=task.dry_run,
+                    )
             task.result = resp.content
             estimated_cost = decision.backend.estimate_cost(resp.usage, decision.model)
             task.cost_usd = estimated_cost if estimated_cost is not None else 0.0

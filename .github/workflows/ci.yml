@@ -340,9 +340,9 @@ jobs:
           cache: 'pip'
       - name: Purge pip cache
         run: python -m pip cache purge || true
-      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - run: uv venv .venv --python $(which python)
-      - run: uv pip install bandit pip-audit
+      - run: python -m venv .venv
+      - name: Install security scanners without cached wheels
+        run: .venv/bin/python -m pip install --no-cache-dir bandit pip-audit
       - name: Bandit (static analysis)
         run: .venv/bin/python -m bandit -r maxwell_daemon -c pyproject.toml
       - name: pip-audit (dependency vulnerabilities)

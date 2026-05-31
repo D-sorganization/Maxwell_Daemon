@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -195,7 +196,7 @@ class TestWebhookRouter:
 class TestWebhookEndpoint:
     """Black-box FastAPI test — exercises the real endpoint + signature checks."""
 
-    def _setup(self, secret: str = "topsecret") -> tuple[Any, _FakeDaemon]:
+    def _setup(self, tmp_path: Path, secret: str = "topsecret") -> tuple[Any, _FakeDaemon]:
         from fastapi.testclient import TestClient
 
         from maxwell_daemon.api import create_app
@@ -220,12 +221,12 @@ class TestWebhookEndpoint:
                 },
             }
         )
-        daemon = Daemon(cfg, ledger_path=None)
+        daemon = Daemon(cfg, ledger_path=tmp_path / "ledger.db")
         client = TestClient(create_app(daemon))
         return client, daemon  # type: ignore[return-value]
 
-    def test_valid_signature_accepted(self) -> None:
-        client, daemon = self._setup()
+    def test_valid_signature_accepted(self, tmp_path: Path) -> None:
+        client, daemon = self._setup(tmp_path)
         body = json.dumps(_issue_payload("owner/allowed", 1, ["maxwell-daemon-plan"])).encode()
         sig = _sign("topsecret", body)
         r = client.post(
@@ -243,8 +244,8 @@ class TestWebhookEndpoint:
         tasks = daemon.state().tasks  # type: ignore[attr-defined]
         assert any(t.kind.value == "issue" for t in tasks.values())
 
-    def test_missing_signature_rejected(self) -> None:
-        client, _ = self._setup()
+    def test_missing_signature_rejected(self, tmp_path: Path) -> None:
+        client, _ = self._setup(tmp_path)
         r = client.post(
             "/api/v1/webhooks/github",
             content=b"{}",
@@ -252,8 +253,8 @@ class TestWebhookEndpoint:
         )
         assert r.status_code == 401
 
-    def test_bad_signature_rejected(self) -> None:
-        client, _ = self._setup()
+    def test_bad_signature_rejected(self, tmp_path: Path) -> None:
+        client, _ = self._setup(tmp_path)
         r = client.post(
             "/api/v1/webhooks/github",
             content=b"{}",
@@ -265,8 +266,8 @@ class TestWebhookEndpoint:
         )
         assert r.status_code == 401
 
-    def test_ping_returns_200(self) -> None:
-        client, _ = self._setup()
+    def test_ping_returns_200(self, tmp_path: Path) -> None:
+        client, _ = self._setup(tmp_path)
         body = b'{"zen":"hello"}'
         sig = _sign("topsecret", body)
         r = client.post(
@@ -280,8 +281,8 @@ class TestWebhookEndpoint:
         )
         assert r.status_code == 200
 
-    def test_malformed_json_rejected(self) -> None:
-        client, _ = self._setup()
+    def test_malformed_json_rejected(self, tmp_path: Path) -> None:
+        client, _ = self._setup(tmp_path)
         body = b"not json"
         sig = _sign("topsecret", body)
         r = client.post(
