@@ -61,6 +61,7 @@ from maxwell_daemon.events import Event, EventBus, EventKind, attach_observabili
 from maxwell_daemon.fleet.capabilities import InMemoryFleetCapabilityRegistry
 from maxwell_daemon.logging import get_logger
 from maxwell_daemon.metrics import record_request
+from maxwell_daemon.tracing import span as _trace_span
 
 log = get_logger("maxwell_daemon.daemon")
 
@@ -1599,39 +1600,58 @@ class Daemon:
                 )
             )
             self._record_stream_event(task.id, EventKind.TASK_STARTED.value)
-            snapshot.budget.require_under_budget()
-            decision = snapshot.router.route(
-                repo=task.repo,
-                backend_override=task.backend,
-                model_override=task.model,
-            )
-            task.backend = decision.backend_name
-            task.route_reason = decision.reason
-            if task.kind is not TaskKind.ISSUE:
-                task.model = decision.model
-            decision_backend = task.backend
-            decision_model = task.model or decision.model
-            try:
-                self._task_store.save(task)
-            except Exception:
-                log.exception("task store write failed while recording route for task=%s", task.id)
+            # Wrap the dispatch path (routing → backend completion) in a span so
+            # a trace shows the task lifecycle end-to-end. The span is a no-op
+            # when tracing is disabled (zero-cost default install). Exceptions
+            # propagate *through* the span — it records them and sets an ERROR
+            # status — and are then handled by the except clauses below.
+            async with _trace_span(
+                "maxwell_daemon.task.dispatch",
+                {"task_id": task.id, "kind": task.kind.value},
+            ):
+                snapshot.budget.require_under_budget()
+                decision = snapshot.router.route(
+                    repo=task.repo,
+                    backend_override=task.backend,
+                    model_override=task.model,
+                )
+                task.backend = decision.backend_name
+                task.route_reason = decision.reason
+                if task.kind is not TaskKind.ISSUE:
+                    task.model = decision.model
+                decision_backend = task.backend
+                decision_model = task.model or decision.model
+                try:
+                    self._task_store.save(task)
+                except Exception:
+                    log.exception(
+                        "task store write failed while recording route for task=%s", task.id
+                    )
 
-            if task.kind is TaskKind.ISSUE:
-                await self._execute_issue(task, decision)
-                return
+                if task.kind is TaskKind.ISSUE:
+                    await self._execute_issue(task, decision)
+                    return
 
-            prompt_content = task.prompt
-            if task.repo and repo_path:
-                from maxwell_daemon.core.repo_overrides import RepoSchematic
+                prompt_content = task.prompt
+                if task.repo and repo_path:
+                    from maxwell_daemon.core.repo_overrides import RepoSchematic
 
-                schematic = RepoSchematic(task.repo, repo_path).generate()
-                prompt_content = f"{schematic}\n\n{prompt_content}"
+                    schematic = RepoSchematic(task.repo, repo_path).generate()
+                    prompt_content = f"{schematic}\n\n{prompt_content}"
 
-            resp = await decision.backend.complete(
-                [Message(role=MessageRole.USER, content=prompt_content)],
-                model=decision.model,
-                dry_run=task.dry_run,
-            )
+                async with _trace_span(
+                    "maxwell_daemon.task.backend_complete",
+                    {
+                        "task_id": task.id,
+                        "backend": decision.backend_name,
+                        "model": decision.model,
+                    },
+                ):
+                    resp = await decision.backend.complete(
+                        [Message(role=MessageRole.USER, content=prompt_content)],
+                        model=decision.model,
+                        dry_run=task.dry_run,
+                    )
             task.result = resp.content
             estimated_cost = decision.backend.estimate_cost(resp.usage, decision.model)
             task.cost_usd = estimated_cost if estimated_cost is not None else 0.0
