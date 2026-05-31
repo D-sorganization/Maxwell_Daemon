@@ -52,9 +52,12 @@ def install_problem_handler(app: FastAPI) -> None:
     @app.exception_handler(MaxwellError)
     async def _handle_maxwell_error(request: Request, exc: MaxwellError) -> JSONResponse:
         # LoD boundary: the handler reads from ``exc`` only via its public
-        # serialiser, and from ``request`` only via the headers mapping.
+        # serialiser and header hook, and from ``request`` only via headers.
         body = exc.to_problem_detail()
         status = type(exc).http_status
+        # Subclass-contributed headers (e.g. Retry-After on 429s). The base
+        # contract returns {}, so this is a no-op for most errors.
+        extra_headers = exc.response_headers()
 
         # Log at WARNING for 4xx (caller fault) and ERROR for 5xx (our fault).
         # ``exc_info`` is included for 5xx so the stack reaches the operator.
@@ -72,6 +75,7 @@ def install_problem_handler(app: FastAPI) -> None:
             status_code=status,
             content=body,
             media_type=PROBLEM_JSON_MEDIA_TYPE,
+            headers=extra_headers or None,
         )
 
     setattr(app, _INSTALL_SENTINEL, True)

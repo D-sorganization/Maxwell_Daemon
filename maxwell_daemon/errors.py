@@ -23,10 +23,16 @@ Design notes:
 * **LoD** — the handler only talks to ``error.to_problem_detail()`` and
   ``type(error).http_status``; it does not reach into the error's internals.
 
-Migration plan: existing exceptions (``BudgetExceededError`` in ``core/budget.py``,
-``DuplicateTaskIdError`` in ``daemon/task_models.py``, etc.) will be migrated to
-inherit from the appropriate node in this tree in follow-up PRs. The tree is
-introduced first so call sites have something to subclass from.
+Migration plan: existing exceptions inherit from the appropriate node in this
+tree, one wave at a time. The first wave (#896, Phase 1.2) migrated the two
+exceptions that crossed the HTTP boundary through bespoke per-error handlers:
+``QueueSaturationError`` (429, via :class:`RateLimitedError`) and
+``DuplicateTaskIdError`` (409, via :class:`ConflictError`) in
+``daemon/task_models.py`` — their ad-hoc handlers in ``api/server.py`` and
+``api/routes/dispatch.py`` were deleted in favour of the single RFC 7807
+handler. Remaining domain exceptions (``BudgetExceededError`` in
+``core/budget.py``, ``PolicyDeniedError`` call sites, etc.) follow in later
+waves.
 """
 
 from __future__ import annotations
@@ -37,8 +43,10 @@ __all__ = [
     "BackendUnavailableError",
     "BudgetExceededError",
     "ClientError",
+    "ConflictError",
     "MaxwellError",
     "PolicyDeniedError",
+    "RateLimitedError",
     "ServerError",
     "StorageError",
     "ValidationFailedError",
@@ -99,6 +107,20 @@ class MaxwellError(RuntimeError):
         body["detail"] = str(self)
         return body
 
+    def response_headers(self) -> dict[str, str]:
+        """HTTP headers this error contributes to the response.
+
+        The RFC 7807 handler merges these onto the ``problem+json`` response
+        (LoD: the handler calls this method, it does not introspect the
+        subclass). The base contract is *no extra headers* — subclasses that
+        need to steer client retry behaviour (e.g. ``Retry-After`` for 429s)
+        override this.
+
+        Postcondition: returns a fresh ``dict[str, str]`` every call, so a
+        caller mutating the result cannot poison a future response.
+        """
+        return {}
+
 
 # ── Client-side problem family (4xx) ─────────────────────────────────────────
 
@@ -143,6 +165,57 @@ class PolicyDeniedError(ClientError):
     http_status = 403
     problem_type = _PROBLEM_TYPE_BASE + "policy-denied"
     problem_title = "Policy Denied"
+
+
+class ConflictError(ClientError):
+    """The request conflicts with current server state. 409 Conflict.
+
+    Canonical use: an idempotency key / task id that already exists. The
+    caller can retry only after changing the conflicting field, so this is a
+    4xx (client) condition, not a 5xx.
+    """
+
+    http_status = 409
+    problem_type = _PROBLEM_TYPE_BASE + "conflict"
+    problem_title = "Conflict"
+
+
+class RateLimitedError(ClientError):
+    """The caller exceeded a rate/capacity limit. 429 Too Many Requests.
+
+    Carries a ``retry_after_seconds`` hint that is surfaced two ways so both
+    header-aware and body-only clients can back off correctly:
+
+    * as a ``Retry-After`` response header (RFC 9110 §10.2.3) via
+      :meth:`response_headers`, and
+    * as a ``retry_after_seconds`` field in the problem+json body.
+
+    DbC — ``retry_after_seconds`` is a non-negative ``int`` (precondition
+    enforced at construction); the header value is always its ``str`` form.
+    """
+
+    http_status = 429
+    problem_type = _PROBLEM_TYPE_BASE + "rate-limited"
+    problem_title = "Too Many Requests"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        retry_after_seconds: int = 0,
+        extras: dict[str, Any] | None = None,
+    ) -> None:
+        if retry_after_seconds < 0:
+            raise ValueError("retry_after_seconds must be non-negative")
+        merged: dict[str, Any] = dict(extras) if extras else {}
+        # Surface the hint in the body without letting a caller override it
+        # via extras (the explicit kwarg wins — invariant).
+        merged["retry_after_seconds"] = retry_after_seconds
+        super().__init__(message, extras=merged)
+        self.retry_after_seconds: Final[int] = retry_after_seconds
+
+    def response_headers(self) -> dict[str, str]:
+        return {"Retry-After": str(self.retry_after_seconds)}
 
 
 # ── Server-side problem family (5xx) ─────────────────────────────────────────
