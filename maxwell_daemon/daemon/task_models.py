@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
+from maxwell_daemon.errors import ConflictError, RateLimitedError
+
 __all__ = [
     "DaemonState",
     "DuplicateTaskIdError",
@@ -26,11 +28,22 @@ __all__ = [
 ]
 
 
-class QueueSaturationError(Exception):
-    """Raised when the priority queue is full and cannot accept more tasks."""
+class QueueSaturationError(RateLimitedError):
+    """Raised when the priority queue is full and cannot accept more tasks.
+
+    Migrated onto the typed error tree (#896, Phase 1.2): it is now a
+    :class:`~maxwell_daemon.errors.RateLimitedError` (429) so the single RFC
+    7807 handler renders it — the bespoke ``server.py`` handler was removed.
+
+    The historical ``backoff_seconds`` attribute and 60s default are preserved
+    for backwards compatibility; it is mirrored to the tree's
+    ``retry_after_seconds`` so the ``Retry-After`` header and problem+json body
+    stay correct. ``MaxwellError`` derives from ``RuntimeError``, so existing
+    ``except QueueSaturationError`` / ``except Exception`` clauses keep working.
+    """
 
     def __init__(self, message: str, backoff_seconds: int = 60) -> None:
-        super().__init__(message)
+        super().__init__(message, retry_after_seconds=backoff_seconds)
         self.backoff_seconds = backoff_seconds
 
 
@@ -48,8 +61,19 @@ class TaskKind(str, Enum):
     ISSUE = "issue"
 
 
-class DuplicateTaskIdError(ValueError):
-    """Raised when a caller supplies a task id that already exists."""
+class DuplicateTaskIdError(ConflictError, ValueError):
+    """Raised when a caller supplies a task id that already exists.
+
+    Migrated onto the typed error tree (#896, Phase 1.2): it is now a
+    :class:`~maxwell_daemon.errors.ConflictError` (409) governed by the single
+    RFC 7807 handler, so the manual ``HTTPException(409)`` translation in
+    ``api/routes/dispatch.py`` was removed (DRY).
+
+    It also retains ``ValueError`` ancestry so the ``except ValueError``
+    fallbacks in ``api/routes/tasks.py`` and ``cli/tasks.py`` keep catching it
+    (LSP). ``ConflictError`` is listed first so it wins the MRO for
+    ``http_status`` / ``problem_type``.
+    """
 
 
 @functools.total_ordering

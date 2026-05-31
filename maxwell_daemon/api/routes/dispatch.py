@@ -25,7 +25,6 @@ from maxwell_daemon.api.contract import (
     DispatchResponse,
 )
 from maxwell_daemon.daemon import Daemon
-from maxwell_daemon.daemon.task_models import DuplicateTaskIdError
 from maxwell_daemon.logging import get_logger
 
 log = get_logger(__name__)
@@ -58,15 +57,15 @@ def register(
             payload.idempotency_key,
             payload.repo,
         )
-        try:
-            task = daemon.submit(
-                payload.prompt,
-                repo=payload.repo,
-                task_id=payload.idempotency_key,
-            )
-        except DuplicateTaskIdError as exc:
-            # 409 Conflict: idempotency_key already exists.
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        # ``DuplicateTaskIdError`` (idempotency_key already exists) is now a
+        # ``ConflictError`` in the typed error tree (#896, Phase 1.2): it
+        # propagates to the RFC 7807 handler, which renders the 409 +
+        # problem+json uniformly. No bespoke ``HTTPException`` translation here.
+        task = daemon.submit(
+            payload.prompt,
+            repo=payload.repo,
+            task_id=payload.idempotency_key,
+        )
 
         return DispatchResponse(
             task_id=task.id,

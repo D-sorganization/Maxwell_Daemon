@@ -114,8 +114,11 @@ class TestProblemHandlerUnrelatedExceptions:
     """Non-MaxwellError exceptions pass through to FastAPI's default 500 path.
 
     This is the explicit LoD boundary: the problem handler only knows about
-    the daemon's typed tree. Other handlers (e.g. ``QueueSaturationError``)
-    continue to work independently.
+    the daemon's typed tree. Exceptions outside the tree (a bare
+    ``RuntimeError`` here) fall through to FastAPI's default 500. Domain
+    errors that *have* been migrated onto the tree (e.g.
+    ``QueueSaturationError`` since #896 Phase 1.2) are instead rendered by
+    this handler — see ``test_error_tree_migration.py``.
     """
 
     def test_runtime_error_is_not_caught(self, client: TestClient) -> None:

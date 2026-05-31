@@ -37,8 +37,7 @@ import uuid
 from pathlib import Path as _Path
 from typing import Any
 
-from fastapi import FastAPI, Request, Response, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, Response
 
 from maxwell_daemon import __version__
 from maxwell_daemon.api.contract import CONTRACT_VERSION
@@ -141,19 +140,9 @@ def create_app(  # noqa: C901
 
     install_problem_handler(app)
 
-    # -- QueueSaturationError -> HTTP 429
-    from maxwell_daemon.daemon.runner import QueueSaturationError
-
-    @app.exception_handler(QueueSaturationError)
-    async def queue_saturation_exception_handler(
-        request: Request,
-        exc: QueueSaturationError,
-    ) -> JSONResponse:
-        return JSONResponse(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            content={"detail": str(exc)},
-            headers={"Retry-After": str(exc.backoff_seconds)},
-        )
+    # ``QueueSaturationError`` (429) and ``DuplicateTaskIdError`` (409) are now
+    # ``MaxwellError`` subclasses, so the RFC 7807 handler above renders them
+    # uniformly (#896, Phase 1.2). The bespoke per-error handlers were removed.
 
     # -- Audit logger
     _audit: AuditLogger | None = (
