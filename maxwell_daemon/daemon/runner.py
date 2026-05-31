@@ -130,23 +130,28 @@ class Daemon:
 
         self._router = BackendRouter(config, mcp_manager=self._mcp_manager)
         self._fleet_registry = InMemoryFleetCapabilityRegistry()
-        self._ledger = CostLedger(
-            ledger_path or Path.home() / ".local/share/maxwell-daemon/ledger.db"
+        storage_root = (
+            Path(ledger_path).expanduser().parent
+            if ledger_path is not None
+            else Path.home() / ".local/share/maxwell-daemon"
         )
+        self._ledger = CostLedger(ledger_path or storage_root / "ledger.db")
         self._budget = BudgetEnforcer(config.budget, self._ledger)
         self._events = EventBus()
         self._workspace_root = (
             workspace_root or Path.home() / ".local/share/maxwell-daemon/workspaces"
         )
-        # Durable task store lives next to the cost ledger by default.
-        default_store = Path.home() / ".local/share/maxwell-daemon/tasks.db"
+        # Durable stores live next to the cost ledger by default. Keeping the
+        # default root derived from an explicit ledger path lets tests and
+        # embedded instances isolate all SQLite state with one parameter.
+        default_store = storage_root / "tasks.db"
         self._task_store = TaskStore(task_store_path or default_store)
-        default_work_item_store = Path.home() / ".local/share/maxwell-daemon/work_items.db"
+        default_work_item_store = storage_root / "work_items.db"
         self._work_item_store = WorkItemStore(work_item_store_path or default_work_item_store)
-        default_task_graph_store = Path.home() / ".local/share/maxwell-daemon/task_graphs.db"
+        default_task_graph_store = storage_root / "task_graphs.db"
         self._task_graph_store = TaskGraphStore(task_graph_store_path or default_task_graph_store)
-        default_artifact_store = Path.home() / ".local/share/maxwell-daemon/artifacts.db"
-        default_artifact_root = Path.home() / ".local/share/maxwell-daemon/artifacts"
+        default_artifact_store = storage_root / "artifacts.db"
+        default_artifact_root = storage_root / "artifacts"
         self._artifact_store = ArtifactStore(
             artifact_store_path or default_artifact_store,
             blob_root=artifact_blob_root or default_artifact_root,
@@ -155,7 +160,7 @@ class Daemon:
             store=self._task_graph_store,
             artifact_store=self._artifact_store,
         )
-        default_action_store = Path.home() / ".local/share/maxwell-daemon/actions.db"
+        default_action_store = storage_root / "actions.db"
         self._action_store = ActionStore(action_store_path or default_action_store)
         self._actions = ActionService(
             self._action_store,
@@ -166,10 +171,7 @@ class Daemon:
             events=self._events,
             on_side_effect_started=self.mark_task_side_effects_started,
         )
-        default_delegate_store = (
-            delegate_lifecycle_store_path
-            or Path.home() / ".local/share/maxwell-daemon/delegate_sessions.db"
-        )
+        default_delegate_store = delegate_lifecycle_store_path or storage_root / "delegate_sessions.db"
         self._delegate_lifecycle = DelegateLifecycleService(
             DelegateSessionStore(default_delegate_store)
         )
@@ -177,9 +179,7 @@ class Daemon:
 
         self._template_store = TemplateStore(Path.home() / ".local/share/maxwell-daemon/templates")
 
-        default_auth_store = auth_store_path or (
-            Path.home() / ".local/share/maxwell-daemon/auth_sessions.db"
-        )
+        default_auth_store = auth_store_path or storage_root / "auth_sessions.db"
         self._auth_store = AuthSessionStore(default_auth_store)
         # Memory store — co-located with the ledger for easy backup.
         from maxwell_daemon.memory import (

@@ -75,6 +75,15 @@ class _FakeIssueWorkspace:
 
 
 class TestLifecycle:
+    def test_explicit_ledger_path_isolates_default_sqlite_stores(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        d = Daemon(minimal_config, ledger_path=isolated_ledger_path)
+
+        assert d._task_store._path == isolated_ledger_path.parent / "tasks.db"
+        assert d._work_item_store._path == isolated_ledger_path.parent / "work_items.db"
+        assert d._action_store._path == isolated_ledger_path.parent / "actions.db"
+
     def test_start_spawns_workers(
         self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
     ) -> None:
