@@ -19,6 +19,7 @@ from maxwell_daemon.backends import (
     BackendResponse,
     ILLMBackend,
     Message,
+    MessageRole,
     TokenUsage,
 )
 from maxwell_daemon.config import MaxwellDaemonConfig
@@ -192,6 +193,92 @@ class TestBackends:
         assert catalog["openai"]["configured_aliases"] == []
         assert catalog["openai"]["loaded"] is False
         assert catalog["openai"]["connected"] is False
+
+
+class TestChatEndpoint:
+    def test_chat_accepts_repo_root_and_seeds_codebase_context(
+        self,
+        client: TestClient,
+        daemon: Daemon,
+        tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        (workspace / "README.md").write_text("# Demo\n\nOperator notes.", encoding="utf-8")
+        (workspace / "app.py").write_text("def answer():\n    return 42\n", encoding="utf-8")
+
+        class CapturingBackend(ILLMBackend):
+            def __init__(self) -> None:
+                self.calls: list[dict[str, Any]] = []
+
+            async def complete(
+                self,
+                messages: list[Message],
+                *,
+                model: str,
+                **kwargs: Any,
+            ) -> BackendResponse:
+                self.calls.append({"messages": messages, "model": model, "kwargs": kwargs})
+                return BackendResponse(
+                    content="workspace answer",
+                    finish_reason="stop",
+                    usage=TokenUsage(prompt_tokens=3, completion_tokens=2, total_tokens=5),
+                    model=model,
+                    backend="capture",
+                )
+
+            async def stream(
+                self,
+                messages: list[Message],
+                *,
+                model: str,
+                **_: Any,
+            ) -> AsyncIterator[str]:
+                if False:
+                    yield model
+
+            async def health_check(self) -> bool:
+                return True
+
+            def capabilities(self, model: str) -> BackendCapabilities:
+                return BackendCapabilities()
+
+        backend = CapturingBackend()
+        daemon._router._instances["primary"] = backend
+
+        response = client.post(
+            "/api/chat",
+            json={
+                "prompt": "Where is answer defined?",
+                "repo_root": str(workspace),
+                "repo": "D-sorganization/Runner_Dashboard",
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["content"] == "workspace answer"
+        assert body["backend_name"] == "primary"
+        assert body["workspace"] == str(workspace.resolve())
+        assert body["usage"]["total_tokens"] == 5
+        call = backend.calls[-1]
+        assert call["kwargs"]["workspace_dir"] == str(workspace.resolve())
+        assert call["kwargs"]["repo"] == "D-sorganization/Runner_Dashboard"
+        assert call["messages"][0].role is MessageRole.SYSTEM
+        system_prompt = call["messages"][0].content
+        assert "codebase Q&A assistant" in system_prompt
+        assert "Context pack manifest" in system_prompt
+        assert "README.md" in system_prompt
+        assert call["messages"][-1].content == "Where is answer defined?"
+
+    def test_chat_rejects_missing_workspace(self, client: TestClient, tmp_path: Path) -> None:
+        response = client.post(
+            "/api/chat",
+            json={"prompt": "hello", "workspace": str(tmp_path / "missing")},
+        )
+
+        assert response.status_code == 400
+        assert "workspace root does not exist" in response.json()["detail"]
 
 
 class TestTaskSubmission:
