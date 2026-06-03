@@ -79,6 +79,8 @@ This inventory is checked against `create_app(...).openapi()` by `tests/unit/tes
 
 | Path | Methods | Area |
 | --- | --- | --- |
+| `/api/chat` | `POST` | Chat |
+| `/api/chat/codebase` | `POST` | Chat |
 | `/api/control/{action}` | `POST` | Control |
 | `/api/dispatch` | `POST` | Tasks |
 | `/api/health` | `GET` | Health |
