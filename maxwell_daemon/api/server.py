@@ -294,6 +294,7 @@ def create_app(  # noqa: C901
     from maxwell_daemon.api.routes import audit as _audit_routes
     from maxwell_daemon.api.routes import auth as _auth_routes
     from maxwell_daemon.api.routes import backends as _backends_routes
+    from maxwell_daemon.api.routes import chat as _chat_routes
     from maxwell_daemon.api.routes import control_plane as _control_plane_routes
     from maxwell_daemon.api.routes import cost as _cost_routes
     from maxwell_daemon.api.routes import dispatch as _dispatch_routes
@@ -314,6 +315,7 @@ def create_app(  # noqa: C901
     _health_routes.register(app, daemon)
     _status_routes.register(app, daemon)
     _cost_routes.register(app, daemon, _require_viewer())
+    _chat_routes.register(app, daemon, _require_operator())
     _task_routes.register(app, daemon, auth, _require_viewer(), _require_operator())
     _control_plane_routes.register(app, daemon, auth, _require_viewer(), _require_operator())
 
