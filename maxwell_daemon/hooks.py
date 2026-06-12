@@ -190,8 +190,8 @@ class HookRunner:
     Two runners are maintained:
     * ``_exec_run`` — used for commands that do **not** need shell semantics
       (the safe default via ``create_subprocess_exec``).
-    * ``_shell_run`` — used when a :class:`HookSpec` carries ``shell=True``
-      or when ``_needs_shell()`` detects metacharacters in a lifecycle command.
+    * ``_shell_run`` — used only when a :class:`HookSpec` carries
+      ``shell=True``.
 
     Backward-compatibility: the ``runner=`` kwarg maps to ``exec_runner``.
     ``_run`` is kept as an alias so existing tests that monkeypatch
@@ -276,8 +276,7 @@ class HookRunner:
     async def run_pre_commit(self) -> HookOutcome:
         """Run every pre_commit command in order; first failure short-circuits."""
         for command in self._cfg.pre_commit:
-            run_fn = self._shell_run if _needs_shell(command) else self._exec_run
-            rc, output = await run_fn(
+            rc, output = await self._exec_run(
                 command,
                 cwd=str(self._workspace),
                 env=_env(None, None, None),
@@ -301,8 +300,7 @@ class HookRunner:
         """Run every on_prompt hook in order. Returns their raw outputs for context injection."""
         outputs: list[tuple[int, str]] = []
         for command in self._cfg.on_prompt:
-            run_fn = self._shell_run if _needs_shell(command) else self._exec_run
-            rc, output = await run_fn(
+            rc, output = await self._exec_run(
                 command,
                 cwd=str(self._workspace),
                 env=_env(None, None, None),
@@ -315,8 +313,7 @@ class HookRunner:
         """Run every on_stop hook. Exit codes are ignored — it's housekeeping, not a gate."""
         env = {**_env(None, None, None), "MAXWELL_EXIT_REASON": exit_reason}
         for command in self._cfg.on_stop:
-            run_fn = self._shell_run if _needs_shell(command) else self._exec_run
-            await run_fn(
+            await self._exec_run(
                 command,
                 cwd=str(self._workspace),
                 env=env,
@@ -326,16 +323,16 @@ class HookRunner:
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
-#: Regex matching shell syntax that needs expansion via ``create_subprocess_shell``.
+#: Regex matching shell syntax. Retained for callers that need advisory checks.
 _SHELL_METACHAR_RE = re.compile(r"[|&;<>`$(){}*?\[\]~]")
 
 
 def _needs_shell(command: str) -> bool:
     """Return ``True`` iff ``command`` contains shell metacharacters.
 
-    Used by lifecycle hooks (pre_commit, on_prompt, on_stop) to auto-select the
-    appropriate subprocess runner.  HookSpec-based hooks use the explicit
-    ``shell:`` field instead.
+    This helper is advisory only. Hook execution must not use it to
+    auto-escalate to ``create_subprocess_shell``; HookSpec-based hooks use the
+    explicit ``shell:`` field instead.
 
     Precondition: ``command`` must be a ``str``.
     Postcondition: returns a ``bool``.
@@ -437,10 +434,8 @@ async def _shell_default_runner(
 ) -> tuple[int, str]:
     """Shell subprocess runner using ``create_subprocess_shell``.
 
-    Used only when a :class:`HookSpec` carries ``shell=True`` or when
-    ``_needs_shell()`` detects metacharacters in a lifecycle hook command.
-    Operators who need pipelines or shell built-ins opt into this path
-    explicitly.
+    Used only when a :class:`HookSpec` carries ``shell=True``. Operators who
+    need pipelines or shell built-ins opt into this path explicitly.
 
     Precondition: ``command`` is a non-empty ``str``; ``timeout`` is positive.
     Postcondition: returns ``(int, str)`` where int is the exit code.
