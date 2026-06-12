@@ -247,7 +247,7 @@ def test_snapshot_render_truncates_to_max_chars(tmp_path: Path) -> None:
 
 def test_secret_redaction_masks_values_for_display() -> None:
     redacted = redact_secret_looking_values(
-        "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456 and ghp_abcdefghijklmnopqrstuv"
+        "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456 and ghp_abcdefghijklmnopqrstuv"  # gitleaks:allow redaction fixture
     )
 
     assert "[REDACTED]" in redacted
