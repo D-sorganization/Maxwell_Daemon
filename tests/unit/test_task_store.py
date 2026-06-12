@@ -136,6 +136,130 @@ class TestList:
 
         assert [task.id for task in listed] == [old.id]
 
+    def test_filter_by_created_before(self, store: TaskStore) -> None:
+        # Regression for #964/#977: list_tasks/alist_tasks silently dropped the
+        # created_before filter, so creation-time pagination repeated page one.
+        old = _fresh_task(created_at=datetime.now(timezone.utc) - timedelta(days=8))
+        recent = _fresh_task(created_at=datetime.now(timezone.utc))
+        store.save(old)
+        store.save(recent)
+
+        listed = store.list_tasks(
+            limit=10,
+            created_before=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+
+        assert [task.id for task in listed] == [old.id]
+
+    def test_created_before_paginates_instead_of_repeating(self, store: TaskStore) -> None:
+        base = datetime.now(timezone.utc)
+        tasks = [_fresh_task(created_at=base - timedelta(hours=i)) for i in range(3)]
+        for task in tasks:
+            store.save(task)
+
+        # First page: newest only.
+        page1 = store.list_tasks(limit=1)
+        assert page1[0].id == tasks[0].id
+
+        # Second page keyed on the oldest seen created_at must advance, not repeat.
+        page2 = store.list_tasks(limit=1, created_before=page1[0].created_at)
+        assert page2[0].id == tasks[1].id
+        assert page2[0].id != page1[0].id
+
+    async def test_alist_created_before_filters(self, store: TaskStore) -> None:
+        old = _fresh_task(created_at=datetime.now(timezone.utc) - timedelta(days=8))
+        recent = _fresh_task(created_at=datetime.now(timezone.utc))
+        store.save(old)
+        store.save(recent)
+
+        listed = await store.alist_tasks(
+            limit=10,
+            created_before=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+
+        assert [task.id for task in listed] == [old.id]
+
+
+class TestDependsOnAndDryRunPersistence:
+    """Regression for #970: DAG edges and dry_run must survive save/restart."""
+
+    def test_roundtrips_depends_on_and_dry_run(self, store: TaskStore) -> None:
+        task = _fresh_task(depends_on=["dep-a", "dep-b"], dry_run=True)
+        store.save(task)
+
+        loaded = store.get(task.id)
+
+        assert loaded is not None
+        assert loaded.depends_on == ["dep-a", "dep-b"]
+        assert loaded.dry_run is True
+
+    def test_defaults_when_unset(self, store: TaskStore) -> None:
+        task = _fresh_task()
+        store.save(task)
+
+        loaded = store.get(task.id)
+
+        assert loaded is not None
+        assert loaded.depends_on == []
+        assert loaded.dry_run is False
+
+    def test_survives_recover_pending(self, store: TaskStore) -> None:
+        # A queued task with unmet deps must not lose its edges across restart —
+        # otherwise it would run immediately and a dry_run task would run live.
+        task = _fresh_task(depends_on=["upstream"], dry_run=True)
+        store.save(task)
+
+        recovered = {t.id: t for t in store.recover_pending()}
+
+        assert task.id in recovered
+        assert recovered[task.id].depends_on == ["upstream"]
+        assert recovered[task.id].dry_run is True
+
+    def test_migration_applies_to_legacy_db(self, tmp_path: Path) -> None:
+        import sqlite3
+
+        db = tmp_path / "legacy.db"
+        # Simulate a pre-#970 DB: tasks table without depends_on / dry_run.
+        with sqlite3.connect(db) as conn:
+            conn.execute(
+                """
+                CREATE TABLE tasks (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    repo TEXT, backend TEXT, model TEXT, route_reason TEXT,
+                    issue_repo TEXT, issue_number INTEGER, issue_mode TEXT,
+                    result TEXT, error TEXT, pr_url TEXT,
+                    cost_usd REAL NOT NULL DEFAULT 0,
+                    started_at TEXT, finished_at TEXT
+                )
+                """
+            )
+            now = datetime.now(timezone.utc).isoformat()
+            conn.execute(
+                "INSERT INTO tasks (id, created_at, updated_at, kind, status, prompt) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("legacy-1", now, now, TaskKind.PROMPT.value, TaskStatus.QUEUED.value, "x"),
+            )
+            conn.commit()
+
+        # Opening with TaskStore must migrate cleanly and read legacy rows.
+        store = TaskStore(db)
+        loaded = store.get("legacy-1")
+        assert loaded is not None
+        assert loaded.depends_on == []
+        assert loaded.dry_run is False
+
+        # And new writes round-trip the new columns.
+        store.save(_fresh_task(id="new-1", depends_on=["legacy-1"], dry_run=True))
+        new = store.get("new-1")
+        assert new is not None
+        assert new.depends_on == ["legacy-1"]
+        assert new.dry_run is True
+
 
 class TestRecoverPending:
     def test_recovers_queued(self, store: TaskStore) -> None:

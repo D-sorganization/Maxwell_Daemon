@@ -36,6 +36,7 @@ outside an event loop.
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 import threading
 from collections.abc import Iterator
@@ -81,7 +82,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     started_at TEXT,
     finished_at TEXT,
     dispatched_to TEXT,
-    side_effects_started INTEGER NOT NULL DEFAULT 0
+    side_effects_started INTEGER NOT NULL DEFAULT 0,
+    depends_on TEXT NOT NULL DEFAULT '[]',
+    dry_run INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
@@ -114,6 +117,10 @@ _MIGRATIONS = [
         "side_effects_started",
         "ALTER TABLE tasks ADD COLUMN side_effects_started INTEGER NOT NULL DEFAULT 0",
     ),
+    # DAG edges and dry-run flag must survive restart, else recovered tasks lose
+    # their dependency ordering and dry-run tasks re-run live (issue #970).
+    ("depends_on", "ALTER TABLE tasks ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'"),
+    ("dry_run", "ALTER TABLE tasks ADD COLUMN dry_run INTEGER NOT NULL DEFAULT 0"),
 ]
 
 _TERMINAL_STATUS_VALUES = ("completed", "failed", "cancelled")
@@ -210,6 +217,8 @@ class TaskStore:
             _iso(task.finished_at),
             task.dispatched_to,
             int(task.side_effects_started),
+            json.dumps(list(task.depends_on)),
+            int(task.dry_run),
             _completed_at(task),
         )
         with self._lock, self._connect() as conn:
@@ -222,11 +231,13 @@ class TaskStore:
                     thread_id, turn_count, max_turns,
                     priority, result, error, waived_by, waiver_reason,
                     waived_at, pr_url, cost_usd, started_at,
-                    finished_at, dispatched_to, side_effects_started, completed_at
+                    finished_at, dispatched_to, side_effects_started,
+                    depends_on, dry_run, completed_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?
                 )
                 ON CONFLICT(id) DO UPDATE SET
                     updated_at=excluded.updated_at,
@@ -253,6 +264,8 @@ class TaskStore:
                     started_at=excluded.started_at, finished_at=excluded.finished_at,
                     dispatched_to=excluded.dispatched_to,
                     side_effects_started=excluded.side_effects_started,
+                    depends_on=excluded.depends_on,
+                    dry_run=excluded.dry_run,
                     completed_at=excluded.completed_at
                 """,
                 row,
@@ -465,6 +478,7 @@ class TaskStore:
             kind=kind,
             cursor=cursor,
             completed_before=completed_before,
+            created_before=created_before,
         )
 
     def recover_pending(self) -> list[Task]:
@@ -543,6 +557,7 @@ class TaskStore:
                 kind=kind,
                 cursor=cursor,
                 completed_before=completed_before,
+                created_before=created_before,
             ),
         )
 
@@ -606,6 +621,15 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         waived_at = row["waived_at"]
     except (IndexError, KeyError):
         waived_at = None
+    try:
+        raw_depends_on = row["depends_on"]
+        depends_on = list(json.loads(raw_depends_on)) if raw_depends_on else []
+    except (IndexError, KeyError, ValueError, TypeError):
+        depends_on = []
+    try:
+        dry_run = bool(row["dry_run"])
+    except (IndexError, KeyError):
+        dry_run = False
 
     return Task(
         id=row["id"],
@@ -636,4 +660,6 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         finished_at=_parse_iso(row["finished_at"]),
         dispatched_to=dispatched_to,
         side_effects_started=side_effects_started,
+        depends_on=depends_on,
+        dry_run=dry_run,
     )
