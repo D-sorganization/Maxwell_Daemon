@@ -50,6 +50,7 @@ from maxwell_daemon.core.task_store import TaskStore
 from maxwell_daemon.core.work_item_store import WorkItemStore
 from maxwell_daemon.core.work_items import WorkItem, WorkItemStatus
 from maxwell_daemon.daemon.retry_policy import DEFAULT_RETRY_POLICY
+from maxwell_daemon.daemon.single_instance import InstanceLock
 from maxwell_daemon.director import (
     GraphNodeExecutor,
     GraphStatus,
@@ -179,6 +180,9 @@ class Daemon:
         # embedded instances isolate all SQLite state with one parameter.
         default_store = storage_root / "tasks.db"
         self._task_store = TaskStore(task_store_path or default_store)
+        # Single-instance guard keyed on the storage root (#975): a second
+        # daemon against the same root would corrupt state / double-spend.
+        self._instance_lock = InstanceLock(storage_root)
         default_work_item_store = storage_root / "work_items.db"
         self._work_item_store = WorkItemStore(work_item_store_path or default_work_item_store)
         default_task_graph_store = storage_root / "task_graphs.db"
@@ -424,6 +428,10 @@ class Daemon:
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
             return
+        # Acquire the single-instance lock BEFORE recovery — recovery mutates
+        # shared on-disk state, which is exactly what must not happen twice
+        # against one storage root (#975). Raises InstanceLockError if held.
+        self._instance_lock.acquire()
         if recover:
             self.recover()
         self._running = True
@@ -573,6 +581,9 @@ class Daemon:
                 await close_method()
 
         await self._mcp_manager.stop()
+
+        # Release the single-instance lock so a clean restart can re-acquire it.
+        self._instance_lock.release()
 
         log.info("Daemon shut down")
 
@@ -756,8 +767,97 @@ class Daemon:
                 ),
             )
         )
+
+        # A task that already started irreversible side effects (opened a PR,
+        # posted a comment) must NOT be auto-retried — a re-run would duplicate
+        # them. Leave it permanently FAILED with a clear reason (#971).
+        if task.side_effects_started:
+            log.warning("stalled task %s had side_effects_started; not auto-retrying", task.id)
+            return
+
+        # Gate the stall retry on the RetryPolicy so a perpetually-stalling task
+        # fails permanently after max_retries instead of looping forever with
+        # zero backoff and unbounded spend (#971).
+        if not DEFAULT_RETRY_POLICY.should_retry(task):
+            log.warning(
+                "stalled task %s exhausted retry budget (retry_count=%d); failing permanently",
+                task.id,
+                task.retry_count,
+            )
+            return
+
+        delay = DEFAULT_RETRY_POLICY.next_retry_delay(task.retry_count)
         retried = self.retry_task(task.id, expected_status=TaskStatus.FAILED)
-        self._enqueue_task_entry(retried.priority, retried)
+        retried.retry_count += 1
+        try:
+            self._task_store.save(retried)
+        except Exception:
+            log.exception("task store write failed while bumping retry_count task=%s", task.id)
+        # Re-enqueue after the backoff delay rather than immediately, so retries
+        # don't form a tight cancel/re-run loop.
+        self._schedule_delayed_enqueue(retried, delay.total_seconds())
+
+    def _schedule_delayed_enqueue(self, task: Task, delay_seconds: float) -> None:
+        """Re-enqueue ``task`` after ``delay_seconds`` via a tracked bg task."""
+
+        async def _delayed() -> None:
+            try:
+                if delay_seconds > 0:
+                    await asyncio.sleep(delay_seconds)
+                self._enqueue_task_entry(task.priority, task)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                log.warning("delayed re-enqueue failed for task=%s", task.id, exc_info=True)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop (e.g. unit context): enqueue inline.
+            self._enqueue_task_entry(task.priority, task)
+            return
+        bg = loop.create_task(_delayed())
+        self._bg_tasks.add(bg)
+        bg.add_done_callback(self._bg_tasks.discard)
+
+    def _fail_saturated_task(self, task: Task | None) -> None:
+        """Mark a task FAILED + emit an event when the on-loop enqueue is full.
+
+        The on-loop submission path defers the actual queue ``put`` to a
+        callback that runs after the HTTP response is already sent. If the queue
+        is saturated at that point we cannot return 429, so we make the drop
+        observable instead of leaving the persisted task stranded in QUEUED with
+        no queue entry and no error (#972).
+        """
+        if task is None:
+            return
+        message = (
+            f"Task queue saturated (max_depth={self._config.agent.max_queue_depth}); "
+            "submission dropped before it could be enqueued."
+        )
+        log.warning("queue saturated; failing dropped task %s", task.id)
+        task.status = TaskStatus.FAILED
+        task.error = message
+        task.finished_at = datetime.now(timezone.utc)
+        try:
+            self._task_store.save(task)
+        except Exception:
+            log.exception("task store write failed while failing saturated task=%s", task.id)
+        bg = asyncio.ensure_future(
+            self._events.publish(
+                Event(
+                    kind=EventKind.TASK_FAILED,
+                    payload=attach_observability(
+                        {"id": task.id, "error": message, "reason": "queue_saturated"},
+                        task_id=task.id,
+                        backend=task.backend,
+                        model=task.model,
+                    ),
+                )
+            )
+        )
+        self._bg_tasks.add(bg)
+        bg.add_done_callback(self._bg_tasks.discard)
 
     async def _dream_cycle_loop(self) -> None:
         """Periodically consolidate raw markdown memory when explicitly enabled."""
@@ -832,19 +932,16 @@ class Daemon:
             def _put_inline() -> None:
                 try:
                     if self._queue.full():
-                        log.warning(
-                            "queue is saturated (max_depth=%d); dropped task %s",
-                            self._config.agent.max_queue_depth,
-                            getattr(task, "id", None),
-                        )
+                        # The HTTP 200 has already been returned by the time this
+                        # deferred callback runs, so we cannot raise 429 here.
+                        # Instead of silently dropping the task (leaving it
+                        # stranded QUEUED forever), transition it to FAILED and
+                        # emit an event so the saturation is observable (#972).
+                        self._fail_saturated_task(task)
                         return
                     self._queue.put_nowait(item)
                 except asyncio.QueueFull:
-                    log.warning(
-                        "queue is saturated (max_depth=%d); dropped task %s",
-                        self._config.agent.max_queue_depth,
-                        getattr(task, "id", None),
-                    )
+                    self._fail_saturated_task(task)
 
             self._loop.call_soon_threadsafe(_put_inline)
             return

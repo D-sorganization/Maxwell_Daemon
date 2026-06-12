@@ -117,6 +117,10 @@ class Task:
     # Fleet dispatch tracking: set when a coordinator sends this task to a remote worker.
     dispatched_to: str | None = None  # machine name of the worker that received this task
     side_effects_started: bool = False
+    # Number of automatic retries already attempted (e.g. after a stall). Gated
+    # by RetryPolicy.should_retry so stalled tasks fail permanently instead of
+    # retrying forever (#971).
+    retry_count: int = 0
 
     @property
     def continuation_thread_id(self) -> str:
