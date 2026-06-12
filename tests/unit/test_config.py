@@ -34,9 +34,21 @@ class TestEnvSubstitution:
         monkeypatch.delenv("NO_SUCH_VAR", raising=False)
         assert _substitute_env("${NO_SUCH_VAR:-fallback}") == "fallback"
 
-    def test_empty_when_unset_no_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_raises_when_unset_no_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # #982: a ${VAR} with no :-default that is unset must fail loud (a typo'd
+        # ${ANTHROPIC_API_KY} otherwise silently becomes "" and breaks auth later).
         monkeypatch.delenv("NO_SUCH_VAR", raising=False)
-        assert _substitute_env("${NO_SUCH_VAR}") == ""
+        with pytest.raises(ValueError, match="NO_SUCH_VAR"):
+            _substitute_env("${NO_SUCH_VAR}")
+
+    def test_empty_default_when_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # An explicit empty default (${VAR:-}) is a deliberate opt-in to "".
+        monkeypatch.delenv("NO_SUCH_VAR", raising=False)
+        assert _substitute_env("${NO_SUCH_VAR:-}") == ""
+
+    def test_set_var_takes_precedence_over_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_KEY", "real")
+        assert _substitute_env("${TEST_KEY:-fallback}") == "real"
 
     def test_recurses_into_dict(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("X", "v")
@@ -124,6 +136,31 @@ class TestConfigLoad:
             "maxwell-daemon/backends/claude/api_key"
         )
         assert "api_key" not in rewritten["backends"]["claude"]
+
+    def test_migration_backs_up_original_config(self, tmp_path: Path) -> None:
+        """The in-place keyring rewrite first backs up the original (#979)."""
+        path = tmp_path / "c.yaml"
+        original = yaml.safe_dump(
+            {
+                "backends": {
+                    "claude": {
+                        "type": "claude",
+                        "model": "claude-sonnet-4-6",
+                        "api_key": "sk-live-123",
+                    }
+                }
+            }
+        )
+        path.write_text(original, encoding="utf-8")
+
+        load_config(path, secret_store=InMemorySecretStore())
+
+        backup = path.with_suffix(path.suffix + ".bak")
+        assert backup.exists(), "original config must be backed up before rewrite"
+        # The backup still contains the pre-migration plaintext key.
+        assert "sk-live-123" in backup.read_text(encoding="utf-8")
+        # And the live config no longer leaves a stray temp file behind.
+        assert list(tmp_path.glob("*.tmp")) == []
 
     def test_load_resolves_backend_api_key_secret_ref(self, tmp_path: Path) -> None:
         path = tmp_path / "c.yaml"
