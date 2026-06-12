@@ -73,24 +73,6 @@ jobs:
               sudo rm -rf "$cache_root/Python_stale_$RANDOM" || true
             fi
           done
-      - name: Pre-populate Python 3.10 cache
-        env:
-          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-      - name: Pre-populate Python 3.11 cache
-        env:
-          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Pre-populate Python 3.12 cache
-        env:
-          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - name: Check for self-hosted runner
         id: check
         shell: bash
