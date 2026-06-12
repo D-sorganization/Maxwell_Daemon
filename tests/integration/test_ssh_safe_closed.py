@@ -145,6 +145,18 @@ class TestSshSafeClosedWhenUnconfigured:
         assert excinfo.value.code == 1008
 
 
+class TestSshConnectPasswordRedaction:
+    """Issue #966 — the plaintext password never appears in model repr."""
+
+    def test_password_excluded_from_repr(self) -> None:
+        from maxwell_daemon.api.routes.ssh import SSHConnectRequest
+
+        req = SSHConnectRequest(host="h", user="u", password="s3cr3t-pw")
+        assert "s3cr3t-pw" not in repr(req)
+        # The value is still usable by the handler / SSH layer.
+        assert req.password == "s3cr3t-pw"
+
+
 class TestSshReachableWhenConfigured:
     """Once auth is configured, the safe-closed guard steps aside.
 

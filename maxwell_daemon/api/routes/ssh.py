@@ -13,7 +13,7 @@ import json as _json_mod
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
@@ -62,7 +62,10 @@ class SSHConnectRequest(BaseModel):
     host: str
     port: int = 22
     user: str
-    password: str | None = None
+    # repr=False keeps the plaintext password out of model repr / tracebacks /
+    # structured-log dumps; it is still accepted in the request body and passed
+    # to the SSH layer, never logged (issue #966).
+    password: str | None = Field(default=None, repr=False)
 
 
 class SSHRunRequest(BaseModel):

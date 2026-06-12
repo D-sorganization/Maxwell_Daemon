@@ -312,7 +312,12 @@ class APIConfig(BaseModel):
         default_factory=list,
         description=(
             "Allowed CORS origins. Empty list disables CORS middleware. "
-            'Use ["*"] for development only — never in production.'
+            "List explicit origins, e.g. "
+            '["https://your-dashboard.example.com"]. The wildcard "*" is '
+            "rejected: the API serves credentialed responses "
+            "(allow_credentials=True), and the browser CORS spec forbids "
+            'combining "*" with credentials — it would let any site issue '
+            "authenticated cross-origin requests."
         ),
     )
     # WebSocket connection cap (per-server process). Protects against connection
@@ -333,6 +338,23 @@ class APIConfig(BaseModel):
             raise ValueError(
                 f"Refusing to bind API to {self.host} without JWT configured. "
                 "Set api.jwt_secret to expose the daemon on a non-loopback interface."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_cors_origins(self) -> APIConfig:
+        # The CORS middleware is installed with allow_credentials=True, so it
+        # echoes the request Origin and sets Access-Control-Allow-Credentials.
+        # Combined with a "*" entry that would let *any* site make credentialed
+        # cross-origin requests once auth is wired up — the classic
+        # echo-origin + credentials hole. Reject it at config time rather than
+        # shipping an insecure middleware setup (issue #968).
+        if "*" in self.cors_allowed_origins:
+            raise ValueError(
+                'api.cors_allowed_origins must not contain "*": the API serves '
+                "credentialed responses (allow_credentials=True) and the CORS "
+                'spec forbids combining "*" with credentials. List explicit '
+                'origins instead, e.g. ["https://your-dashboard.example.com"].'
             )
         return self
 
