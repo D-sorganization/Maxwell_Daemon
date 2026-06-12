@@ -14,13 +14,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
+import shutil
+import subprocess  # nosec B404 - fixed git argv invocation, no shell.
 import sys
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 CONFIG_PATH = Path("scripts/config/file_size_budget.json")
+GIT = shutil.which("git")
 
 
 def _load_config(repo_root: Path) -> dict[str, Any]:
@@ -40,7 +42,15 @@ def _exception_map(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _run_git(args: list[str], repo_root: Path) -> str:
-    r = subprocess.run(["git", *args], cwd=repo_root, capture_output=True, text=True, check=False)
+    if GIT is None:
+        raise RuntimeError("git executable not found")
+    r = subprocess.run(  # nosec B603 - fixed executable, controlled arguments, no shell.
+        [GIT, *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     if r.returncode != 0:
         raise RuntimeError(r.stderr.strip() or "git failed")
     return r.stdout
