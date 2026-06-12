@@ -12,7 +12,7 @@ from __future__ import annotations
 import json as _json_mod
 from typing import Any
 
-from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 
 from maxwell_daemon.audit import AuditLogger
@@ -27,6 +27,33 @@ __all__ = [
     "SSHRunRequest",
     "register",
 ]
+
+
+def make_require_auth_configured(auth_token: str | None, jwt_config: JWTConfig | None) -> Any:
+    """Return a dependency that fails *closed* when no auth is configured.
+
+    SSH endpoints expose remote command execution against any host with a
+    stored/agent key. Unlike read-only routes, they must never run in the
+    fully-open dev mode that ``make_rbac_dep`` falls back to when neither a
+    static ``auth_token`` nor a ``jwt_config`` is set (issue #965). This guard
+    mirrors the safe-closed contract of ``POST /api/dispatch``: with no auth
+    configured the request is rejected before any side effect, returning
+    ``503 Service Unavailable`` (the server is misconfigured for this surface)
+    rather than silently admitting an unauthenticated caller.
+    """
+
+    async def _dep() -> None:
+        if auth_token is None and jwt_config is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "SSH endpoints are disabled: configure api.auth_token or "
+                    "api.jwt_secret to enable authenticated SSH access."
+                ),
+            )
+
+    return _dep
+
 
 _SSH_ALLOWED_COMMANDS: frozenset[str] = frozenset({"bash", "sh", "zsh", "fish", "rbash"})
 
@@ -58,6 +85,11 @@ def register(  # noqa: C901
 ) -> None:
     """Attach SSH endpoints to ``app``."""
 
+    # Safe-closed guard: SSH (remote command execution) must reject every
+    # request when no auth is configured, instead of falling through to the
+    # open dev mode that ``require_admin`` permits (issue #965).
+    require_auth_configured = make_require_auth_configured(auth_token, jwt_config)
+
     _ssh_pool_ref: dict[str, Any] = {}
 
     def _ssh_pool() -> Any:
@@ -80,7 +112,10 @@ def register(  # noqa: C901
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
-    @app.get("/api/v1/ssh/sessions", dependencies=[Depends(require_admin)])
+    @app.get(
+        "/api/v1/ssh/sessions",
+        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+    )
     async def ssh_sessions() -> Any:
         """List active SSH sessions."""
         pool = _ssh_pool()
@@ -88,7 +123,10 @@ def register(  # noqa: C901
             return _ssh_unavailable()
         return {"sessions": pool.sessions()}
 
-    @app.get("/api/v1/ssh/keys", dependencies=[Depends(require_admin)])
+    @app.get(
+        "/api/v1/ssh/keys",
+        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+    )
     async def ssh_list_keys() -> Any:
         """List machines that have stored SSH keys."""
         try:
@@ -98,7 +136,10 @@ def register(  # noqa: C901
         store = SSHKeyStore()
         return {"machines": store.list_machines()}
 
-    @app.get("/api/v1/ssh/keys/{machine}", dependencies=[Depends(require_admin)])
+    @app.get(
+        "/api/v1/ssh/keys/{machine}",
+        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+    )
     async def ssh_get_key(machine: str) -> Any:
         """Return the public key for *machine*, generating it if absent."""
         try:
@@ -109,7 +150,10 @@ def register(  # noqa: C901
         _, pub = store.get_or_generate(machine)
         return {"machine": machine, "public_key": pub}
 
-    @app.delete("/api/v1/ssh/keys/{machine}", dependencies=[Depends(require_admin)])
+    @app.delete(
+        "/api/v1/ssh/keys/{machine}",
+        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+    )
     async def ssh_delete_key(machine: str) -> Any:
         """Remove stored SSH keys for *machine*."""
         try:
@@ -119,7 +163,10 @@ def register(  # noqa: C901
         SSHKeyStore().remove(machine)
         return {"machine": machine, "deleted": True}
 
-    @app.post("/api/v1/ssh/connect", dependencies=[Depends(auth), Depends(require_admin)])
+    @app.post(
+        "/api/v1/ssh/connect",
+        dependencies=[Depends(require_auth_configured), Depends(auth), Depends(require_admin)],
+    )
     async def ssh_connect(payload: SSHConnectRequest) -> Any:
         """Open (or reuse) an SSH session and return its summary."""
         pool = _ssh_pool()
@@ -138,7 +185,10 @@ def register(  # noqa: C901
             "age_seconds": round(session.age_seconds, 1),
         }
 
-    @app.post("/api/v1/ssh/run", dependencies=[Depends(auth), Depends(require_admin)])
+    @app.post(
+        "/api/v1/ssh/run",
+        dependencies=[Depends(require_auth_configured), Depends(auth), Depends(require_admin)],
+    )
     async def ssh_run(payload: SSHRunRequest) -> Any:
         """Run a command on a remote machine and return its output."""
         pool = _ssh_pool()
@@ -152,7 +202,10 @@ def register(  # noqa: C901
             "exit_code": result.exit_code,
         }
 
-    @app.get("/api/v1/ssh/files", dependencies=[Depends(require_admin)])
+    @app.get(
+        "/api/v1/ssh/files",
+        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+    )
     async def ssh_list_files(
         host: str = Query(...),
         user: str = Query(...),
@@ -196,6 +249,11 @@ def register(  # noqa: C901
         Session ends when the command exits or the client disconnects.
         Max session duration: 1 hour.
         """
+        # Safe-closed: refuse the interactive shell entirely when no auth is
+        # configured, rather than admitting via open dev mode (issue #965).
+        if auth_token is None and jwt_config is None:
+            await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="SSH auth not configured")
+            return
         if not await websocket_auth_or_close(
             ws,
             Role.admin,
