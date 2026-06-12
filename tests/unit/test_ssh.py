@@ -281,6 +281,64 @@ class TestSSHSessionPool:
 
         asyncio.run(_run())
 
+    def test_different_password_does_not_reuse_session(self, tmp_path: Path) -> None:
+        """Issue #966 — a caller with different credentials gets its own session.
+
+        Before the fix the pool key was only (host, port, user), so any caller
+        could ride an existing authenticated session for that tuple without
+        presenting matching credentials.
+        """
+        store = SSHKeyStore(tmp_path)
+        pool = SSHSessionPool(store, known_hosts=None)
+
+        def _conn() -> MagicMock:
+            c = MagicMock()
+            c.close = MagicMock()
+            c.wait_closed = AsyncMock()
+            return c
+
+        async def _run() -> tuple[SSHSession, SSHSession]:
+            with patch("asyncssh.connect", AsyncMock(side_effect=[_conn(), _conn()])) as connect:
+                s_a = await pool.get("myhost", user="ubuntu", password="alice-secret")
+                s_b = await pool.get("myhost", user="ubuntu", password="mallory-secret")
+                # Two distinct credentials → two distinct connections, no reuse.
+                assert connect.call_count == 2
+            return s_a, s_b
+
+        s_a, s_b = asyncio.run(_run())
+        assert s_a is not s_b
+
+    def test_same_password_reuses_session(self, tmp_path: Path) -> None:
+        """Issue #966 — identical credentials still pool to one session."""
+        store = SSHKeyStore(tmp_path)
+        pool = SSHSessionPool(store, known_hosts=None)
+
+        mock_conn = MagicMock()
+        mock_conn.close = MagicMock()
+        mock_conn.wait_closed = AsyncMock()
+
+        async def _run() -> tuple[SSHSession, SSHSession]:
+            with patch("asyncssh.connect", AsyncMock(return_value=mock_conn)) as connect:
+                s1 = await pool.get("myhost", user="ubuntu", password="same-secret")
+                s2 = await pool.get("myhost", user="ubuntu", password="same-secret")
+                assert connect.call_count == 1
+            return s1, s2
+
+        s1, s2 = asyncio.run(_run())
+        assert s1 is s2
+
+    def test_pool_key_principal_does_not_leak_password(self) -> None:
+        """Issue #966 — the principal is a digest, never the plaintext password."""
+        from maxwell_daemon.ssh.session import _credential_principal, _PoolKey
+
+        principal = _credential_principal("hunter2")
+        assert "hunter2" not in principal
+        assert principal.startswith("pw:")
+        # Key auth has a stable, password-free principal.
+        assert _credential_principal(None) == "key"
+        key = _PoolKey(host="h", port=22, user="u", principal=principal)
+        assert "hunter2" not in repr(key)
+
     def test_get_replaces_expired_session(self, tmp_path: Path) -> None:
         import time
 

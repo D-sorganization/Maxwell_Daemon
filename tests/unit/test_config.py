@@ -288,3 +288,32 @@ class TestAPIConfigJWT:
         assert secret is not None
         jwt_cfg = JWTConfig(secret, expiry_seconds=cfg.api.jwt_expiry_seconds)
         assert jwt_cfg.expiry_seconds == 1800
+
+
+class TestAPIConfigCors:
+    """Issue #968 — reject wildcard CORS origin with credentialed responses."""
+
+    def _base_cfg(self) -> dict[str, object]:
+        return {"backends": {"claude": {"type": "claude", "model": "claude-sonnet-4-6"}}}
+
+    def test_wildcard_origin_rejected(self) -> None:
+        raw = self._base_cfg()
+        raw["api"] = {"cors_allowed_origins": ["*"]}
+        with pytest.raises(ValueError, match=r'must not contain "\*"'):
+            MaxwellDaemonConfig.model_validate(raw)
+
+    def test_wildcard_rejected_even_among_explicit_origins(self) -> None:
+        raw = self._base_cfg()
+        raw["api"] = {"cors_allowed_origins": ["https://ok.example.com", "*"]}
+        with pytest.raises(ValueError, match=r'must not contain "\*"'):
+            MaxwellDaemonConfig.model_validate(raw)
+
+    def test_explicit_origins_allowed(self) -> None:
+        raw = self._base_cfg()
+        raw["api"] = {"cors_allowed_origins": ["https://dash.example.com"]}
+        cfg = MaxwellDaemonConfig.model_validate(raw)
+        assert cfg.api.cors_allowed_origins == ["https://dash.example.com"]
+
+    def test_empty_origins_default_disables_cors(self) -> None:
+        cfg = MaxwellDaemonConfig.model_validate(self._base_cfg())
+        assert cfg.api.cors_allowed_origins == []
