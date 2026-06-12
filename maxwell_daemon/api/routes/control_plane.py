@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import Task, TaskStatus
@@ -99,6 +99,8 @@ class ControlPlaneWorkItemView(BaseModel):
 class GateRetryRequest(BaseModel):
     """Request to retry a failed gate."""
 
+    model_config = ConfigDict(extra="forbid")  # contract surface, fail loud (#994)
+
     target_id: str = Field(..., min_length=1)
     expected_status: Literal["failed"] = "failed"
 
@@ -106,12 +108,16 @@ class GateRetryRequest(BaseModel):
 class GateCancelRequest(BaseModel):
     """Request to cancel a queued gate."""
 
+    model_config = ConfigDict(extra="forbid")  # contract surface, fail loud (#994)
+
     target_id: str = Field(..., min_length=1)
     expected_status: Literal["queued"] = "queued"
 
 
 class GateWaiverRequest(BaseModel):
     """Request to waive a failed gate."""
+
+    model_config = ConfigDict(extra="forbid")  # contract surface, fail loud (#994)
 
     target_id: str = Field(..., min_length=1)
     expected_status: Literal["failed"] = "failed"

@@ -21,7 +21,7 @@ fleet. The cross-repo contract is documented canonically in
 | Repo                     | Role                                                         |
 | ------------------------ | ------------------------------------------------------------ |
 | [`Repository_Management`](https://github.com/D-sorganization/Repository_Management) | Fleet orchestrator (CI workflows, skills, templates, agent coordination). |
-| [`runner-dashboard`](https://github.com/D-sorganization/runner-dashboard) | Operator console; calls Maxwell-Daemon's HTTP API from its Maxwell tab. |
+| [`Runner_Dashboard`](https://github.com/D-sorganization/Runner_Dashboard) | Operator console; calls Maxwell-Daemon's HTTP API from its Maxwell tab. |
 | `Maxwell-Daemon` (here)  | Strategist / Implementer / Crucible state machine, ExecutionSandbox, BYO-CLI runtime, gate-aware `/ui/`. |
 
 **Rule that keeps the graph acyclic:** Maxwell-Daemon **never calls back**

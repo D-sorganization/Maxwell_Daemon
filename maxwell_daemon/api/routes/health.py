@@ -20,8 +20,10 @@ from fastapi import FastAPI
 from maxwell_daemon import __version__
 from maxwell_daemon.api.contract import (
     CONTRACT_VERSION,
+    ConnectionProfile,
     HealthResponse,
     VersionResponse,
+    connection_profile,
 )
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.logging import get_logger
@@ -61,6 +63,16 @@ def register(app: FastAPI, daemon: Daemon) -> None:
     @app.get("/api/version")
     async def api_version() -> VersionResponse:
         return VersionResponse(daemon=__version__, contract=CONTRACT_VERSION)
+
+    @app.get("/api/connection-profile")
+    async def api_connection_profile() -> ConnectionProfile:
+        """Canonical, machine-readable connection profile (#996).
+
+        Consumers fetch this (or vendor ``contract.connection_profile()``) to
+        learn the default port / health + version endpoints / systemd unit
+        rather than guessing.
+        """
+        return connection_profile()
 
     @app.get("/health")
     async def legacy_health() -> dict[str, Any]:

@@ -108,6 +108,27 @@ class TestApiVersion:
 
 
 # ---------------------------------------------------------------------------
+# GET /api/connection-profile (#996)
+# ---------------------------------------------------------------------------
+
+
+class TestApiConnectionProfile:
+    def test_returns_canonical_port_and_endpoints(self, client: TestClient) -> None:
+        r = client.get("/api/connection-profile")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["default_port"] == 8080
+        assert body["contract"] == "2.0.0"
+        assert body["health_endpoint"] == "/api/health"
+        assert body["version_endpoint"] == "/api/version"
+        assert body["systemd_unit"] == "maxwell-daemon.service"
+
+    def test_does_not_require_auth(self, auth_client: TestClient) -> None:
+        r = auth_client.get("/api/connection-profile")
+        assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # GET /api/health
 # ---------------------------------------------------------------------------
 
@@ -353,6 +374,42 @@ class TestApiTasksList:
     def test_has_total_field(self, client: TestClient) -> None:
         body = client.get("/api/tasks").json()
         assert "total" in body
+
+    def test_invalid_cursor_returns_422(self, client: TestClient) -> None:
+        """#998: a non-ISO cursor is rejected loudly, not silently ignored."""
+        r = client.get("/api/tasks?cursor=not-a-timestamp")
+        assert r.status_code == 422
+
+    def test_cursor_pagination_round_trips(self, client: TestClient) -> None:
+        """#998: pagination actually advances — page 2 reachable via next_cursor.
+
+        Submit three tasks, fetch a page of 2, then follow ``next_cursor`` and
+        assert the second page holds the remaining task with no overlap.
+        """
+        ids = []
+        for i in range(3):
+            resp = client.post("/api/v1/tasks", json={"prompt": f"pagination task {i}"})
+            assert resp.status_code == 202
+            ids.append(resp.json()["id"])
+
+        first = client.get("/api/tasks", params={"limit": 2}).json()
+        assert len(first["tasks"]) == 2
+        assert first["next_cursor"] is not None
+
+        second = client.get(
+            "/api/tasks", params={"limit": 2, "cursor": first["next_cursor"]}
+        ).json()
+        first_ids = {t["id"] for t in first["tasks"]}
+        second_ids = {t["id"] for t in second["tasks"]}
+        assert not (first_ids & second_ids), "pages must not overlap"
+        # All submitted tasks are reachable across the two pages.
+        assert set(ids) <= (first_ids | second_ids)
+
+    def test_last_page_has_null_next_cursor(self, client: TestClient) -> None:
+        """#998: the final page reports ``next_cursor=None`` (no phantom page)."""
+        client.post("/api/v1/tasks", json={"prompt": "only task"})
+        body = client.get("/api/tasks?limit=100").json()
+        assert body["next_cursor"] is None
 
 
 # ---------------------------------------------------------------------------

@@ -343,6 +343,29 @@ class TestTaskSubmission:
         assert r.status_code == 422
         assert "issue_repo and issue_number" in r.json()["detail"]
 
+    def test_submit_rejects_confirmation_token_and_idempotency_key(
+        self, client: TestClient
+    ) -> None:
+        """#994: a consumer forwarding gate/idempotency fields to the non-gated
+        ``/api/v1/tasks`` endpoint must get a loud 422 naming the offending key,
+        never a silent drop. The gated path is ``POST /api/dispatch``."""
+        r = client.post(
+            "/api/v1/tasks",
+            json={
+                "prompt": "do the thing",
+                "confirmation_token": "spoofed",
+                "idempotency_key": "abc-123",
+            },
+        )
+        assert r.status_code == 422
+        body = r.json()
+        offending = {
+            entry.get("loc", [None])[-1]
+            for entry in body.get("detail", [])
+            if isinstance(entry, dict)
+        }
+        assert {"confirmation_token", "idempotency_key"} & offending
+
     def test_submit_maps_issue_submission_value_error_to_422(
         self,
         client: TestClient,
@@ -494,6 +517,38 @@ class TestTaskSubmission:
     def test_get_nonexistent_returns_404(self, client: TestClient) -> None:
         r = client.get("/api/v1/tasks/nonexistent-id")
         assert r.status_code == 404
+
+
+class TestChatContractEnforcement:
+    """#995: ``/api/chat`` must not silently strip unsupported fields."""
+
+    def test_chat_rejects_history_field(self, client: TestClient) -> None:
+        """Bare ``history`` is unsupported — history travels in ``messages[]``.
+        It must 422, not be silently discarded."""
+        r = client.post(
+            "/api/chat",
+            json={"message": "hi", "history": [{"role": "user", "content": "prev"}]},
+        )
+        assert r.status_code == 422
+
+    def test_chat_rejects_stream_field(self, client: TestClient) -> None:
+        """``stream: true`` is not supported and must be rejected loudly."""
+        r = client.post("/api/chat", json={"message": "hi", "stream": True})
+        assert r.status_code == 422
+
+    def test_chat_honors_messages_history(self, client: TestClient) -> None:
+        """The canonical history field ``messages[]`` is accepted and honored."""
+        r = client.post(
+            "/api/chat",
+            json={
+                "messages": [
+                    {"role": "user", "content": "earlier turn"},
+                    {"role": "assistant", "content": "earlier reply"},
+                    {"role": "user", "content": "follow up"},
+                ]
+            },
+        )
+        assert r.status_code == 200
 
 
 class TestControlPlaneGauntlet:
