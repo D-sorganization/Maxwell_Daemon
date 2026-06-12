@@ -54,4 +54,12 @@ def test_ci_compatibility_lanes_do_not_collect_coverage() -> None:
 
     assert len(compatibility_steps) == 1
     assert compatibility_steps[0]["if"] == "matrix.python-version != '3.12'"
-    assert "--no-cov" in compatibility_steps[0]["run"]
+    compatibility_run = compatibility_steps[0]["run"]
+    assert "--no-cov" in compatibility_run
+    assert "tests/unit/test_auth.py" in compatibility_run
+    assert "tests/unit/test_auth_optional_pyjwt.py" in compatibility_run
+    assert "tests/unit/test_api_websocket_auth.py" in compatibility_run
+    assert "tests/unit/test_roles.py" in compatibility_run
+    assert "tests/integration/test_serve_jwt_wiring.py" in compatibility_run
+    assert "tests/unit/test_ci_timeout_contract.py" in compatibility_run
+    assert ".venv/bin/python -m pytest -p no:xvfb --timeout=300 --no-cov" not in compatibility_run
