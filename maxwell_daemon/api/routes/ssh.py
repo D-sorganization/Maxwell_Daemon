@@ -115,9 +115,20 @@ def register(  # noqa: C901
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
+    async def _require_ssh_available() -> None:
+        if _ssh_pool() is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="SSH support not installed — pip install maxwell-daemon[ssh]",
+            )
+
     @app.get(
         "/api/v1/ssh/sessions",
-        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+        dependencies=[
+            Depends(_require_ssh_available),
+            Depends(require_auth_configured),
+            Depends(require_admin),
+        ],
     )
     async def ssh_sessions() -> Any:
         """List active SSH sessions."""
@@ -128,7 +139,11 @@ def register(  # noqa: C901
 
     @app.get(
         "/api/v1/ssh/keys",
-        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+        dependencies=[
+            Depends(_require_ssh_available),
+            Depends(require_auth_configured),
+            Depends(require_admin),
+        ],
     )
     async def ssh_list_keys() -> Any:
         """List machines that have stored SSH keys."""
@@ -141,7 +156,11 @@ def register(  # noqa: C901
 
     @app.get(
         "/api/v1/ssh/keys/{machine}",
-        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+        dependencies=[
+            Depends(_require_ssh_available),
+            Depends(require_auth_configured),
+            Depends(require_admin),
+        ],
     )
     async def ssh_get_key(machine: str) -> Any:
         """Return the public key for *machine*, generating it if absent."""
@@ -155,7 +174,11 @@ def register(  # noqa: C901
 
     @app.delete(
         "/api/v1/ssh/keys/{machine}",
-        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+        dependencies=[
+            Depends(_require_ssh_available),
+            Depends(require_auth_configured),
+            Depends(require_admin),
+        ],
     )
     async def ssh_delete_key(machine: str) -> Any:
         """Remove stored SSH keys for *machine*."""
@@ -168,7 +191,12 @@ def register(  # noqa: C901
 
     @app.post(
         "/api/v1/ssh/connect",
-        dependencies=[Depends(require_auth_configured), Depends(auth), Depends(require_admin)],
+        dependencies=[
+            Depends(_require_ssh_available),
+            Depends(require_auth_configured),
+            Depends(auth),
+            Depends(require_admin),
+        ],
     )
     async def ssh_connect(payload: SSHConnectRequest) -> Any:
         """Open (or reuse) an SSH session and return its summary."""
@@ -190,7 +218,12 @@ def register(  # noqa: C901
 
     @app.post(
         "/api/v1/ssh/run",
-        dependencies=[Depends(require_auth_configured), Depends(auth), Depends(require_admin)],
+        dependencies=[
+            Depends(_require_ssh_available),
+            Depends(require_auth_configured),
+            Depends(auth),
+            Depends(require_admin),
+        ],
     )
     async def ssh_run(payload: SSHRunRequest) -> Any:
         """Run a command on a remote machine and return its output."""
@@ -207,7 +240,11 @@ def register(  # noqa: C901
 
     @app.get(
         "/api/v1/ssh/files",
-        dependencies=[Depends(require_auth_configured), Depends(require_admin)],
+        dependencies=[
+            Depends(_require_ssh_available),
+            Depends(require_auth_configured),
+            Depends(require_admin),
+        ],
     )
     async def ssh_list_files(
         host: str = Query(...),
