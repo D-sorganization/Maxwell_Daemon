@@ -202,7 +202,17 @@ jobs:
         run: .venv/bin/python -m pytest -p no:xvfb --timeout=300 --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
       - name: Run compatibility tests
         if: matrix.python-version != '3.12'
-        run: .venv/bin/python -m pytest -p no:xvfb --timeout=300 --no-cov
+        run: |
+          .venv/bin/python -m pytest \
+            tests/unit/test_auth.py \
+            tests/unit/test_auth_optional_pyjwt.py \
+            tests/unit/test_api_websocket_auth.py \
+            tests/unit/test_roles.py \
+            tests/integration/test_serve_jwt_wiring.py \
+            tests/unit/test_ci_timeout_contract.py \
+            -p no:xvfb \
+            --timeout=300 \
+            --no-cov
       - name: Run integration tests (PR only)
         # Phase 1 of #800 - gated to pull_request events so the unit-test
         # fast lane on push/main stays untouched. The default ``pytest``

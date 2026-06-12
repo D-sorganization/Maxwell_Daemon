@@ -7,7 +7,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -443,6 +443,23 @@ def doctor(
         console.print("\n[green]All checks healthy.[/green]")
 
 
+def _build_jwt_config(cfg: MaxwellDaemonConfig) -> Any:
+    """Build a ``JWTConfig`` from daemon config, or ``None`` when JWT is unset.
+
+    When ``api.jwt_secret`` is configured the daemon enforces JWT/RBAC on
+    protected routes; without it the daemon falls back to the optional static
+    ``api.auth_token`` (and to fully-open dev mode when neither is set). This
+    helper is the single wiring point that makes the RBAC subsystem reachable
+    from the ``serve`` entrypoint (issue #964).
+    """
+    from maxwell_daemon.auth import JWTConfig
+
+    secret = cfg.api.jwt_secret_value()
+    if secret is None:
+        return None
+    return JWTConfig(secret=secret, expiry_seconds=cfg.api.jwt_expiry_seconds)
+
+
 @app.command()
 def serve(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
@@ -469,7 +486,12 @@ def serve(
         # call, which caused the workers to be cancelled before uvicorn started —
         # meaning tasks submitted via the API were never picked up.
         await daemon.start(worker_count=workers)
-        fastapi_app = create_app(daemon, auth_token=cfg.api.auth_token)
+        jwt_config = _build_jwt_config(cfg)
+        fastapi_app = create_app(
+            daemon,
+            auth_token=cfg.api.auth_token,
+            jwt_config=jwt_config,
+        )
         console.print(f"[green]✓[/green] Maxwell-Daemon serving on http://{host}:{port}")
         uvi_config = uvicorn.Config(fastapi_app, host=host, port=port, log_level="info")
         server = uvicorn.Server(uvi_config)
