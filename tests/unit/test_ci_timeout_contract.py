@@ -40,6 +40,33 @@ def test_ci_test_matrix_targets_desktop_linux_runners() -> None:
     assert test_job["runs-on"] == ["self-hosted", "Linux", "X64", "d-sorg-fleet"]
 
 
+def test_ci_pick_runner_stays_lightweight() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    pick_runner = workflow["jobs"]["pick-runner"]
+
+    setup_python_steps = [
+        step
+        for step in pick_runner["steps"]
+        if step.get("uses", "").startswith("actions/setup-python")
+    ]
+
+    assert setup_python_steps == []
+
+
+def test_anti_phantom_guard_uses_workflow_token_with_comment_scope() -> None:
+    workflow = yaml.safe_load(
+        Path(".github/workflows/anti-phantom-merge.yml").read_text(encoding="utf-8")
+    )
+
+    assert workflow["permissions"]["pull-requests"] == "read"
+    assert workflow["permissions"]["issues"] == "write"
+
+    guard_steps = workflow["jobs"]["guard"]["steps"]
+    guard_step = next(step for step in guard_steps if step["name"] == "Anti-phantom guard")
+
+    assert guard_step["env"]["GH_TOKEN"] == "${{ github.token }}"
+
+
 def test_ci_compatibility_lanes_do_not_collect_coverage() -> None:
     workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
     test_job = workflow["jobs"]["test"]
@@ -54,4 +81,12 @@ def test_ci_compatibility_lanes_do_not_collect_coverage() -> None:
 
     assert len(compatibility_steps) == 1
     assert compatibility_steps[0]["if"] == "matrix.python-version != '3.12'"
-    assert "--no-cov" in compatibility_steps[0]["run"]
+    compatibility_run = compatibility_steps[0]["run"]
+    assert "--no-cov" in compatibility_run
+    assert "tests/unit/test_auth.py" in compatibility_run
+    assert "tests/unit/test_auth_optional_pyjwt.py" in compatibility_run
+    assert "tests/unit/test_api_websocket_auth.py" in compatibility_run
+    assert "tests/unit/test_roles.py" in compatibility_run
+    assert "tests/integration/test_serve_jwt_wiring.py" in compatibility_run
+    assert "tests/unit/test_ci_timeout_contract.py" in compatibility_run
+    assert ".venv/bin/python -m pytest -p no:xvfb --timeout=300 --no-cov" not in compatibility_run

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from maxwell_daemon.api.contract import TaskDetail, TaskListResponse, TaskSummary
 from maxwell_daemon.api.validation import PromptField, RepoField
@@ -23,7 +23,16 @@ log = get_logger(__name__)
 
 
 class TaskSubmit(BaseModel):
-    """Request model for task submission."""
+    """Request model for task submission.
+
+    ``extra="forbid"`` so unknown fields (e.g. a consumer forwarding
+    ``confirmation_token`` / ``idempotency_key`` to this non-gated endpoint)
+    fail loudly with a 422 naming the key instead of being silently dropped.
+    The confirmation-gated, idempotent dispatch path is ``POST /api/dispatch``
+    (#994).
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     prompt: PromptField
     task_id: str | None = None
@@ -231,7 +240,24 @@ def register(  # noqa: C901
         limit: int = Query(default=100, ge=1, le=1000),
         cursor: str | None = Query(default=None),
     ) -> TaskListResponse:
-        tasks = await daemon._task_store.alist_tasks(limit=limit)
+        # Honest cursor pagination (#998): the cursor is the ``created_at`` of
+        # the last item on the previous page; the store returns tasks strictly
+        # older than it (``created_at < cursor``, DESC). We over-fetch by one
+        # to detect whether a further page exists without a second query.
+        cursor_dt: datetime | None = None
+        if cursor is not None:
+            try:
+                cursor_dt = datetime.fromisoformat(cursor)
+            except ValueError as exc:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"invalid cursor {cursor!r}: expected ISO-8601 timestamp",
+                ) from exc
+
+        tasks = await daemon._task_store.alist_tasks(limit=limit + 1, cursor=cursor_dt)
+        has_more = len(tasks) > limit
+        page = tasks[:limit]
+        next_cursor = page[-1].created_at.isoformat() if has_more and page else None
         summaries = [
             TaskSummary(
                 id=t.id,
@@ -240,11 +266,11 @@ def register(  # noqa: C901
                 repo=t.repo,
                 prompt_preview=t.prompt[:120] if t.prompt else "",
             )
-            for t in tasks
+            for t in page
         ]
         return TaskListResponse(
             tasks=summaries,
-            next_cursor=None,
+            next_cursor=next_cursor,
             total=len(summaries),
         )
 
@@ -253,11 +279,23 @@ def register(  # noqa: C901
         t = daemon.get_task(task_id)
         if t is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
+        # Populate artifacts from the artifact store rather than returning a
+        # permanent empty stub (#998). ``transcript`` is not yet persisted; it
+        # is documented as reserved-for-future in the contract model and stays
+        # an explicit empty list until a transcript store exists.
+        artifacts = [
+            {
+                "id": a.id,
+                "kind": a.kind.value,
+                "created_at": a.created_at.isoformat(),
+            }
+            for a in daemon._artifact_store.list_for_task(task_id)
+        ]
         return TaskDetail(
             id=t.id,
             status=t.status.value,
             created_at=t.created_at.isoformat(),
             repo=t.repo,
             transcript=[],
-            artifacts=[],
+            artifacts=artifacts,
         )

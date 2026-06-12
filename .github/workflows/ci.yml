@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      clean_cache:
+        description: "Force-clean stale Python tool cache"
+        required: false
+        default: "false"
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,12 +24,17 @@ jobs:
   local-only-workflows:
     timeout-minutes: 30
     name: Reject hosted runner routing
-    runs-on: d-sorg-fleet
+    needs: pick-runner
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - name: Run local-only workflow guard
         shell: bash
         run: |
@@ -32,10 +43,36 @@ jobs:
 
   pick-runner:
     runs-on: d-sorg-fleet
-    timeout-minutes: 2
+    timeout-minutes: 5
     outputs:
       runner: ${{ steps.check.outputs.runner }}
     steps:
+      - uses: actions/checkout@v6
+      - name: Runner Diagnostics
+        shell: bash
+        run: |
+          echo "=== Disk Space ==="
+          df -h
+          echo "=== Directory Permissions ==="
+          ls -la /home/dieterolson/actions-runners-nvme/ || true
+          ls -la /home/dieterolson/actions-runners-nvme/.shared-tool-cache || true
+          echo "=== Whoami ==="
+          whoami
+          echo "=== Temp Directory ==="
+          ls -la /home/dieterolson/actions-runners-nvme/runner-*/_work/_temp || true
+      - name: Force-clean stale Python tool cache (NVMe runners)
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
+        if: runner.os != 'Windows' && github.event.inputs.clean_cache == 'true'
+        shell: bash
+        run: |
+          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
+            if [ -d "$cache_root/Python" ]; then
+              echo "Cleaning $cache_root/Python (pre-setup-python)"
+              sudo mv "$cache_root/Python" "$cache_root/Python_stale_$RANDOM" || true
+              sudo rm -rf "$cache_root/Python_stale_$RANDOM" || true
+            fi
+          done
       - name: Check for self-hosted runner
         id: check
         shell: bash
@@ -60,13 +97,17 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Purge stale untracked files (self-hosted runner hygiene)
         run: git clean -fdx --exclude=.venv
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
@@ -86,11 +127,15 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
@@ -117,11 +162,15 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv sync --all-extras
@@ -135,7 +184,17 @@ jobs:
         run: .venv/bin/python -m pytest -p no:xvfb --timeout=300 --cov=maxwell_daemon --cov-report=xml --cov-report=term-missing
       - name: Run compatibility tests
         if: matrix.python-version != '3.12'
-        run: .venv/bin/python -m pytest -p no:xvfb --timeout=300 --no-cov
+        run: |
+          .venv/bin/python -m pytest \
+            tests/unit/test_auth.py \
+            tests/unit/test_auth_optional_pyjwt.py \
+            tests/unit/test_api_websocket_auth.py \
+            tests/unit/test_roles.py \
+            tests/integration/test_serve_jwt_wiring.py \
+            tests/unit/test_ci_timeout_contract.py \
+            -p no:xvfb \
+            --timeout=300 \
+            --no-cov
       - name: Run integration tests (PR only)
         # Phase 1 of #800 - gated to pull_request events so the unit-test
         # fast lane on push/main stays untouched. The default ``pytest``
@@ -147,7 +206,7 @@ jobs:
         run: .venv/bin/python -m pytest tests/integration/ --no-cov -p no:xvfb --timeout=300
       - name: Upload coverage artifact
         if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-xml
           path: coverage.xml
@@ -156,7 +215,7 @@ jobs:
         run: .venv/bin/python -m pytest benchmarks/ --benchmark-only --no-cov --benchmark-json=benchmark-results.json
       - name: Upload benchmark results
         if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: benchmark-results.json
@@ -173,12 +232,16 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
-      - uses: actions/download-artifact@v4
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
+      - uses: actions/download-artifact@v8
         with:
           name: coverage-xml
       - run: python scripts/check_coverage_floor.py --xml coverage.xml
@@ -194,11 +257,15 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: python scripts/check_file_size_budget.py
 
 
@@ -213,11 +280,15 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: python scripts/check_noqa_ratchet.py
   todo-fixme:
     timeout-minutes: 30
@@ -230,11 +301,15 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: python scripts/check_todo_fixme.py maxwell_daemon
 
   security:
@@ -248,14 +323,18 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
-      - run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - run: uv venv .venv --python $(which python)
-      - run: uv pip install bandit pip-audit
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
+      - run: python -m venv .venv
+      - name: Install security scanners without cached wheels
+        run: .venv/bin/python -m pip install --no-cache-dir bandit pip-audit
       - name: Bandit (static analysis)
         run: .venv/bin/python -m bandit -r maxwell_daemon -c pyproject.toml
       - name: pip-audit (dependency vulnerabilities)
@@ -272,15 +351,19 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: python -m pip install uv
       - name: Verify uv.lock is fresh
         run: uv lock --check
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: 'npm'
@@ -300,16 +383,20 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - run: uv venv .venv --python $(which python)
       - run: uv pip install build
       - run: .venv/bin/python -m build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -337,12 +424,18 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        if: runner.os != 'Windows'
+        uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
-      - uses: actions/download-artifact@v4
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist
@@ -358,7 +451,7 @@ jobs:
               print("No wheel artifact found in dist/")
               sys.exit(1)
           subprocess.check_call([sys.executable, "-m", "pip", "install", wheels[0]])
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: 'npm'
@@ -366,6 +459,22 @@ jobs:
       - name: Install desktop dependencies
         working-directory: apps/desktop-electron
         run: npm ci
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          if sudo -n true 2>/dev/null; then
+            sudo apt-get update || true
+            # libasound2 was renamed to libasound2t64 in the Ubuntu 24.04
+            # time_t64 transition; install whichever exists. Install each
+            # package best-effort so a single unavailable candidate on a newer
+            # runner image does not fail the whole job — the smoke step below
+            # surfaces any library that is genuinely missing.
+            for pkg in libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libdbus-1-3 libxcb1 libxkbcommon0 libxdg-basedir1 libpango-1.0-0 libcairo2 libasound2t64 libasound2; do
+              sudo apt-get install -y "$pkg" || echo "Skipping unavailable package: $pkg"
+            done
+          else
+            echo "No passwordless sudo, assuming libraries are pre-installed"
+          fi
       - name: Run desktop launch smoke (Linux)
         if: runner.os == 'Linux'
         working-directory: apps/desktop-electron

@@ -8,6 +8,10 @@ permissions:
   contents: write
   id-token: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
 
 
@@ -51,11 +55,15 @@ jobs:
       name: pypi
       url: https://pypi.org/p/maxwell-daemon
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
           python-version: "3.12"
           cache: 'pip'
+      - name: Purge pip cache
+        run: python -m pip cache purge || true
       - run: |
           pip install build twine
           python -m build
@@ -73,7 +81,7 @@ jobs:
             dist/*.whl
             dist/sbom.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/

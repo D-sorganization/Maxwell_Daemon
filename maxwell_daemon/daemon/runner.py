@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import functools
 import signal
 import threading
 import uuid
@@ -61,6 +62,7 @@ from maxwell_daemon.events import Event, EventBus, EventKind, attach_observabili
 from maxwell_daemon.fleet.capabilities import InMemoryFleetCapabilityRegistry
 from maxwell_daemon.logging import get_logger
 from maxwell_daemon.metrics import record_request
+from maxwell_daemon.tracing import span as _trace_span
 
 log = get_logger("maxwell_daemon.daemon")
 
@@ -101,6 +103,37 @@ class ConfigSnapshot:
     ledger: CostLedger
 
 
+@functools.total_ordering
+class _StopSentinel:
+    """Totally-ordered stop marker for the worker PriorityQueue.
+
+    The queue holds ``(priority, payload)`` tuples and ``heapq`` falls back to
+    comparing the second element when priorities tie.  A bare ``None`` sentinel
+    is not orderable, so two stop markers at the same priority raised
+    ``TypeError: '<' not supported between instances of 'NoneType'`` mid-heappush
+    — corrupting the heap and failing the scale-down API (issue #974).  This
+    sentinel sorts deterministically against itself and after any real ``Task``
+    (it is only ever enqueued at priority ``-1``, ahead of all tasks, so the
+    tiebreaker is exercised only when multiple sentinels collide).
+    """
+
+    __slots__ = ()
+
+    def __lt__(self, other: object) -> bool:
+        # All sentinels are interchangeable: never strictly less than anything.
+        return False
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _StopSentinel)
+
+    def __hash__(self) -> int:
+        return hash(_StopSentinel)
+
+
+# Singleton stop marker shared by every scale-down signal.
+_STOP = _StopSentinel()
+
+
 class Daemon:
     def __init__(
         self,
@@ -130,23 +163,28 @@ class Daemon:
 
         self._router = BackendRouter(config, mcp_manager=self._mcp_manager)
         self._fleet_registry = InMemoryFleetCapabilityRegistry()
-        self._ledger = CostLedger(
-            ledger_path or Path.home() / ".local/share/maxwell-daemon/ledger.db"
+        storage_root = (
+            Path(ledger_path).expanduser().parent
+            if ledger_path is not None
+            else Path.home() / ".local/share/maxwell-daemon"
         )
+        self._ledger = CostLedger(ledger_path or storage_root / "ledger.db")
         self._budget = BudgetEnforcer(config.budget, self._ledger)
         self._events = EventBus()
         self._workspace_root = (
             workspace_root or Path.home() / ".local/share/maxwell-daemon/workspaces"
         )
-        # Durable task store lives next to the cost ledger by default.
-        default_store = Path.home() / ".local/share/maxwell-daemon/tasks.db"
+        # Durable stores live next to the cost ledger by default. Keeping the
+        # default root derived from an explicit ledger path lets tests and
+        # embedded instances isolate all SQLite state with one parameter.
+        default_store = storage_root / "tasks.db"
         self._task_store = TaskStore(task_store_path or default_store)
-        default_work_item_store = Path.home() / ".local/share/maxwell-daemon/work_items.db"
+        default_work_item_store = storage_root / "work_items.db"
         self._work_item_store = WorkItemStore(work_item_store_path or default_work_item_store)
-        default_task_graph_store = Path.home() / ".local/share/maxwell-daemon/task_graphs.db"
+        default_task_graph_store = storage_root / "task_graphs.db"
         self._task_graph_store = TaskGraphStore(task_graph_store_path or default_task_graph_store)
-        default_artifact_store = Path.home() / ".local/share/maxwell-daemon/artifacts.db"
-        default_artifact_root = Path.home() / ".local/share/maxwell-daemon/artifacts"
+        default_artifact_store = storage_root / "artifacts.db"
+        default_artifact_root = storage_root / "artifacts"
         self._artifact_store = ArtifactStore(
             artifact_store_path or default_artifact_store,
             blob_root=artifact_blob_root or default_artifact_root,
@@ -155,7 +193,7 @@ class Daemon:
             store=self._task_graph_store,
             artifact_store=self._artifact_store,
         )
-        default_action_store = Path.home() / ".local/share/maxwell-daemon/actions.db"
+        default_action_store = storage_root / "actions.db"
         self._action_store = ActionStore(action_store_path or default_action_store)
         self._actions = ActionService(
             self._action_store,
@@ -167,8 +205,7 @@ class Daemon:
             on_side_effect_started=self.mark_task_side_effects_started,
         )
         default_delegate_store = (
-            delegate_lifecycle_store_path
-            or Path.home() / ".local/share/maxwell-daemon/delegate_sessions.db"
+            delegate_lifecycle_store_path or storage_root / "delegate_sessions.db"
         )
         self._delegate_lifecycle = DelegateLifecycleService(
             DelegateSessionStore(default_delegate_store)
@@ -177,9 +214,7 @@ class Daemon:
 
         self._template_store = TemplateStore(Path.home() / ".local/share/maxwell-daemon/templates")
 
-        default_auth_store = auth_store_path or (
-            Path.home() / ".local/share/maxwell-daemon/auth_sessions.db"
-        )
+        default_auth_store = auth_store_path or storage_root / "auth_sessions.db"
         self._auth_store = AuthSessionStore(default_auth_store)
         # Memory store — co-located with the ledger for easy backup.
         from maxwell_daemon.memory import (
@@ -224,8 +259,8 @@ class Daemon:
         self._restart_required_reasons: list[str] = []
         # PriorityQueue: workers dequeue (priority, task) tuples. Lower priority
         # number = higher urgency (0=emergency, 50=high, 100=normal, 200=batch).
-        self._queue: asyncio.PriorityQueue[tuple[int, Task | None]] = asyncio.PriorityQueue(
-            maxsize=config.agent.max_queue_depth
+        self._queue: asyncio.PriorityQueue[tuple[int, Task | _StopSentinel]] = (
+            asyncio.PriorityQueue(maxsize=config.agent.max_queue_depth)
         )
         self._workers: list[asyncio.Task[None]] = []
         self._worker_count: int = 0
@@ -323,23 +358,38 @@ class Daemon:
             if running.status is TaskStatus.RUNNING and self._task_kind_key(running) == kind_key
         )
 
+    async def _restore_deferred(self, deferred: list[tuple[int, Task]]) -> None:
+        """Re-enqueue deferred entries without ever losing them on ``QueueFull``.
+
+        These entries were just dequeued from this same bounded queue, so the
+        space normally exists — but a concurrent producer could fill the queue
+        between the ``get`` and the re-``put``.  ``put_nowait`` would then raise
+        ``QueueFull`` and silently drop the held entry (issue #973).  We fall
+        back to an awaitable ``put`` for any entry that does not fit so deferred
+        work is always preserved.
+        """
+        for deferred_item in deferred:
+            try:
+                self._queue.put_nowait(deferred_item)
+            except asyncio.QueueFull:
+                await self._queue.put(deferred_item)
+
     async def _claim_next_queued_task(self) -> tuple[bool, Task | None]:
         deferred: list[tuple[int, Task]] = []
+        claimed: Task | None = None
         while True:
             try:
                 if deferred:
-                    priority, task = self._queue.get_nowait()
+                    priority, payload = self._queue.get_nowait()
                 else:
-                    priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
-            except asyncio.TimeoutError:
-                break
-            except asyncio.QueueEmpty:
+                    priority, payload = await asyncio.wait_for(self._queue.get(), timeout=0.2)
+            except (asyncio.TimeoutError, asyncio.QueueEmpty):
                 break
 
-            if task is None:
-                for deferred_item in deferred:
-                    self._queue.put_nowait(deferred_item)
+            if isinstance(payload, _StopSentinel):
+                await self._restore_deferred(deferred)
                 return True, None
+            task = payload
 
             kind_cap = self._kind_cap_for(task)
             with self._tasks_lock:
@@ -362,13 +412,14 @@ class Daemon:
                         continue
                 task.status = TaskStatus.RUNNING
                 task.started_at = datetime.now(timezone.utc)
-                for deferred_item in deferred:
-                    self._queue.put_nowait(deferred_item)
-                return False, task
+                claimed = task
+            # ``put_nowait``/await of deferred entries must happen OUTSIDE the
+            # threading lock (no awaiting while holding it).
+            if claimed is not None:
+                break
 
-        for deferred_item in deferred:
-            self._queue.put_nowait(deferred_item)
-        return False, None
+        await self._restore_deferred(deferred)
+        return False, claimed
 
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
@@ -748,9 +799,9 @@ class Daemon:
             summarizer_role=summarizer,
         ).anneal()
 
-    def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:
+    def _enqueue_task_entry(self, priority: int, task: Task) -> None:
         """Insert a queue entry while respecting daemon loop thread affinity."""
-        item = (priority, task)
+        item: tuple[int, Task | _StopSentinel] = (priority, task)
         if self._loop is None or not self._loop.is_running():
             with self._queue_lock:
                 if self._queue.full():
@@ -1432,10 +1483,10 @@ class Daemon:
                     len(self._workers),
                 )
         elif n < current:
-            # Send sentinel (priority=-1, task=None) to excess workers so they
-            # exit cleanly after finishing their current task.
+            # Send a totally-ordered stop sentinel (priority=-1) to excess
+            # workers so they exit cleanly after finishing their current task.
             for _ in range(current - n):
-                await self._queue.put((-1, None))
+                await self._queue.put((-1, _STOP))
             # Remove excess workers from tracking immediately; sentinels will
             # signal them to exit after finishing their current task.
             self._workers = self._workers[:n]
@@ -1522,44 +1573,55 @@ class Daemon:
                 await asyncio.sleep(0.05)
                 continue
             with bind_context(task_id=task.id, worker_id=worker_id):
-                # Attempt to mark the task RUNNING in the durable store before
-                # executing.  If that write fails (disk full, lock contention),
-                # re-queue the task so it is retried rather than silently lost.
-                # Double-execution is still possible if the DB write succeeds but
-                # the worker crashes before execution completes; preventing that
-                # fully requires a lease/heartbeat mechanism (future work).
+                # Supervision boundary (#973): an unexpected exception escaping a
+                # single task must NOT kill the worker coroutine — otherwise each
+                # incident (disk-full, lock-timeout) permanently drops a worker
+                # while ``state()`` still reports it alive.  CancelledError is the
+                # one exception we re-raise: it is the loop's own shutdown signal.
                 try:
-                    self._task_store.update_status(
-                        task.id, TaskStatus.RUNNING, started_at=task.started_at
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    log.error(
-                        "failed to mark task %s RUNNING: %s; re-queuing",
-                        task.id,
-                        exc,
-                    )
-                    with self._tasks_lock:
-                        if task.status is TaskStatus.RUNNING:
-                            task.status = TaskStatus.QUEUED
-                            task.started_at = None
-                    await self._queue.put((task.priority, task))
-                    continue
-                snapshot = self._capture_config_snapshot()
-                execution = asyncio.create_task(
-                    self._execute(task, snapshot),
-                    name=f"task-exec-{task.id}",
-                )
-                self._active_execution_tasks[task.id] = execution
-                try:
-                    await execution
+                    await self._run_one_task(task)
                 except asyncio.CancelledError:
-                    if task.id in self._stalled_task_ids:
-                        self._stalled_task_ids.discard(task.id)
-                        await self._handle_stalled_task(task)
-                        continue
                     raise
-                finally:
-                    self._clear_execution_tracking(task.id)
+                except Exception:  # last-resort worker supervision
+                    log.exception("worker %d: task %s crashed; continuing", worker_id, task.id)
+
+    async def _run_one_task(self, task: Task) -> None:
+        # Attempt to mark the task RUNNING in the durable store before
+        # executing.  If that write fails (disk full, lock contention),
+        # re-queue the task so it is retried rather than silently lost.
+        # Double-execution is still possible if the DB write succeeds but
+        # the worker crashes before execution completes; preventing that
+        # fully requires a lease/heartbeat mechanism (future work).
+        try:
+            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
+        except Exception as exc:  # noqa: BLE001
+            log.error(
+                "failed to mark task %s RUNNING: %s; re-queuing",
+                task.id,
+                exc,
+            )
+            with self._tasks_lock:
+                if task.status is TaskStatus.RUNNING:
+                    task.status = TaskStatus.QUEUED
+                    task.started_at = None
+            await self._queue.put((task.priority, task))
+            return
+        snapshot = self._capture_config_snapshot()
+        execution = asyncio.create_task(
+            self._execute(task, snapshot),
+            name=f"task-exec-{task.id}",
+        )
+        self._active_execution_tasks[task.id] = execution
+        try:
+            await execution
+        except asyncio.CancelledError:
+            if task.id in self._stalled_task_ids:
+                self._stalled_task_ids.discard(task.id)
+                await self._handle_stalled_task(task)
+                return
+            raise
+        finally:
+            self._clear_execution_tracking(task.id)
 
     async def _execute(self, task: Task, snapshot: ConfigSnapshot) -> None:  # noqa: C901
         task.status = TaskStatus.RUNNING
@@ -1599,39 +1661,58 @@ class Daemon:
                 )
             )
             self._record_stream_event(task.id, EventKind.TASK_STARTED.value)
-            snapshot.budget.require_under_budget()
-            decision = snapshot.router.route(
-                repo=task.repo,
-                backend_override=task.backend,
-                model_override=task.model,
-            )
-            task.backend = decision.backend_name
-            task.route_reason = decision.reason
-            if task.kind is not TaskKind.ISSUE:
-                task.model = decision.model
-            decision_backend = task.backend
-            decision_model = task.model or decision.model
-            try:
-                self._task_store.save(task)
-            except Exception:
-                log.exception("task store write failed while recording route for task=%s", task.id)
+            # Wrap the dispatch path (routing → backend completion) in a span so
+            # a trace shows the task lifecycle end-to-end. The span is a no-op
+            # when tracing is disabled (zero-cost default install). Exceptions
+            # propagate *through* the span — it records them and sets an ERROR
+            # status — and are then handled by the except clauses below.
+            async with _trace_span(
+                "maxwell_daemon.task.dispatch",
+                {"task_id": task.id, "kind": task.kind.value},
+            ):
+                snapshot.budget.require_under_budget()
+                decision = snapshot.router.route(
+                    repo=task.repo,
+                    backend_override=task.backend,
+                    model_override=task.model,
+                )
+                task.backend = decision.backend_name
+                task.route_reason = decision.reason
+                if task.kind is not TaskKind.ISSUE:
+                    task.model = decision.model
+                decision_backend = task.backend
+                decision_model = task.model or decision.model
+                try:
+                    self._task_store.save(task)
+                except Exception:
+                    log.exception(
+                        "task store write failed while recording route for task=%s", task.id
+                    )
 
-            if task.kind is TaskKind.ISSUE:
-                await self._execute_issue(task, decision)
-                return
+                if task.kind is TaskKind.ISSUE:
+                    await self._execute_issue(task, decision)
+                    return
 
-            prompt_content = task.prompt
-            if task.repo and repo_path:
-                from maxwell_daemon.core.repo_overrides import RepoSchematic
+                prompt_content = task.prompt
+                if task.repo and repo_path:
+                    from maxwell_daemon.core.repo_overrides import RepoSchematic
 
-                schematic = RepoSchematic(task.repo, repo_path).generate()
-                prompt_content = f"{schematic}\n\n{prompt_content}"
+                    schematic = RepoSchematic(task.repo, repo_path).generate()
+                    prompt_content = f"{schematic}\n\n{prompt_content}"
 
-            resp = await decision.backend.complete(
-                [Message(role=MessageRole.USER, content=prompt_content)],
-                model=decision.model,
-                dry_run=task.dry_run,
-            )
+                async with _trace_span(
+                    "maxwell_daemon.task.backend_complete",
+                    {
+                        "task_id": task.id,
+                        "backend": decision.backend_name,
+                        "model": decision.model,
+                    },
+                ):
+                    resp = await decision.backend.complete(
+                        [Message(role=MessageRole.USER, content=prompt_content)],
+                        model=decision.model,
+                        dry_run=task.dry_run,
+                    )
             task.result = resp.content
             estimated_cost = decision.backend.estimate_cost(resp.usage, decision.model)
             task.cost_usd = estimated_cost if estimated_cost is not None else 0.0

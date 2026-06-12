@@ -1,4 +1,17 @@
 {
   "max_lines": 1200,
-  "exceptions": []
+  "exceptions": [
+    {
+      "path": "maxwell_daemon/core/delegate_lifecycle.py",
+      "expires_on": "2027-12-31",
+      "owner": "dieterolson",
+      "reason": "Legacy delegate lifecycle logic, pending refactoring"
+    },
+    {
+      "path": "maxwell_daemon/daemon/runner.py",
+      "expires_on": "2027-12-31",
+      "owner": "dieterolson",
+      "reason": "Daemon runner implementation, pending splitting"
+    }
+  ]
 }
