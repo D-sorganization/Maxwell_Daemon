@@ -1,7 +1,15 @@
 """SSH session pool with async shell access and SFTP support.
 
-Sessions are cached by (host, port, user) and reused for up to
+Sessions are cached by ``(host, port, user, principal)`` and reused for up to
 ``SESSION_TTL_SECONDS``.  The pool evicts idle connections in the background.
+
+**Session reuse semantics (issue #966):** the *principal* component of the
+pool key is derived from the authenticating credential — a non-reversible
+SHA-256 digest of the password, or the sentinel ``"key"`` for key/agent auth.
+A session is therefore only reused by a caller presenting the *same*
+credential; a caller with a different password (or key-vs-password) opens a
+fresh connection and cannot ride another caller's authenticated session.  The
+plaintext password is never stored in the key, in ``repr``, or in logs.
 
 Usage::
 
@@ -22,6 +30,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -33,6 +42,24 @@ from maxwell_daemon.ssh.keys import SSHKeyStore, _require_asyncssh
 __all__ = ["CommandResult", "DirEntry", "SSHSession", "SSHSessionPool"]
 
 SESSION_TTL_SECONDS = 3600  # 1 hour max session lifetime
+
+# Sentinel principal used when authentication is key/agent based (no password).
+_KEY_AUTH_PRINCIPAL = "key"
+
+
+def _credential_principal(password: str | None) -> str:
+    """Derive a stable, non-reversible principal id for the auth material.
+
+    Sessions are pooled per *(host, port, user, principal)* so a caller can
+    only reuse a session that was opened with the *same* credential. We never
+    store the plaintext password — only a salted-domain SHA-256 digest — so the
+    principal can sit safely in an in-memory key and in repr/log output
+    (issue #966).
+    """
+    if password is None:
+        return _KEY_AUTH_PRINCIPAL
+    digest = hashlib.sha256(f"pw:{password}".encode()).hexdigest()
+    return f"pw:{digest}"
 
 
 @dataclass
@@ -150,9 +177,10 @@ class _PoolKey:
     host: str
     port: int
     user: str
+    principal: str = _KEY_AUTH_PRINCIPAL
 
     def __hash__(self) -> int:
-        return hash((self.host, self.port, self.user))
+        return hash((self.host, self.port, self.user, self.principal))
 
 
 class SSHSessionPool:
@@ -190,7 +218,15 @@ class SSHSessionPool:
     ) -> SSHSession:
         """Return a cached session for (host, port, user), creating one if needed."""
         asyncssh = _require_asyncssh()
-        key = _PoolKey(host=host, port=port, user=user)
+        # Scope the session to the authenticating principal so a caller with
+        # different credentials cannot ride another caller's open session for
+        # the same (host, port, user) tuple (issue #966).
+        key = _PoolKey(
+            host=host,
+            port=port,
+            user=user,
+            principal=_credential_principal(password),
+        )
 
         async with self._lock:
             existing = self._pool.get(key)
