@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from maxwell_daemon.backends.base import Message, MessageRole
 from maxwell_daemon.context.packs import ContextPackPolicy, build_context_pack
@@ -35,6 +35,13 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    # ``extra="forbid"`` so unsupported fields are rejected with a 422 instead
+    # of silently stripped. Conversation history is carried in ``messages[]``
+    # (honored end-to-end via ``_messages_for``); a consumer sending a bare
+    # ``history`` or ``stream`` field now fails loudly and must migrate to
+    # ``messages[]`` (#995).
+    model_config = ConfigDict(extra="forbid")
+
     prompt: str | None = Field(default=None, min_length=1, max_length=100_000)
     message: str | None = Field(default=None, min_length=1, max_length=100_000)
     messages: list[ChatMessage] = Field(default_factory=list, max_length=50)

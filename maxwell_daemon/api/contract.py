@@ -10,9 +10,49 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 CONTRACT_VERSION = "2.0.0"
+
+# -- Canonical connection profile (single source of truth, #996) -------------
+#
+# The default loopback port the daemon listens on (``serve --port`` /
+# ``APIConfig.port``). Consumers (e.g. Runner_Dashboard) MUST import/vendor
+# these values rather than hard-coding a guess. There is no built-in token:
+# auth is operator-configured (static ``api.auth_token`` or ``api.jwt_secret``)
+# and the daemon runs open only when neither is set.
+DEFAULT_API_PORT = 8080
+DEFAULT_API_HOST = "127.0.0.1"
+SYSTEMD_UNIT_NAME = "maxwell-daemon.service"
+HEALTH_ENDPOINT = "/api/health"
+VERSION_ENDPOINT = "/api/version"
+
+
+class ConnectionProfile(BaseModel):
+    """Machine-readable statement of how to connect to this daemon (#996).
+
+    Published at ``GET /api/version`` adjacent metadata and importable by
+    consumers so the default port / health probe / version-negotiation
+    endpoint are a single source of truth instead of a hard-coded guess.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    contract: str = CONTRACT_VERSION
+    default_host: str = DEFAULT_API_HOST
+    default_port: int = DEFAULT_API_PORT
+    systemd_unit: str = SYSTEMD_UNIT_NAME
+    health_endpoint: str = HEALTH_ENDPOINT
+    version_endpoint: str = VERSION_ENDPOINT
+    # Auth is operator-configured; there is no shipped default token. A
+    # consumer presenting a placeholder token is rejected (401), never
+    # silently admitted.
+    auth_required_when_configured: bool = True
+
+
+def connection_profile() -> ConnectionProfile:
+    """Return the canonical connection profile for this daemon build."""
+    return ConnectionProfile()
 
 
 class VersionResponse(BaseModel):
@@ -89,11 +129,20 @@ class TaskDetail(BaseModel):
     status: str
     created_at: str
     repo: str | None = None
+    # ``transcript`` is reserved for a future transcript store and is always
+    # an empty list today (no transcript is persisted yet); it is NOT a silent
+    # stub — consumers should treat empty as "no transcript available" (#998).
     transcript: list[dict[str, Any]]
+    # ``artifacts`` is populated from the artifact store: each entry is
+    # ``{"id", "kind", "created_at"}`` (#998).
     artifacts: list[dict[str, Any]]
 
 
 class DispatchRequest(BaseModel):
+    # Contract-surface request: reject unknown fields with a 422 naming the
+    # offending key rather than silently dropping them (#994).
+    model_config = ConfigDict(extra="forbid")
+
     confirmation_token: str
     prompt: str
     repo: str | None = None
@@ -107,6 +156,9 @@ class DispatchResponse(BaseModel):
 
 
 class ControlRequest(BaseModel):
+    # Contract-surface request: reject unknown fields loudly (#994).
+    model_config = ConfigDict(extra="forbid")
+
     confirmation_token: str
     reason: str | None = None
 
