@@ -19,7 +19,14 @@ import yaml
 from maxwell_daemon.backends import registry
 from maxwell_daemon.config import MaxwellDaemonConfig
 from maxwell_daemon.daemon import Daemon
-from maxwell_daemon.daemon.runner import DuplicateTaskIdError, Task, TaskStatus
+from maxwell_daemon.daemon.runner import (
+    _STOP,
+    DuplicateTaskIdError,
+    Task,
+    TaskKind,
+    TaskStatus,
+    _StopSentinel,
+)
 
 T = TypeVar("T")
 
@@ -997,3 +1004,87 @@ class TestWorkerRescaling:
             assert d.state().worker_count == 1
 
         _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=2, body=body))
+
+    def test_scale_down_by_two_enqueues_orderable_sentinels(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        """Regression for #974: two stop sentinels must not raise TypeError.
+
+        With the old ``(-1, None)`` sentinel, ``heapq`` compared
+        ``None < None`` while sifting the second sentinel into the heap and
+        raised ``TypeError``, failing the scale-down and corrupting the heap.
+        """
+
+        async def body(d: Daemon) -> None:
+            await d.set_worker_count(5)
+            # Drain anything workers already pulled so the assertion is precise.
+            await d.set_worker_count(1)  # enqueues 4 stop sentinels at priority -1
+            # The decisive check: two equal-priority sentinels coexisting in the
+            # heap must be totally orderable.  Force the comparison directly.
+            await d._queue.put((-1, _STOP))
+            await d._queue.put((-1, _STOP))  # would TypeError pre-fix during sift
+            assert d._queue.qsize() >= 2
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=2, body=body))
+
+    def test_stop_sentinel_total_ordering(self) -> None:
+        """The sentinel sorts deterministically against itself and tasks."""
+        a, b = _StopSentinel(), _StopSentinel()
+        # Never strictly less than another sentinel (interchangeable).
+        assert not (a < b)
+        assert not (b < a)
+        assert a == b
+        # Heap operations over equal-priority sentinels must not raise.
+        import heapq
+
+        heap: list[tuple[int, _StopSentinel]] = []
+        heapq.heappush(heap, (-1, a))
+        heapq.heappush(heap, (-1, b))  # would TypeError with a bare None sentinel
+        assert len(heap) == 2
+
+
+class TestWorkerSupervision:
+    """Regression for #973: a crashing task must not kill the worker."""
+
+    def test_worker_survives_task_exception(
+        self, minimal_config: MaxwellDaemonConfig, isolated_ledger_path: Path
+    ) -> None:
+        async def body(d: Daemon) -> None:
+            # Stop the real workers so only our driven loop consumes the queue,
+            # making the crash-then-recover sequence deterministic.
+            await d.stop()
+            d._running = True
+
+            calls: list[str] = []
+
+            async def boom(task: Task) -> None:
+                calls.append(task.id)
+                if task.id == "crash-1":
+                    raise RuntimeError("simulated task crash")
+
+            d._run_one_task = boom  # type: ignore[method-assign]
+
+            def _task(task_id: str) -> Task:
+                return Task(id=task_id, prompt="x", kind=TaskKind.PROMPT, repo=None)
+
+            t1, t2 = _task("crash-1"), _task("ok-2")
+            with d._tasks_lock:
+                d._tasks[t1.id] = t1
+                d._tasks[t2.id] = t2
+            await d._queue.put((t1.priority, t1))
+            await d._queue.put((t2.priority, t2))
+
+            loop_task = asyncio.create_task(d._worker_loop(99))
+            for _ in range(100):
+                if len(calls) >= 2:
+                    break
+                await asyncio.sleep(0.02)
+            d._running = False
+            await d._queue.put((-1, _STOP))
+            await asyncio.wait_for(loop_task, timeout=2.0)
+
+            # The worker processed the second task despite the first crashing —
+            # the loop did not die on the unhandled RuntimeError.
+            assert calls == [t1.id, t2.id]
+
+        _run(_with_daemon(minimal_config, isolated_ledger_path, worker_count=1, body=body))
