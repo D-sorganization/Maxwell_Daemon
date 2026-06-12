@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import functools
 import signal
 import threading
 import uuid
@@ -100,6 +101,37 @@ class ConfigSnapshot:
     router: BackendRouter
     budget: BudgetEnforcer
     ledger: CostLedger
+
+
+@functools.total_ordering
+class _StopSentinel:
+    """Totally-ordered stop marker for the worker PriorityQueue.
+
+    The queue holds ``(priority, payload)`` tuples and ``heapq`` falls back to
+    comparing the second element when priorities tie.  A bare ``None`` sentinel
+    is not orderable, so two stop markers at the same priority raised
+    ``TypeError: '<' not supported between instances of 'NoneType'`` mid-heappush
+    — corrupting the heap and failing the scale-down API (issue #974).  This
+    sentinel sorts deterministically against itself and after any real ``Task``
+    (it is only ever enqueued at priority ``-1``, ahead of all tasks, so the
+    tiebreaker is exercised only when multiple sentinels collide).
+    """
+
+    __slots__ = ()
+
+    def __lt__(self, other: object) -> bool:
+        # All sentinels are interchangeable: never strictly less than anything.
+        return False
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _StopSentinel)
+
+    def __hash__(self) -> int:
+        return hash(_StopSentinel)
+
+
+# Singleton stop marker shared by every scale-down signal.
+_STOP = _StopSentinel()
 
 
 class Daemon:
@@ -227,8 +259,8 @@ class Daemon:
         self._restart_required_reasons: list[str] = []
         # PriorityQueue: workers dequeue (priority, task) tuples. Lower priority
         # number = higher urgency (0=emergency, 50=high, 100=normal, 200=batch).
-        self._queue: asyncio.PriorityQueue[tuple[int, Task | None]] = asyncio.PriorityQueue(
-            maxsize=config.agent.max_queue_depth
+        self._queue: asyncio.PriorityQueue[tuple[int, Task | _StopSentinel]] = (
+            asyncio.PriorityQueue(maxsize=config.agent.max_queue_depth)
         )
         self._workers: list[asyncio.Task[None]] = []
         self._worker_count: int = 0
@@ -326,23 +358,38 @@ class Daemon:
             if running.status is TaskStatus.RUNNING and self._task_kind_key(running) == kind_key
         )
 
+    async def _restore_deferred(self, deferred: list[tuple[int, Task]]) -> None:
+        """Re-enqueue deferred entries without ever losing them on ``QueueFull``.
+
+        These entries were just dequeued from this same bounded queue, so the
+        space normally exists — but a concurrent producer could fill the queue
+        between the ``get`` and the re-``put``.  ``put_nowait`` would then raise
+        ``QueueFull`` and silently drop the held entry (issue #973).  We fall
+        back to an awaitable ``put`` for any entry that does not fit so deferred
+        work is always preserved.
+        """
+        for deferred_item in deferred:
+            try:
+                self._queue.put_nowait(deferred_item)
+            except asyncio.QueueFull:
+                await self._queue.put(deferred_item)
+
     async def _claim_next_queued_task(self) -> tuple[bool, Task | None]:
         deferred: list[tuple[int, Task]] = []
+        claimed: Task | None = None
         while True:
             try:
                 if deferred:
-                    priority, task = self._queue.get_nowait()
+                    priority, payload = self._queue.get_nowait()
                 else:
-                    priority, task = await asyncio.wait_for(self._queue.get(), timeout=0.2)
-            except asyncio.TimeoutError:
-                break
-            except asyncio.QueueEmpty:
+                    priority, payload = await asyncio.wait_for(self._queue.get(), timeout=0.2)
+            except (asyncio.TimeoutError, asyncio.QueueEmpty):
                 break
 
-            if task is None:
-                for deferred_item in deferred:
-                    self._queue.put_nowait(deferred_item)
+            if isinstance(payload, _StopSentinel):
+                await self._restore_deferred(deferred)
                 return True, None
+            task = payload
 
             kind_cap = self._kind_cap_for(task)
             with self._tasks_lock:
@@ -365,13 +412,14 @@ class Daemon:
                         continue
                 task.status = TaskStatus.RUNNING
                 task.started_at = datetime.now(timezone.utc)
-                for deferred_item in deferred:
-                    self._queue.put_nowait(deferred_item)
-                return False, task
+                claimed = task
+            # ``put_nowait``/await of deferred entries must happen OUTSIDE the
+            # threading lock (no awaiting while holding it).
+            if claimed is not None:
+                break
 
-        for deferred_item in deferred:
-            self._queue.put_nowait(deferred_item)
-        return False, None
+        await self._restore_deferred(deferred)
+        return False, claimed
 
     async def start(self, *, worker_count: int = 2, recover: bool = True) -> None:
         if self._running:
@@ -751,9 +799,9 @@ class Daemon:
             summarizer_role=summarizer,
         ).anneal()
 
-    def _enqueue_task_entry(self, priority: int, task: Task | None) -> None:
+    def _enqueue_task_entry(self, priority: int, task: Task) -> None:
         """Insert a queue entry while respecting daemon loop thread affinity."""
-        item = (priority, task)
+        item: tuple[int, Task | _StopSentinel] = (priority, task)
         if self._loop is None or not self._loop.is_running():
             with self._queue_lock:
                 if self._queue.full():
@@ -1435,10 +1483,10 @@ class Daemon:
                     len(self._workers),
                 )
         elif n < current:
-            # Send sentinel (priority=-1, task=None) to excess workers so they
-            # exit cleanly after finishing their current task.
+            # Send a totally-ordered stop sentinel (priority=-1) to excess
+            # workers so they exit cleanly after finishing their current task.
             for _ in range(current - n):
-                await self._queue.put((-1, None))
+                await self._queue.put((-1, _STOP))
             # Remove excess workers from tracking immediately; sentinels will
             # signal them to exit after finishing their current task.
             self._workers = self._workers[:n]
@@ -1525,44 +1573,55 @@ class Daemon:
                 await asyncio.sleep(0.05)
                 continue
             with bind_context(task_id=task.id, worker_id=worker_id):
-                # Attempt to mark the task RUNNING in the durable store before
-                # executing.  If that write fails (disk full, lock contention),
-                # re-queue the task so it is retried rather than silently lost.
-                # Double-execution is still possible if the DB write succeeds but
-                # the worker crashes before execution completes; preventing that
-                # fully requires a lease/heartbeat mechanism (future work).
+                # Supervision boundary (#973): an unexpected exception escaping a
+                # single task must NOT kill the worker coroutine — otherwise each
+                # incident (disk-full, lock-timeout) permanently drops a worker
+                # while ``state()`` still reports it alive.  CancelledError is the
+                # one exception we re-raise: it is the loop's own shutdown signal.
                 try:
-                    self._task_store.update_status(
-                        task.id, TaskStatus.RUNNING, started_at=task.started_at
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    log.error(
-                        "failed to mark task %s RUNNING: %s; re-queuing",
-                        task.id,
-                        exc,
-                    )
-                    with self._tasks_lock:
-                        if task.status is TaskStatus.RUNNING:
-                            task.status = TaskStatus.QUEUED
-                            task.started_at = None
-                    await self._queue.put((task.priority, task))
-                    continue
-                snapshot = self._capture_config_snapshot()
-                execution = asyncio.create_task(
-                    self._execute(task, snapshot),
-                    name=f"task-exec-{task.id}",
-                )
-                self._active_execution_tasks[task.id] = execution
-                try:
-                    await execution
+                    await self._run_one_task(task)
                 except asyncio.CancelledError:
-                    if task.id in self._stalled_task_ids:
-                        self._stalled_task_ids.discard(task.id)
-                        await self._handle_stalled_task(task)
-                        continue
                     raise
-                finally:
-                    self._clear_execution_tracking(task.id)
+                except Exception:  # last-resort worker supervision
+                    log.exception("worker %d: task %s crashed; continuing", worker_id, task.id)
+
+    async def _run_one_task(self, task: Task) -> None:
+        # Attempt to mark the task RUNNING in the durable store before
+        # executing.  If that write fails (disk full, lock contention),
+        # re-queue the task so it is retried rather than silently lost.
+        # Double-execution is still possible if the DB write succeeds but
+        # the worker crashes before execution completes; preventing that
+        # fully requires a lease/heartbeat mechanism (future work).
+        try:
+            self._task_store.update_status(task.id, TaskStatus.RUNNING, started_at=task.started_at)
+        except Exception as exc:  # noqa: BLE001
+            log.error(
+                "failed to mark task %s RUNNING: %s; re-queuing",
+                task.id,
+                exc,
+            )
+            with self._tasks_lock:
+                if task.status is TaskStatus.RUNNING:
+                    task.status = TaskStatus.QUEUED
+                    task.started_at = None
+            await self._queue.put((task.priority, task))
+            return
+        snapshot = self._capture_config_snapshot()
+        execution = asyncio.create_task(
+            self._execute(task, snapshot),
+            name=f"task-exec-{task.id}",
+        )
+        self._active_execution_tasks[task.id] = execution
+        try:
+            await execution
+        except asyncio.CancelledError:
+            if task.id in self._stalled_task_ids:
+                self._stalled_task_ids.discard(task.id)
+                await self._handle_stalled_task(task)
+                return
+            raise
+        finally:
+            self._clear_execution_tracking(task.id)
 
     async def _execute(self, task: Task, snapshot: ConfigSnapshot) -> None:  # noqa: C901
         task.status = TaskStatus.RUNNING
