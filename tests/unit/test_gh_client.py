@@ -313,6 +313,76 @@ class TestRateLimitHandling:
         assert GitHubClient._is_rate_limit_error(0, b"rate limit") is False  # rc=0 means success
         assert GitHubClient._is_rate_limit_error(1, b"Repository not found") is False
 
+    def test_bare_403_is_not_a_rate_limit(self) -> None:
+        """A 403 without rate-limit text is an auth error, not a rate limit (#980).
+
+        GitHub returns 403 for both secondary rate limits and auth/SSO failures;
+        only a co-occurring rate-limit marker should classify it as rate-limited.
+        """
+        assert GitHubClient._is_rate_limit_error(1, b"HTTP 403: Bad credentials") is False
+        assert (
+            GitHubClient._is_rate_limit_error(1, b"403 Forbidden: SSO authorization required")
+            is False
+        )
+        # A 403 that *is* a secondary rate limit still classifies correctly.
+        assert (
+            GitHubClient._is_rate_limit_error(1, b"403 You have exceeded a secondary rate limit")
+            is True
+        )
+
+    def test_bare_403_raises_without_sleeping(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A bare 403 surfaces as GhCliError immediately, with no backoff sleep (#980)."""
+        slept: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            slept.append(seconds)
+
+        monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+        runner = self._make_runner([(4, b"", b"HTTP 403: Bad credentials")])
+        client = GitHubClient(runner=runner)  # type: ignore[arg-type]
+        with pytest.raises(GhCliError) as exc_info:
+            asyncio.run(client._gh("api", "user"))
+        assert "403" in str(exc_info.value)
+        assert not isinstance(exc_info.value, GitHubRateLimitError)
+        assert slept == []  # no rate-limit backoff for an auth failure
+
+    def test_subprocess_timeout_kills_and_reaps(self) -> None:
+        """_default_runner kills and reaps a hung gh and raises GhCliError (#980)."""
+        from maxwell_daemon.gh import client as gh_client_mod
+
+        killed = {"value": False}
+        waited = {"value": False}
+
+        class _HungProc:
+            returncode = None
+
+            async def communicate(self) -> tuple[bytes, bytes]:
+                await asyncio.sleep(10)  # longer than the test timeout
+                return b"", b""
+
+            def kill(self) -> None:
+                killed["value"] = True
+
+            async def wait(self) -> int:
+                waited["value"] = True
+                return -9
+
+        async def fake_create(*args: object, **kwargs: object) -> _HungProc:
+            return _HungProc()
+
+        async def _run() -> None:
+            orig = gh_client_mod.asyncio.create_subprocess_exec
+            gh_client_mod.asyncio.create_subprocess_exec = fake_create  # type: ignore[assignment]
+            try:
+                with pytest.raises(GhCliError, match="timed out"):
+                    await gh_client_mod._default_runner("gh", "api", "user", timeout=0.05)
+            finally:
+                gh_client_mod.asyncio.create_subprocess_exec = orig  # type: ignore[assignment]
+
+        asyncio.run(_run())
+        assert killed["value"] is True
+        assert waited["value"] is True
+
     def test_retries_once_on_rate_limit_with_backoff(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Client retries after a rate-limit error and succeeds on the second attempt."""
 

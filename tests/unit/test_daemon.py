@@ -368,7 +368,10 @@ class TestTaskExecution:
         reason="flaky on Python 3.11 self-hosted runner — see issue #891",
     )
     def test_stalled_issue_task_is_cancelled_and_retried(
-        self, isolated_ledger_path: Path, minimal_config: MaxwellDaemonConfig
+        self,
+        isolated_ledger_path: Path,
+        minimal_config: MaxwellDaemonConfig,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         class _RetryingIssueExecutor:
             def __init__(self) -> None:
@@ -389,6 +392,18 @@ class TestTaskExecution:
                 }
             )
             executor = _RetryingIssueExecutor()
+            # The stall retry now applies RetryPolicy backoff (#971); collapse it
+            # to ~0 here so the test exercises the retry-then-complete path
+            # without waiting the production 60s backoff. DEFAULT_RETRY_POLICY is
+            # frozen+slots, so swap the module attribute for a zero-delay policy.
+            import maxwell_daemon.daemon.runner as runner_mod
+            from maxwell_daemon.daemon.retry_policy import RetryPolicy
+
+            monkeypatch.setattr(
+                runner_mod,
+                "DEFAULT_RETRY_POLICY",
+                RetryPolicy(base_delay_seconds=0.0, max_delay_seconds=0.0),
+            )
             d = Daemon(
                 cfg,
                 ledger_path=isolated_ledger_path,

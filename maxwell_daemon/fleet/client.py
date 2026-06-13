@@ -90,10 +90,30 @@ class RemoteDaemonClient:
         timeout_seconds: float = 30.0,
         tls_verify: bool = True,
     ) -> None:
-        self._http = http_client if http_client is not None else _make_default_http(timeout_seconds)
+        # Forward tls_verify into the default httpx adapter so ``tls_verify=False``
+        # actually reaches httpx; otherwise self-signed fleets fail every probe
+        # and surface only as "machine unhealthy" (#978b). We own the transport
+        # only when we created it — an injected client is the caller's to close.
+        self._owns_http = http_client is None
+        self._http = (
+            http_client
+            if http_client is not None
+            else _make_default_http(timeout_seconds, tls_verify=tls_verify)
+        )
         self._auth_token = auth_token
         self._timeout_seconds = timeout_seconds
         self._tls_verify = tls_verify
+
+    async def aclose(self) -> None:
+        """Release the underlying connection pool if we created it.
+
+        Injected transports are owned by the caller and left untouched so the
+        coordinator can hold one long-lived client per remote (#978b).
+        """
+        if self._owns_http:
+            aclose = getattr(self._http, "aclose", None)
+            if aclose is not None:
+                await aclose()
 
     # ------------------------------------------------------------------ headers
     def _headers(self) -> dict[str, str]:
