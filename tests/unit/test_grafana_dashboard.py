@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
-DASHBOARD = Path(__file__).resolve().parents[2] / "grafana" / "maxwell-daemon-dashboard.json"
+DASHBOARD = (
+    Path(__file__).resolve().parents[2] / "deploy" / "grafana" / "maxwell-daemon-dashboard.json"
+)
 
 
 @pytest.fixture(scope="module")
@@ -18,7 +20,7 @@ def dashboard() -> dict:  # type: ignore[type-arg]
 
 class TestDashboardShape:
     def test_has_title_and_uid(self, dashboard: dict) -> None:  # type: ignore[type-arg]
-        assert dashboard["title"] == "Maxwell-Daemon — Agent Fleet"
+        assert dashboard["title"] == "Maxwell-Daemon — Full Stack"
         assert dashboard["uid"]
         assert dashboard["schemaVersion"] >= 36
 
@@ -47,7 +49,11 @@ class TestMetricsAreReal:
 
     def _exported_metrics(self) -> set[str]:
         from maxwell_daemon.metrics import (
+            HTTP_REQUEST_DURATION,
+            HTTP_REQUESTS_TOTAL,
             MAXWELL_COST_FORECAST_USD,
+            MAXWELL_DAEMON_ACTIVE_TASKS,
+            MAXWELL_QUEUE_DEPTH,
             MAXWELL_REQUEST_COST,
             MAXWELL_REQUEST_DURATION,
             MAXWELL_REQUESTS_TOTAL,
@@ -62,6 +68,10 @@ class TestMetricsAreReal:
             MAXWELL_REQUEST_COST._name,
             MAXWELL_REQUEST_DURATION._name,
             MAXWELL_COST_FORECAST_USD._name,
+            MAXWELL_DAEMON_ACTIVE_TASKS._name,
+            MAXWELL_QUEUE_DEPTH._name,
+            HTTP_REQUESTS_TOTAL._name,
+            HTTP_REQUEST_DURATION._name,
         }
 
     def test_every_referenced_metric_exists(self, dashboard: dict) -> None:  # type: ignore[type-arg]
