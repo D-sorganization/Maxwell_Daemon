@@ -72,6 +72,9 @@ async def _run_hook(
 
             with contextlib.suppress(OSError):
                 proc.kill()
+            # Reap the killed child so it does not linger as a zombie (#980).
+            with contextlib.suppress(Exception):
+                await proc.wait()
             raise WorkspaceHookError(f"Hook {name!r} timed out after {timeout_seconds}s") from None
     except Exception as e:
         if isinstance(e, WorkspaceHookError):
