@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
+import shutil
+import subprocess  # nosec B404 — fixed arg vectors only, never shell=True
 import sys
 import threading
 import time
@@ -102,7 +103,23 @@ def build_plan(
 
 
 def _run(args: Sequence[str], *, cwd: Path) -> None:
-    subprocess.run(args, cwd=cwd, check=True, env=_subprocess_env())
+    subprocess.run(args, cwd=cwd, check=True, env=_subprocess_env())  # nosec B603 — list args, no shell, internally constructed
+
+
+def _resolve_install_args(plan: LauncherPlan) -> tuple[str, ...]:
+    """Pick the install command, preferring a frozen lockfile sync (#989).
+
+    When ``uv`` is on PATH and a ``uv.lock`` is present next to the project, use
+    ``uv sync --frozen`` so the launcher installs the exact pinned dependency set
+    — the same one CI resolves — instead of an unpinned ``pip install -e .`` that
+    drifts between laptop and CI. Falls back to the plan's pip command otherwise
+    so environments without uv still work.
+    """
+    if shutil.which("uv") is not None and (plan.repo_root / "uv.lock").is_file():
+        # --frozen: never re-resolve; fail loudly if the lock is stale rather
+        # than silently installing a different set than CI verified.
+        return ("uv", "sync", "--frozen", "--python", str(plan.python_path))
+    return plan.install_args
 
 
 def _subprocess_env() -> dict[str, str]:
@@ -163,7 +180,7 @@ def execute_plan(
 ) -> None:
     ensure_venv(plan)
     if not skip_install:
-        _run(plan.install_args, cwd=plan.repo_root)
+        _run(_resolve_install_args(plan), cwd=plan.repo_root)
     if not plan.config_path.exists():
         plan.config_path.parent.mkdir(parents=True, exist_ok=True)
         _run(plan.init_args, cwd=plan.repo_root)
