@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import functools
 import signal
 import threading
@@ -2146,8 +2147,20 @@ def main() -> None:
         await daemon.start()
         stop = asyncio.Event()
         loop = asyncio.get_event_loop()
+
+        # ``loop.add_signal_handler`` raises NotImplementedError on Windows'
+        # ProactorEventLoop. Guard every install so the daemon starts there too,
+        # matching the SIGUSR1 path in start() (#981). Fall back to
+        # ``signal.signal`` for SIGINT/SIGTERM so Ctrl-C still stops the daemon.
+        def _request_stop() -> None:
+            loop.call_soon_threadsafe(stop.set)
+
         for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, stop.set)
+            try:
+                loop.add_signal_handler(sig, stop.set)
+            except (NotImplementedError, OSError):
+                with contextlib.suppress(ValueError, OSError):
+                    signal.signal(sig, lambda _signum, _frame: _request_stop())
 
         def _sighup_handler() -> None:
             """Reload config in-place on SIGHUP without stopping workers."""
@@ -2158,7 +2171,9 @@ def main() -> None:
 
         sighup = getattr(signal, "SIGHUP", None)
         if sighup is not None:
-            loop.add_signal_handler(sighup, _sighup_handler)
+            # No SIGHUP on Windows — hot-reload-on-signal is simply unavailable.
+            with contextlib.suppress(NotImplementedError, OSError):
+                loop.add_signal_handler(sighup, _sighup_handler)
         await stop.wait()
         await daemon.stop()
 

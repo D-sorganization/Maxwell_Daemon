@@ -219,7 +219,13 @@ class TestLoadFleetManifest:
             """,
         )
         monkeypatch.chdir(empty_cwd)
-        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        # Patch Path.home() rather than $HOME so the home fallback resolves the
+        # same way on every platform (Windows uses USERPROFILE, not HOME) — #981.
+        home_dir = tmp_path / "home"
+        monkeypatch.setenv("HOME", str(home_dir))
+        from maxwell_daemon.config import fleet as _fleet_mod
+
+        monkeypatch.setattr(_fleet_mod.Path, "home", classmethod(lambda cls: home_dir))
         monkeypatch.delenv("MAXWELL_FLEET_CONFIG", raising=False)
         manifest = load_fleet_manifest()
         assert manifest.fleet.name == "HOME"
