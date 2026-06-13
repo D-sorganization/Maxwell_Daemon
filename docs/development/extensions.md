@@ -6,7 +6,7 @@ The Maxwell Daemon acts as the control tower for AI agents. To provide a seamles
 
 Foundational plugin structures have been scaffolded for the following platforms (Issue #493):
 
-- **VS Code** (`extensions/vscode`): The primary IDE integration offering inline agent suggestions, task management, and artifact review.
+- **VS Code** (`extensions/vscode`): The single, canonical VS Code integration offering inline agent suggestions, task management, and artifact review. (A duplicate `extensions/conductor-vscode/` from before the product rename was removed in #988.)
 - **JetBrains** (`extensions/jetbrains`): Support for IntelliJ IDEA, PyCharm, and WebStorm, utilizing the JetBrains Plugin SDK.
 - **Zed** (`extensions/zed`): Native integration for the Zed editor, prioritizing speed and low-latency agent interactions.
 - **Obsidian** (`extensions/obsidian`): A knowledge-management integration that allows agents to build and refine documentation graphs.
