@@ -155,9 +155,15 @@ def _candidate_paths() -> list[Path]:
     if env:
         paths.append(Path(env))
     paths.append(Path.cwd() / _CWD_FILENAME)
-    home = os.environ.get("HOME")
-    if home:
-        paths.append(Path(home) / _DEFAULT_HOME_SUBPATH)
+    # ``Path.home()`` resolves the user home on every platform (USERPROFILE on
+    # Windows); ``os.environ["HOME"]`` is unset on Windows, which silently
+    # dropped the default ~/.maxwell-daemon/fleet.yaml candidate there (#981).
+    try:
+        home = Path.home()
+    except RuntimeError:
+        home = None
+    if home is not None:
+        paths.append(home / _DEFAULT_HOME_SUBPATH)
     return paths
 
 
