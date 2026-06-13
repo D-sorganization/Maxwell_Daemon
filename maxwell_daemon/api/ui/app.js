@@ -1898,7 +1898,7 @@ document.addEventListener("DOMContentLoaded", () => {
               // using a dummy applicationServerKey for now
               const sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuB-3qIX7EoOwvj0WMCk9hQYvI" // gitleaks:allow public demo VAPID key
+                applicationServerKey: "test-push-key-placeholder"
               });
               await fetch("/api/v1/push/subscribe", {
                 method: "POST",

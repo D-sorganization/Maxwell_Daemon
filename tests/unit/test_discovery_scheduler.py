@@ -194,6 +194,21 @@ class TestRunOnce:
         persisted = json.loads(dedup_file.read_text())
         assert set(persisted.get("a/b", [])) == {1, 2}
 
+    async def test_dedup_write_is_atomic_no_temp_leftover(self, tmp_path: Path) -> None:
+        """Dedup persistence uses atomic write — no truncation, no stray temp (#979)."""
+        dedup_file = tmp_path / "dedup.json"
+        gh = _FakeGitHub({"a/b": [_issue(1, labels=["deliver"])]})
+        sched = DiscoveryScheduler(
+            github=gh,
+            daemon=_FakeDaemon(),
+            repos=[DiscoveryRepoSpec(repo="a/b", labels={"deliver"})],  # type: ignore[arg-type]
+            dedup_path=dedup_file,
+        )
+        await sched.run_once()
+        # The atomic temp file must have been renamed away, not left behind.
+        assert list(tmp_path.glob("*.tmp")) == []
+        assert json.loads(dedup_file.read_text()).get("a/b") == [1]
+
     async def test_dedup_loaded_on_restart(self, tmp_path: Path) -> None:
         """A new scheduler instance loads persisted dedup and skips already-seen issues (#149)."""
         dedup_file = tmp_path / "dedup.json"

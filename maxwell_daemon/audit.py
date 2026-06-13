@@ -21,11 +21,12 @@ import contextlib
 import hashlib
 import json
 import os
-import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from maxwell_daemon.fsutil import atomic_write_text
 
 __all__ = [
     "AuditEntry",
@@ -364,22 +365,10 @@ class AuditLogger:
 
     def _write_lines(self, lines: list[str]) -> None:
         """Atomically replace the log file (used by rotate())."""
-        fd, tmp = tempfile.mkstemp(dir=self._path.parent, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                for line in lines:
-                    f.write(line + "\n")
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, self._path)
-        except OSError:
-            # Narrow from `except Exception` per epic #896 §1.2 — the only
-            # failures here are OS-level I/O errors from write/fsync/replace.
-            # Non-OS exceptions (e.g. MemoryError) propagate unchanged via the
-            # outer `raise`; catching only OSError avoids masking programming
-            # errors that should surface during development.
-            os.unlink(tmp)
-            raise
+        # Shared temp-file + fsync + os.replace helper (DRY with scheduler dedup
+        # and config migration); failure cleanup is handled inside.
+        body = "".join(line + "\n" for line in lines)
+        atomic_write_text(self._path, body)
 
 
 # ── standalone verifier ─────────────────────────────────────────────────────
