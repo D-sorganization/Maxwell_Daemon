@@ -5,11 +5,11 @@ Wants=network.target
 
 [Service]
 Type=simple
-User={{ conductor_user }}
-Group={{ conductor_group }}
-WorkingDirectory={{ conductor_data_dir }}
-ExecStart={{ conductor_venv }}/bin/maxwell-daemon serve \
-    --config {{ conductor_config_dir }}/config.toml
+User={{ maxwell_user }}
+Group={{ maxwell_group }}
+WorkingDirectory={{ maxwell_data_dir }}
+ExecStart={{ maxwell_venv }}/bin/maxwell-daemon serve \
+    --config {{ maxwell_config_dir }}/config.toml
 Restart=on-failure
 RestartSec=5s
 
@@ -18,7 +18,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths={{ conductor_data_dir }} {{ conductor_log_dir }}
+ReadWritePaths={{ maxwell_data_dir }} {{ maxwell_log_dir }}
 
 [Install]
 WantedBy=multi-user.target

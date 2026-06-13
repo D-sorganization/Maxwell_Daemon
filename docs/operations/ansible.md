@@ -1,44 +1,59 @@
 # Deploying with Ansible
 
-The `ansible/` tree contains playbooks for standing up a Maxwell-Daemon fleet on Linux hosts.
+The `deploy/ansible/` tree contains the role-based playbooks for standing up a
+Maxwell-Daemon fleet on Linux hosts. It is the single, canonical Ansible tree
+(an older flat `ansible/` tree using the pre-rename "conductor" naming was
+removed in #986).
 
 ## Inventory
 
-Copy the example:
+Copy the example and fill in real hosts:
 
 ```bash
-cp ansible/inventory.example.yml ansible/inventory.yml
-$EDITOR ansible/inventory.yml
+cp deploy/ansible/inventory/fleet.yml.example deploy/ansible/inventory/fleet.yml
+$EDITOR deploy/ansible/inventory/fleet.yml
 ```
 
-The inventory declares per-host capacity and tags, which feed into the rendered `maxwell-daemon.yaml` fleet section so every node knows about every other node.
+The inventory declares the `maxwell_primary` and `maxwell_agents` host groups
+plus per-fleet variables (`maxwell_version`, `maxwell_port`,
+`maxwell_config_dir`, `maxwell_data_dir`). Role defaults live in
+`deploy/ansible/roles/maxwell_daemon/defaults/main.yml`.
 
 ## Install
 
 ```bash
-ansible-playbook -i ansible/inventory.yml ansible/playbooks/install.yml
+ansible-playbook -i deploy/ansible/inventory/fleet.yml deploy/ansible/install-maxwell.yml
+# pin a version:
+ansible-playbook -i deploy/ansible/inventory/fleet.yml deploy/ansible/install-maxwell.yml \
+  -e maxwell_version=0.2.0
 ```
 
-The playbook:
+The `maxwell_daemon` role:
 
-1. Creates a system user `maxwell-daemon`.
-2. Installs Python 3 + venv.
-3. `pip install maxwell-daemon=={{ maxwell_daemon_version }}` into a dedicated venv.
-4. Renders `/etc/maxwell-daemon/maxwell-daemon.yaml` from a Jinja template.
-5. Installs a systemd unit with sensible hardening (`NoNewPrivileges`, `ProtectSystem=strict`, `PrivateTmp`).
-6. Enables and starts the `maxwell-daemon.service`.
+1. Creates the `maxwell` system user.
+2. Installs Python 3 + venv into `maxwell_venv`.
+3. Installs `maxwell-daemon` at `maxwell_version` into that venv.
+4. Renders the config and a systemd unit with hardening
+   (`NoNewPrivileges`, `ProtectSystem=strict`, `PrivateTmp`).
+5. Enables and starts `maxwell-daemon.service`.
 
+The playbook verifies the service is active and waits for the API health probe.
 Idempotent by design — safe to re-run.
 
-## Upgrading
+## Other playbooks
 
-Bump `maxwell_daemon_version` in your inventory and re-run:
-
-```bash
-ansible-playbook -i ansible/inventory.yml ansible/playbooks/install.yml \
-  -e "maxwell_daemon_version=0.2.0"
-```
+| Playbook | Purpose |
+| --- | --- |
+| `install-maxwell.yml` | Install + start the daemon on `maxwell_primary`. |
+| `configure-maxwell.yml` | Re-render config / apply settings without a full reinstall. |
+| `upgrade-maxwell.yml` | Bump `maxwell_version` and restart. |
+| `deploy-agents.yml` | Provision `maxwell_agents` worker hosts. |
+| `health-check.yml` | Probe the fleet's API health endpoints. |
+| `backup-config.yml` | Back up the rendered config + data dir. |
 
 ## Secrets
 
-API keys are **not** baked into the config. The systemd unit relies on environment variables (`ANTHROPIC_API_KEY`, etc.) read at launch time. Use your preferred secrets store (`systemd-creds`, HashiCorp Vault, AWS SSM, etc.) to populate the environment before the service starts.
+API keys are **not** baked into the config. The systemd unit relies on
+environment variables (`ANTHROPIC_API_KEY`, etc.) read at launch time. Use your
+preferred secrets store (`systemd-creds`, HashiCorp Vault, AWS SSM, etc.) to
+populate the environment before the service starts.

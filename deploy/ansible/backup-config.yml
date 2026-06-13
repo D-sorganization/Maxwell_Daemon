@@ -1,5 +1,5 @@
 ---
-# backup-config.yml — Archive config and data from all conductor nodes to the control host.
+# backup-config.yml — Archive config and data from all maxwell nodes to the control host.
 #
 # Usage:
 #   ansible-playbook -i inventory/fleet.yml backup-config.yml
@@ -7,7 +7,7 @@
 #     -e backup_dest=/mnt/backups/maxwell
 
 - name: Back up maxwell-daemon configuration and data
-  hosts: conductor_primary:conductor_agents
+  hosts: maxwell_primary:maxwell_agents
   become: true
   gather_facts: true
 
@@ -20,8 +20,8 @@
     - name: Create remote archive of config and data dirs
       ansible.builtin.archive:
         path:
-          - "{{ conductor_config_dir }}"
-          - "{{ conductor_data_dir }}"
+          - "{{ maxwell_config_dir }}"
+          - "{{ maxwell_data_dir }}"
         dest: "{{ remote_archive }}"
         format: gz
         owner: root
@@ -52,7 +52,7 @@
       ansible.builtin.find:
         paths: "{{ backup_dest }}/{{ inventory_hostname }}"
         patterns: "maxwell-backup-*.tar.gz"
-        age: "{{ conductor_backup_retention_days }}d"
+        age: "{{ maxwell_backup_retention_days }}d"
       register: old_backups
       delegate_to: localhost
       become: false

@@ -23,7 +23,7 @@ variable "agent_count" {
   default     = 2
 }
 
-variable "conductor_port" {
+variable "maxwell_port" {
   description = "TCP port the Maxwell-Daemon API listens on"
   type        = number
   default     = 8765
@@ -53,7 +53,7 @@ variable "tags" {
 # ── AWS ───────────────────────────────────────────────────────────────────────
 
 variable "aws_ami" {
-  description = "AMI ID for conductor and agent instances (Ubuntu 22.04 recommended)"
+  description = "AMI ID for maxwell and agent instances (Ubuntu 22.04 recommended)"
   type        = string
   default     = "ami-0c02fb55956c7d316"  # us-east-1 Ubuntu 22.04 LTS
 }
