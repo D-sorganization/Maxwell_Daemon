@@ -79,8 +79,21 @@ def _check(paths: list[Path], repo_root: Path, config: dict[str, Any]) -> list[s
             continue
         if rel in exc_map:
             exc = exc_map[rel]
+            # A shrink-only ratchet: an exception may pin a per-file ``max_lines``
+            # ceiling above the global budget. The file is tolerated over budget
+            # while it is decomposed, but it must never *grow* past the recorded
+            # ceiling — growth fails CI so a god module cannot regrow (#987).
+            ceiling = exc.get("max_lines")
+            if ceiling is not None and n > int(ceiling):
+                violations.append(
+                    f"ERROR: {rel} has {n} lines, over its shrink-only ratchet ceiling "
+                    f"of {ceiling}. This file may only shrink; lower the ceiling in "
+                    f"{CONFIG_PATH} as you decompose it, never raise it."
+                )
+                continue
+            ceiling_note = f", ratchet ceiling {ceiling}" if ceiling is not None else ""
             print(
-                f"WARNING: {rel} ({n} lines) exempt until {exc['expires_on']} "
+                f"WARNING: {rel} ({n} lines{ceiling_note}) exempt until {exc['expires_on']} "
                 f"- owner: {exc['owner']}, reason: {exc['reason']}"
             )
             continue
