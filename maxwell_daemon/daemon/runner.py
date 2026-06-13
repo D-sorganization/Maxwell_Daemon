@@ -378,6 +378,32 @@ class Daemon:
             except asyncio.QueueFull:
                 await self._queue.put(deferred_item)
 
+    def _classify_dependencies_locked(self, task: Task) -> tuple[str | None, bool]:
+        """Classify a task's dependencies. Caller must hold ``_tasks_lock``.
+
+        Returns ``(failed_dependency, deps_pending)``:
+
+        * ``failed_dependency`` is the id of the first dependency that terminally
+          failed/cancelled — such a dependency will never reach COMPLETED, so
+          deferring on it would strand the dependent in a tight re-enqueue loop
+          forever (#978c). When set, the dependent should be failed.
+        * ``deps_pending`` is True when at least one dependency is still
+          unfinished (missing or not yet COMPLETED) and none has failed — the
+          dependent should be deferred.
+        """
+        for dep in task.depends_on:
+            dep_task = self._tasks.get(dep)
+            if dep_task is not None and dep_task.status in (
+                TaskStatus.FAILED,
+                TaskStatus.CANCELLED,
+            ):
+                return dep, False
+        deps_pending = any(
+            self._tasks.get(dep) is None or self._tasks[dep].status is not TaskStatus.COMPLETED
+            for dep in task.depends_on
+        )
+        return None, deps_pending
+
     async def _claim_next_queued_task(self) -> tuple[bool, Task | None]:
         deferred: list[tuple[int, Task]] = []
         claimed: Task | None = None
@@ -396,27 +422,55 @@ class Daemon:
             task = payload
 
             kind_cap = self._kind_cap_for(task)
+            failed_dependency: str | None = None
             with self._tasks_lock:
                 if task.status is not TaskStatus.QUEUED:
                     continue
                 if task.depends_on:
-                    unfinished = [
-                        dep
-                        for dep in task.depends_on
-                        if self._tasks.get(dep) is None
-                        or self._tasks[dep].status is not TaskStatus.COMPLETED
-                    ]
-                    if unfinished:
+                    failed_dependency, deps_pending = self._classify_dependencies_locked(task)
+                    if failed_dependency is None and deps_pending:
                         deferred.append((priority, task))
                         continue
-                if kind_cap is not None:
-                    kind_key = self._task_kind_key(task)
-                    if self._count_running_tasks_locked(kind_key=kind_key) >= kind_cap:
-                        deferred.append((priority, task))
-                        continue
-                task.status = TaskStatus.RUNNING
-                task.started_at = datetime.now(timezone.utc)
-                claimed = task
+                if failed_dependency is not None:
+                    dep_message = f"dependency {failed_dependency} failed"
+                    task.status = TaskStatus.FAILED
+                    task.error = dep_message
+                    task.finished_at = datetime.now(timezone.utc)
+                else:
+                    if kind_cap is not None:
+                        kind_key = self._task_kind_key(task)
+                        if self._count_running_tasks_locked(kind_key=kind_key) >= kind_cap:
+                            deferred.append((priority, task))
+                            continue
+                    task.status = TaskStatus.RUNNING
+                    task.started_at = datetime.now(timezone.utc)
+                    claimed = task
+            # Persist + publish the dependency-failure outside the lock (no store
+            # I/O or awaiting while holding the threading lock), then keep draining
+            # the queue rather than claiming the failed task for execution.
+            if failed_dependency is not None:
+                try:
+                    self._task_store.save(task)
+                except Exception:
+                    log.exception(
+                        "task store write failed while failing dependent task=%s", task.id
+                    )
+                await self._events.publish(
+                    Event(
+                        kind=EventKind.TASK_FAILED,
+                        payload=attach_observability(
+                            {
+                                "id": task.id,
+                                "error": task.error,
+                                "reason": "dependency_failed",
+                            },
+                            task_id=task.id,
+                            backend=task.backend,
+                            model=task.model,
+                        ),
+                    )
+                )
+                continue
             # ``put_nowait``/await of deferred entries must happen OUTSIDE the
             # threading lock (no awaiting while holding it).
             if claimed is not None:
@@ -581,6 +635,11 @@ class Daemon:
                 await close_method()
 
         await self._mcp_manager.stop()
+
+        # Release the long-lived per-machine fleet clients' connection pools
+        # (#978b) so a coordinator shutdown leaves no leaked httpx sockets.
+        if self._fleet_coordinator is not None:
+            await self._fleet_coordinator.aclose()
 
         # Release the single-instance lock so a clean restart can re-acquire it.
         self._instance_lock.release()
@@ -1151,19 +1210,23 @@ class Daemon:
             priority=priority,
             dry_run=dry_run,
         )
-        # See note in submit(): queue mutation must stay loop-affine once the
-        # daemon has started.
+        # See note in submit(): the queue mutation waits for the daemon loop to
+        # run a callback, so it must happen *outside* _tasks_lock — holding the
+        # lock across the cross-thread enqueue can deadlock the loop. Persist and
+        # track under the lock, enqueue after release, and roll back on
+        # saturation so a rejected task leaves no orphaned store/registry row.
         with self._tasks_lock:
             if task_id is not None:
                 self._reject_duplicate_task_id(task.id)
             self._task_store.save(task)
             self._tasks[task.id] = task
-            try:
-                self._enqueue_task_entry(task.priority, task)
-            except QueueSaturationError:
+        try:
+            self._enqueue_task_entry(task.priority, task)
+        except QueueSaturationError:
+            with self._tasks_lock:
                 del self._tasks[task.id]
-                self._task_store.delete(task.id)
-                raise
+            self._task_store.delete(task.id)
+            raise
         try:
             loop = asyncio.get_running_loop()
             bg = loop.create_task(

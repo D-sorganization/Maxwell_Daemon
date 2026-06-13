@@ -12,6 +12,7 @@ and other bounded inputs get regex-validated before they reach the subprocess.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 import time
@@ -66,12 +67,15 @@ RateLimitError = GitHubRateLimitError
 
 # Exit codes emitted by `gh` when GitHub returns 403 or 429 (rate-limited).
 _RATE_LIMIT_EXIT_CODES: frozenset[int] = frozenset({4})  # gh uses rc=4 for HTTP 4xx
-# Error substrings that indicate a rate-limit response rather than an auth error.
+# Error substrings that indicate a genuine rate-limit response rather than an
+# auth error. A bare "403" is deliberately NOT here: GitHub returns 403 for both
+# secondary rate limits AND auth/SSO failures, so treating every 403 as a rate
+# limit masks bad-token errors as ~15s+ sleeps (#980). A 403 only counts as a
+# rate limit when one of these co-occurring markers is present.
 _RATE_LIMIT_MARKERS: tuple[str, ...] = (
     "rate limit",
     "rate_limit",
     "429",
-    "403",
     "secondary rate",
     "abuse detection",
 )
@@ -120,14 +124,34 @@ class PullRequest:
         return cls(number=int(match.group(1)), url=url, draft=draft)
 
 
-async def _default_runner(*argv: str, cwd: str | None = None) -> tuple[int, bytes, bytes]:
+# Wall-clock ceiling for a single `gh` invocation. A hung `gh` (e.g. a stuck
+# network call or auth prompt) must not pin a worker until the stall reconciler
+# fires and feeds the retry loop (#980).
+_GH_SUBPROCESS_TIMEOUT_SECONDS = 120.0
+
+
+async def _default_runner(
+    *argv: str,
+    cwd: str | None = None,
+    timeout: float = _GH_SUBPROCESS_TIMEOUT_SECONDS,
+) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *argv,
         cwd=cwd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        # Kill and reap so the hung child does not linger as a zombie, then
+        # surface a clear error instead of blocking the worker indefinitely.
+        proc.kill()
+        with contextlib.suppress(Exception):
+            await proc.wait()
+        raise GhCliError(
+            f"gh {' '.join(argv)} timed out after {timeout:.0f}s and was killed"
+        ) from None
     return proc.returncode or 0, stdout, stderr
 
 

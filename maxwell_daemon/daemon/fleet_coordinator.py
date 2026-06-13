@@ -74,10 +74,40 @@ class FleetCoordinator:
         self._worker_last_seen = worker_last_seen
         self._enqueue_task_entry = enqueue_task_entry
         self._running_flag = running_flag
+        # One long-lived RemoteDaemonClient per machine, reused across ticks
+        # rather than a fresh httpx pool per poll (#978b). Keyed by machine name
+        # because each machine carries its own ``tls_verify``. Lazily created so
+        # importing this module never requires httpx.
+        self._clients: dict[str, Any] = {}
 
     def update_config(self, config: MaxwellDaemonConfig) -> None:
         """Swap the active config (used during hot-reload)."""
         self._config = config
+
+    async def aclose(self) -> None:
+        """Release every per-machine remote client's connection pool."""
+        clients = list(self._clients.values())
+        self._clients.clear()
+        for client in clients:
+            await client.aclose()
+
+    def _client_for(self, machine: Any) -> Any:
+        """Return the long-lived client for ``machine``, creating it on first use.
+
+        Each client forwards the machine's ``tls_verify`` to httpx so a
+        self-signed fleet member with ``tls_verify=False`` is actually probed
+        instead of failing every health check (#978b).
+        """
+        from maxwell_daemon.fleet.client import RemoteDaemonClient
+
+        client = self._clients.get(machine.name)
+        if client is None:
+            client = RemoteDaemonClient(
+                auth_token=self._config.api_auth_token,
+                tls_verify=getattr(machine, "tls_verify", True),
+            )
+            self._clients[machine.name] = client
+        return client
 
     async def run_loop(self) -> None:
         """Coordinator event loop — runs until the daemon stops."""
@@ -92,7 +122,7 @@ class FleetCoordinator:
     async def _dispatch_tick(self) -> None:  # noqa: C901
         """One coordinator dispatch tick: probe machines, plan, submit, requeue stale tasks."""
         from maxwell_daemon.daemon.task_models import TaskStatus
-        from maxwell_daemon.fleet.client import RemoteDaemonClient, RemoteDaemonError
+        from maxwell_daemon.fleet.client import RemoteDaemonError
         from maxwell_daemon.fleet.dispatcher import (
             FleetDispatcher,
             MachineState,
@@ -103,7 +133,9 @@ class FleetCoordinator:
         if not fleet_machines:
             return
 
-        # Build initial MachineState snapshots from config.
+        # Build initial MachineState snapshots from config. ``tls``/``tls_verify``
+        # must be carried through so the scheme and certificate-verification
+        # policy reach the per-machine client (#978b).
         initial_machines = tuple(
             MachineState(
                 name=m.name,
@@ -111,16 +143,34 @@ class FleetCoordinator:
                 port=m.port,
                 capacity=m.capacity,
                 tags=tuple(m.tags),
+                tls=getattr(m, "tls", True),
+                tls_verify=getattr(m, "tls_verify", True),
             )
             for m in fleet_machines
         )
 
-        client = RemoteDaemonClient(
-            auth_token=self._config.api_auth_token,
-        )
+        # Probe all machines in parallel to get live health, each via its own
+        # long-lived per-machine client so per-machine ``tls_verify`` is honored
+        # and no httpx pool is leaked per tick (#978b).
+        async def _probe(m: MachineState) -> bool:
+            healthy: bool = await self._client_for(m).health_check(m)
+            return healthy
 
-        # Probe all machines in parallel to get live health.
-        machines = await client.refresh_all(initial_machines)
+        health = await asyncio.gather(*(_probe(m) for m in initial_machines))
+        machines = tuple(
+            MachineState(
+                name=m.name,
+                host=m.host,
+                port=m.port,
+                capacity=m.capacity,
+                tags=m.tags,
+                active_tasks=m.active_tasks,
+                healthy=healthy,
+                tls=m.tls,
+                tls_verify=m.tls_verify,
+            )
+            for m, healthy in zip(initial_machines, health, strict=True)
+        )
 
         # Requeue tasks dispatched to machines that have gone offline.
         now = datetime.now(timezone.utc)
@@ -198,7 +248,9 @@ class FleetCoordinator:
             }
 
             try:
-                result = await client.submit_task(machine, task_payload=task_payload)
+                result = await self._client_for(machine).submit_task(
+                    machine, task_payload=task_payload
+                )
             except RemoteDaemonError:
                 log.exception(
                     "failed to dispatch task %s to machine %s",
@@ -208,8 +260,24 @@ class FleetCoordinator:
                 continue
 
             if result.status == "submitted":
-                assigned_task.status = TaskStatus.DISPATCHED
-                assigned_task.dispatched_to = machine.name
+                # Re-check the task is still QUEUED under the lock before flipping
+                # to DISPATCHED: a cancel racing the submit_task await window must
+                # not be overwritten, which would run a cancelled task remotely
+                # (#978d). The snapshot above is stale across the await.
+                with self._tasks_lock:
+                    live = self._tasks.get(assigned_task.id)
+                    if live is None or live.status is not TaskStatus.QUEUED:
+                        log.info(
+                            "task %s no longer QUEUED (status=%s) after remote submit to %s; "
+                            "not marking DISPATCHED",
+                            assigned_task.id,
+                            None if live is None else live.status.value,
+                            machine.name,
+                        )
+                        continue
+                    live.status = TaskStatus.DISPATCHED
+                    live.dispatched_to = machine.name
+                    assigned_task = live
                 log.info("dispatched task %s to machine %s", assigned_task.id, machine.name)
                 try:
                     self._task_store.save(assigned_task)
