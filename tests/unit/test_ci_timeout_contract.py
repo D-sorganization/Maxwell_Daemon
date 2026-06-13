@@ -90,3 +90,17 @@ def test_ci_compatibility_lanes_do_not_collect_coverage() -> None:
     assert "tests/integration/test_serve_jwt_wiring.py" in compatibility_run
     assert "tests/unit/test_ci_timeout_contract.py" in compatibility_run
     assert ".venv/bin/python -m pytest -p no:xvfb --timeout=300 --no-cov" not in compatibility_run
+
+
+def test_secret_scan_uses_event_ranges_instead_of_full_history() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    secret_scan = workflow["jobs"]["secret-scan"]
+    run_step = next(step for step in secret_scan["steps"] if step.get("name") == "Run gitleaks")
+    script = run_step["run"]
+
+    assert "${{ github.event.pull_request.base.sha }}" in script
+    assert "${{ github.event.pull_request.head.sha }}" in script
+    assert "${{ github.event.before }}" in script
+    assert "${{ github.sha }}" in script
+    assert '--log-opts="${base}..${head}"' in script
+    assert "gitleaks git --redact --verbose ." not in script
