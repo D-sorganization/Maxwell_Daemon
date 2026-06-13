@@ -1,5 +1,5 @@
 ---
-# health-check.yml — Verify health of all conductor and agent nodes.
+# health-check.yml — Verify health of all maxwell and agent nodes.
 #
 # Usage:
 #   ansible-playbook -i inventory/fleet.yml health-check.yml
@@ -21,7 +21,7 @@
 
     - name: Hit the health endpoint
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ conductor_port }}/healthz"
+        url: "http://127.0.0.1:{{ maxwell_port }}/healthz"
         status_code: 200
         timeout: 5
       register: health_resp

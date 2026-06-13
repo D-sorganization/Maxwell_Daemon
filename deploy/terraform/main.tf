@@ -1,6 +1,6 @@
 ################################################################################
 # Maxwell-Daemon Terraform module
-# Provisions cloud VMs for the conductor fleet on AWS, GCP, or Azure.
+# Provisions cloud VMs for the maxwell fleet on AWS, GCP, or Azure.
 # Cloud is selected via `var.cloud`.
 ################################################################################
 
@@ -48,7 +48,7 @@ resource "aws_key_pair" "maxwell" {
 resource "aws_security_group" "maxwell" {
   count       = var.cloud == "aws" ? 1 : 0
   name        = "${var.name_prefix}-maxwell"
-  description = "Maxwell-Daemon conductor fleet"
+  description = "Maxwell-Daemon maxwell fleet"
   vpc_id      = var.aws_vpc_id
 
   ingress {
@@ -60,8 +60,8 @@ resource "aws_security_group" "maxwell" {
   }
 
   ingress {
-    from_port   = var.conductor_port
-    to_port     = var.conductor_port
+    from_port   = var.maxwell_port
+    to_port     = var.maxwell_port
     protocol    = "tcp"
     cidr_blocks = var.allowed_cidr_blocks
     description = "Maxwell-Daemon API"
@@ -78,7 +78,7 @@ resource "aws_security_group" "maxwell" {
   tags = merge(var.tags, { Name = "${var.name_prefix}-maxwell" })
 }
 
-resource "aws_instance" "conductor" {
+resource "aws_instance" "maxwell" {
   count                  = var.cloud == "aws" ? 1 : 0
   ami                    = var.aws_ami
   instance_type          = var.aws_instance_type
@@ -91,7 +91,7 @@ resource "aws_instance" "conductor" {
     volume_type = "gp3"
   }
 
-  tags = merge(var.tags, { Name = "${var.name_prefix}-conductor", Role = "primary" })
+  tags = merge(var.tags, { Name = "${var.name_prefix}-maxwell", Role = "primary" })
 }
 
 resource "aws_instance" "agent" {
@@ -121,16 +121,16 @@ resource "google_compute_firewall" "maxwell" {
 
   allow {
     protocol = "tcp"
-    ports    = ["22", tostring(var.conductor_port)]
+    ports    = ["22", tostring(var.maxwell_port)]
   }
 
   source_ranges = var.allowed_cidr_blocks
   target_tags   = ["maxwell-daemon"]
 }
 
-resource "google_compute_instance" "conductor" {
+resource "google_compute_instance" "maxwell" {
   count        = var.cloud == "gcp" ? 1 : 0
-  name         = "${var.name_prefix}-conductor"
+  name         = "${var.name_prefix}-maxwell"
   machine_type = var.gcp_machine_type
   zone         = var.gcp_zone
   tags         = ["maxwell-daemon"]
@@ -219,15 +219,15 @@ resource "azurerm_network_security_group" "maxwell" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = tostring(var.conductor_port)
+    destination_port_range     = tostring(var.maxwell_port)
     source_address_prefix      = join(",", var.allowed_cidr_blocks)
     destination_address_prefix = "*"
   }
 }
 
-resource "azurerm_linux_virtual_machine" "conductor" {
+resource "azurerm_linux_virtual_machine" "maxwell" {
   count                           = var.cloud == "azure" ? 1 : 0
-  name                            = "${var.name_prefix}-conductor"
+  name                            = "${var.name_prefix}-maxwell"
   resource_group_name             = azurerm_resource_group.maxwell[0].name
   location                        = azurerm_resource_group.maxwell[0].location
   size                            = var.azure_vm_size
@@ -253,12 +253,12 @@ resource "azurerm_linux_virtual_machine" "conductor" {
     version   = "latest"
   }
 
-  network_interface_ids = [azurerm_network_interface.conductor[0].id]
+  network_interface_ids = [azurerm_network_interface.maxwell[0].id]
 }
 
-resource "azurerm_network_interface" "conductor" {
+resource "azurerm_network_interface" "maxwell" {
   count               = var.cloud == "azure" ? 1 : 0
-  name                = "${var.name_prefix}-conductor-nic"
+  name                = "${var.name_prefix}-maxwell-nic"
   location            = azurerm_resource_group.maxwell[0].location
   resource_group_name = azurerm_resource_group.maxwell[0].name
   tags                = var.tags
@@ -267,13 +267,13 @@ resource "azurerm_network_interface" "conductor" {
     name                          = "internal"
     subnet_id                     = var.azure_subnet_id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.conductor[0].id
+    public_ip_address_id          = azurerm_public_ip.maxwell[0].id
   }
 }
 
-resource "azurerm_public_ip" "conductor" {
+resource "azurerm_public_ip" "maxwell" {
   count               = var.cloud == "azure" ? 1 : 0
-  name                = "${var.name_prefix}-conductor-pip"
+  name                = "${var.name_prefix}-maxwell-pip"
   resource_group_name = azurerm_resource_group.maxwell[0].name
   location            = azurerm_resource_group.maxwell[0].location
   allocation_method   = "Static"

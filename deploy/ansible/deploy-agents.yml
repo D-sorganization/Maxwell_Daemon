@@ -7,7 +7,7 @@
 #   ansible-playbook -i inventory/fleet.yml deploy-agents.yml --limit agent-01
 
 - name: Deploy maxwell-daemon agent workers
-  hosts: conductor_agents
+  hosts: maxwell_agents
   become: true
   gather_facts: true
 
@@ -18,18 +18,18 @@
     - name: Configure agent to join the primary
       ansible.builtin.template:
         src: roles/maxwell_daemon/templates/config.toml.j2
-        dest: "{{ conductor_config_dir }}/config.toml"
-        owner: "{{ conductor_user }}"
-        group: "{{ conductor_group }}"
+        dest: "{{ maxwell_config_dir }}/config.toml"
+        owner: "{{ maxwell_user }}"
+        group: "{{ maxwell_group }}"
         mode: "0640"
       vars:
-        conductor_role: agent
+        maxwell_role: agent
       notify: Restart maxwell-daemon
       no_log: true
 
     - name: Register agent with primary controller
       ansible.builtin.uri:
-        url: "http://{{ primary_host }}:{{ conductor_port }}/api/v1/fleet/register"
+        url: "http://{{ primary_host }}:{{ maxwell_port }}/api/v1/fleet/register"
         method: POST
         body_format: json
         body:
@@ -37,11 +37,11 @@
           ip: "{{ ansible_default_ipv4.address }}"
           roles: "{{ agent_roles | default(['worker']) }}"
         headers:
-          Authorization: "Bearer {{ conductor_admin_token }}"
+          Authorization: "Bearer {{ maxwell_admin_token }}"
         status_code: [200, 201, 409]
       vars:
-        primary_host: "{{ groups['conductor_primary'][0] }}"
-      when: conductor_admin_token is defined
+        primary_host: "{{ groups['maxwell_primary'][0] }}"
+      when: maxwell_admin_token is defined
 
   handlers:
     - name: Restart maxwell-daemon
