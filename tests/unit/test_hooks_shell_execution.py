@@ -1,12 +1,12 @@
 """Tests for the split-runner shell execution model (issue #897).
 
 Covers:
-  * _needs_shell() — auto-detection of shell metacharacters
+  * _needs_shell() — legacy metacharacter detection helper
   * HookSpec.shell field — default False, settable to True
   * YAML loading with shell: true / shell: false
   * HookRunner dispatches to shell_runner when spec.shell=True
   * HookRunner dispatches to exec_runner when spec.shell=False
-  * Lifecycle hook auto-detection: pipes → shell_runner; plain cmd → exec_runner
+  * Lifecycle hooks do not auto-escalate to shell_runner
   * _exec_default_runner and _shell_default_runner are callable (smoke tests)
 """
 
@@ -241,6 +241,24 @@ class TestHookRunnerShellDispatch:
         assert len(exec_runner.calls) == 1
         assert len(shell_runner.calls) == 0
 
+    async def test_pre_tool_metacharacters_without_shell_true_use_exec_runner(
+        self, tmp_path: Path
+    ) -> None:
+        exec_runner = _TrackingRunner("exec")
+        shell_runner = _TrackingRunner("shell")
+        cfg = HookConfig(
+            pre_tool=(HookSpec(command="cat log | grep ERROR", match="*", shell=False),)
+        )
+        hr = HookRunner(
+            cfg,
+            workspace=tmp_path,
+            exec_runner=exec_runner,
+            shell_runner=shell_runner,
+        )
+        await hr.run_pre_tool("run_bash", {})
+        assert len(exec_runner.calls) == 1
+        assert len(shell_runner.calls) == 0
+
     async def test_post_tool_shell_true_uses_shell_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
         shell_runner = _TrackingRunner("shell")
@@ -273,6 +291,23 @@ class TestHookRunnerShellDispatch:
         assert len(exec_runner.calls) == 1
         assert len(shell_runner.calls) == 0
 
+    async def test_post_tool_substituted_metacharacters_stay_on_exec_runner(
+        self, tmp_path: Path
+    ) -> None:
+        exec_runner = _TrackingRunner("exec")
+        shell_runner = _TrackingRunner("shell")
+        cfg = HookConfig(post_tool=(HookSpec(command="check {{path}}", match="write_file"),))
+        hr = HookRunner(
+            cfg,
+            workspace=tmp_path,
+            exec_runner=exec_runner,
+            shell_runner=shell_runner,
+        )
+        await hr.run_post_tool("write_file", {"path": "safe.py; touch owned"}, tool_output="")
+        assert len(exec_runner.calls) == 1
+        assert len(shell_runner.calls) == 0
+        assert "'safe.py; touch owned'" in exec_runner.calls[0]["command"]
+
     async def test_backward_compat_runner_kwarg_used_as_exec_runner(self, tmp_path: Path) -> None:
         """runner= kwarg maps to exec_runner for backward compatibility."""
         compat_runner = _TrackingRunner("compat")
@@ -282,13 +317,13 @@ class TestHookRunnerShellDispatch:
         assert len(compat_runner.calls) == 1
 
 
-# ── Lifecycle hook auto-detection ────────────────────────────────────────────
+# ── Lifecycle hook shell escalation guard ────────────────────────────────────
 
 
-class TestLifecycleHookAutoDetect:
-    """Lifecycle hooks (pre_commit, on_prompt, on_stop) auto-detect via _needs_shell."""
+class TestLifecycleHookShellEscalationGuard:
+    """Lifecycle hooks must not auto-escalate to a shell on metacharacters."""
 
-    async def test_pre_commit_with_pipe_uses_shell_runner(self, tmp_path: Path) -> None:
+    async def test_pre_commit_with_pipe_uses_exec_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
         shell_runner = _TrackingRunner("shell")
         cfg = HookConfig(pre_commit=("cat log | grep FAIL",))
@@ -299,8 +334,8 @@ class TestLifecycleHookAutoDetect:
             shell_runner=shell_runner,
         )
         await hr.run_pre_commit()
-        assert len(shell_runner.calls) == 1
-        assert len(exec_runner.calls) == 0
+        assert len(exec_runner.calls) == 1
+        assert len(shell_runner.calls) == 0
 
     async def test_pre_commit_simple_uses_exec_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
@@ -316,7 +351,7 @@ class TestLifecycleHookAutoDetect:
         assert len(exec_runner.calls) == 1
         assert len(shell_runner.calls) == 0
 
-    async def test_pre_commit_with_glob_uses_shell_runner(self, tmp_path: Path) -> None:
+    async def test_pre_commit_with_glob_uses_exec_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
         shell_runner = _TrackingRunner("shell")
         cfg = HookConfig(pre_commit=("pytest tests/unit/test_*.py",))
@@ -327,10 +362,10 @@ class TestLifecycleHookAutoDetect:
             shell_runner=shell_runner,
         )
         await hr.run_pre_commit()
-        assert len(shell_runner.calls) == 1
-        assert len(exec_runner.calls) == 0
+        assert len(exec_runner.calls) == 1
+        assert len(shell_runner.calls) == 0
 
-    async def test_on_prompt_with_pipe_uses_shell_runner(self, tmp_path: Path) -> None:
+    async def test_on_prompt_with_pipe_uses_exec_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
         shell_runner = _TrackingRunner("shell")
         cfg = HookConfig(on_prompt=("cat context | head -20",))
@@ -341,8 +376,8 @@ class TestLifecycleHookAutoDetect:
             shell_runner=shell_runner,
         )
         await hr.run_on_prompt()
-        assert len(shell_runner.calls) == 1
-        assert len(exec_runner.calls) == 0
+        assert len(exec_runner.calls) == 1
+        assert len(shell_runner.calls) == 0
 
     async def test_on_prompt_simple_uses_exec_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
@@ -358,7 +393,7 @@ class TestLifecycleHookAutoDetect:
         assert len(exec_runner.calls) == 1
         assert len(shell_runner.calls) == 0
 
-    async def test_on_stop_with_semicolon_uses_shell_runner(self, tmp_path: Path) -> None:
+    async def test_on_stop_with_semicolon_uses_exec_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
         shell_runner = _TrackingRunner("shell")
         cfg = HookConfig(on_stop=("echo done; scripts/summary.sh",))
@@ -369,8 +404,8 @@ class TestLifecycleHookAutoDetect:
             shell_runner=shell_runner,
         )
         await hr.run_on_stop(exit_reason="end_turn")
-        assert len(shell_runner.calls) == 1
-        assert len(exec_runner.calls) == 0
+        assert len(exec_runner.calls) == 1
+        assert len(shell_runner.calls) == 0
 
     async def test_on_stop_simple_uses_exec_runner(self, tmp_path: Path) -> None:
         exec_runner = _TrackingRunner("exec")
@@ -387,7 +422,7 @@ class TestLifecycleHookAutoDetect:
         assert len(shell_runner.calls) == 0
 
     async def test_mixed_lifecycle_commands_route_independently(self, tmp_path: Path) -> None:
-        """Multiple pre_commit commands each route based on their own metachar content."""
+        """Multiple pre_commit commands all stay on the safe exec runner."""
         exec_runner = _TrackingRunner("exec")
         shell_runner = _TrackingRunner("shell")
         cfg = HookConfig(pre_commit=("ruff check .", "cat log | grep ERROR", "mypy ."))
@@ -398,8 +433,8 @@ class TestLifecycleHookAutoDetect:
             shell_runner=shell_runner,
         )
         await hr.run_pre_commit()
-        assert len(exec_runner.calls) == 2  # ruff and mypy
-        assert len(shell_runner.calls) == 1  # cat | grep
+        assert len(exec_runner.calls) == 3
+        assert len(shell_runner.calls) == 0
 
 
 # ── Smoke tests for default runners ─────────────────────────────────────────
