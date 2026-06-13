@@ -13,6 +13,33 @@ loader sees a literal plaintext `backends.<name>.api_key`, it migrates that
 value into the OS keyring, rewrites the YAML to `api_key_secret_ref`, and keeps
 the raw key out of subsequent saves.
 
+## Configuration Surface Map
+
+Maxwell-Daemon reads configuration from five distinct surfaces. They do **not**
+override one another field-by-field — each owns a different concern. The table
+lists every surface, its format, default location, and how to point at it (#989).
+
+| Surface | Format | Default location | Selected by | Owns |
+| --- | --- | --- | --- | --- |
+| Main daemon config | **YAML** | `$XDG_CONFIG_HOME/maxwell-daemon/maxwell-daemon.yaml` (≈ `~/.config/maxwell-daemon/maxwell-daemon.yaml`) | `MAXWELL_CONFIG` env var → default path | Backends, agent loop, budget, memory, role. |
+| Fleet manifest | **YAML** | `./fleet.yaml`, then `~/.maxwell-daemon/fleet.yaml` | `MAXWELL_FLEET_CONFIG` → `./fleet.yaml` → `~/.maxwell-daemon/fleet.yaml` | The repos the fleet manages + shared defaults. |
+| Environment / `.env` | `KEY=value` | process env; `.env` for local dev (see `.env.example`) | the shell / process manager | Secrets, `MAXWELL_*` paths and overrides, `${VAR}` substitution into the YAML above. |
+| CI ratchets / budgets | **JSON** | `scripts/config/*.json` (e.g. `coverage_floor.json`, `file_size_budget.json`) | committed in-repo | CI gate thresholds; not runtime config. |
+| Per-workspace hooks | **YAML** | `<workspace>/.maxwell/workspace_hooks.yaml` | presence in a repo workspace; falls back to `workspace_hooks` in the main config | Lifecycle hook commands run around task execution. |
+
+**Precedence notes**
+
+- The main config file is chosen by the single `MAXWELL_CONFIG` env var; if unset,
+  the default path above is used. The on-disk format is **YAML** — there is no
+  TOML config file (a common doc error fixed in #989).
+- `${VAR}` / `${VAR:-default}` references inside the YAML are resolved from the
+  process environment (surface 3) before validation.
+- The fleet manifest is independent of the main config and resolved by its own
+  order (explicit path → `MAXWELL_FLEET_CONFIG` → `./fleet.yaml` →
+  `~/.maxwell-daemon/fleet.yaml`); see [SPEC.md](../../SPEC.md) for its schema.
+- Workspace hooks prefer the per-repo `.maxwell/workspace_hooks.yaml` and fall
+  back to the `workspace_hooks` block in the main config.
+
 ## Minimal Configuration
 
 ```yaml
