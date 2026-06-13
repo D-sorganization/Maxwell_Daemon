@@ -19,8 +19,15 @@ def test_coverage_floor_preserves_prior_ratchet() -> None:
     assert floor >= 85.10
 
 
-def test_pytest_cov_fail_under_matches_phase_one_gate() -> None:
+def test_coverage_floor_is_single_sourced() -> None:
+    """The coverage floor is single-sourced in coverage_floor.json (#993).
+
+    A second ``--cov-fail-under`` in pytest addopts would be a competing, weaker
+    floor that drifts from the ratchet job, so it must not be present.
+    """
     pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     addopts = pyproject["tool"]["pytest"]["ini_options"]["addopts"]
 
-    assert "--cov-fail-under=80.0" in addopts
+    assert "--cov-fail-under" not in addopts
+    # The authoritative ratchet floor still exists and is enforced in CI.
+    assert Path("scripts/config/coverage_floor.json").is_file()
