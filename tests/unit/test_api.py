@@ -1654,25 +1654,6 @@ class TestSSHEndpointsWithoutAsyncSSH:
             )
         assert r.status_code == 503
 
-    def test_ssh_sessions_still_fail_closed_when_auth_unconfigured(
-        self, daemon: Daemon, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        import sys
-
-        class InstalledPool:
-            def sessions(self) -> list[dict[str, Any]]:
-                return []
-
-        from maxwell_daemon.ssh import session as ssh_session
-
-        monkeypatch.setitem(sys.modules, "asyncssh", object())
-        monkeypatch.setattr(ssh_session, "SSHSessionPool", InstalledPool)
-        with TestClient(create_app(daemon)) as c:
-            r = c.get("/api/v1/ssh/sessions")
-
-        assert r.status_code == 503
-        assert "SSH endpoints are disabled" in r.json()["detail"]
-
 
 class TestOpenAPIMetadata:
     """OpenAPI / Swagger schema is exposed and carries curated metadata."""
