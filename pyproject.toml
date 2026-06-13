@@ -132,6 +132,10 @@ timeout_method = "thread"
 #
 # Default lane: fast, deterministic, offline. See
 # Repository_Management/docs/FLEET_TESTING_STANDARDS.md §2.
+# NOTE: the coverage floor is single-sourced in scripts/config/coverage_floor.json
+# and enforced by the "Coverage floor (ratchet)" CI job (#993). Do NOT add a
+# --cov-fail-under here — it would be a competing, weaker floor that drifts from
+# the ratchet. (pytest addopts is whitespace-split and does not accept # comments.)
 addopts = """
   -ra
   --strict-markers
@@ -139,7 +143,6 @@ addopts = """
   --durations=20
   --cov=maxwell_daemon
   --cov-report=term-missing
-  --cov-fail-under=80.0
   --ignore=tests/benchmark
   --ignore=tests/benchmarks
   -m "not slow and not live_simulation and not e2e and not requires_network"
