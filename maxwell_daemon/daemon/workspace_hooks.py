@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,9 +48,12 @@ async def _run_hook(
     name: str, command: str, cwd: Path, timeout_seconds: float
 ) -> tuple[int, bytes, bytes]:
     """Run a single hook command safely without shell=True."""
-    # We split using shlex to avoid shell=True while still allowing basic args
+    # We split using shlex to avoid shell=True while still allowing basic args.
+    # POSIX-mode shlex treats backslash as an escape, which mangles Windows
+    # paths (``C:\tools\x.exe`` -> ``C:toolsx.exe``); split in non-POSIX mode on
+    # Windows so native paths survive intact (#981).
     try:
-        args = shlex.split(command)
+        args = shlex.split(command, posix=(os.name != "nt"))
     except ValueError as e:
         raise WorkspaceHookError(f"Failed to parse hook command {command!r}: {e}") from e
 
@@ -72,6 +76,9 @@ async def _run_hook(
 
             with contextlib.suppress(OSError):
                 proc.kill()
+            # Reap the killed child so it does not linger as a zombie (#980).
+            with contextlib.suppress(Exception):
+                await proc.wait()
             raise WorkspaceHookError(f"Hook {name!r} timed out after {timeout_seconds}s") from None
     except Exception as e:
         if isinstance(e, WorkspaceHookError):

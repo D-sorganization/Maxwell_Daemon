@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     dispatched_to TEXT,
     side_effects_started INTEGER NOT NULL DEFAULT 0,
     depends_on TEXT NOT NULL DEFAULT '[]',
-    dry_run INTEGER NOT NULL DEFAULT 0
+    dry_run INTEGER NOT NULL DEFAULT 0,
+    retry_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
@@ -121,6 +122,9 @@ _MIGRATIONS = [
     # their dependency ordering and dry-run tasks re-run live (issue #970).
     ("depends_on", "ALTER TABLE tasks ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'"),
     ("dry_run", "ALTER TABLE tasks ADD COLUMN dry_run INTEGER NOT NULL DEFAULT 0"),
+    # Bounded stall-retry accounting (issue #971); persisted so retry budget
+    # survives daemon restart instead of resetting to zero.
+    ("retry_count", "ALTER TABLE tasks ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0"),
 ]
 
 _TERMINAL_STATUS_VALUES = ("completed", "failed", "cancelled")
@@ -219,6 +223,7 @@ class TaskStore:
             int(task.side_effects_started),
             json.dumps(list(task.depends_on)),
             int(task.dry_run),
+            task.retry_count,
             _completed_at(task),
         )
         with self._lock, self._connect() as conn:
@@ -232,12 +237,12 @@ class TaskStore:
                     priority, result, error, waived_by, waiver_reason,
                     waived_at, pr_url, cost_usd, started_at,
                     finished_at, dispatched_to, side_effects_started,
-                    depends_on, dry_run, completed_at
+                    depends_on, dry_run, retry_count, completed_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?
+                    ?, ?, ?
                 )
                 ON CONFLICT(id) DO UPDATE SET
                     updated_at=excluded.updated_at,
@@ -266,6 +271,7 @@ class TaskStore:
                     side_effects_started=excluded.side_effects_started,
                     depends_on=excluded.depends_on,
                     dry_run=excluded.dry_run,
+                    retry_count=excluded.retry_count,
                     completed_at=excluded.completed_at
                 """,
                 row,
@@ -594,6 +600,10 @@ def _row_to_task(row: sqlite3.Row) -> Task:
     except (IndexError, KeyError):
         side_effects_started = False
     try:
+        retry_count = row["retry_count"]
+    except (IndexError, KeyError):
+        retry_count = 0
+    try:
         route_reason = row["route_reason"]
     except (IndexError, KeyError):
         route_reason = None
@@ -662,4 +672,5 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         side_effects_started=side_effects_started,
         depends_on=depends_on,
         dry_run=dry_run,
+        retry_count=retry_count if retry_count is not None else 0,
     )
