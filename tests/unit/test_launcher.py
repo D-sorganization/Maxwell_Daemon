@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
+import maxwell_daemon.launcher as launcher_mod
 from maxwell_daemon.launcher import (
     _open_dashboard_when_ready,
+    _resolve_install_args,
     _subprocess_env,
     build_plan,
     default_config_path,
@@ -55,6 +57,45 @@ def test_default_config_path_is_platform_specific() -> None:
 
     assert path.name == "maxwell-daemon.yaml"
     assert "maxwell-daemon" in path.parts
+
+
+def test_install_prefers_frozen_uv_sync_when_available(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With uv on PATH and a uv.lock present, install from the lockfile (#989)."""
+    (tmp_path / "uv.lock").write_text("# lock\n", encoding="utf-8")
+    plan = build_plan(repo_root=tmp_path)
+    monkeypatch.setattr(launcher_mod.shutil, "which", lambda name: "/usr/bin/uv")
+
+    args = _resolve_install_args(plan)
+
+    assert args[:3] == ("uv", "sync", "--frozen")
+
+
+def test_install_falls_back_to_pip_without_uv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No uv on PATH -> keep the unpinned pip editable install (#989)."""
+    (tmp_path / "uv.lock").write_text("# lock\n", encoding="utf-8")
+    plan = build_plan(repo_root=tmp_path)
+    monkeypatch.setattr(launcher_mod.shutil, "which", lambda name: None)
+
+    args = _resolve_install_args(plan)
+
+    assert args == plan.install_args
+    assert "pip" in args
+
+
+def test_install_falls_back_to_pip_without_lockfile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """uv present but no uv.lock -> pip fallback (nothing to freeze against)."""
+    plan = build_plan(repo_root=tmp_path)
+    monkeypatch.setattr(launcher_mod.shutil, "which", lambda name: "/usr/bin/uv")
+
+    args = _resolve_install_args(plan)
+
+    assert args == plan.install_args
 
 
 def test_root_wrappers_delegate_to_python_launcher() -> None:
