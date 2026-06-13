@@ -1,12 +1,12 @@
 ---
-# install-conductor.yml — Install maxwell-daemon, dependencies, and systemd service.
+# install-maxwell.yml — Install maxwell-daemon, dependencies, and systemd service.
 #
 # Usage:
-#   ansible-playbook -i inventory/fleet.yml install-conductor.yml
-#   ansible-playbook -i inventory/fleet.yml install-conductor.yml -e conductor_version=0.1.0
+#   ansible-playbook -i inventory/fleet.yml install-maxwell.yml
+#   ansible-playbook -i inventory/fleet.yml install-maxwell.yml -e maxwell_version=0.1.0
 
-- name: Install maxwell-daemon on conductor hosts
-  hosts: conductor_primary
+- name: Install maxwell-daemon on maxwell hosts
+  hosts: maxwell_primary
   become: true
   gather_facts: true
 
@@ -22,7 +22,7 @@
 
     - name: Wait for API to become reachable
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ conductor_port }}/healthz"
+        url: "http://127.0.0.1:{{ maxwell_port }}/healthz"
         status_code: 200
       retries: 10
       delay: 3

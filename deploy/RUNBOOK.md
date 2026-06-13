@@ -4,7 +4,7 @@
 
 | Path | When to use | Guide |
 | --- | --- | --- |
-| Ansible playbook | Known hosts, repeatable | `ansible/inventory.yml` + `ansible/playbooks/install.yml` |
+| Ansible playbook | Known hosts, repeatable | `deploy/ansible/inventory/fleet.yml` + `deploy/ansible/install-maxwell.yml` |
 | WSL2 systemd (manual) | New fleet node, no Ansible | `docs/operations/wsl2-node-deployment.md` |
 | `deploy-og-laptop.sh` | OG-Laptop combined deploy | Script in repo root or `~/deploy-og-laptop.sh` |
 | Launcher scripts | Local dev / single machine | `Launch-Maxwell.sh` / `.bat` / `.command` |

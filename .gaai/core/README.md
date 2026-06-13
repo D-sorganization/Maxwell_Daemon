@@ -1,5 +1,27 @@
 # .gaai/ — GAAI Framework (v2.6.3)
 
+## Provenance
+
+> **Vendored from [`Fr-e-d/GAAI-framework`](https://github.com/Fr-e-d/GAAI-framework) @ v2.6.3.**
+> This tree is **not** first-party to Maxwell-Daemon. The files under
+> `.gaai/core/` (install scripts, git hooks such as
+> `pre-push.d/01-block-production.sh`, the skills library, and
+> `specialists.registry.yaml`) originate upstream and are kept in sync by the
+> post-commit hook described below.
+
+**Why it is committed rather than installed at setup time:** the post-commit sync
+hook treats this checkout as the *editing surface* for upstream `core/` — local
+edits are auto-contributed back to the OSS framework. Removing it from version
+control would break that bidirectional sync. Because the tree is executable
+framework code (including git hooks), treat upstream bumps as dependency
+updates: review the diff when `v2.6.x` changes, and pin the version recorded in
+this header.
+
+**Update path:** bump the upstream version, let the sync hook reconcile
+`core/`, then update the version in this README's title and the Provenance note.
+Maxwell-Daemon's own integration point is `maxwell_daemon/gaai/loader.py`
+(first-party), which only *reads* metadata from this tree.
+
 ## Directory Structure
 
 ```

@@ -2,19 +2,19 @@
 # Outputs — fleet endpoint and SSH details
 ################################################################################
 
-output "conductor_public_ip" {
-  description = "Public IP of the primary conductor node"
+output "maxwell_public_ip" {
+  description = "Public IP of the primary maxwell node"
   value = (
-    var.cloud == "aws" ? (length(aws_instance.conductor) > 0 ? aws_instance.conductor[0].public_ip : "") :
-    var.cloud == "gcp" ? (length(google_compute_instance.conductor) > 0 ? google_compute_instance.conductor[0].network_interface[0].access_config[0].nat_ip : "") :
-    var.cloud == "azure" ? (length(azurerm_public_ip.conductor) > 0 ? azurerm_public_ip.conductor[0].ip_address : "") :
+    var.cloud == "aws" ? (length(aws_instance.maxwell) > 0 ? aws_instance.maxwell[0].public_ip : "") :
+    var.cloud == "gcp" ? (length(google_compute_instance.maxwell) > 0 ? google_compute_instance.maxwell[0].network_interface[0].access_config[0].nat_ip : "") :
+    var.cloud == "azure" ? (length(azurerm_public_ip.maxwell) > 0 ? azurerm_public_ip.maxwell[0].ip_address : "") :
     ""
   )
 }
 
 output "fleet_api_endpoint" {
   description = "Maxwell-Daemon API base URL"
-  value       = "http://${local.conductor_ip}:${var.conductor_port}/api/v1"
+  value       = "http://${local.maxwell_ip}:${var.maxwell_port}/api/v1"
 }
 
 output "agent_ips" {
@@ -35,8 +35,8 @@ output "ssh_private_key" {
 output "ssh_config" {
   description = "Ready-to-use ~/.ssh/config block for the provisioned fleet"
   value = <<-EOT
-    Host ${var.name_prefix}-conductor
-      HostName ${local.conductor_ip}
+    Host ${var.name_prefix}-maxwell
+      HostName ${local.maxwell_ip}
       User ubuntu
       IdentityFile ~/.ssh/${var.name_prefix}-maxwell.pem
 
@@ -54,10 +54,10 @@ output "ssh_config" {
 ################################################################################
 
 locals {
-  conductor_ip = (
-    var.cloud == "aws" ? (length(aws_instance.conductor) > 0 ? aws_instance.conductor[0].public_ip : "0.0.0.0") :
-    var.cloud == "gcp" ? (length(google_compute_instance.conductor) > 0 ? google_compute_instance.conductor[0].network_interface[0].access_config[0].nat_ip : "0.0.0.0") :
-    var.cloud == "azure" ? (length(azurerm_public_ip.conductor) > 0 ? azurerm_public_ip.conductor[0].ip_address : "0.0.0.0") :
+  maxwell_ip = (
+    var.cloud == "aws" ? (length(aws_instance.maxwell) > 0 ? aws_instance.maxwell[0].public_ip : "0.0.0.0") :
+    var.cloud == "gcp" ? (length(google_compute_instance.maxwell) > 0 ? google_compute_instance.maxwell[0].network_interface[0].access_config[0].nat_ip : "0.0.0.0") :
+    var.cloud == "azure" ? (length(azurerm_public_ip.maxwell) > 0 ? azurerm_public_ip.maxwell[0].ip_address : "0.0.0.0") :
     "0.0.0.0"
   )
 

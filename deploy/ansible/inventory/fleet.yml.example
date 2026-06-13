@@ -4,18 +4,18 @@ all:
   vars:
     ansible_user: ubuntu
     ansible_ssh_private_key_file: ~/.ssh/id_ed25519
-    conductor_version: "latest"   # pip version or "git:main"
-    conductor_port: 8765
-    conductor_config_dir: /etc/maxwell-daemon
-    conductor_data_dir: /var/lib/maxwell-daemon
+    maxwell_version: "latest"   # pip version or "git:main"
+    maxwell_port: 8765
+    maxwell_config_dir: /etc/maxwell-daemon
+    maxwell_data_dir: /var/lib/maxwell-daemon
 
   children:
-    conductor_primary:
+    maxwell_primary:
       hosts:
         primary-01:
           ansible_host: 192.0.2.10
 
-    conductor_agents:
+    maxwell_agents:
       hosts:
         agent-01:
           ansible_host: 192.0.2.20

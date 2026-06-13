@@ -99,16 +99,18 @@ or starter-config generation changes.
 Use Ansible when you already know the hosts that should run workers. For securely connecting your fleet over a private network, see the [Tailscale Fleet Deployment Guide](tailscale.md).
 
 ```bash
-cp ansible/inventory.example.yml ansible/inventory.yml
-$EDITOR ansible/inventory.yml
-ansible-playbook -i ansible/inventory.yml ansible/playbooks/install.yml
+cp deploy/ansible/inventory/fleet.yml.example deploy/ansible/inventory/fleet.yml
+$EDITOR deploy/ansible/inventory/fleet.yml
+ansible-playbook -i deploy/ansible/inventory/fleet.yml deploy/ansible/install-maxwell.yml
 ```
 
 The playbook installs Python, creates a dedicated service user, renders
 configuration, installs a hardened systemd unit, and starts the daemon.
 
-Use the playbooks under `deploy/ansible/` for conductor-oriented fleet
-operations such as backups, health checks, upgrades, and agent deployment.
+The same `deploy/ansible/` tree provides playbooks for other fleet operations —
+`configure-maxwell.yml`, `upgrade-maxwell.yml`, `deploy-agents.yml`,
+`health-check.yml`, and `backup-config.yml`. See
+[ansible.md](ansible.md) for the full reference.
 
 ## Tailscale Tailnet Fleet
 
