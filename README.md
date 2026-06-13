@@ -16,7 +16,7 @@ cross-repo contract is in
 | --- | --- |
 | [`Repository_Management`](https://github.com/D-sorganization/Repository_Management) | Fleet orchestrator (CI workflows, skills, templates, agent coordination). |
 | [`runner-dashboard`](https://github.com/D-sorganization/runner-dashboard) | Operator console; its **Maxwell tab** consumes the daemon's HTTP API. |
-| `Maxwell-Daemon` (here) | Strategist / Implementer / Crucible pipeline + ExecutionSandbox + BYO-CLI runtime. |
+| `Maxwell-Daemon` (here) | Strategist / Implementer / Crucible pipeline + policy-gated executor (no isolation — see Execution) + BYO-CLI runtime. |
 
 The daemon's **`/ui/`** is the daemon's own console (for direct/local use).
 The fleet-wide operator console is `runner-dashboard`. The daemon never
@@ -27,7 +27,7 @@ traffic is into the daemon.
 - **Canonical Dashboard Launcher**: Use `Launch-Maxwell.bat`, `Launch-Maxwell.command`, or `Launch-Maxwell.sh` from a source checkout to bootstrap Maxwell-Daemon and open the shipped `/ui/` dashboard on Windows, macOS, or Linux.
 - **The Cognitive Pipeline**: A state-machine orchestrated team:
   - 🧠 **Strategist**: Formulates architectural plans using the compressed `RepoSchematic`.
-  - 💻 **Implementer**: Generates code and runs validation through a policy-gated `ExecutionSandbox`.
+  - 💻 **Implementer**: Generates code and runs validation through a policy-gated executor (argv allowlist + workspace/env/timeout policy; **not** an isolation sandbox — see [Execution](#execution-model) below).
   - ⚔️ **Maxwell Crucible**: Adversarial QA role that violently tests the Implementer's code against the Strategist's contract.
 - **BYO-CLI**: Don't pay double API taxes. Maxwell-Daemon can hook into your existing local CLI subscriptions (like `jules-cli`, `claude-code`, or `ollama`).
 
@@ -106,7 +106,7 @@ Operator-facing guides live under [`docs/operations/`](docs/operations/):
 ## 🧠 Architectural Highlights
 - **RepoSchematic**: Generates highly compressed file-and-symbol trees, saving massive token budgets compared to dumping raw files.
 - **Memory Annealer**: Automatically compresses verbose agent logs into dense `architectural_state.md` files, responsibly purging raw logs to save disk space.
-- **Execution Sandbox**: Validation commands run through an argv allowlist, workspace-root check, environment filter, timeout, output redaction, and artifact capture. The current executor uses host subprocesses; it does not provide Docker, filesystem, network, process, or resource isolation. See [Security](docs/operations/security.md) before running untrusted generated code.
+- <a id="execution-model"></a>**Execution model — policy-gated executor, NOT an isolation sandbox**: Validation commands run through an argv allowlist, workspace-root check, environment filter, timeout, output redaction, and artifact capture. **The executor runs host subprocesses and provides no Docker, filesystem, network, process, or resource isolation** — these policy gates reduce blast radius but are not a security boundary. Do not rely on it to contain untrusted generated code; see [Security](docs/operations/security.md) first. Real isolation is tracked as a roadmap item ([#1015](https://github.com/D-sorganization/Maxwell_Daemon/issues/1015)).
 
 ---
 **License**: MIT © D-sorganization
