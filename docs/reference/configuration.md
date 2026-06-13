@@ -36,7 +36,9 @@ lists every surface, its format, default location, and how to point at it (#989)
   process environment (surface 3) before validation.
 - The fleet manifest is independent of the main config and resolved by its own
   order (explicit path → `MAXWELL_FLEET_CONFIG` → `./fleet.yaml` →
-  `~/.maxwell-daemon/fleet.yaml`); see [SPEC.md](../../SPEC.md) for its schema.
+  `~/.maxwell-daemon/fleet.yaml`); see
+  [SPEC.md](https://github.com/D-sorganization/Maxwell-Daemon/blob/main/SPEC.md)
+  for its schema.
 - Workspace hooks prefer the per-repo `.maxwell/workspace_hooks.yaml` and fall
   back to the `workspace_hooks` block in the main config.
 
