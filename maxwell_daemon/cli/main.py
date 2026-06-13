@@ -478,7 +478,11 @@ def serve(
     log_file = getattr(cfg, "log_file", None)
     configure_logging(level="INFO", log_file=log_file)
 
-    daemon = Daemon(cfg)
+    # Pass the resolved config path so SIGUSR1/SIGHUP hot-reload re-reads the
+    # SAME file the operator started with — not the default path, which could
+    # carry different backends/budgets/fleet role (#976).
+    resolved_config_path = config.expanduser() if config else default_config_path()
+    daemon = Daemon(cfg, config_path=resolved_config_path)
 
     async def _run_all() -> None:
         # Start daemon workers (including task recovery) in the SAME event loop

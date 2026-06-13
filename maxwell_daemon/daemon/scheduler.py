@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from maxwell_daemon.contracts import require
+from maxwell_daemon.fsutil import atomic_write_text
 from maxwell_daemon.gh.discovery import DiscoveryFilter, discover_issues
 from maxwell_daemon.logging import get_logger
 
@@ -123,9 +124,10 @@ class DiscoveryScheduler:
         if self._dedup_path is None:
             return
         try:
-            self._dedup_path.parent.mkdir(parents=True, exist_ok=True)
             payload = {repo: sorted(nums) for repo, nums in self._dispatched.items()}
-            self._dedup_path.write_text(json.dumps(payload))
+            # Atomic write: a crash mid-write must not truncate the dedup file,
+            # which would make the scheduler re-dispatch every seen issue (#979).
+            atomic_write_text(self._dedup_path, json.dumps(payload))
         except Exception:  # noqa: BLE001
             log.warning("failed to persist discovery dedup", exc_info=True)
 

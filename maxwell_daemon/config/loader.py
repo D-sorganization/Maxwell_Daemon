@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
+import shutil
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -11,6 +13,7 @@ from typing import Any
 import yaml
 
 from maxwell_daemon.config.models import MaxwellDaemonConfig
+from maxwell_daemon.fsutil import atomic_write_text
 from maxwell_daemon.logging import get_logger
 from maxwell_daemon.secrets import (
     KeyringSecretStore,
@@ -18,17 +21,34 @@ from maxwell_daemon.secrets import (
     backend_api_key_secret_ref,
 )
 
+# group(1) = VAR name; group(2) present (possibly empty) only when ``:-`` is used.
 _ENV_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}")
 _LOGGER = get_logger(__name__)
 
 
 def _substitute_env(value: Any) -> Any:
-    """Expand ${VAR} and ${VAR:-default} in strings. Recurses into dicts and lists."""
+    """Expand ``${VAR}`` and ``${VAR:-default}`` in strings.
+
+    Fails loud on a ``${VAR}`` reference (no ``:-default``) whose variable is
+    unset, instead of silently substituting an empty string — a typo like
+    ``${ANTHROPIC_API_KY}`` would otherwise yield ``""`` and surface much later
+    as a confusing auth/connectivity failure (#982). ``${VAR:-default}`` still
+    substitutes the default when unset, even an empty one.
+    """
     if isinstance(value, str):
 
         def replace(m: re.Match[str]) -> str:
             var, default = m.group(1), m.group(2)
-            return os.environ.get(var, default or "")
+            env_value = os.environ.get(var)
+            if env_value is not None:
+                return env_value
+            if default is not None:
+                # ``:-`` was supplied (default may legitimately be empty).
+                return default
+            raise ValueError(
+                f"environment variable '{var}' referenced as '${{{var}}}' in config "
+                f"is not set. Set it, or use '${{{var}:-<default>}}' to allow a default."
+            )
 
         return _ENV_PATTERN.sub(replace, value)
     if isinstance(value, dict):
@@ -48,9 +68,10 @@ def default_config_path() -> Path:
 
 
 def _write_raw_config(raw: dict[str, Any], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(raw, f, default_flow_style=False, sort_keys=False)
+    # Atomic write so a crash mid-rewrite cannot destroy the user's only config
+    # copy (the keyring migration rewrites it in place) — #979.
+    serialized = yaml.safe_dump(raw, default_flow_style=False, sort_keys=False)
+    atomic_write_text(path, serialized)
 
 
 def _default_secret_store() -> SecretStore | None:
@@ -137,6 +158,11 @@ def load_config(
     active_secret_store = secret_store if secret_store is not None else _default_secret_store()
     migrated_raw, changed = _migrate_backend_api_keys(deepcopy(raw), active_secret_store)
     if changed:
+        # Back up the original before the in-place rewrite so a botched migration
+        # is always recoverable (#979). The write itself is atomic.
+        backup = p.with_suffix(p.suffix + ".bak")
+        with contextlib.suppress(OSError):
+            shutil.copy2(p, backup)
         _write_raw_config(migrated_raw, p)
     resolved_raw = _resolve_backend_api_keys(deepcopy(migrated_raw), active_secret_store)
     return MaxwellDaemonConfig.model_validate(_substitute_env(resolved_raw))
