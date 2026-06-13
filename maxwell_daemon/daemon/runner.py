@@ -807,7 +807,7 @@ class Daemon:
                 self._enqueue_task_entry(task.priority, task)
             except asyncio.CancelledError:
                 raise
-            except Exception:  # noqa: BLE001
+            except (QueueSaturationError, RuntimeError):
                 log.warning("delayed re-enqueue failed for task=%s", task.id, exc_info=True)
 
         try:
