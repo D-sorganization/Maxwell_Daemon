@@ -526,15 +526,24 @@ jobs:
         run: |
           set -euo pipefail
           # Match the pre-commit hook version without using the license-gated
-          # GitHub Action. PRs scan only the introduced commit range.
+          # GitHub Action. PRs and pushes scan only the introduced commit range;
+          # historical fixtures are covered by the current tree and must not
+          # make main fail for already-known old commits.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
             head="${{ github.event.pull_request.head.sha }}"
-            git fetch --no-tags --depth=1 origin "$base" "$head"
-            gitleaks git --redact --verbose --log-opts="${base}..${head}" .
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
           else
-            gitleaks git --redact --verbose .
+            base="$(git rev-parse HEAD~1)"
+            head="$(git rev-parse HEAD)"
           fi
+          if [[ "$base" =~ ^0+$ ]]; then
+            base="$(git rev-list --max-parents=0 "$head" | tail -1)"
+          fi
+          git fetch --no-tags --depth=1 origin "$base" "$head"
+          gitleaks git --redact --verbose --log-opts="${base}..${head}" .
 
   repo-hygiene:
     timeout-minutes: 10
