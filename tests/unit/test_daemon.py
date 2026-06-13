@@ -17,7 +17,7 @@ import pytest
 import yaml
 
 from maxwell_daemon.backends import registry
-from maxwell_daemon.config import MaxwellDaemonConfig
+from maxwell_daemon.config import MaxwellDaemonConfig, load_config
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.daemon.runner import (
     _STOP,
@@ -305,9 +305,12 @@ class TestTaskExecution:
             base_payload["agent"]["concurrency_by_kind"] = {"implement": 1}
             config_path.write_text(yaml.safe_dump(base_payload, sort_keys=False), encoding="utf-8")
 
-            d = Daemon.from_config_path(config_path)
-            d._ledger = d._ledger.__class__(isolated_ledger_path)
-            d._task_store = d._task_store.__class__(isolated_ledger_path.with_suffix(".tasks.db"))
+            d = Daemon(
+                load_config(config_path),
+                config_path=config_path,
+                ledger_path=isolated_ledger_path,
+                task_store_path=isolated_ledger_path.with_suffix(".tasks.db"),
+            )
             active = 0
             max_active = 0
             release_first = asyncio.Event()
