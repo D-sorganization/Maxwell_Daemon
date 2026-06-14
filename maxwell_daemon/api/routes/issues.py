@@ -27,8 +27,8 @@ __all__ = [
     "IssueBatchDispatch",
     "IssueCreate",
     "IssueDispatch",
+    "IssueTaskView",
     "RecordMemoryOutcome",
-    "TaskView",
     "register",
 ]
 
@@ -91,7 +91,7 @@ class IssueAbDispatch(BaseModel):
         return v
 
 
-class TaskView(BaseModel):
+class IssueTaskView(BaseModel):
     id: str
     prompt: str
     kind: str
@@ -126,7 +126,7 @@ class TaskView(BaseModel):
     finished_at: datetime | None
 
     @classmethod
-    def from_task(cls, t: Task) -> TaskView:
+    def from_task(cls, t: Task) -> IssueTaskView:
         return cls(
             id=t.id,
             prompt=t.prompt,
@@ -244,7 +244,7 @@ def register(  # noqa: C901
         dependencies=[Depends(auth), Depends(require_admin)],
         status_code=status.HTTP_202_ACCEPTED,
     )
-    async def dispatch_issue(payload: IssueDispatch) -> TaskView:
+    async def dispatch_issue(payload: IssueDispatch) -> IssueTaskView:
         """Queue an existing issue for the daemon to draft a PR for."""
         task = daemon.submit_issue(
             repo=payload.repo,
@@ -255,7 +255,7 @@ def register(  # noqa: C901
             priority=payload.priority,
             dry_run=payload.dry_run,
         )
-        return TaskView.from_task(task)
+        return IssueTaskView.from_task(task)
 
     @app.post(
         "/api/v1/issues/ab-dispatch",
@@ -283,7 +283,7 @@ def register(  # noqa: C901
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
         return {
             "ab_group": tasks[0].ab_group,
-            "tasks": [TaskView.from_task(t).model_dump(mode="json") for t in tasks],
+            "tasks": [IssueTaskView.from_task(t).model_dump(mode="json") for t in tasks],
         }
 
     @app.post(
@@ -293,7 +293,7 @@ def register(  # noqa: C901
     )
     async def batch_dispatch_issues(payload: IssueBatchDispatch) -> dict[str, Any]:
         """Queue up to 100 issues in one call."""
-        dispatched: list[TaskView] = []
+        dispatched: list[IssueTaskView] = []
         failures: list[dict[str, Any]] = []
         for item in payload.items:
             try:
@@ -305,7 +305,7 @@ def register(  # noqa: C901
                     model=item.model,
                     priority=item.priority,
                 )
-                dispatched.append(TaskView.from_task(task))
+                dispatched.append(IssueTaskView.from_task(task))
             except Exception as e:  # noqa: BLE001
                 failures.append({"repo": item.repo, "number": item.number, "error": str(e)})
         return {
