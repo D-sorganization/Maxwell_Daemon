@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
@@ -100,9 +102,23 @@ def test_binary_artifact_persists_across_store_instances(tmp_path: Path) -> None
 
 def test_lists_by_owner_and_kind_deterministically(tmp_path: Path) -> None:
     store = _store(tmp_path)
-    first = store.put_text(task_id="task-1", kind=ArtifactKind.PLAN, name="Plan", text="one")
-    store.put_text(task_id="other", kind=ArtifactKind.PLAN, name="Other", text="other")
-    second = store.put_text(task_id="task-1", kind=ArtifactKind.DIFF, name="Diff", text="two")
+    generated_uuids = [
+        uuid.UUID("ffffffffffffffffffffffffffffffff"),
+        uuid.UUID("10000000000000000000000000000000"),
+        uuid.UUID("20000000000000000000000000000000"),
+        uuid.UUID("30000000000000000000000000000000"),
+        uuid.UUID("00000000000000000000000000000000"),
+        uuid.UUID("40000000000000000000000000000000"),
+    ]
+    with patch("maxwell_daemon.core.artifacts.uuid.uuid4", side_effect=generated_uuids):
+        first = store.put_text(task_id="task-1", kind=ArtifactKind.PLAN, name="Plan", text="one")
+        store.put_text(task_id="other", kind=ArtifactKind.PLAN, name="Other", text="other")
+        second = store.put_text(task_id="task-1", kind=ArtifactKind.DIFF, name="Diff", text="two")
+    with sqlite3.connect(tmp_path / "artifacts.db") as conn:
+        conn.execute(
+            "UPDATE artifacts SET created_at = ? WHERE id IN (?, ?)",
+            ("2026-06-14T00:00:00+00:00", first.id, second.id),
+        )
 
     assert [item.id for item in store.list_for_task("task-1")] == [first.id, second.id]
     assert [item.id for item in store.list_for_task("task-1", kind=ArtifactKind.DIFF)] == [

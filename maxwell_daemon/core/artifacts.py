@@ -286,7 +286,7 @@ class ArtifactStore:
         if kind is not None:
             query += " AND kind = ?"
             args.append(kind.value)
-        query += " ORDER BY created_at ASC, id ASC"
+        query += " ORDER BY created_at ASC, rowid ASC"
         with self._connect() as conn:
             rows = conn.execute(query, args).fetchall()
         return [_row_to_artifact(row) for row in rows]
