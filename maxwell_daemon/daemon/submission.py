@@ -7,7 +7,7 @@ import asyncio
 import concurrent.futures
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 from maxwell_daemon.daemon.retry_policy import DEFAULT_RETRY_POLICY
 from maxwell_daemon.daemon.task_models import (
@@ -45,9 +45,10 @@ class DaemonSubmissionMixin:
                         backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
                     ) from exc
             return
-        loop = self._loop
-        if loop is None:
+        raw_loop = self._loop
+        if raw_loop is None:
             raise RuntimeError("daemon must be started before enqueueing tasks")
+        loop = cast(asyncio.AbstractEventLoop, raw_loop)
         try:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -189,12 +190,10 @@ class DaemonSubmissionMixin:
         :raises RuntimeError: if the daemon has not been started yet
             (``self._loop`` is ``None``).
         """
-        if self._loop is None:
+        raw_loop = self._loop
+        if raw_loop is None:
             raise RuntimeError("daemon must be started before submit_threadsafe()")
-
-        loop = self._loop
-        if loop is None:
-            raise RuntimeError("daemon must be started before submit_threadsafe()")
+        loop = cast(asyncio.AbstractEventLoop, raw_loop)
         try:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -225,7 +224,7 @@ class DaemonSubmissionMixin:
             else:
                 result.set_result(task)
 
-        self._loop.call_soon_threadsafe(_submit_on_loop)
+        loop.call_soon_threadsafe(_submit_on_loop)
         return result.result(timeout=60.0)
 
     def _offload_prompt_if_needed(self, task_id: str, prompt: str) -> str:
