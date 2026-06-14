@@ -1,0 +1,118 @@
+{
+  "source": {
+    "repository": "D-sorganization/Runner_Dashboard",
+    "commit": "63ed2681d69908fa3c13756a56e54b801f5b31b5",
+    "files": [
+      "backend/maxwell_contract.py",
+      "tests/test_maxwell_contract.py"
+    ]
+  },
+  "responses": [
+    {
+      "name": "version",
+      "path": "/api/version",
+      "method": "get",
+      "status": "200",
+      "schema": "VersionResponse",
+      "required": ["daemon", "contract"],
+      "discriminators": ["contract"]
+    },
+    {
+      "name": "status",
+      "path": "/api/status",
+      "method": "get",
+      "status": "200",
+      "schema": "StatusResponse",
+      "required": ["pipeline_state", "gate", "sandbox"],
+      "discriminators": ["pipeline_state"]
+    },
+    {
+      "name": "status_v2",
+      "path": "/api/v2/status",
+      "method": "get",
+      "status": "200",
+      "schema": "StatusV2Response",
+      "required": ["counts"],
+      "discriminators": ["counts"]
+    },
+    {
+      "name": "task_list",
+      "path": "/api/tasks",
+      "method": "get",
+      "status": "200",
+      "schema": "TaskListResponse",
+      "required": ["tasks", "total"],
+      "nested": [
+        {
+          "property": "tasks",
+          "schema": "TaskSummary",
+          "required": ["id", "status", "created_at"],
+          "discriminators": ["status"]
+        }
+      ]
+    },
+    {
+      "name": "task_detail",
+      "path": "/api/tasks/{task_id}",
+      "method": "get",
+      "status": "200",
+      "schema": "TaskDetail",
+      "required": ["id", "status", "created_at", "transcript", "artifacts"],
+      "discriminators": ["status"]
+    },
+    {
+      "name": "dispatch",
+      "path": "/api/dispatch",
+      "method": "post",
+      "status": "202",
+      "schema": "DispatchResponse",
+      "required": ["task_id", "status", "queued_at"],
+      "discriminators": ["task_id", "status"]
+    },
+    {
+      "name": "control",
+      "path": "/api/control/{action}",
+      "method": "post",
+      "status": "200",
+      "schema": "ControlResponse",
+      "required": ["action", "applied_at", "previous_state"],
+      "discriminators": ["action"]
+    },
+    {
+      "name": "workers",
+      "path": "/api/v1/workers",
+      "method": "get",
+      "status": "200",
+      "schema": "WorkersStatusResponse",
+      "required": ["worker_count", "queue_depth"],
+      "discriminators": ["worker_count"]
+    },
+    {
+      "name": "cost",
+      "path": "/api/v1/cost",
+      "method": "get",
+      "status": "200",
+      "schema": "CostSummary",
+      "required": ["month_to_date_usd", "by_backend"],
+      "discriminators": ["month_to_date_usd"]
+    }
+  ],
+  "requests": [
+    {
+      "name": "dispatch_request",
+      "path": "/api/dispatch",
+      "method": "post",
+      "schema": "DispatchRequest",
+      "required": ["confirmation_token", "prompt", "idempotency_key"],
+      "discriminators": ["confirmation_token", "prompt", "idempotency_key"]
+    },
+    {
+      "name": "control_request",
+      "path": "/api/control/{action}",
+      "method": "post",
+      "schema": "ControlRequest",
+      "required": ["confirmation_token"],
+      "discriminators": ["confirmation_token"]
+    }
+  ]
+}

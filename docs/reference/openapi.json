@@ -4256,6 +4256,24 @@
         ],
         "title": "WorkItemView",
         "type": "object"
+      },
+      "WorkersStatusResponse": {
+        "properties": {
+          "queue_depth": {
+            "title": "Queue Depth",
+            "type": "integer"
+          },
+          "worker_count": {
+            "title": "Worker Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "worker_count",
+          "queue_depth"
+        ],
+        "title": "WorkersStatusResponse",
+        "type": "object"
       }
     }
   },
@@ -8875,9 +8893,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Workers Status Api V1 Workers Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/WorkersStatusResponse"
                 }
               }
             },

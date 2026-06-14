@@ -12,6 +12,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 
+from maxwell_daemon.api.contract import WorkersStatusResponse
 from maxwell_daemon.core.delegate_lifecycle import DelegateSessionSnapshot, DelegateSessionStatus
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.logging import get_logger
@@ -203,14 +204,15 @@ def register(  # noqa: C901
         )
         return status_view.to_dict()
 
-    @app.get("/api/v1/workers", dependencies=[Depends(require_viewer)])
-    async def workers_status() -> dict[str, Any]:
+    @app.get(
+        "/api/v1/workers",
+        dependencies=[Depends(require_viewer)],
+        response_model=WorkersStatusResponse,
+    )
+    async def workers_status() -> WorkersStatusResponse:
         """Return current worker count and queue depth."""
         state = daemon.state()
-        return {
-            "worker_count": state.worker_count,
-            "queue_depth": state.queue_depth,
-        }
+        return WorkersStatusResponse(worker_count=state.worker_count, queue_depth=state.queue_depth)
 
     @app.put("/api/v1/workers", dependencies=[Depends(require_operator)])
     async def set_workers(count: int) -> dict[str, Any]:

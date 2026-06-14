@@ -172,3 +172,8 @@ class ControlResponse(BaseModel):
 class CostSummary(BaseModel):
     month_to_date_usd: float
     by_backend: dict[str, float]
+
+
+class WorkersStatusResponse(BaseModel):
+    worker_count: int
+    queue_depth: int
