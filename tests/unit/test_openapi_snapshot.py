@@ -102,3 +102,14 @@ def test_release_sigstore_action_uses_job_python() -> None:
     # v3.4.0 bootstraps its own Python 3.14 env and currently hits a cffi
     # resolver conflict before signing; v3.0.1 uses this job's pinned 3.12.
     assert sigstore_steps[0]["uses"] == "sigstore/gh-action-sigstore-python@v3.0.1"
+
+
+def test_release_pypi_publish_requires_explicit_trusted_publisher_flag() -> None:
+    release_workflow = yaml.safe_load(Path(".github/workflows/release.yml").read_text())
+    assert isinstance(release_workflow, dict)
+    steps = release_workflow["jobs"]["build-and-publish"]["steps"]
+    publish_steps = [step for step in steps if step.get("name") == "Publish to PyPI"]
+    assert len(publish_steps) == 1
+
+    assert publish_steps[0]["uses"] == "pypa/gh-action-pypi-publish@release/v1"
+    assert publish_steps[0]["if"] == "${{ vars.PYPI_TRUSTED_PUBLISHING_ENABLED == 'true' }}"
