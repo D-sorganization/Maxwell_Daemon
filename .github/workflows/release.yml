@@ -87,6 +87,7 @@ jobs:
           path: dist/
 
       - name: Publish to PyPI
+        if: ${{ vars.PYPI_TRUSTED_PUBLISHING_ENABLED == 'true' }}
         uses: pypa/gh-action-pypi-publish@release/v1
 
       - name: Create GitHub Release
