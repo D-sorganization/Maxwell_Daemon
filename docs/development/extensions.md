@@ -9,7 +9,7 @@ Foundational plugin structures have been scaffolded for the following platforms 
 - **VS Code** (`extensions/vscode`): The single, canonical VS Code integration offering inline agent suggestions, task management, and artifact review. (A duplicate `extensions/conductor-vscode/` from before the product rename was removed in #988.)
 - **JetBrains** (`extensions/jetbrains`): Support for IntelliJ IDEA, PyCharm, and WebStorm, utilizing the JetBrains Plugin SDK.
 - **Zed** (`extensions/zed`): Native integration for the Zed editor, prioritizing speed and low-latency agent interactions.
-- **Obsidian** (`extensions/obsidian`): A knowledge-management integration that allows agents to build and refine documentation graphs.
+- **Obsidian** (`extensions/obsidian`): A knowledge-management integration that allows agents to build and refine documentation graphs. This extension currently ships as a checked-in, built-artifact-only `main.js`; CI syntax-checks the artifact until source-based packaging is restored.
 
 ## Extension Architecture
 
@@ -22,6 +22,8 @@ Each extension follows a standard architecture pattern to interface with the Max
 ## Development Standard
 
 All extensions reside within the `extensions/` directory. They should be built as thin clients that delegate all heavy cognitive processing and LLM interaction to the Maxwell Daemon backend.
+
+CI must exercise every shipped, non-experimental extension before merge: VS Code is compiled with npm, JetBrains is built with Gradle, Zed is checked with Cargo, and Obsidian's current built artifact is syntax-checked with Node.
 
 * **State**: Do not store complex state in the IDE plugin. Treat the daemon's API as the single source of truth for task progress and ledger history.
 * **UI Matching**: Extensions should map closely to the concepts shown in the canonical browser UI (`maxwell_daemon/api/ui/`), adopting similar task graphs and approval interfaces.
