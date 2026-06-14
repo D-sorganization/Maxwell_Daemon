@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-14
+
+### Added
+- Deterministic OpenAPI snapshot generation and release artifact publication for the
+  operator HTTP contract.
+- Runner_Dashboard consumer fixture replay in Maxwell CI, covering the producer
+  fields consumed by the dashboard integration.
+- IDE extension build checks and release-readiness documentation gates.
+
+### Changed
+- The launcher now prefers `uv sync --frozen` when `uv.lock` is present, keeping
+  local installs aligned with CI.
+- Configuration docs now map the YAML, fleet, environment, script-config, and
+  `.maxwell/` surfaces with their precedence.
+- `/api/v1/workers` now publishes a typed `WorkersStatusResponse` in OpenAPI.
+
 ### Security
 - Audit and fix noqa suppressions for security-relevant codes (#712)
 
