@@ -372,6 +372,43 @@ jobs:
         working-directory: apps/desktop-electron
         run: npm ci --ignore-scripts
 
+  ide-extensions:
+    timeout-minutes: 45
+    name: IDE extension builds
+    needs: pick-runner
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
+    steps:
+      - name: Clear stale checkout locks
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: 'npm'
+          cache-dependency-path: extensions/vscode/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build VS Code extension
+        working-directory: extensions/vscode
+        run: |
+          npm ci
+          npm run compile
+      - name: Build JetBrains extension
+        run: gradle -p extensions/jetbrains build --no-daemon
+      - name: Check Zed extension
+        run: cargo check --manifest-path extensions/zed/Cargo.toml --locked
+      - name: Check Obsidian built artifact
+        run: node --check extensions/obsidian/main.js
+
   build:
     timeout-minutes: 60
     name: Build distribution
@@ -579,6 +616,7 @@ jobs:
       - secret-scan
       - repo-hygiene
       - dependency-locks
+      - ide-extensions
       - build
       - desktop-smoke
     runs-on: d-sorg-fleet
