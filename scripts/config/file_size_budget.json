@@ -11,8 +11,8 @@
       "path": "maxwell_daemon/daemon/runner.py",
       "expires_on": "2027-12-31",
       "owner": "dieterolson",
-      "reason": "Daemon runner god module pending phase 3+ decomposition (#987). Shrink-only ratchet: lower max_lines as worker.py/dispatch.py are extracted, never raise it.",
-      "max_lines": 2184
+      "reason": "Daemon runner worker, maintenance, and submission behavior were extracted to daemon/worker.py, daemon/maintenance.py, and daemon/submission.py (#987). Shrink-only ratchet: lower max_lines as remaining orchestration is extracted, never raise it.",
+      "max_lines": 1113
     }
   ]
 }
