@@ -46,6 +46,8 @@ class DaemonSubmissionMixin:
                     ) from exc
             return
         loop = self._loop
+        if loop is None:
+            raise RuntimeError("daemon must be started before enqueueing tasks")
         try:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -191,6 +193,8 @@ class DaemonSubmissionMixin:
             raise RuntimeError("daemon must be started before submit_threadsafe()")
 
         loop = self._loop
+        if loop is None:
+            raise RuntimeError("daemon must be started before submit_threadsafe()")
         try:
             running_loop = asyncio.get_running_loop()
         except RuntimeError:
