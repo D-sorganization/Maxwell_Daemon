@@ -76,3 +76,15 @@ def test_release_uploads_openapi_snapshot_as_artifact() -> None:
     create_release = release_workflow["jobs"]["build-and-publish"]["steps"][-1]
 
     assert "docs/reference/openapi.json" in create_release["with"]["files"]
+
+
+def test_release_sbom_uses_supported_cyclonedx_cli_flag() -> None:
+    release_workflow = yaml.safe_load(Path(".github/workflows/release.yml").read_text())
+    assert isinstance(release_workflow, dict)
+    steps = release_workflow["jobs"]["build-and-publish"]["steps"]
+    sbom_steps = [step for step in steps if step.get("name") == "Generate SBOM (CycloneDX)"]
+    assert len(sbom_steps) == 1
+
+    sbom_command = sbom_steps[0]["run"]
+    assert "cyclonedx-py environment --output-file dist/sbom.json" in sbom_command
+    assert "--outfile" not in sbom_command
