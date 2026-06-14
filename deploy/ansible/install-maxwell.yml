@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ansible-playbook -i inventory/fleet.yml install-maxwell.yml
-#   ansible-playbook -i inventory/fleet.yml install-maxwell.yml -e maxwell_version=0.1.0
+#   ansible-playbook -i inventory/fleet.yml install-maxwell.yml -e maxwell_version=0.2.0
 
 - name: Install maxwell-daemon on maxwell hosts
   hosts: maxwell_primary
