@@ -88,3 +88,17 @@ def test_release_sbom_uses_supported_cyclonedx_cli_flag() -> None:
     sbom_command = sbom_steps[0]["run"]
     assert "cyclonedx-py environment --output-file dist/sbom.json" in sbom_command
     assert "--outfile" not in sbom_command
+
+
+def test_release_sigstore_action_uses_job_python() -> None:
+    release_workflow = yaml.safe_load(Path(".github/workflows/release.yml").read_text())
+    assert isinstance(release_workflow, dict)
+    steps = release_workflow["jobs"]["build-and-publish"]["steps"]
+    sigstore_steps = [
+        step for step in steps if step.get("name") == "Sign distributions with Sigstore"
+    ]
+    assert len(sigstore_steps) == 1
+
+    # v3.4.0 bootstraps its own Python 3.14 env and currently hits a cffi
+    # resolver conflict before signing; v3.0.1 uses this job's pinned 3.12.
+    assert sigstore_steps[0]["uses"] == "sigstore/gh-action-sigstore-python@v3.0.1"
