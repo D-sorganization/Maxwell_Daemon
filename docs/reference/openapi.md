@@ -26,13 +26,16 @@ Start the daemon locally:
 maxwell-daemon serve --host 127.0.0.1 --port 8080
 ```
 
-Then export the schema:
+Then export the schema from the repo so the checked-in release snapshot stays deterministic:
 
 ```bash
-curl http://127.0.0.1:8080/openapi.json > openapi.json
+python scripts/generate_openapi_snapshot.py
+python scripts/generate_openapi_snapshot.py --check
 ```
 
 If `api.auth_token` is configured, `/openapi.json`, `/docs`, and `/redoc` are still served by FastAPI as schema/documentation routes. Protected API calls listed inside the schema require `Authorization: Bearer <token>`.
+
+The checked-in `docs/reference/openapi.json` snapshot is uploaded with GitHub releases so Runner_Dashboard and other consumers can pin a producer-owned schema artifact instead of scraping a floating branch.
 
 ## Client generation
 
