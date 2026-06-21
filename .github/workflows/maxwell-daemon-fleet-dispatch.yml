@@ -91,7 +91,7 @@ jobs:
       MAXWELL_FLEET_CONFIG: ${{ github.workspace }}/fleet.yaml
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python
         env:
