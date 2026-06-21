@@ -45,7 +45,7 @@ dependencies = [
 
 [project.optional-dependencies]
 ollama = ["ollama>=0.3.0"]
-google = ["google-cloud-aiplatform>=1.157.0"]
+google = ["google-cloud-aiplatform>=1.158.0"]
 azure = ["azure-identity>=1.18.0"]
 grpc = ["grpcio>=1.81.1", "grpcio-tools>=1.81.1", "protobuf>=5.28.0"]
 ssh = ["asyncssh>=2.23.1"]
