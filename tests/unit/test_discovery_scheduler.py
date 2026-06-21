@@ -461,19 +461,20 @@ class TestSchedulerLoop:
         # Make run_once raise on the first call, succeed on subsequent
         call_count = 0
         original_run_once = sched.run_once
+        second_call = asyncio.Event()
 
         async def patched_run_once() -> DiscoveryTick:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise RuntimeError("simulated first-tick failure")
-            return await original_run_once()
+            tick = await original_run_once()
+            second_call.set()
+            return tick
 
         sched.run_once = patched_run_once  # type: ignore[method-assign]
         await sched.start()
-        deadline = asyncio.get_running_loop().time() + 1.0
-        while call_count < 2 and asyncio.get_running_loop().time() < deadline:
-            await asyncio.sleep(0.01)
+        await asyncio.wait_for(second_call.wait(), timeout=5.0)
         await sched.stop()
         # The loop continued past the first exception
         assert call_count >= 2
