@@ -27,7 +27,7 @@ jobs:
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -47,7 +47,7 @@ jobs:
     outputs:
       runner: ${{ steps.check.outputs.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Runner Diagnostics
         shell: bash
         run: |
@@ -97,7 +97,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Purge stale untracked files (self-hosted runner hygiene)
         run: git clean -fdx --exclude=.venv
       - uses: actions/setup-python@v5
@@ -127,7 +127,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -162,7 +162,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -232,7 +232,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -257,7 +257,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -280,7 +280,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -301,7 +301,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -323,7 +323,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -351,7 +351,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -383,7 +383,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
@@ -420,7 +420,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -461,7 +461,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python
         if: runner.os != 'Windows'
         uses: actions/setup-python@v5
@@ -538,7 +538,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Full history so the gitleaks diff scan can compare against the base.
           fetch-depth: 0
@@ -594,7 +594,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
