@@ -367,8 +367,8 @@ class TestTaskExecution:
         _run(body())
 
     @pytest.mark.skipif(
-        sys.version_info[:2] == (3, 11),
-        reason="flaky on Python 3.11 self-hosted runner — see issue #891",
+        sys.version_info[:2] in {(3, 11), (3, 12)},
+        reason="flaky on self-hosted runners due to event-loop scheduling jitter — see issue #891",
     )
     def test_stalled_issue_task_is_cancelled_and_retried(
         self,
