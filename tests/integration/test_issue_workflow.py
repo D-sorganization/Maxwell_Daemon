@@ -143,6 +143,7 @@ def full_system(
         ledger_path=tmp_path / "l.db",
         workspace_root=tmp_path / "ws",
         task_store_path=tmp_path / "tasks.db",
+        delegate_lifecycle_store_path=tmp_path / "delegate_sessions.db",
     )
     stub_gh = StubGitHub()
 
