@@ -471,7 +471,8 @@ jobs:
           python-version: "3.12"
           cache: 'pip'
       - name: Purge pip cache
-        run: python -m pip cache purge || true
+        continue-on-error: true
+        run: python -m pip cache purge
       - uses: actions/download-artifact@v8
         with:
           name: dist
