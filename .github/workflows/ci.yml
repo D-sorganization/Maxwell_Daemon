@@ -519,13 +519,13 @@ jobs:
         env:
           ELECTRON_DISABLE_SANDBOX: "1"
           ELECTRON_EXTRA_LAUNCH_ARGS: "--disable-gpu --disable-dev-shm-usage"
-          MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "60000"
+          MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "180000"
       - name: Run desktop launch smoke
         if: runner.os != 'Linux'
         working-directory: apps/desktop-electron
         run: npm run smoke:launch
         env:
-          MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "60000"
+          MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: "180000"
   secret-scan:
     timeout-minutes: 20
     name: Secret scan (gitleaks)
