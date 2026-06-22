@@ -53,6 +53,21 @@ def test_ci_pick_runner_stays_lightweight() -> None:
     assert setup_python_steps == []
 
 
+def test_desktop_smoke_budget_allows_loaded_self_hosted_runners() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    desktop_smoke = workflow["jobs"]["desktop-smoke"]
+
+    smoke_steps = [
+        step
+        for step in desktop_smoke["steps"]
+        if step.get("run", "").endswith("npm run smoke:launch")
+    ]
+
+    assert len(smoke_steps) == 2
+    for step in smoke_steps:
+        assert int(step["env"]["MAXWELL_DESKTOP_LAUNCH_BUDGET_MS"]) >= 180000
+
+
 def test_anti_phantom_guard_uses_workflow_token_with_comment_scope() -> None:
     workflow = yaml.safe_load(
         Path(".github/workflows/anti-phantom-merge.yml").read_text(encoding="utf-8")
