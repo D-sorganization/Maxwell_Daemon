@@ -363,7 +363,7 @@ jobs:
       - run: python -m pip install uv
       - name: Verify uv.lock is fresh
         run: uv lock --check
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: 'npm'
@@ -384,7 +384,7 @@ jobs:
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: 'npm'
@@ -489,7 +489,7 @@ jobs:
               print("No wheel artifact found in dist/")
               sys.exit(1)
           subprocess.check_call([sys.executable, "-m", "pip", "install", wheels[0]])
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: 'npm'
