@@ -56,7 +56,7 @@ jobs:
       url: https://pypi.org/p/maxwell-daemon
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
         with:
