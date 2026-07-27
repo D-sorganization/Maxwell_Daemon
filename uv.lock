@@ -651,7 +651,7 @@ requests = [
 
 [[package]]
 name = "google-cloud-aiplatform"
-version = "1.158.0"
+version = "1.162.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -668,9 +668,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d0/74/71440b7793068d8411f096712d6274a64a42f44bd01a11d67d8cbbd27b54/google_cloud_aiplatform-1.158.0.tar.gz", hash = "sha256:85b6bedc3823824617db1ea83e07fa07f00681d7ab63c42cdc584066a844737b", size = 11128785, upload-time = "2026-06-16T23:08:45.036Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/fa/20a86701f1d3bcbedfe03a965bd4ae000ba79863fb1c2b4b658965f1057d/google_cloud_aiplatform-1.162.0.tar.gz", hash = "sha256:2403f75e6e44e879aecc0eab2d8c26e972507e4b4414d873b31cd4f4b49c9edb", size = 11218765, upload-time = "2026-07-21T23:17:44.419Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/1c/4273f7a6eb59214a94575d34a3603b37519217af7dfc1bcd2387daed0219/google_cloud_aiplatform-1.158.0-py2.py3-none-any.whl", hash = "sha256:8ed07f866fe9a49c31f0ba9fc8049c5cd5b47ff7f833ca3d9d8ce480f871d715", size = 9343147, upload-time = "2026-06-16T23:08:41.398Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/b8/6f10db46713d03d4e889d569b8b0e10e4334d2cab26b9f865c78b1e4e4d9/google_cloud_aiplatform-1.162.0-py2.py3-none-any.whl", hash = "sha256:07ac79932b8f7a683c3bec6dcc21dd05234b55d01636b5a622ec93c18aad15fd", size = 9391054, upload-time = "2026-07-21T23:17:41.173Z" },
 ]
 
 [[package]]
@@ -1678,7 +1678,7 @@ requires-dist = [
     { name = "asyncssh", marker = "extra == 'ssh'", specifier = ">=2.23.1" },
     { name = "azure-identity", marker = "extra == 'azure'", specifier = ">=1.18.0" },
     { name = "fastapi", specifier = ">=0.140.0,<0.140.1" },
-    { name = "google-cloud-aiplatform", marker = "extra == 'google'", specifier = ">=1.158.0" },
+    { name = "google-cloud-aiplatform", marker = "extra == 'google'", specifier = ">=1.162.0" },
     { name = "grpcio", marker = "extra == 'grpc'", specifier = ">=1.81.1" },
     { name = "grpcio-tools", marker = "extra == 'grpc'", specifier = ">=1.81.1" },
     { name = "httpx", specifier = ">=0.27.0" },
