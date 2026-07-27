@@ -59,7 +59,7 @@ jobs:
       env:
         AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
       if: matrix.language == 'python'
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         cache: 'pip'
