@@ -396,6 +396,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: "8.3"
+          cache-disabled: true
       - uses: dtolnay/rust-toolchain@stable
       - name: Build VS Code extension
         working-directory: extensions/vscode
