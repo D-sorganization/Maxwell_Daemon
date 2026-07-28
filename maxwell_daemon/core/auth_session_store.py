@@ -32,16 +32,14 @@ class AuthSessionStore:
 
     def _init_db(self) -> None:
         with self._get_conn() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS auth_sessions (
                     jti TEXT PRIMARY KEY,
                     subject TEXT NOT NULL,
                     issued_at TEXT NOT NULL,
                     revoked_at TEXT
                 )
-                """
-            )
+                """)
             # Index for revoking all by subject
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_auth_sessions_subject ON auth_sessions(subject)"

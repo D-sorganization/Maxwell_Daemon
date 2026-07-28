@@ -39,7 +39,10 @@ def register(
         """Return paginated audit log entries (oldest first)."""
         if audit is None:
             return {"entries": [], "audit_enabled": False}
-        return {"entries": audit.entries(limit=limit, offset=offset), "audit_enabled": True}
+        return {
+            "entries": audit.entries(limit=limit, offset=offset),
+            "audit_enabled": True,
+        }
 
     @app.get("/api/v1/audit/verify", dependencies=[Depends(require_viewer)])
     async def audit_verify() -> dict[str, Any]:

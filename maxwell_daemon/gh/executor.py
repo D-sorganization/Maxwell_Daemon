@@ -548,7 +548,10 @@ class IssueExecutor:
         """
         from maxwell_daemon.contracts import require
 
-        require(self._test_runner is not None, "IssueExecutor: test_runner must be configured")
+        require(
+            self._test_runner is not None,
+            "IssueExecutor: test_runner must be configured",
+        )
         test_runner = cast(TestRunner, self._test_runner)
         attempt = 0
         current_plan, current_diff = plan, diff

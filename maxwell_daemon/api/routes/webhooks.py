@@ -176,7 +176,7 @@ def register(  # noqa: C901
                                         model=model,
                                         score=res.score_total,
                                         cost=sum(res.cost_summary.values()),
-                                        pass_rate=1.0 if res.status.value == "passed" else 0.0,
+                                        pass_rate=(1.0 if res.status.value == "passed" else 0.0),
                                     )
                                 )
                 except Exception:  # noqa: BLE001

@@ -109,7 +109,10 @@ class Workspace:
         await self._run_git("clone", "--depth", str(depth), url, str(target))
 
         # Workspace lifecycle hook: after_create
-        from maxwell_daemon.daemon.workspace_hooks import execute_hooks, load_hooks_config
+        from maxwell_daemon.daemon.workspace_hooks import (
+            execute_hooks,
+            load_hooks_config,
+        )
 
         config = load_hooks_config(target)
         if config:

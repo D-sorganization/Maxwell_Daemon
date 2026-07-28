@@ -106,7 +106,9 @@ def test_root_wrappers_delegate_to_python_launcher() -> None:
     assert "maxwell_daemon.launcher" in (repo / "Launch-Maxwell.command").read_text()
 
 
-def test_open_dashboard_when_ready_uses_browser_opener(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_open_dashboard_when_ready_uses_browser_opener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     opened: list[str] = []
 
     class _Response:
@@ -159,7 +161,9 @@ def test_pyproject_no_longer_advertises_pyqt_desktop_extra() -> None:
     assert "PyQt6>=" not in pyproject
 
 
-def test_launcher_subprocess_env_defaults_to_utf8(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_launcher_subprocess_env_defaults_to_utf8(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("PYTHONUTF8", raising=False)
     monkeypatch.delenv("PYTHONIOENCODING", raising=False)
 
@@ -187,7 +191,8 @@ def test_main_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Mock execute_plan to ensure it's not called
     execute_calls = []
     monkeypatch.setattr(
-        "maxwell_daemon.launcher.execute_plan", lambda *args, **kwargs: execute_calls.append(args)
+        "maxwell_daemon.launcher.execute_plan",
+        lambda *args, **kwargs: execute_calls.append(args),
     )
 
     exit_code = main(argv)
@@ -201,7 +206,8 @@ def test_main_execute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     execute_calls = []
     monkeypatch.setattr(
-        "maxwell_daemon.launcher.execute_plan", lambda *args, **kwargs: execute_calls.append(kwargs)
+        "maxwell_daemon.launcher.execute_plan",
+        lambda *args, **kwargs: execute_calls.append(kwargs),
     )
 
     exit_code = main(argv)

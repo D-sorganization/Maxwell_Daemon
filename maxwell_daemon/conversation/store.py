@@ -173,16 +173,14 @@ class SqliteConversationStore(ConversationStore):
 
     def _init_db(self) -> None:
         with self._conn() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS conversations (
                     conversation_id TEXT PRIMARY KEY,
                     messages        TEXT NOT NULL DEFAULT '[]',
                     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
                 )
-                """
-            )
+                """)
 
     def save(self, conversation_id: str, messages: list[Message]) -> None:
         payload = json.dumps([_message_to_dict(m) for m in messages], ensure_ascii=False)

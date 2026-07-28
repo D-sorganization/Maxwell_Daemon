@@ -451,7 +451,9 @@ class InMemoryFleetCapabilityRegistry:
         return tuple(decisions), tuple(scored_nodes)
 
 
-def parse_tailscale_status_json(raw: str | Mapping[str, Any]) -> tuple[TailscalePeerStatus, ...]:
+def parse_tailscale_status_json(
+    raw: str | Mapping[str, Any],
+) -> tuple[TailscalePeerStatus, ...]:
     """Parse a Tailscale status JSON payload into a stable tuple of peers."""
 
     payload = json.loads(raw) if isinstance(raw, str) else dict(raw)

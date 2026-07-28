@@ -88,7 +88,10 @@ class TestStatusCodeMapping:
         ("error_cls", "expected_status"),
         [
             (ValidationFailedError, 422),
-            (BudgetExceededError, 402),  # Payment Required — semantically apt for budget.
+            (
+                BudgetExceededError,
+                402,
+            ),  # Payment Required — semantically apt for budget.
             (PolicyDeniedError, 403),
             (BackendUnavailableError, 503),
             (StorageError, 500),

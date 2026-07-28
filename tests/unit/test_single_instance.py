@@ -14,7 +14,8 @@ from maxwell_daemon.daemon.single_instance import InstanceLock, InstanceLockErro
 # assertions environment-specific. The daemon's required CI runs on Linux
 # (d-sorg-fleet) where flock is advisory; gate the OS-lock-dependent assertions.
 _skip_on_windows = pytest.mark.skipif(
-    os.name == "nt", reason="msvcrt byte-range lock blocks same-process reads; CI is Linux"
+    os.name == "nt",
+    reason="msvcrt byte-range lock blocks same-process reads; CI is Linux",
 )
 
 

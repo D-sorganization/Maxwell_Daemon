@@ -13,7 +13,10 @@ from typing import Annotated, Any
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 
 from maxwell_daemon.api.contract import WorkersStatusResponse
-from maxwell_daemon.core.delegate_lifecycle import DelegateSessionSnapshot, DelegateSessionStatus
+from maxwell_daemon.core.delegate_lifecycle import (
+    DelegateSessionSnapshot,
+    DelegateSessionStatus,
+)
 from maxwell_daemon.daemon import Daemon
 from maxwell_daemon.logging import get_logger
 

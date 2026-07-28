@@ -135,9 +135,12 @@ class TestFullAppControlPlaneRoutes:
         """POST /api/control/{action} (legacy) is reachable from the full app."""
         r = full_client.post("/api/control/pause")
         # Expect 200 (paused OK) or 409 (already paused) — not 404.
-        assert r.status_code in (200, 400, 409, 422), (
-            f"Expected control plane to be reachable; got {r.status_code}: {r.text}"
-        )
+        assert r.status_code in (
+            200,
+            400,
+            409,
+            422,
+        ), f"Expected control plane to be reachable; got {r.status_code}: {r.text}"
 
 
 # ── No-duplicate-inline check ─────────────────────────────────────────────────

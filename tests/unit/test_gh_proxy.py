@@ -103,7 +103,8 @@ class TestMakeGhProxy:
             task_id="t-123",
         )
         result = await tool(
-            "create_pr", {"repo": "owner/repo", "head": "f", "base": "m", "title": "t", "body": "b"}
+            "create_pr",
+            {"repo": "owner/repo", "head": "f", "base": "m", "title": "t", "body": "b"},
         )
         parsed = json.loads(result)
         assert parsed["success"] is False

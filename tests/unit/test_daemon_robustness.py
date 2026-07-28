@@ -232,7 +232,13 @@ class TestCoordinatorClientLifecycle:
         """Two ticks must reuse one client per machine, not build a new pool each tick."""
         task = Task(id="t1", prompt="p", kind=TaskKind.PROMPT, status=TaskStatus.QUEUED)
         machine = SimpleNamespace(
-            name="w1", host="h", port=8080, capacity=1, tags=[], tls=False, tls_verify=False
+            name="w1",
+            host="h",
+            port=8080,
+            capacity=1,
+            tags=[],
+            tls=False,
+            tls_verify=False,
         )
         coordinator = _make_coordinator(tasks={"t1": task}, machines=[machine])
 
@@ -274,7 +280,13 @@ class TestCoordinatorClientLifecycle:
         """A task cancelled while submit_task awaits stays CANCELLED, not DISPATCHED (#978d)."""
         task = Task(id="t1", prompt="p", kind=TaskKind.PROMPT, status=TaskStatus.QUEUED)
         machine = SimpleNamespace(
-            name="w1", host="h", port=8080, capacity=1, tags=[], tls=False, tls_verify=True
+            name="w1",
+            host="h",
+            port=8080,
+            capacity=1,
+            tags=[],
+            tls=False,
+            tls_verify=True,
         )
         tasks = {"t1": task}
         coordinator = _make_coordinator(tasks=tasks, machines=[machine])

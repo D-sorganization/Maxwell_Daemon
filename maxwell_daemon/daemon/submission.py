@@ -31,7 +31,8 @@ class DaemonSubmissionMixin:
             with self._queue_lock:
                 if self._queue.full():
                     log.warning(
-                        "queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth
+                        "queue is saturated (max_depth=%d)",
+                        self._config.agent.max_queue_depth,
                     )
                     raise QueueSaturationError(
                         "Task queue is full, please try again later",
@@ -89,7 +90,10 @@ class DaemonSubmissionMixin:
                     return
                 self._queue.put_nowait(item)
             except asyncio.QueueFull:
-                log.warning("queue is saturated (max_depth=%d)", self._config.agent.max_queue_depth)
+                log.warning(
+                    "queue is saturated (max_depth=%d)",
+                    self._config.agent.max_queue_depth,
+                )
                 result.set_exception(
                     QueueSaturationError(
                         "Task queue is full, please try again later",
