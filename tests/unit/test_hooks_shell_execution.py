@@ -129,78 +129,66 @@ class TestHookSpecShellField:
 
 class TestLoadHookConfigShell:
     def test_shell_true_parsed_from_yaml(self, tmp_path: Path) -> None:
-        (tmp_path / "h.yaml").write_text(
-            """
+        (tmp_path / "h.yaml").write_text("""
 hooks:
   pre_tool:
     - command: "cat log | grep ERROR"
       match: "*"
       shell: true
-"""
-        )
+""")
         cfg = load_hook_config(tmp_path / "h.yaml")
         assert cfg.pre_tool[0].shell is True
 
     def test_shell_false_parsed_from_yaml(self, tmp_path: Path) -> None:
-        (tmp_path / "h.yaml").write_text(
-            """
+        (tmp_path / "h.yaml").write_text("""
 hooks:
   pre_tool:
     - command: "ruff check ."
       match: "*"
       shell: false
-"""
-        )
+""")
         cfg = load_hook_config(tmp_path / "h.yaml")
         assert cfg.pre_tool[0].shell is False
 
     def test_shell_defaults_to_false_when_absent(self, tmp_path: Path) -> None:
-        (tmp_path / "h.yaml").write_text(
-            """
+        (tmp_path / "h.yaml").write_text("""
 hooks:
   pre_tool:
     - command: "ruff check ."
       match: "*"
-"""
-        )
+""")
         cfg = load_hook_config(tmp_path / "h.yaml")
         assert cfg.pre_tool[0].shell is False
 
     def test_string_shorthand_spec_defaults_shell_false(self, tmp_path: Path) -> None:
-        (tmp_path / "h.yaml").write_text(
-            """
+        (tmp_path / "h.yaml").write_text("""
 hooks:
   pre_tool:
     - "ruff check ."
-"""
-        )
+""")
         cfg = load_hook_config(tmp_path / "h.yaml")
         assert cfg.pre_tool[0].shell is False
 
     def test_shell_non_bool_raises(self, tmp_path: Path) -> None:
         from maxwell_daemon.hooks import HookViolationError
 
-        (tmp_path / "h.yaml").write_text(
-            """
+        (tmp_path / "h.yaml").write_text("""
 hooks:
   pre_tool:
     - command: "echo hi"
       shell: "yes"
-"""
-        )
+""")
         with pytest.raises(HookViolationError, match="shell"):
             load_hook_config(tmp_path / "h.yaml")
 
     def test_post_tool_shell_true_parsed(self, tmp_path: Path) -> None:
-        (tmp_path / "h.yaml").write_text(
-            """
+        (tmp_path / "h.yaml").write_text("""
 hooks:
   post_tool:
     - command: "cat {{path}} | wc -l"
       match: "write_file"
       shell: true
-"""
-        )
+""")
         cfg = load_hook_config(tmp_path / "h.yaml")
         assert cfg.post_tool[0].shell is True
 

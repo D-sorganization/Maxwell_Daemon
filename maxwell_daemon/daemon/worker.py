@@ -113,7 +113,10 @@ class WorkerExecutionMixin:
                     ws = getattr(self, "_workspace", None) or Workspace(root=self._workspace_root)
                     repo_path = await ws.ensure_clone(target_repo, task_id=task.id)
 
-                from maxwell_daemon.daemon.workspace_hooks import execute_hooks, load_hooks_config
+                from maxwell_daemon.daemon.workspace_hooks import (
+                    execute_hooks,
+                    load_hooks_config,
+                )
 
                 hook_config = load_hooks_config(repo_path, global_config=snapshot.config)
                 if hook_config:
@@ -154,7 +157,8 @@ class WorkerExecutionMixin:
                     self._task_store.save(task)
                 except Exception:
                     log.exception(
-                        "task store write failed while recording route for task=%s", task.id
+                        "task store write failed while recording route for task=%s",
+                        task.id,
                     )
 
                 if task.kind is TaskKind.ISSUE:

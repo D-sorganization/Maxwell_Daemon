@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from maxwell_daemon.backends.base import Message, MessageRole
-from maxwell_daemon.conversation.store import JsonConversationStore, SqliteConversationStore
+from maxwell_daemon.conversation.store import (
+    JsonConversationStore,
+    SqliteConversationStore,
+)
 
 
 def test_json_conversation_store(tmp_path: Path):
@@ -11,7 +14,13 @@ def test_json_conversation_store(tmp_path: Path):
     assert store.load("test_1") == []
 
     # Test save and load
-    msg = Message(role=MessageRole.USER, content="Hello", name=None, tool_call_id=None, metadata={})
+    msg = Message(
+        role=MessageRole.USER,
+        content="Hello",
+        name=None,
+        tool_call_id=None,
+        metadata={},
+    )
     store.save("test_1", [msg])
 
     loaded = store.load("test_1")
@@ -21,7 +30,11 @@ def test_json_conversation_store(tmp_path: Path):
 
     # Test append
     msg2 = Message(
-        role=MessageRole.ASSISTANT, content="Hi", name=None, tool_call_id=None, metadata={}
+        role=MessageRole.ASSISTANT,
+        content="Hi",
+        name=None,
+        tool_call_id=None,
+        metadata={},
     )
     store.append("test_1", msg2)
     loaded = store.load("test_1")
@@ -44,7 +57,13 @@ def test_sqlite_conversation_store(tmp_path: Path):
     assert store.load("test_1") == []
 
     # Test save and load
-    msg = Message(role=MessageRole.USER, content="Hello", name=None, tool_call_id=None, metadata={})
+    msg = Message(
+        role=MessageRole.USER,
+        content="Hello",
+        name=None,
+        tool_call_id=None,
+        metadata={},
+    )
     store.save("test_1", [msg])
 
     loaded = store.load("test_1")
@@ -57,7 +76,11 @@ def test_sqlite_conversation_store(tmp_path: Path):
 
     # Test append
     msg2 = Message(
-        role=MessageRole.ASSISTANT, content="Hi", name=None, tool_call_id=None, metadata={}
+        role=MessageRole.ASSISTANT,
+        content="Hi",
+        name=None,
+        tool_call_id=None,
+        metadata={},
     )
     store.append("test_1", msg2)
     loaded = store.load("test_1")

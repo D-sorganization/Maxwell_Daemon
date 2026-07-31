@@ -177,6 +177,7 @@ class TestPhase1Smoke:
         task_id = response.json()["id"]
 
         final = _wait_for_completion(client, loop, task_id)
-        assert final["status"] in {"completed", "failed"}, (
-            f"task {task_id} did not reach a terminal state: {final}"
-        )
+        assert final["status"] in {
+            "completed",
+            "failed",
+        }, f"task {task_id} did not reach a terminal state: {final}"

@@ -393,7 +393,9 @@ class TestControlPlaneHelpers:
     def test_control_plane_actions_queued_returns_cancel(self) -> None:
         from unittest.mock import MagicMock
 
-        from maxwell_daemon.api.routes.control_plane import _control_plane_actions_for_task
+        from maxwell_daemon.api.routes.control_plane import (
+            _control_plane_actions_for_task,
+        )
 
         task = MagicMock()
         task.status.value = "queued"
@@ -405,7 +407,9 @@ class TestControlPlaneHelpers:
     def test_control_plane_actions_completed_returns_empty(self) -> None:
         from unittest.mock import MagicMock
 
-        from maxwell_daemon.api.routes.control_plane import _control_plane_actions_for_task
+        from maxwell_daemon.api.routes.control_plane import (
+            _control_plane_actions_for_task,
+        )
 
         task = MagicMock()
         task.status.value = "completed"
@@ -417,7 +421,9 @@ class TestControlPlaneHelpers:
     def test_control_plane_actions_failed_returns_retry_and_waive(self) -> None:
         from unittest.mock import MagicMock
 
-        from maxwell_daemon.api.routes.control_plane import _control_plane_actions_for_task
+        from maxwell_daemon.api.routes.control_plane import (
+            _control_plane_actions_for_task,
+        )
 
         task = MagicMock()
         task.status.value = "failed"

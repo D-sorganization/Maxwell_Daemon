@@ -221,8 +221,7 @@ class TestDependsOnAndDryRunPersistence:
         db = tmp_path / "legacy.db"
         # Simulate a pre-#970 DB: tasks table without depends_on / dry_run.
         with sqlite3.connect(db) as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE tasks (
                     id TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
@@ -236,13 +235,19 @@ class TestDependsOnAndDryRunPersistence:
                     cost_usd REAL NOT NULL DEFAULT 0,
                     started_at TEXT, finished_at TEXT
                 )
-                """
-            )
+                """)
             now = datetime.now(timezone.utc).isoformat()
             conn.execute(
                 "INSERT INTO tasks (id, created_at, updated_at, kind, status, prompt) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                ("legacy-1", now, now, TaskKind.PROMPT.value, TaskStatus.QUEUED.value, "x"),
+                (
+                    "legacy-1",
+                    now,
+                    now,
+                    TaskKind.PROMPT.value,
+                    TaskStatus.QUEUED.value,
+                    "x",
+                ),
             )
             conn.commit()
 

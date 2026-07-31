@@ -125,7 +125,7 @@ def register(app: FastAPI, daemon: Daemon) -> None:
                 session_id=t.turn_session_id,
                 run_count=t.turn_count,
                 last_event=t.status.value,
-                started_at=t.started_at.isoformat() if t.started_at is not None else None,
+                started_at=(t.started_at.isoformat() if t.started_at is not None else None),
                 dispatched_to=t.dispatched_to,
                 tokens=_status_v2_tokens(token_totals_by_task.get(t.id)),
             )

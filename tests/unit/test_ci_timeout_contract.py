@@ -68,6 +68,19 @@ def test_desktop_smoke_budget_allows_loaded_self_hosted_runners() -> None:
         assert int(step["env"]["MAXWELL_DESKTOP_LAUNCH_BUDGET_MS"]) >= 180000
 
 
+def test_desktop_smoke_does_not_upload_persistent_runner_npm_cache() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    desktop_smoke = workflow["jobs"]["desktop-smoke"]
+    setup_node = next(
+        step
+        for step in desktop_smoke["steps"]
+        if step.get("uses", "").startswith("actions/setup-node")
+    )
+
+    assert "cache" not in setup_node.get("with", {})
+    assert "cache-dependency-path" not in setup_node.get("with", {})
+
+
 def test_anti_phantom_guard_uses_workflow_token_with_comment_scope() -> None:
     workflow = yaml.safe_load(
         Path(".github/workflows/anti-phantom-merge.yml").read_text(encoding="utf-8")

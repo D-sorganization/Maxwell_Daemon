@@ -112,7 +112,10 @@ _MIGRATIONS = [
     ("waived_at", "ALTER TABLE tasks ADD COLUMN waived_at TEXT"),
     ("route_reason", "ALTER TABLE tasks ADD COLUMN route_reason TEXT"),
     ("thread_id", "ALTER TABLE tasks ADD COLUMN thread_id TEXT"),
-    ("turn_count", "ALTER TABLE tasks ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0"),
+    (
+        "turn_count",
+        "ALTER TABLE tasks ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0",
+    ),
     ("max_turns", "ALTER TABLE tasks ADD COLUMN max_turns INTEGER NOT NULL DEFAULT 20"),
     (
         "side_effects_started",
@@ -120,11 +123,17 @@ _MIGRATIONS = [
     ),
     # DAG edges and dry-run flag must survive restart, else recovered tasks lose
     # their dependency ordering and dry-run tasks re-run live (issue #970).
-    ("depends_on", "ALTER TABLE tasks ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'"),
+    (
+        "depends_on",
+        "ALTER TABLE tasks ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'",
+    ),
     ("dry_run", "ALTER TABLE tasks ADD COLUMN dry_run INTEGER NOT NULL DEFAULT 0"),
     # Bounded stall-retry accounting (issue #971); persisted so retry budget
     # survives daemon restart instead of resetting to zero.
-    ("retry_count", "ALTER TABLE tasks ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0"),
+    (
+        "retry_count",
+        "ALTER TABLE tasks ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
+    ),
 ]
 
 _TERMINAL_STATUS_VALUES = ("completed", "failed", "cancelled")

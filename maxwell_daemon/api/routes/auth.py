@@ -163,7 +163,9 @@ def register(  # noqa: C901
         )
 
     @app.post("/api/v1/auth/revoke", dependencies=[Depends(require_operator)])
-    async def revoke_token(payload: Annotated[TokenRevokeRequest, Body()]) -> dict[str, str]:
+    async def revoke_token(
+        payload: Annotated[TokenRevokeRequest, Body()],
+    ) -> dict[str, str]:
         """Revoke a specific token or all tokens for a subject."""
         auth_store = getattr(daemon, "_auth_store", None)
         if auth_store is None:

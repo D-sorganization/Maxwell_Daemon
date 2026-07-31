@@ -297,7 +297,10 @@ class TestTaskExecution:
         _run(body())
 
     def test_reload_config_updates_future_issue_mode_dispatch_caps(
-        self, isolated_ledger_path: Path, tmp_path: Path, minimal_config: MaxwellDaemonConfig
+        self,
+        isolated_ledger_path: Path,
+        tmp_path: Path,
+        minimal_config: MaxwellDaemonConfig,
     ) -> None:
         async def body() -> None:
             config_path = tmp_path / "maxwell-daemon.yaml"
@@ -333,10 +336,14 @@ class TestTaskExecution:
             await d.start(worker_count=2)
             try:
                 first = d.submit_issue(
-                    repo="D-sorganization/Maxwell-Daemon", issue_number=764, mode="implement"
+                    repo="D-sorganization/Maxwell-Daemon",
+                    issue_number=764,
+                    mode="implement",
                 )
                 second = d.submit_issue(
-                    repo="D-sorganization/Maxwell-Daemon", issue_number=765, mode="implement"
+                    repo="D-sorganization/Maxwell-Daemon",
+                    issue_number=765,
+                    mode="implement",
                 )
                 await started.wait()
                 await asyncio.sleep(0.2)
@@ -385,7 +392,9 @@ class TestTaskExecution:
                 if self.calls == 1:
                     await asyncio.Event().wait()
                 return type(
-                    "Result", (), {"pr_url": "https://example.invalid/pr/762", "plan": "done"}
+                    "Result",
+                    (),
+                    {"pr_url": "https://example.invalid/pr/762", "plan": "done"},
                 )()
 
         async def body() -> None:
@@ -447,7 +456,9 @@ class TestTaskExecution:
                     await asyncio.sleep(0.4)
                     await on_test_output("ok", "stdout")
                 return type(
-                    "Result", (), {"pr_url": "https://example.invalid/pr/763", "plan": "streamed"}
+                    "Result",
+                    (),
+                    {"pr_url": "https://example.invalid/pr/763", "plan": "streamed"},
                 )()
 
         async def body() -> None:

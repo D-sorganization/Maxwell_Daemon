@@ -75,14 +75,26 @@ class TestGetDefaultBranch:
 class TestIssueState:
     async def test_closes_issue_with_supported_gh_subcommand(self) -> None:
         runner = _StubRunner(
-            {("gh", "issue", "close", "42", "--repo", "acme/foo"): (0, b"https://x/42\n", b"")}
+            {
+                ("gh", "issue", "close", "42", "--repo", "acme/foo"): (
+                    0,
+                    b"https://x/42\n",
+                    b"",
+                )
+            }
         )
         gh = GitHubClient(runner=runner)
         assert await gh.set_issue_state("acme/foo", 42, "closed") == "https://x/42"
 
     async def test_reopens_issue_with_supported_gh_subcommand(self) -> None:
         runner = _StubRunner(
-            {("gh", "issue", "reopen", "42", "--repo", "acme/foo"): (0, b"https://x/42\n", b"")}
+            {
+                ("gh", "issue", "reopen", "42", "--repo", "acme/foo"): (
+                    0,
+                    b"https://x/42\n",
+                    b"",
+                )
+            }
         )
         gh = GitHubClient(runner=runner)
         assert await gh.set_issue_state("acme/foo", 42, "open") == "https://x/42"

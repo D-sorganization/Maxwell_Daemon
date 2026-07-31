@@ -207,7 +207,11 @@ def register(  # noqa: C901
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     ) -> list[WorkItemView]:
         items = daemon.list_work_items(
-            limit=limit, status=status_filter, repo=repo, source=source, max_priority=max_priority
+            limit=limit,
+            status=status_filter,
+            repo=repo,
+            source=source,
+            max_priority=max_priority,
         )
         return [WorkItemView.from_item(item) for item in items]
 

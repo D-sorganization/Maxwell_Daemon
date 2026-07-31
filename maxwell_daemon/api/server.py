@@ -41,7 +41,11 @@ from fastapi import FastAPI, Request, Response
 
 from maxwell_daemon import __version__
 from maxwell_daemon.api.contract import CONTRACT_VERSION
-from maxwell_daemon.api.deps import make_auth_dep, make_rbac_dep, websocket_auth_or_close
+from maxwell_daemon.api.deps import (
+    make_auth_dep,
+    make_rbac_dep,
+    websocket_auth_or_close,
+)
 from maxwell_daemon.audit import AuditLogger
 from maxwell_daemon.auth import JWTConfig, Role
 from maxwell_daemon.daemon import Daemon
@@ -124,7 +128,10 @@ def create_app(  # noqa: C901
                 "description": "Privileged daemon control (pause / resume / abort).",
             },
             {"name": "cost", "description": "Cost ledger queries and aggregates."},
-            {"name": "backends", "description": "LLM backend discovery and configuration."},
+            {
+                "name": "backends",
+                "description": "LLM backend discovery and configuration.",
+            },
             {"name": "auth", "description": "Authentication and session management."},
             {"name": "fleet", "description": "Multi-repo fleet manifest and dispatch."},
         ],

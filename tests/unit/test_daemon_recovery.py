@@ -181,8 +181,7 @@ class TestRecovery:
     def test_existing_task_db_migrates_fleet_failover_fields(self, tmp_path: Path) -> None:
         task_store_path = tmp_path / "tasks.db"
         with sqlite3.connect(task_store_path) as conn:
-            conn.executescript(
-                """
+            conn.executescript("""
                 CREATE TABLE tasks (
                     id TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
@@ -205,8 +204,7 @@ class TestRecovery:
                     finished_at TEXT,
                     completed_at TEXT
                 );
-                """
-            )
+                """)
 
         TaskStore(task_store_path)
 

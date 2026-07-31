@@ -185,14 +185,12 @@ class CostLedger:
 
     def _token_totals_sync(self) -> TokenUsage:
         with self._get_conn() as conn:
-            row = conn.execute(
-                """
+            row = conn.execute("""
                 SELECT
                     COALESCE(SUM(prompt_tokens), 0),
                     COALESCE(SUM(completion_tokens), 0)
                 FROM cost_records
-                """
-            ).fetchone()
+                """).fetchone()
         prompt_tokens = int(row[0])
         completion_tokens = int(row[1])
         return TokenUsage(
