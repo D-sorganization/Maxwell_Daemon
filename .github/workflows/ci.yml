@@ -23,7 +23,7 @@ permissions:
 jobs:
   local-only-workflows:
     timeout-minutes: 30
-    name: Reject hosted runner routing
+    name: Validate runner routing
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
@@ -42,49 +42,31 @@ jobs:
           python scripts/check_local_only_workflows.py
 
   pick-runner:
-    runs-on: d-sorg-fleet
-    timeout-minutes: 5
+    runs-on: ${{ !github.event.repository.private && vars.CI_RUNNER_MODE != 'local' && 'ubuntu-latest' || 'd-sorg-fleet' }}
+    timeout-minutes: 1
     outputs:
       runner: ${{ steps.check.outputs.runner }}
+      mode: ${{ steps.check.outputs.mode }}
     steps:
-      - uses: actions/checkout@v7
-      - name: Runner Diagnostics
-        shell: bash
-        run: |
-          echo "=== Disk Space ==="
-          df -h
-          echo "=== Directory Permissions ==="
-          ls -la /home/dieterolson/actions-runners-nvme/ || true
-          ls -la /home/dieterolson/actions-runners-nvme/.shared-tool-cache || true
-          echo "=== Whoami ==="
-          whoami
-          echo "=== Temp Directory ==="
-          ls -la /home/dieterolson/actions-runners-nvme/runner-*/_work/_temp || true
-      - name: Force-clean stale Python tool cache (NVMe runners)
-        env:
-          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
-        if: runner.os != 'Windows' && github.event.inputs.clean_cache == 'true'
-        shell: bash
-        run: |
-          for cache_root in /opt/runner-tool-cache /home/dieterolson/actions-runners/.shared-tool-cache /home/dieterolson/actions-runners-nvme/.shared-tool-cache; do
-            if [ -d "$cache_root/Python" ]; then
-              echo "Cleaning $cache_root/Python (pre-setup-python)"
-              sudo mv "$cache_root/Python" "$cache_root/Python_stale_$RANDOM" || true
-              sudo rm -rf "$cache_root/Python_stale_$RANDOM" || true
-            fi
-          done
-      - name: Check for self-hosted runner
+      - name: Select runner target
         id: check
+        env:
+          CI_RUNNER_MODE: ${{ vars.CI_RUNNER_MODE }}
+          REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+          LOCAL_RUNNER: d-sorg-fleet
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${GITHUB_OUTPUT:-}" ]]; then
-            echo "::error::GITHUB_OUTPUT is unavailable"
-            exit 1
+          if [ "$REPOSITORY_PRIVATE" != "true" ] && [ "${CI_RUNNER_MODE:-auto}" != "local" ]; then
+            runner=ubuntu-latest
+            mode=hosted
+          else
+            runner="$LOCAL_RUNNER"
+            mode=local
           fi
-          mkdir -p "$(dirname "$GITHUB_OUTPUT")"
-          echo "runner=d-sorg-fleet" >> "$GITHUB_OUTPUT"
-          echo "Desktop fleet runner claimed this job - routing locally"
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Selected $runner ($mode)"
 
   lint:
     timeout-minutes: 20
@@ -147,13 +129,13 @@ jobs:
   test:
     name: Test (py${{ matrix.python-version }})
     needs: pick-runner
-    runs-on: [self-hosted, Linux, X64, d-sorg-fleet]
+    runs-on: ${{ needs.pick-runner.outputs.runner }}
     timeout-minutes: 45
     env:
       BASELINE_TEST_COUNT: 2471
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 3
       matrix:
         python-version: ["3.12", "3.10", "3.11"]
     steps:
@@ -619,7 +601,7 @@ jobs:
       - ide-extensions
       - build
       - desktop-smoke
-    runs-on: d-sorg-fleet
+    runs-on: ${{ !github.event.repository.private && vars.CI_RUNNER_MODE != 'local' && 'ubuntu-latest' || 'd-sorg-fleet' }}
     steps:
       - name: All checks passed
         run: echo "All required checks passed"

@@ -16,8 +16,10 @@
   for the returned task, preventing cross-thread task-map locks from blocking loop callbacks.
 - CI test lanes enforce bounded execution with the pytest timeout plugin and a matrix job timeout
   so a wedged test cannot block merge readiness indefinitely. Coverage is produced by the py3.12
-  lane; py3.10 and py3.11 run compatibility tests without coverage overhead. The test matrix
-  targets the desktop Linux runner pool for predictable throughput.
+  lane; py3.10 and py3.11 run compatibility tests without coverage overhead. Lightweight public
+  CI uses GitHub-hosted Linux when `CI_RUNNER_MODE=hosted` and falls back to the local fleet when
+  public repositories by default and returns local with `CI_RUNNER_MODE=local`;
+  private repositories remain local and desktop smoke retains its platform matrix.
 
 ## HTTP API
 
