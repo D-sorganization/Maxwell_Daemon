@@ -33,11 +33,12 @@ def test_ci_test_matrix_has_job_timeout() -> None:
     assert test_job["timeout-minutes"] == 45
 
 
-def test_ci_test_matrix_targets_desktop_linux_runners() -> None:
+def test_ci_test_matrix_uses_reversible_public_fast_lane() -> None:
     workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
     test_job = workflow["jobs"]["test"]
 
-    assert test_job["runs-on"] == ["self-hosted", "Linux", "X64", "d-sorg-fleet"]
+    assert test_job["runs-on"] == "${{ needs.pick-runner.outputs.runner }}"
+    assert test_job["strategy"]["max-parallel"] == 3
 
 
 def test_ci_pick_runner_stays_lightweight() -> None:
@@ -51,6 +52,17 @@ def test_ci_pick_runner_stays_lightweight() -> None:
     ]
 
     assert setup_python_steps == []
+    assert "CI_RUNNER_MODE != 'local'" in pick_runner["runs-on"]
+    scripts = "\n".join(step.get("run", "") for step in pick_runner["steps"])
+    assert "gh api" not in scripts
+    assert "gh repo list" not in scripts
+    assert "runner=ubuntu-latest" in scripts
+
+
+def test_quality_gate_does_not_consume_a_local_slot() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+
+    assert "CI_RUNNER_MODE != 'local'" in workflow["jobs"]["quality-gate"]["runs-on"]
 
 
 def test_desktop_smoke_budget_allows_loaded_self_hosted_runners() -> None:
