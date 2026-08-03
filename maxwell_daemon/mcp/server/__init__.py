@@ -6,17 +6,26 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from mcp.server import Server
+from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
 from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
     GetPromptResult,
+    GetPromptRequestParams,
+    ListPromptsResult,
+    ListResourcesResult,
+    ListToolsResult,
+    PaginatedRequestParams,
     Prompt,
     PromptMessage,
+    ReadResourceRequestParams,
+    ReadResourceResult,
     Resource,
     TextContent,
+    TextResourceContents,
     Tool,
 )
-from pydantic import AnyUrl
 
 from maxwell_daemon.config import load_config
 from maxwell_daemon.core.action_service import ActionService
@@ -33,8 +42,6 @@ async def run_mcp_server(config_path: Path | None = None) -> None:  # noqa: C901
     """Run the Maxwell Daemon as an MCP server via stdio."""
     config = load_config(config_path)
 
-    server = Server("maxwell-daemon")
-
     # Wire up the ActionService so side-effecting tools require approval in the daemon UI
     action_store = ActionStore(":memory:")
     action_service = ActionService(action_store)
@@ -49,8 +56,9 @@ async def run_mcp_server(config_path: Path | None = None) -> None:  # noqa: C901
     for name in daemon_registry.names():
         registry.register(daemon_registry.get(name))
 
-    @server.list_tools()  # type: ignore[untyped-decorator, no-untyped-call]
-    async def handle_list_tools() -> list[Tool]:
+    async def handle_list_tools(
+        _ctx: ServerRequestContext[Any], _params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
         mcp_tools = []
         for name in registry.names():
             spec = registry.get(name)
@@ -71,48 +79,65 @@ async def run_mcp_server(config_path: Path | None = None) -> None:  # noqa: C901
                 if param.required:
                     schema["required"].append(param.name)
 
-            mcp_tools.append(Tool(name=spec.name, description=spec.description, inputSchema=schema))
-        return mcp_tools
+            mcp_tools.append(Tool(name=spec.name, description=spec.description, input_schema=schema))
+        return ListToolsResult(tools=mcp_tools)
 
-    @server.call_tool()  # type: ignore[untyped-decorator]
-    async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+    async def handle_call_tool(
+        _ctx: ServerRequestContext[Any], params: CallToolRequestParams
+    ) -> CallToolResult:
         try:
             # We enforce that all MCP calls pass through the audit/approval tier by default
             # if the tool was created with requires_approval, but here the UI handles approval.
-            result = await registry.invoke(name, arguments or {})
+            result = await registry.invoke(params.name, params.arguments or {})
             if result.is_error:
-                return [TextContent(type="text", text=f"Error: {result.content}")]
-            return [TextContent(type="text", text=result.content)]
+                return CallToolResult(
+                    content=[TextContent(type="text", text=f"Error: {result.content}")],
+                    is_error=True,
+                )
+            return CallToolResult(content=[TextContent(type="text", text=result.content)])
         except Exception as e:
-            log.exception("Tool execution failed: %s", name)
-            return [TextContent(type="text", text=f"Tool exception: {e}")]
+            log.exception("Tool execution failed: %s", params.name)
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Tool exception: {e}")],
+                is_error=True,
+            )
 
-    @server.list_resources()  # type: ignore[untyped-decorator, no-untyped-call]
-    async def handle_list_resources() -> list[Resource]:
-        return [
+    async def handle_list_resources(
+        _ctx: ServerRequestContext[Any], _params: PaginatedRequestParams | None
+    ) -> ListResourcesResult:
+        return ListResourcesResult(resources=[
             Resource(
-                uri=AnyUrl("artifact://list"),
+                uri="artifact://list",
                 name="Artifacts",
                 description="Maxwell Daemon artifacts",
             ),
             Resource(
-                uri=AnyUrl("workspace://list"),
+                uri="workspace://list",
                 name="Workspaces",
                 description="Task workspaces",
             ),
             Resource(
-                uri=AnyUrl("memory://list"),
+                uri="memory://list",
                 name="Episodic Memory",
                 description="Agent memory",
             ),
-        ]
+        ])
 
-    @server.read_resource()  # type: ignore[untyped-decorator, no-untyped-call]
-    async def handle_read_resource(uri: AnyUrl | str) -> str:
-        return f"Resource {uri} is not fully implemented yet over REST proxy."
+    async def handle_read_resource(
+        _ctx: ServerRequestContext[Any], params: ReadResourceRequestParams
+    ) -> ReadResourceResult:
+        uri = str(params.uri)
+        return ReadResourceResult(contents=[
+            TextResourceContents(
+                uri=uri,
+                mime_type="text/plain",
+                text=f"Resource {uri} is not fully implemented yet over REST proxy.",
+            )
+        ])
 
-    @server.list_prompts()  # type: ignore[untyped-decorator, no-untyped-call]
-    async def handle_list_prompts() -> list[Prompt]:
+    async def handle_list_prompts(
+        _ctx: ServerRequestContext[Any], _params: PaginatedRequestParams | None
+    ) -> ListPromptsResult:
         prompts = []
         for role_id, role in DEFAULT_CROSS_AUDIT_ROLES.items():
             prompts.append(
@@ -122,14 +147,15 @@ async def run_mcp_server(config_path: Path | None = None) -> None:  # noqa: C901
                     arguments=[],
                 )
             )
-        return prompts
+        return ListPromptsResult(prompts=prompts)
 
-    @server.get_prompt()  # type: ignore[untyped-decorator, no-untyped-call]
-    async def handle_get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
-        role_id = name.replace("maxwell_", "")
+    async def handle_get_prompt(
+        _ctx: ServerRequestContext[Any], params: GetPromptRequestParams
+    ) -> GetPromptResult:
+        role_id = params.name.replace("maxwell_", "")
         role = DEFAULT_CROSS_AUDIT_ROLES.get(role_id)
         if not role:
-            raise ValueError(f"Unknown prompt: {name}")
+            raise ValueError(f"Unknown prompt: {params.name}")
 
         return GetPromptResult(
             description=role.name,
@@ -141,6 +167,15 @@ async def run_mcp_server(config_path: Path | None = None) -> None:  # noqa: C901
             ],
         )
 
+    server = Server(
+        "maxwell-daemon",
+        on_list_tools=handle_list_tools,
+        on_call_tool=handle_call_tool,
+        on_list_resources=handle_list_resources,
+        on_read_resource=handle_read_resource,
+        on_list_prompts=handle_list_prompts,
+        on_get_prompt=handle_get_prompt,
+    )
     options = server.create_initialization_options()
     async with stdio_server() as (read, write):
         await server.run(read, write, options)
