@@ -11,8 +11,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import (
     CallToolRequestParams,
     CallToolResult,
-    GetPromptResult,
     GetPromptRequestParams,
+    GetPromptResult,
     ListPromptsResult,
     ListResourcesResult,
     ListToolsResult,
@@ -79,7 +79,9 @@ async def run_mcp_server(config_path: Path | None = None) -> None:  # noqa: C901
                 if param.required:
                     schema["required"].append(param.name)
 
-            mcp_tools.append(Tool(name=spec.name, description=spec.description, input_schema=schema))
+            mcp_tools.append(
+                Tool(name=spec.name, description=spec.description, input_schema=schema)
+            )
         return ListToolsResult(tools=mcp_tools)
 
     async def handle_call_tool(
@@ -105,35 +107,39 @@ async def run_mcp_server(config_path: Path | None = None) -> None:  # noqa: C901
     async def handle_list_resources(
         _ctx: ServerRequestContext[Any], _params: PaginatedRequestParams | None
     ) -> ListResourcesResult:
-        return ListResourcesResult(resources=[
-            Resource(
-                uri="artifact://list",
-                name="Artifacts",
-                description="Maxwell Daemon artifacts",
-            ),
-            Resource(
-                uri="workspace://list",
-                name="Workspaces",
-                description="Task workspaces",
-            ),
-            Resource(
-                uri="memory://list",
-                name="Episodic Memory",
-                description="Agent memory",
-            ),
-        ])
+        return ListResourcesResult(
+            resources=[
+                Resource(
+                    uri="artifact://list",
+                    name="Artifacts",
+                    description="Maxwell Daemon artifacts",
+                ),
+                Resource(
+                    uri="workspace://list",
+                    name="Workspaces",
+                    description="Task workspaces",
+                ),
+                Resource(
+                    uri="memory://list",
+                    name="Episodic Memory",
+                    description="Agent memory",
+                ),
+            ]
+        )
 
     async def handle_read_resource(
         _ctx: ServerRequestContext[Any], params: ReadResourceRequestParams
     ) -> ReadResourceResult:
         uri = str(params.uri)
-        return ReadResourceResult(contents=[
-            TextResourceContents(
-                uri=uri,
-                mime_type="text/plain",
-                text=f"Resource {uri} is not fully implemented yet over REST proxy.",
-            )
-        ])
+        return ReadResourceResult(
+            contents=[
+                TextResourceContents(
+                    uri=uri,
+                    mime_type="text/plain",
+                    text=f"Resource {uri} is not fully implemented yet over REST proxy.",
+                )
+            ]
+        )
 
     async def handle_list_prompts(
         _ctx: ServerRequestContext[Any], _params: PaginatedRequestParams | None
