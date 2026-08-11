@@ -101,7 +101,7 @@ def test_release_sigstore_action_uses_job_python() -> None:
 
     # v3.4.0 bootstraps its own Python 3.14 env and currently hits a cffi
     # resolver conflict before signing; v3.0.1 uses this job's pinned 3.12.
-    assert sigstore_steps[0]["uses"] == "sigstore/gh-action-sigstore-python@v3.0.1"
+    assert sigstore_steps[0]["uses"] == "sigstore/gh-action-sigstore-python@v3.5.0"
 
 
 def test_release_pypi_publish_requires_explicit_trusted_publisher_flag() -> None:
