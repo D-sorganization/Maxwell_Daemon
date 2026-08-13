@@ -214,7 +214,7 @@ def make_gh_proxy(
 
         try:
             result = await _call_gh(client, operation, params)
-        except Exception as exc:  # pragma: no cover  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # pragma: no cover
             log.warning(
                 "gh_proxy execution failed",
                 task_id=task_id,

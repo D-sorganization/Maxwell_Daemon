@@ -451,7 +451,8 @@ class Daemon(DaemonMaintenanceMixin, DaemonSubmissionMixin, WorkerExecutionMixin
                     self._task_store.save(task)
                 except Exception:
                     log.exception(
-                        "task store write failed while failing dependent task=%s", task.id
+                        "task store write failed while failing dependent task=%s",
+                        task.id,
                     )
                 await self._events.publish(
                     Event(

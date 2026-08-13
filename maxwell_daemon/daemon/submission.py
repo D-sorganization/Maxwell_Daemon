@@ -100,7 +100,7 @@ class DaemonSubmissionMixin:
                         backoff_seconds=DEFAULT_RETRY_POLICY.queue_saturation_backoff(),
                     )
                 )
-            except BaseException as exc:  # pragma: no cover - surfaced via Future  # noqa: BLE001
+            except BaseException as exc:  # noqa: BLE001  # pragma: no cover - surfaced via Future
                 result.set_exception(exc)
             else:
                 result.set_result(None)
@@ -223,7 +223,7 @@ class DaemonSubmissionMixin:
                     model=model,
                     dry_run=dry_run,
                 )
-            except BaseException as exc:  # pragma: no cover - surfaced via Future  # noqa: BLE001
+            except BaseException as exc:  # noqa: BLE001  # pragma: no cover - surfaced via Future
                 result.set_exception(exc)
             else:
                 result.set_result(task)
