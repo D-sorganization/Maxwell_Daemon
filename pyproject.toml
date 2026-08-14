@@ -95,6 +95,12 @@ target-version = "py310"
 
 [tool.ruff.format]
 line-ending = "lf"
+# ruff 0.16 began formatting Python code blocks inside Markdown by default.
+# The snippets in CLAUDE.md and docs/ are deliberately compact illustrations
+# (shadowed imports, one-line method bodies) that the formatter would expand
+# and thereby obscure. Keep prose out of scope for the formatter; revisit as
+# a standalone docs change if we ever want it.
+exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "C90", "BLE"]
