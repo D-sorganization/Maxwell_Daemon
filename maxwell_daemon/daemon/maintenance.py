@@ -85,7 +85,7 @@ class DaemonMaintenanceMixin:
                     log.info("retention prune completed: %s", result)
             except asyncio.CancelledError:
                 raise
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.warning("retention prune failed", exc_info=True)
             await asyncio.sleep(interval)
 
@@ -116,7 +116,7 @@ class DaemonMaintenanceMixin:
                     log.debug("evicted %d stale tasks from live memory dict", evicted)
             except asyncio.CancelledError:
                 raise
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.warning("live eviction loop failed", exc_info=True)
             await asyncio.sleep(60.0)
 
@@ -127,7 +127,7 @@ class DaemonMaintenanceMixin:
                 await self._reconcile_stalled_runs()
             except asyncio.CancelledError:
                 raise
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.warning("stall reconcile loop failed", exc_info=True)
             timeout = self._config.agent.stall_timeout_seconds
             interval = 1.0 if timeout <= 2 else min(timeout / 2.0, 30.0)
@@ -310,7 +310,7 @@ class DaemonMaintenanceMixin:
                 log.info("memory dream cycle completed: %s", result)
             except asyncio.CancelledError:
                 raise
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.warning("memory dream cycle failed", exc_info=True)
 
     async def run_memory_dream_cycle(self) -> str:

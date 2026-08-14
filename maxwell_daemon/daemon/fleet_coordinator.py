@@ -281,7 +281,7 @@ class FleetCoordinator:
                 log.info("dispatched task %s to machine %s", assigned_task.id, machine.name)
                 try:
                     self._task_store.save(assigned_task)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     log.warning(
                         "Failed to persist DISPATCHED state for task %s: %s",
                         assigned_task.id,

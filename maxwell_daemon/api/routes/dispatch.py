@@ -108,7 +108,7 @@ def register(
                     if task_obj.status.value in ("running", "queued"):
                         with contextlib.suppress(Exception):
                             daemon.cancel_task(task_obj.id)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.warning("Error during abort: cancel tasks failed", exc_info=True)
 
         return ControlResponse(
