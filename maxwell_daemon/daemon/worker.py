@@ -283,7 +283,7 @@ class WorkerExecutionMixin:
             task.finished_at = datetime.now(timezone.utc)
             try:
                 self._memory.scratchpad.clear(task.id)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning(
                     "scratchpad clear failed for task %s: %s",
                     task.id,

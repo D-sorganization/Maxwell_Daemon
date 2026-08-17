@@ -179,7 +179,7 @@ def register(  # noqa: C901
                                         pass_rate=(1.0 if res.status.value == "passed" else 0.0),
                                     )
                                 )
-                except Exception:  # noqa: BLE001
+                except Exception:
                     log.warning(
                         "Failed to build leaderboard entry for %s/%s",
                         backend,
