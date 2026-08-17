@@ -7,9 +7,18 @@ const path = require("path");
 const budgetMs = Number(process.env.MAXWELL_DESKTOP_LAUNCH_BUDGET_MS || 2000);
 const timeoutMs = Math.max(5000, budgetMs * 3);
 const launchStartedAt = performance.now();
-const electronCli = path.join(__dirname, "node_modules", "electron", "cli.js");
+const electronBinary = require("electron");
 
-const child = spawn(process.execPath, [electronCli, __dirname], {
+const extraArgs = (process.env.ELECTRON_EXTRA_LAUNCH_ARGS || "")
+  .split(/\s+/)
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+if (process.env.ELECTRON_DISABLE_SANDBOX === "1" && !extraArgs.includes("--no-sandbox")) {
+  extraArgs.unshift("--no-sandbox");
+}
+
+const child = spawn(electronBinary, [...extraArgs, __dirname], {
   cwd: __dirname,
   env: {
     ...process.env,
@@ -23,10 +32,31 @@ let stdout = "";
 let stderr = "";
 let settled = false;
 
+function finish(code) {
+  if (settled) return;
+  settled = true;
+  clearTimeout(timer);
+  try {
+    child.kill();
+  } catch (_) {}
+  const wallElapsedMs = Math.round(performance.now() - launchStartedAt);
+  const resultLine = stdout.trim().split(/\r?\n/).find((line) => line.startsWith("{"));
+  if (!resultLine) {
+    console.error(stderr.trim() || "desktop launch smoke did not emit a timing result");
+    process.exit(1);
+  }
+  const result = JSON.parse(resultLine);
+  const passed = result.passed && wallElapsedMs <= budgetMs;
+  console.log(`desktop ready in ${wallElapsedMs}ms (app ${result.elapsedMs}ms, budget ${result.budgetMs}ms)`);
+  process.exit(code || (passed ? 0 : 1));
+}
+
 const timer = setTimeout(() => {
   if (settled) return;
   settled = true;
-  child.kill();
+  try {
+    child.kill();
+  } catch (_) {}
   console.error(`desktop launch smoke timed out after ${timeoutMs}ms`);
   process.exit(1);
 }, timeoutMs);
@@ -46,17 +76,5 @@ child.on("error", (error) => {
 });
 
 child.on("exit", (code) => {
-  if (settled) return;
-  settled = true;
-  clearTimeout(timer);
-  const wallElapsedMs = Math.round(performance.now() - launchStartedAt);
-  const resultLine = stdout.trim().split(/\r?\n/).find((line) => line.startsWith("{"));
-  if (!resultLine) {
-    console.error(stderr.trim() || "desktop launch smoke did not emit a timing result");
-    process.exit(1);
-  }
-  const result = JSON.parse(resultLine);
-  const passed = result.passed && wallElapsedMs <= budgetMs;
-  console.log(`desktop ready in ${wallElapsedMs}ms (app ${result.elapsedMs}ms, budget ${result.budgetMs}ms)`);
-  process.exit(code || (passed ? 0 : 1));
+  finish(code);
 });

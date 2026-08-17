@@ -24,7 +24,7 @@ classifiers = [
 
 dependencies = [
     "anthropic>=0.122.0",
-    "openai>=2.53.0",
+    "openai>=3.0.0",
     "httpx>=0.27.0",
     "pydantic>=2.8.0",
     "pydantic-settings>=2.14.2",
@@ -49,7 +49,7 @@ google = ["google-cloud-aiplatform>=1.164.0"]
 azure = ["azure-identity>=1.18.0"]
 grpc = ["grpcio>=1.83.0", "grpcio-tools>=1.81.1", "protobuf>=5.28.0"]
 ssh = ["asyncssh>=2.23.1"]
-browser = ["playwright>=1.60.0"]
+browser = ["playwright>=1.62.0"]
 docs = [
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.7.7",
@@ -63,7 +63,7 @@ dev = [
     "pytest-mock>=3.14.0",
     "pytest-timeout>=2.3.1",
     "respx>=0.21.0",
-    "ruff>=0.16.1",
+    "ruff>=0.16.3",
     "mypy>=2.3.0",
     "opentelemetry-sdk>=1.44.0",
     "tomli>=2.0.0",
