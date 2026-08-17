@@ -8,8 +8,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: read
+  pull-requests: read
+  issues: write
 
 concurrency:
   group: anti-phantom-${{ github.event.pull_request.number }}-${{ github.event_name }}
@@ -32,7 +32,7 @@ jobs:
 
       - name: Anti-phantom guard
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
@@ -58,7 +58,7 @@ jobs:
           FILES=$(echo "$STATS" | jq -r .changedFiles)
           TITLE=$(gh pr view "$PR" --repo "$REPO" --json title --jq .title)
           BODY=$(gh pr view "$PR" --repo "$REPO" --json body --jq .body)
-          PR_FILES=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
+          PR_FILES=$(gh pr view "$PR" --repo "$REPO" --json files --jq ".files[].path")
           CODE_PATH_PATTERN='^(maxwell_daemon/|src/|rust_core/|api/)'
           ISSUE_PATH_PATTERN='(maxwell_daemon|src|tests|rust_core|api)/[A-Za-z0-9_./-]+'
 
