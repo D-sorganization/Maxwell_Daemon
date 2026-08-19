@@ -79,7 +79,7 @@ jobs:
           fi
 
           # Rule 3: closes-issue path mismatch
-          ISSUE_NUM=$(echo "$BODY" | grep -ioE '(Closes|Fixes|Resolves) #[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+          ISSUE_NUM=$(echo "$BODY" | grep -ioE '^[[:space:]]*(Closes|Fixes|Resolves)[[:space:]]+#[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
           if [ -n "$ISSUE_NUM" ]; then
             ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --repo "$REPO" --json body --jq .body 2>/dev/null || echo "")
             REF_PATHS=$(echo "$ISSUE_BODY" | grep -oE "$ISSUE_PATH_PATTERN" | sort -u || true)
@@ -99,8 +99,8 @@ jobs:
           LAST_MSG=$(git log -1 --pretty=format:%s)
           if [ "$LAST_COMMITTER" = "github-actions[bot]" ] && echo "$LAST_MSG" | grep -q "^Merge branch 'main'"; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            HUMAN_COMMITS=$(git log --pretty=format:%an "${BASE_SHA}..HEAD" | grep -cv -E '\[bot\]$' || true)
-            if [ "${HUMAN_COMMITS:-0}" -eq 0 ]; then
+            NON_MERGE_COMMITS=$(git log --pretty=format:%s "${BASE_SHA}..HEAD" | grep -vcE "^Merge (branch|remote-tracking branch)" || true)
+            if [ "${NON_MERGE_COMMITS:-0}" -eq 0 ]; then
               fail "Rule 4 (bot-only commits): the only commits since branch point are 'Merge branch main' from github-actions[bot]; branch likely absorbed via sibling PR."
             fi
           fi
@@ -108,7 +108,7 @@ jobs:
           if [ -n "$FAIL" ]; then
             printf "::error::Anti-phantom guard failed:\n%b" "$FAIL"
             COMMENT=$(printf "## Anti-Phantom Merge Guard failed\n\n%b\n### Override\nApply the \`phantom-guard-override\` label (admin-only) to bypass. Documented at .github/workflows/anti-phantom-merge.yml" "$FAIL")
-            gh pr comment "$PR" --repo "$REPO" --body "$COMMENT" >/dev/null
+            gh pr comment "$PR" --repo "$REPO" --body "$COMMENT" >/dev/null 2>&1 || echo "::warning::Could not post comment to PR #$PR"
             exit 1
           fi
           echo "::notice::Anti-phantom guard passed."
