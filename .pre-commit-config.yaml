@@ -17,9 +17,9 @@ repos:
         args: ["--fix=lf"]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.1
+    rev: v0.16.4
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
 
@@ -43,8 +43,9 @@ repos:
     rev: 1.7.5
     hooks:
       - id: bandit
-        additional_dependencies: [pbr]
-        exclude: ^tests/
+        args: ["-c", "pyproject.toml"]
+        additional_dependencies: [pbr, "tomli; python_version < '3.11'"]
+        exclude: ^(tests/|docs/|scripts/)
 
   # Secrets scanning — fails the commit if a credential / API key / private
   # key is about to be committed.  Runs locally only; CI re-runs via the

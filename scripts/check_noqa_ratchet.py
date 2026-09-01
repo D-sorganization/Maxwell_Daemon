@@ -126,13 +126,13 @@ def _iter_py_files(roots: Sequence[Path]) -> list[Path]:
 def _format_violation(rule: str, baseline_count: int, current_count: int) -> str:
     delta = current_count - baseline_count
     return (
-        f"  ✗ {rule}: {current_count} (baseline {baseline_count}, +{delta}) "
-        f"— remove the new suppression or burn down existing ones first"
+        f"  [X] {rule}: {current_count} (baseline {baseline_count}, +{delta}) "
+        f"- remove the new suppression or burn down existing ones first"
     )
 
 
 def _format_improvement(rule: str, delta: int) -> str:
-    return f"  ✓ {rule}: improved by {-delta} (good — thank you)"
+    return f"  [OK] {rule}: improved by {-delta} (good - thank you)"
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
-from typing import Any, cast
+from typing import Any
 
 import anthropic
 
@@ -75,15 +75,17 @@ class ClaudeBackend(ILLMBackend):
         **kwargs: Any,
     ) -> BackendResponse:
         system, msgs = self._split_system(messages)
-        resp = await self._client.messages.create(
-            model=model,
-            messages=msgs,  # type: ignore[arg-type]
-            system=cast(Any, system or anthropic.NOT_GIVEN),
-            temperature=temperature,
-            max_tokens=max_tokens or 4096,
-            tools=tools or anthropic.NOT_GIVEN,  # type: ignore[arg-type]
+        call_kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": msgs,
+            "system": system or anthropic.NOT_GIVEN,
+            "max_tokens": max_tokens or 4096,
+            "tools": tools or anthropic.NOT_GIVEN,
             **kwargs,
-        )
+        }
+        if temperature != 1.0 and "extra_body" not in call_kwargs:
+            call_kwargs["extra_body"] = {"temperature": temperature}
+        resp = await self._client.messages.create(**call_kwargs)
         text_parts = [
             getattr(b, "text", "") for b in resp.content if getattr(b, "type", None) == "text"
         ]
@@ -116,15 +118,17 @@ class ClaudeBackend(ILLMBackend):
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         system, msgs = self._split_system(messages)
-        async with self._client.messages.stream(
-            model=model,
-            messages=msgs,  # type: ignore[arg-type]
-            system=cast(Any, system or anthropic.NOT_GIVEN),
-            temperature=temperature,
-            max_tokens=max_tokens or 4096,
-            tools=tools or anthropic.NOT_GIVEN,  # type: ignore[arg-type]
+        call_kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": msgs,
+            "system": system or anthropic.NOT_GIVEN,
+            "max_tokens": max_tokens or 4096,
+            "tools": tools or anthropic.NOT_GIVEN,
             **kwargs,
-        ) as stream:
+        }
+        if temperature != 1.0 and "extra_body" not in call_kwargs:
+            call_kwargs["extra_body"] = {"temperature": temperature}
+        async with self._client.messages.stream(**call_kwargs) as stream:
             async for text in stream.text_stream:
                 yield text
 
