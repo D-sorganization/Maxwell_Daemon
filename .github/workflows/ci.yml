@@ -438,8 +438,6 @@ jobs:
             runs_on: [self-hosted, Linux, X64, d-sorg-fleet]
           - os: [self-hosted, Windows]
             runs_on: [self-hosted, Windows]
-    env:
-      TMPDIR: ${{ runner.temp }}
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
