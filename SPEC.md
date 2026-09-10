@@ -129,8 +129,16 @@ for the dispatch/coordinator design.
 
 ## Related Documentation
 
+- [`docs/architecture/C4.md`](docs/architecture/C4.md) — Mermaid C4 architecture map contract (Epic #1594).
 - [`docs/architecture/overview.md`](docs/architecture/overview.md) — system overview.
 - [`docs/reference/openapi.md`](docs/reference/openapi.md) — drift-checked route inventory.
 - [`docs/architecture/fleet-architecture.md`](docs/architecture/fleet-architecture.md) — fleet topology + remote dispatch.
 - [`docs/operations/observability.md`](docs/operations/observability.md) — metrics, logging, event consumption.
 - [`docs/operations/security.md`](docs/operations/security.md) — execution policy + isolation caveats.
+
+## Change Log
+
+| Date | PR | Summary |
+| --- | --- | --- |
+| 2026-09-10 | #1601 | Adopt maintainable Mermaid C4 architecture-map contract |
+

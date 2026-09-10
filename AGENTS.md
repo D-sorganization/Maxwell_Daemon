@@ -162,6 +162,7 @@ maxwell_daemon/
 | Type check | `mypy --strict maxwell_daemon/` |
 | Security | `bandit -r maxwell_daemon -c pyproject.toml` |
 | Tests | `pytest tests/` (py3.10, py3.11, py3.12) |
+| Architecture Map | `python scripts/architecture_map_contract.py` (`docs/architecture/C4.md`) |
 | File budget | No file >500 KB |
 
 ---

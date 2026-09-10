@@ -23,6 +23,8 @@ The fleet-wide operator console is `runner-dashboard`. The daemon never
 calls back into the dashboard or Repository_Management — all cross-repo
 traffic is into the daemon.
 
+The canonical architecture map, system context, and container diagrams are maintained in [`docs/architecture/C4.md`](docs/architecture/C4.md) per Epic #1594.
+
 ## 🚀 Why Maxwell-Daemon?
 - **Canonical Dashboard Launcher**: Use `Launch-Maxwell.bat`, `Launch-Maxwell.command`, or `Launch-Maxwell.sh` from a source checkout to bootstrap Maxwell-Daemon and open the shipped `/ui/` dashboard on Windows, macOS, or Linux.
 - **The Cognitive Pipeline**: A state-machine orchestrated team:
