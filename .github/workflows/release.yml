@@ -55,7 +55,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/maxwell-daemon
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -81,7 +81,7 @@ jobs:
             dist/*.whl
             dist/sbom.json
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
