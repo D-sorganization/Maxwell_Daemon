@@ -27,7 +27,7 @@ jobs:
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -79,7 +79,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - name: Purge stale untracked files (self-hosted runner hygiene)
         run: git clean -fdx --exclude=.venv
       - uses: actions/setup-python@v5
@@ -109,7 +109,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -144,7 +144,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -188,7 +188,7 @@ jobs:
         run: .venv/bin/python -m pytest tests/integration/ --no-cov -p no:xvfb --timeout=300
       - name: Upload coverage artifact
         if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-xml
           path: coverage.xml
@@ -197,7 +197,7 @@ jobs:
         run: .venv/bin/python -m pytest benchmarks/ --benchmark-only --no-cov --benchmark-json=benchmark-results.json
       - name: Upload benchmark results
         if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: benchmark-results.json
@@ -214,7 +214,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -223,7 +223,7 @@ jobs:
           cache: 'pip'
       - name: Purge pip cache
         run: python -m pip cache purge || true
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: coverage-xml
       - run: python scripts/check_coverage_floor.py --xml coverage.xml
@@ -239,7 +239,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -262,7 +262,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -283,7 +283,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -305,7 +305,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -333,7 +333,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -345,7 +345,7 @@ jobs:
       - run: python3 -m pip install uv
       - name: Verify uv.lock is fresh
         run: uv lock --check
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: 'npm'
@@ -365,8 +365,8 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: 'npm'
@@ -403,7 +403,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
@@ -416,7 +416,7 @@ jobs:
       - run: uv venv .venv --python $(which python)
       - run: uv pip install build
       - run: .venv/bin/python -m build
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
@@ -444,7 +444,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - name: Purge stale untracked files and temp (self-hosted runner hygiene)
         if: runner.os != 'Windows'
         shell: bash
@@ -462,7 +462,7 @@ jobs:
       - name: Purge pip cache
         continue-on-error: true
         run: python -m pip cache purge
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
@@ -480,7 +480,7 @@ jobs:
               print("No wheel artifact found in dist/")
               sys.exit(1)
           subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", wheels[0]])
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
       - name: Install desktop dependencies
@@ -527,7 +527,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           # Full history so the gitleaks diff scan can compare against the base.
           fetch-depth: 0
@@ -583,7 +583,7 @@ jobs:
         shell: bash
         run: |
           find "$GITHUB_WORKSPACE/.git/refs/remotes/pull" -name "*.lock" -type f -delete 2>/dev/null || true
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         env:
           AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/_tool_cache
