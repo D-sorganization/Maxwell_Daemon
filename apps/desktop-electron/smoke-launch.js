@@ -1,6 +1,7 @@
 "use strict";
 
 const { spawn } = require("child_process");
+const os = require("os");
 const { performance } = require("perf_hooks");
 const path = require("path");
 
@@ -24,6 +25,7 @@ const child = spawn(electronBinary, [...extraArgs, __dirname], {
     ...process.env,
     MAXWELL_DESKTOP_LAUNCH_BUDGET_MS: String(budgetMs),
     MAXWELL_DESKTOP_LAUNCH_SMOKE: "1",
+    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME || path.join(os.tmpdir(), "maxwell-electron-config"),
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
