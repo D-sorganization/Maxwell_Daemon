@@ -592,25 +592,60 @@ jobs:
           python-version: "3.12"
       - run: python scripts/check_tracked_ignored.py
 
+  # Required branch-protection context for `main` (org ruleset
+  # Repository_Protections requires exactly this name). It aggregates lint AND
+  # every quality job so a red test/typecheck run blocks merge.
+  #
+  # `if: always()` is load-bearing: without it an upstream failure *skips* this
+  # job, and GitHub treats a skipped required check as passing - which is how
+  # this repo merged 20 PRs with a skipped gate (4 of them with mypy red)
+  # between 2026-08-15 and 2026-09-14.
+  #
+  # `desktop-smoke` is in `needs` for ordering but is NOT gated: its fleet leg
+  # has failed on every run since 2026-08-17 (Electron cannot launch on the
+  # headless fleet hosts - "did not emit a timing result"). Gate it once that
+  # is fixed; tracked in the issue linked from the PR that added this job.
   quality-gate:
-    name: quality-gate
-    timeout-minutes: 5
-    needs:
-      - lint
-      - typecheck
-      - test
-      - coverage-floor
-      - file-size-budget
-      - noqa-ratchet
-      - todo-fixme
-      - security
-      - secret-scan
-      - repo-hygiene
-      - dependency-locks
-      - ide-extensions
-      - build
-      - desktop-smoke
+    needs: [desktop-smoke, lint, typecheck, test, coverage-floor, file-size-budget, noqa-ratchet, todo-fixme, security, secret-scan, repo-hygiene, dependency-locks, ide-extensions, build]
+    if: always()
     runs-on: ${{ !github.event.repository.private && vars.CI_RUNNER_MODE != 'local' && 'ubuntu-latest' || 'd-sorg-fleet' }}
+    timeout-minutes: 5
     steps:
-      - name: All checks passed
-        run: echo "All required checks passed"
+      - name: Require every gated job to succeed
+        shell: bash
+        env:
+          RESULT_LINT: ${{ needs.lint.result }}
+          RESULT_TYPECHECK: ${{ needs.typecheck.result }}
+          RESULT_TEST: ${{ needs.test.result }}
+          RESULT_COVERAGE_FLOOR: ${{ needs.coverage-floor.result }}
+          RESULT_FILE_SIZE_BUDGET: ${{ needs.file-size-budget.result }}
+          RESULT_NOQA_RATCHET: ${{ needs.noqa-ratchet.result }}
+          RESULT_TODO_FIXME: ${{ needs.todo-fixme.result }}
+          RESULT_SECURITY: ${{ needs.security.result }}
+          RESULT_SECRET_SCAN: ${{ needs.secret-scan.result }}
+          RESULT_REPO_HYGIENE: ${{ needs.repo-hygiene.result }}
+          RESULT_DEPENDENCY_LOCKS: ${{ needs.dependency-locks.result }}
+          RESULT_IDE_EXTENSIONS: ${{ needs.ide-extensions.result }}
+          RESULT_BUILD: ${{ needs.build.result }}
+          SKIPPED_OK: "coverage-floor"
+        run: |
+          failed=0
+          for pair in "lint=$RESULT_LINT" "typecheck=$RESULT_TYPECHECK" "test=$RESULT_TEST" "coverage-floor=$RESULT_COVERAGE_FLOOR" "file-size-budget=$RESULT_FILE_SIZE_BUDGET" "noqa-ratchet=$RESULT_NOQA_RATCHET" "todo-fixme=$RESULT_TODO_FIXME" "security=$RESULT_SECURITY" "secret-scan=$RESULT_SECRET_SCAN" "repo-hygiene=$RESULT_REPO_HYGIENE" "dependency-locks=$RESULT_DEPENDENCY_LOCKS" "ide-extensions=$RESULT_IDE_EXTENSIONS" "build=$RESULT_BUILD"; do
+            job="${pair%%=*}"
+            result="${pair#*=}"
+            echo "$job: $result"
+            if [ "$result" = "success" ]; then
+              continue
+            fi
+            if [ "$result" = "skipped" ] && [[ " $SKIPPED_OK " == *" $job "* ]]; then
+              echo "::notice::$job was skipped by its own condition; allowed."
+              continue
+            fi
+            echo "::error::$job reported '$result', expected 'success'."
+            failed=1
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::quality-gate: one or more gated jobs did not succeed."
+            exit 1
+          fi
+          echo "quality-gate: all gated jobs succeeded."
