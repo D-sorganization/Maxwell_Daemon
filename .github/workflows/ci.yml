@@ -601,10 +601,8 @@ jobs:
   # this repo merged 20 PRs with a skipped gate (4 of them with mypy red)
   # between 2026-08-15 and 2026-09-14.
   #
-  # `desktop-smoke` is in `needs` for ordering but is NOT gated: its fleet leg
-  # has failed on every run since 2026-08-17 (Electron cannot launch on the
-  # headless fleet hosts - "did not emit a timing result"). Gate it once that
-  # is fixed; tracked in the issue linked from the PR that added this job.
+  # `desktop-smoke` is now gated: both Windows and fleet legs reliably pass
+  # following runner hygiene and XDG_CONFIG_HOME fixes (issue #1166).
   quality-gate:
     needs: [desktop-smoke, lint, typecheck, test, coverage-floor, file-size-budget, noqa-ratchet, todo-fixme, security, secret-scan, repo-hygiene, dependency-locks, ide-extensions, build]
     if: always()
@@ -627,10 +625,11 @@ jobs:
           RESULT_DEPENDENCY_LOCKS: ${{ needs.dependency-locks.result }}
           RESULT_IDE_EXTENSIONS: ${{ needs.ide-extensions.result }}
           RESULT_BUILD: ${{ needs.build.result }}
+          RESULT_DESKTOP_SMOKE: ${{ needs.desktop-smoke.result }}
           SKIPPED_OK: "coverage-floor"
         run: |
           failed=0
-          for pair in "lint=$RESULT_LINT" "typecheck=$RESULT_TYPECHECK" "test=$RESULT_TEST" "coverage-floor=$RESULT_COVERAGE_FLOOR" "file-size-budget=$RESULT_FILE_SIZE_BUDGET" "noqa-ratchet=$RESULT_NOQA_RATCHET" "todo-fixme=$RESULT_TODO_FIXME" "security=$RESULT_SECURITY" "secret-scan=$RESULT_SECRET_SCAN" "repo-hygiene=$RESULT_REPO_HYGIENE" "dependency-locks=$RESULT_DEPENDENCY_LOCKS" "ide-extensions=$RESULT_IDE_EXTENSIONS" "build=$RESULT_BUILD"; do
+          for pair in "lint=$RESULT_LINT" "typecheck=$RESULT_TYPECHECK" "test=$RESULT_TEST" "coverage-floor=$RESULT_COVERAGE_FLOOR" "file-size-budget=$RESULT_FILE_SIZE_BUDGET" "noqa-ratchet=$RESULT_NOQA_RATCHET" "todo-fixme=$RESULT_TODO_FIXME" "security=$RESULT_SECURITY" "secret-scan=$RESULT_SECRET_SCAN" "repo-hygiene=$RESULT_REPO_HYGIENE" "dependency-locks=$RESULT_DEPENDENCY_LOCKS" "ide-extensions=$RESULT_IDE_EXTENSIONS" "build=$RESULT_BUILD" "desktop-smoke=$RESULT_DESKTOP_SMOKE"; do
             job="${pair%%=*}"
             result="${pair#*=}"
             echo "$job: $result"
