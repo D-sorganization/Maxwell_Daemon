@@ -130,3 +130,9 @@ def test_renderer_command_palette_executes_common_desktop_actions() -> None:
     assert 'data-command="refresh"' in html
     assert 'data-command="dispatch"' in html
     assert 'data-command="updates"' in html
+
+
+def test_quality_gate_enforces_desktop_smoke() -> None:
+    ci_workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "RESULT_DESKTOP_SMOKE: ${{ needs.desktop-smoke.result }}" in ci_workflow
+    assert '"desktop-smoke=$RESULT_DESKTOP_SMOKE"' in ci_workflow
