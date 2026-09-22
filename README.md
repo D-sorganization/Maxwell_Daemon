@@ -6,6 +6,24 @@ Maxwell-Daemon is a professionally packaged, autonomous local control plane that
 
 Unlike existing tools that are locked to the terminal, Maxwell-Daemon ships a browser-served **gate-aware dashboard** at `/ui/`, strict **Test-Driven Development (TDD)** enforcement, and **Bring-Your-Own-CLI (BYO-CLI)** flexibility. It ensures you never burn an API token on tasks you don't need to.
 
+> ## ⚠️ Maintenance mode (2026-09-22)
+>
+> Maxwell-Daemon has **not run in the fleet since June 2026**: the service is
+> disabled, there are no journal entries in the last 90 days, and the deployed
+> config is `repos: []` / `fleet.machines: []`. The
+> **Runner Dashboard Staff Hub**
+> ([D-sorganization/Runner_Dashboard#1192](https://github.com/D-sorganization/Runner_Dashboard/issues/1192))
+> is now the fleet's execution engine.
+>
+> Maxwell remains available as an **optional provider** (`maxwell`) behind the
+> dashboard's existing `/api/maxwell/*` proxy — see the provider registry issue
+> [D-sorganization/Runner_Dashboard#1193](https://github.com/D-sorganization/Runner_Dashboard/issues/1193).
+> Do not pick Maxwell for new fleet work unless explicitly asked.
+>
+> **Archive review date: 2026-10-22** — if still unused, this repository is a
+> candidate for archiving. Tracking issue:
+> [D-sorganization/Maxwell_Daemon#1177](https://github.com/D-sorganization/Maxwell_Daemon/issues/1177).
+
 ## Sibling repos
 
 Maxwell-Daemon is the **AI control plane** in a three-repo fleet. The
