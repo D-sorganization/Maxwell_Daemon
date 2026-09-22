@@ -18,6 +18,19 @@ reachable from any live state and `abandoned` from `parked`.
 
 ## Active
 
+### DL-#1177 · Maintenance Mode Notice And Staff Hub Deferral
+
+- **State:** in_review
+- **Owner:** local
+- **Issue:** #1177 (https://github.com/D-sorganization/Maxwell_Daemon/issues/1177)
+- **Branch:** docs/1177-maintenance-mode
+- **PR:** not created
+- **Paths:** `README.md`, `AGENTS.md`, `docs/architecture/C4.md`, `docs/development/HANDOFF.md`
+- **Started:** 2026-09-22
+- **Last verified:** 2026-09-22 (`b200937`)
+- **Next step:** Merge the draft PR once the Architecture Map Contract gate is green.
+- **Summary:** Docs-only: declare maintenance mode (daemon unused since June 2026), defer fleet execution to the Runner Dashboard Staff Hub (Runner_Dashboard#1192), keep Maxwell as optional `maxwell` provider (Runner_Dashboard#1193), archive review 2026-10-22.
+
 ### DL-#1601 · Adopt Mermaid C4 Architecture Map Contract
 
 - **State:** in_progress

@@ -12,6 +12,21 @@
 
 ---
 
+## 🚧 Status (2026-09-22): maintenance mode
+
+Maxwell-Daemon has not run in the fleet since June 2026 (service disabled, no
+journal entries in 90 days, config `repos: []` / `fleet.machines: []`). The
+Runner Dashboard Staff Hub
+([Runner_Dashboard#1192](https://github.com/D-sorganization/Runner_Dashboard/issues/1192))
+is the fleet's execution engine; Maxwell is an **optional provider**
+(`maxwell`) behind the dashboard's `/api/maxwell/*` proxy
+([Runner_Dashboard#1193](https://github.com/D-sorganization/Runner_Dashboard/issues/1193)).
+**Agents must not pick Maxwell for new fleet work unless explicitly asked.**
+Archive review date 2026-10-22 if unused — see
+[#1177](https://github.com/D-sorganization/Maxwell_Daemon/issues/1177).
+
+---
+
 ## 🗺️ Sibling repos & boundaries (read first)
 
 `Maxwell-Daemon` is the **autonomous AI control plane** in a three-repo
