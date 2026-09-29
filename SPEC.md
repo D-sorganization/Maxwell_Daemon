@@ -141,4 +141,5 @@ for the dispatch/coordinator design.
 | Date | PR | Summary |
 | --- | --- | --- |
 | 2026-09-10 | #1601 | Adopt maintainable Mermaid C4 architecture-map contract |
+| 2026-09-29 | #TBD | Architecture Map Contract job installs pytest-cov and stops at `tests/scripts` conftests, so its focused test runs without the package dependencies. |
 - 2026-09-14: Downgraded non-existent workflow action versions to @v4/@v5 across workflows (#1163).
