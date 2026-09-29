@@ -8,7 +8,7 @@ Keep this file current and concise. Replace instructional placeholders; do not a
 - Working directory: `C:\Users\diete\Repositories\Maxwell_Daemon-worktrees\w-md-archmap`
 - Branch: `claude/md-archmap-contract-0929`
 - Implementation commit: `SELF` — the commit containing this update; resolve with `git rev-parse HEAD`
-- Pull request: `#TBD`
+- Pull request: `#1195`
 - Governing issue/epic: none. This fixes the red `Architecture Map Contract` workflow on `main`, which has failed since 2026-09-22 (run 35759334790).
 
 ## Objective and Status
