@@ -13,6 +13,8 @@ on:
     paths:
       - ".github/workflows/**"
   workflow_dispatch:
+  # Merge queue (Repository_Management#1890): required checks must report on the queue's merge commit.
+  merge_group:
 
 permissions:
   contents: read
