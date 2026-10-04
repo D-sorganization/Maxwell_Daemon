@@ -45,6 +45,12 @@ The `ClaudeBackend` and `OllamaBackend` adapters are good reference implementati
 - [ ] Commits are squashed or logically grouped (one concept per commit)
 - [ ] PR description explains the *why*, not just the *what*
 
+## Merging
+
+Pull requests merge through the GitHub merge queue. Arm auto-merge (squash) and the
+queue rebuilds the PR on the latest `main`, runs the required checks once more, and
+merges it. There is no need to update a PR branch by hand before merging.
+
 ## Coverage floor policy
 
 Coverage is enforced by two independent mechanisms:
