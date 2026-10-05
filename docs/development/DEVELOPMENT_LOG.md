@@ -18,6 +18,19 @@ reachable from any live state and `abandoned` from `parked`.
 
 ## Active
 
+### DL-#1211 · Desktop Smoke Clock Excludes Electron Binary Download
+
+- **State:** in_review
+- **Owner:** claude
+- **Issue:** #1211 (https://github.com/D-sorganization/Maxwell_Daemon/issues/1211)
+- **Branch:** ci/1211-desktop-smoke-clock
+- **PR:** #1212
+- **Paths:** `apps/desktop-electron/smoke-launch.js`, `apps/desktop-electron/test/smoke-launch.test.js`, `apps/desktop-electron/package.json`, `apps/desktop-electron/README.md`, `tests/unit/test_desktop_electron_scaffold.py`
+- **Started:** 2026-10-05
+- **Last verified:** 2026-10-05 (`SELF`)
+- **Next step:** Merge; confirm the next `Desktop launcher smoke (d-sorg-fleet)` run reports wall time near app time.
+- **Summary:** `smoke-launch.js` started its budget clock before `require("electron")`, which lazily downloads the binary, so a 233 s download failed a 119 ms launch. The clock now starts after the binary resolves; budget unchanged at 180000 ms.
+
 ### DL-#1177 · Maintenance Mode Notice And Staff Hub Deferral
 
 - **State:** in_review
