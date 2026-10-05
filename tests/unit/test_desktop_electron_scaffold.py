@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 APP_DIR = Path("apps/desktop-electron")
 
@@ -136,3 +140,28 @@ def test_quality_gate_enforces_desktop_smoke() -> None:
     ci_workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "RESULT_DESKTOP_SMOKE: ${{ needs.desktop-smoke.result }}" in ci_workflow
     assert '"desktop-smoke=$RESULT_DESKTOP_SMOKE"' in ci_workflow
+
+
+def test_electron_launch_smoke_clock_excludes_binary_download() -> None:
+    smoke = (APP_DIR / "smoke-launch.js").read_text(encoding="utf-8")
+    manifest = json.loads((APP_DIR / "package.json").read_text(encoding="utf-8"))
+
+    # require("electron") lazily downloads the binary; the budget clock must
+    # start after it resolves so provisioning time is not billed as launch time.
+    assert "const launchStartedAt = performance.now();" not in smoke
+    assert "resolveBinaryThenStartClock(" in smoke
+    assert manifest["scripts"]["test"] == "node --test test/*.test.js"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_electron_launch_smoke_node_unit_tests_pass() -> None:
+    result = subprocess.run(
+        [shutil.which("node") or "node", "--test", "test/smoke-launch.test.js"],
+        cwd=APP_DIR,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr

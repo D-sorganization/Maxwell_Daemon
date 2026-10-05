@@ -7,6 +7,7 @@
   "scripts": {
     "start": "electron .",
     "smoke:launch": "node smoke-launch.js",
+    "test": "node --test test/*.test.js",
     "package": "electron-builder --dir",
     "dist": "electron-builder"
   },

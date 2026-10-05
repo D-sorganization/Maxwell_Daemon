@@ -31,4 +31,8 @@ npm run dist
 `npm run smoke:launch` starts Electron in smoke mode and fails if the renderer
 does not reach `ready-to-show` within the 2 second launch budget.
 
+The budget clock starts only after the Electron binary is resolved, so a
+first-run "Downloading Electron binary..." does not count against it. Run
+`npm test` for the smoke script's unit tests.
+
 The `dist` script is configured for DMG, MSI, AppImage, and Snap targets through `electron-builder`.
