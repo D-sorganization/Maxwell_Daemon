@@ -25,6 +25,9 @@ jobs:
 
   pick-runner:
     runs-on: d-sorg-fleet
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     timeout-minutes: 2
     outputs:
       runner: ${{ steps.check.outputs.runner }}
@@ -57,6 +60,9 @@ jobs:
     name: Build MkDocs site
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -86,7 +92,10 @@ jobs:
     timeout-minutes: 30
     name: Deploy GitHub Pages
     needs: [pick-runner, build]
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name == 'workflow_dispatch')
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     permissions:
       pages: write

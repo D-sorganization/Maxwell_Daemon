@@ -100,7 +100,14 @@ line-ending = "lf"
 # (shadowed imports, one-line method bodies) that the formatter would expand
 # and thereby obscure. Keep prose out of scope for the formatter; revisit as
 # a standalone docs change if we ever want it.
-exclude = ["*.md"]
+# Also: files vendored byte-identically from Repository_Management (RM#1989),
+# which formats at 88 columns; reformatting would break the byte-identical sync.
+exclude = [
+  "*.md",
+  "scripts/fork_pr_runner_guard.py",
+  "scripts/fork_pr_guard_analysis.py",
+  "tests/scripts/test_fork_pr_runner_guard.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "C90", "BLE"]

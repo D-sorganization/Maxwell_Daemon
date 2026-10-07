@@ -20,16 +20,13 @@ jobs:
     runs-on: d-sorg-fleet
     timeout-minutes: 10
     if: >-
-      github.event.pull_request.base.ref == 'main' &&
-      (github.event_name == 'pull_request' ||
-       github.event.label.name == 'phantom-guard-override') || github.event.pull_request.base.ref == 'master'
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event.pull_request.base.ref == 'main' && (github.event_name == 'pull_request' || github.event.label.name == 'phantom-guard-override') || github.event.pull_request.base.ref == 'master')
     steps:
-      - name: Checkout PR head with full history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-
+      # No checkout: this job runs on the self-hosted fleet under
+      # pull_request_target too, so it must never check out PR head code
+      # (RM#1989). Rule 4 reads the commit list from the API instead.
       - name: Anti-phantom guard
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,11 +92,12 @@ jobs:
           fi
 
           # Rule 4: bot-only commits
-          LAST_COMMITTER=$(git log -1 --pretty=format:%an)
-          LAST_MSG=$(git log -1 --pretty=format:%s)
+          COMMITS=$(gh api "repos/$REPO/pulls/$PR/commits" --paginate \
+            --jq '.[] | [.commit.author.name, (.commit.message | split("\n")[0])] | @tsv')
+          LAST_COMMITTER=$(printf '%s\n' "$COMMITS" | tail -n 1 | cut -f1)
+          LAST_MSG=$(printf '%s\n' "$COMMITS" | tail -n 1 | cut -f2)
           if [ "$LAST_COMMITTER" = "github-actions[bot]" ] && echo "$LAST_MSG" | grep -q "^Merge branch 'main'"; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            NON_MERGE_COMMITS=$(git log --pretty=format:%s "${BASE_SHA}..HEAD" | grep -vcE "^Merge (branch|remote-tracking branch)" || true)
+            NON_MERGE_COMMITS=$(printf '%s\n' "$COMMITS" | cut -f2 | grep -vcE "^Merge (branch|remote-tracking branch)" || true)
             if [ "${NON_MERGE_COMMITS:-0}" -eq 0 ]; then
               fail "Rule 4 (bot-only commits): the only commits since branch point are 'Merge branch main' from github-actions[bot]; branch likely absorbed via sibling PR."
             fi
