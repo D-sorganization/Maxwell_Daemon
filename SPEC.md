@@ -144,4 +144,5 @@ for the dispatch/coordinator design.
 | 2026-09-29 | #1195 | Architecture Map Contract job installs pytest-cov and stops at `tests/scripts` conftests, so its focused test runs without the package dependencies. |
 | 2026-10-05 | #1212 | Desktop launch smoke starts its budget clock after the Electron binary resolves, so a lazy binary download no longer counts as launch time (#1211). |
 | 2026-10-07 | #1213 | Fork PRs can no longer reach the self-hosted fleet: every fleet-capable job is guarded, `anti-phantom-merge.yml` no longer checks out PR head code, and `scripts/fork_pr_runner_guard.py` enforces it in CI (RM#1989). |
+| 2026-10-07 | #1215 | `ide-extensions` CI job isolates `RUSTUP_HOME`/`CARGO_HOME` under the workspace so concurrent fleet jobs stop sharing `~/.rustup` (RM#2021). |
 - 2026-09-14: Downgraded non-existent workflow action versions to @v4/@v5 across workflows (#1163).

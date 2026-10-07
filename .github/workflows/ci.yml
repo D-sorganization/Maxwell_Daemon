@@ -397,6 +397,11 @@ jobs:
     if: >-
       (!github.event.pull_request ||
       github.event.pull_request.head.repo.full_name == github.repository)
+    # Per-workspace Rust homes: concurrent jobs on a persistent runner must not
+    # share ~/.rustup or ~/.cargo (RM#2021).
+    env:
+      RUSTUP_HOME: ${{ github.workspace }}/.rustup-home
+      CARGO_HOME: ${{ github.workspace }}/.cargo-home
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -417,6 +422,16 @@ jobs:
         with:
           gradle-version: "8.3"
           cache-disabled: true
+      - name: Bootstrap rustup into per-workspace homes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUSTUP_HOME" "$CARGO_HOME/bin"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+          if [ ! -x "$CARGO_HOME/bin/rustup" ]; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
+              sh -s -- -y --profile minimal --default-toolchain none --no-modify-path
+          fi
       - uses: dtolnay/rust-toolchain@stable
       - name: Build VS Code extension
         working-directory: extensions/vscode
