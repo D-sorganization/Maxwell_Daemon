@@ -16,6 +16,8 @@ def test_release_docs_build_does_not_require_pages_deploy() -> None:
     assert upload_step["if"] == "github.event_name == 'workflow_dispatch'"
     # The deploy job runs only on workflow_dispatch and, like every fleet-capable
     # job, carries the same-repo fork guard (RM#1989).
-    deploy_if = jobs["deploy"]["if"]
-    assert "github.event_name == 'workflow_dispatch'" in deploy_if
-    assert "github.event.pull_request.head.repo.full_name == github.repository" in deploy_if
+    assert jobs["deploy"]["if"] == (
+        "(!github.event.pull_request || "
+        "github.event.pull_request.head.repo.full_name == github.repository) && "
+        "(github.event_name == 'workflow_dispatch')"
+    )
