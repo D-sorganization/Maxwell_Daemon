@@ -145,3 +145,9 @@ jobs:
               sys.exit(1)
 
           print("All workflows route to d-sorg-fleet.")
+
+      - name: Verify no job runs fork PR code on the self-hosted fleet
+        # The logic lives in scripts/fork_pr_runner_guard.py (tested by
+        # tests/scripts/test_fork_pr_runner_guard.py); it runs here, on the
+        # hosted canary, so fork PRs get the verdict too (RM#1989).
+        run: python scripts/fork_pr_runner_guard.py

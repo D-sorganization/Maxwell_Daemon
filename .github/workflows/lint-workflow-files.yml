@@ -16,6 +16,9 @@ concurrency:
 jobs:
   lint:
     runs-on: d-sorg-fleet
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4

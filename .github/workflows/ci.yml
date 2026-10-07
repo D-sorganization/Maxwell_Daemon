@@ -28,6 +28,9 @@ jobs:
     name: Validate runner routing
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
@@ -45,6 +48,9 @@ jobs:
 
   pick-runner:
     runs-on: ${{ !github.event.repository.private && vars.CI_RUNNER_MODE != 'local' && 'ubuntu-latest' || 'd-sorg-fleet' }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     timeout-minutes: 1
     outputs:
       runner: ${{ steps.check.outputs.runner }}
@@ -75,6 +81,9 @@ jobs:
     name: Lint (ruff)
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -105,6 +114,9 @@ jobs:
     name: Typecheck (mypy --strict)
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -132,6 +144,9 @@ jobs:
     name: Test (py${{ matrix.python-version }})
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     timeout-minutes: 45
     env:
       BASELINE_TEST_COUNT: 2471
@@ -208,7 +223,10 @@ jobs:
     timeout-minutes: 30
     name: Coverage floor (ratchet)
     needs: [pick-runner, test]
-    if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'dependabot/github_actions/') }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'pull_request' || !startsWith(github.head_ref, 'dependabot/github_actions/'))
     runs-on: ${{ needs.pick-runner.outputs.runner }}
     steps:
       - name: Clear stale checkout locks
@@ -235,6 +253,9 @@ jobs:
     name: File size budget
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -258,6 +279,9 @@ jobs:
     name: noqa ratchet (BLE001 / C901)
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -279,6 +303,9 @@ jobs:
     name: No untracked TODO/FIXME
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -301,6 +328,9 @@ jobs:
     name: Security scans
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -329,6 +359,9 @@ jobs:
     name: Dependency locks
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -361,6 +394,9 @@ jobs:
     name: IDE extension builds
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -399,6 +435,9 @@ jobs:
     name: Build distribution
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -428,6 +467,9 @@ jobs:
     name: Desktop launcher smoke (${{ matrix.os }})
     needs: build
     runs-on: ${{ matrix.runs_on }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     strategy:
       fail-fast: false
       matrix:
@@ -524,6 +566,9 @@ jobs:
     name: Secret scan (gitleaks)
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -583,6 +628,9 @@ jobs:
     name: Repo hygiene (no tracked-ignored files)
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Clear stale checkout locks
         if: runner.os != 'Windows'
@@ -610,7 +658,10 @@ jobs:
   # following runner hygiene and XDG_CONFIG_HOME fixes (issue #1166).
   quality-gate:
     needs: [desktop-smoke, lint, typecheck, test, coverage-floor, file-size-budget, noqa-ratchet, todo-fixme, security, secret-scan, repo-hygiene, dependency-locks, ide-extensions, build]
-    if: always()
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository) &&
+      (always())
     runs-on: ${{ !github.event.repository.private && vars.CI_RUNNER_MODE != 'local' && 'ubuntu-latest' || 'd-sorg-fleet' }}
     timeout-minutes: 5
     steps:

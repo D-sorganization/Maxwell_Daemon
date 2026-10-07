@@ -19,6 +19,9 @@ jobs:
 
   pick-runner:
     runs-on: d-sorg-fleet
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     timeout-minutes: 2
     outputs:
       runner: ${{ steps.check.outputs.runner }}
@@ -41,6 +44,9 @@ jobs:
     name: Analyze
     needs: pick-runner
     runs-on: ${{ needs.pick-runner.outputs.runner }}
+    if: >-
+      (!github.event.pull_request ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     permissions:
       actions: read
       contents: read
