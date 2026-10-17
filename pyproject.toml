@@ -90,6 +90,8 @@ packages = ["maxwell_daemon"]
 "maxwell_daemon/api/ui/style.css" = "maxwell_daemon/api/ui/style.css"
 
 [tool.ruff]
+# Vendored byte-for-byte from Repository_Management (RM#2118); lint upstream, not here.
+extend-exclude = ["scripts/automerge_guard.py", "scripts/requeue_stalled_merges.py"]
 line-length = 100
 target-version = "py310"
 
